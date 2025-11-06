@@ -101,6 +101,7 @@ const handleLogin = async () => {
 </script>
 
 <template>
+    
     <div class="login-layout">
         <header
             class="header-nav container-fluid d-flex justify-content-between align-items-center p-3 border-bottom bg-white shadow-sm">
