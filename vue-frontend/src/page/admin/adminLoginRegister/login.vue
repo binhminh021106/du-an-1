@@ -58,8 +58,7 @@ const handleLogin = async () => {
             showConfirmButton: false,
         });
 
-        // Chuyển hướng dùng router sẽ mượt hơn
-        router.push('/admin'); 
+        router.push({name: 'admin-dashboard'}); 
 
     } catch (error) {
         if (error.response) {
@@ -147,7 +146,7 @@ const handleLogin = async () => {
                         <a href="#">Quên mật khẩu</a>
                     </p>
                     <p class="mb-0">
-                        <router-link to="/admin/register" class="text-center">
+                        <router-link :to="{name: 'admin-register'}" class="text-center">
                             Đăng ký thành viên mới
                         </router-link>
                     </p>

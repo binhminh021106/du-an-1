@@ -4,7 +4,6 @@ const adminLayoutRoutes = [
     component: () => import("../layout/layoutAdmin.vue"),
     children: [
       {
-        // Đường dẫn rỗng '' có nghĩa là đây là trang mặc định khi truy cập /admin
         path: "",
         name: "admin-dashboard",
         component: () => import("../page/admin/index.vue"),

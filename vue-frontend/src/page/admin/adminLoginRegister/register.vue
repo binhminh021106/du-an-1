@@ -7,7 +7,6 @@ import { useRouter } from 'vue-router';
 const API_URL = import.meta.env.VITE_API_BASE_URL;
 const router = useRouter();
 
-// --- Logic cũ của bạn ---
 const formData = reactive({
     username: '',
     email: '',
@@ -40,7 +39,6 @@ const togglePasswordVisibility = (field) => {
 };
 
 const validateForm = () => {
-    // Reset lỗi
     Object.keys(errors).forEach(key => errors[key] = '');
     let isValid = true;
     const re = /^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]+$/;
@@ -106,8 +104,7 @@ const handleRegister = async () => {
                 text: `Tài khoản ${payload.username} đã được tạo!`,
                 confirmButtonText: 'Đăng nhập ngay',
             }).then(() => {
-                router.push('/admin/login');
-                // Reset form
+                router.push({name: 'admin-login'});
                 Object.assign(formData, { username: '', email: '', password: '', confirmPassword: '' });
                 agreedToTerms.value = false;
             });
@@ -220,7 +217,7 @@ const handleRegister = async () => {
                     <p v-if="errors.general" class="text-danger mt-3">{{ errors.general }}</p>
 
                     <p class="mb-0 mt-3">
-                        <router-link to="/admin/login" class="text-center">
+                        <router-link :to="{name: 'admin-login'}" class="text-center">
                             Tôi đã có tài khoản
                         </router-link>
                     </p>
