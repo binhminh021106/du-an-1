@@ -23,6 +23,14 @@
       "password": "Binhminh@123",
       "password_confirmation": "Binhminh@123",
       "role": "nhanvien"
+    },
+    {
+      "id": "c4d1",
+      "username": "binhminh0211",
+      "email": "binhminh211@gmail.com",
+      "password": "Binhminh@123",
+      "password_confirmation": "Binhminh@123",
+      "role": "nhanvien"
     }
   ],
   "roles": [
