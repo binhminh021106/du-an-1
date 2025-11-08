@@ -9,12 +9,11 @@
       "status": "active"
     },
     {
-      "id": "3399",
       "username": "binhminh21106",
       "email": "minhdzwama211@gmail.com",
-      "password": "Binhminh@123",
-      "role": "nhanvien",
-      "status": "active"
+      "role": "manager",
+      "status": "active",
+      "id": "3399"
     },
     {
       "id": "d3cd",
