@@ -34,19 +34,18 @@
 
           <div class="dropdown-menu" :class="{ active: isMenuActive }">
             <ul class="menu-list">
-              <li><router-link to="/category/phone"><i class="fa-solid fa-mobile-screen"></i> Điện thoại & Phụ
-                  kiện</router-link></li>
+              <li>
+                <router-link to="/category/phone"><i class="fa-solid fa-mobile-screen"></i> Điện thoại & Phụ
+                  kiện</router-link>
+              </li>
               <li><router-link to="/category/laptop"><i class="fa-solid fa-laptop"></i> Máy tính & Laptop</router-link>
               </li>
-              <li><router-link to="/category/camera"><i class="fa-solid fa-camera"></i> Máy ảnh & Quay
-                  phim</router-link></li>
               <li><router-link to="/category/watch"><i class="fa-solid fa-clock"></i> Đồng hồ thông minh</router-link>
               </li>
               <li><router-link to="/category/audio"><i class="fa-solid fa-headphones"></i> Thiết bị âm
                   thanh</router-link></li>
               <li><router-link to="/category/gaming"><i class="fa-solid fa-gamepad"></i> Gaming Gear</router-link></li>
-              <li><router-link to="/category/office"><i class="fa-solid fa-house-laptop"></i> Thiết bị văn
-                  phòng</router-link></li>
+
             </ul>
           </div>
         </div>
@@ -76,7 +75,8 @@
 <style>
 :root {
   --primary-color: #009981;
-  --primary-light: #DBF9EB; /* Đảm bảo dòng này có ở đây */
+  --primary-light: #DBF9EB;
+  /* Đảm bảo dòng này có ở đây */
   --primary-dark: #00483D;
   --text-white: #ffffff;
   --text-dark: #333333;
@@ -133,12 +133,14 @@ onUnmounted(() => {
   --primary-dark: #00483D;
   --text-white: #ffffff;
   --text-dark: #333333;
-  --bg-gray: #f8f9fa; /* Màu nền nhẹ cho các nút trên nền trắng */
+  --bg-gray: #f8f9fa;
+  /* Màu nền nhẹ cho các nút trên nền trắng */
 }
 
 .site-header {
   font-family: Arial, sans-serif;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.05); /* Thêm bóng nhẹ cho header trắng */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  /* Thêm bóng nhẹ cho header trắng */
 }
 
 a {
@@ -189,7 +191,8 @@ ul {
 .main-header {
   background-color: var(--text-white);
   padding: 15px 0;
-  color: var(--text-dark); /* Chữ đổi sang màu tối */
+  color: var(--text-dark);
+  /* Chữ đổi sang màu tối */
   border-bottom: 1px solid #eee;
 }
 
@@ -222,6 +225,7 @@ ul {
   white-space: nowrap;
   transition: all 0.2s;
 }
+
 .category-button:hover {
   background-color: #e9ecef;
 }
@@ -233,7 +237,8 @@ ul {
 
 .dropdown-menu {
   position: absolute;
-  top: calc(100% + 10px); /* Đẩy xuống một chút cho đẹp */
+  top: calc(100% + 10px);
+  /* Đẩy xuống một chút cho đẹp */
   left: 0;
   width: 250px;
   background: white;
@@ -286,13 +291,15 @@ ul {
 .search-bar input {
   width: 100%;
   padding: 10px 15px;
-  border: 2px solid var(--primary-color); /* Viền màu chính */
+  border: 2px solid var(--primary-color);
+  /* Viền màu chính */
   border-radius: 8px;
   font-size: 14px;
   box-sizing: border-box;
   background-color: var(--bg-gray);
   outline: none;
 }
+
 .search-bar input:focus {
   background-color: var(--text-white);
 }
@@ -311,6 +318,7 @@ ul {
   height: 80%;
   transition: background-color 0.2s;
 }
+
 .search-btn:hover {
   background-color: var(--primary-dark);
 }
@@ -328,7 +336,8 @@ ul {
   gap: 8px;
   padding: 8px 12px;
   border-radius: 8px;
-  background-color: var(--bg-gray); /* Nền xám nhẹ */
+  background-color: var(--bg-gray);
+  /* Nền xám nhẹ */
   color: var(--text-dark);
   font-size: 14px;
   white-space: nowrap;
@@ -342,7 +351,8 @@ ul {
 
 .action-item i {
   font-size: 20px;
-  color: var(--primary-color); /* Icon màu chính cho nổi bật */
+  color: var(--primary-color);
+  /* Icon màu chính cho nổi bật */
 }
 
 /* Nút đăng nhập nổi bật */
@@ -351,6 +361,7 @@ ul {
   color: var(--text-white) !important;
   font-weight: bold;
 }
+
 .login-btn i {
   color: var(--text-white) !important;
 }

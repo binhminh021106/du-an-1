@@ -9,12 +9,11 @@
       "status": "active"
     },
     {
-      "id": "3399",
       "username": "binhminh21106",
       "email": "minhdzwama211@gmail.com",
-      "password": "Binhminh@123",
-      "role": "nhanvien",
-      "status": "active"
+      "role": "manager",
+      "status": "active",
+      "id": "3399"
     },
     {
       "id": "d3cd",
@@ -23,6 +22,8 @@
       "password": "Binhminh@123",
       "password_confirmation": "Binhminh@123",
       "role": "nhanvien"
+<<<<<<< Updated upstream
+=======
     },
     {
       "id": "c4d1",
@@ -31,6 +32,15 @@
       "password": "Binhminh@123",
       "password_confirmation": "Binhminh@123",
       "role": "nhanvien"
+    },
+    {
+      "id": "c289",
+      "username": "tantuanhi47k1",
+      "email": "ttuann47@gmail.com",
+      "password": "123456789",
+      "password_confirmation": "123456789",
+      "role": "nhanvien"
+>>>>>>> Stashed changes
     }
   ],
   "roles": [
@@ -174,7 +184,7 @@
       "customerPhone": "0987654321",
       "customerAddress": "456 Đường XYZ, Q3, TP. HCM",
       "totalAmount": 1200000,
-      "status": "Đang giao",
+      "status": "Đã hoàn thành",
       "createdAt": "2023-10-28T14:30:00Z",
       "return_status": ""
     },
@@ -208,6 +218,33 @@
       "createdAt": "2023-10-27T10:00:00Z",
       "productId": 1,
       "userId": 1
+    }
+  ],
+  "coupons": [
+    {
+      "id": "1",
+      "name": "Giảm giá 30/4",
+      "code": "30THANG4",
+      "type": "percent",
+      "value": 15,
+      "expiresAt": "2025-04-30T23:59:59",
+      "usageLimit": 100,
+      "usageCount": 10,
+      "limitPerUser": 1 
+    }
+  ],
+  "coupon_usage": [ 
+    {
+      "id": "1",
+      "couponId": "1",
+      "userId": "5",
+      "orderId": "101"
+    },
+    {
+      "id": "2",
+      "couponId": "1",
+      "userId": "7",
+      "orderId": "102"
     }
   ],
   "reviews": [

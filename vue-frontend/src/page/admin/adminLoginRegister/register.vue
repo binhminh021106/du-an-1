@@ -160,7 +160,7 @@ const handleRegister = async () => {
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
                                         <input id="registerUsername" type="text" v-model="formData.username"
-                                            placeholder="vidu: vana01"
+                                            placeholder="VD: abc123"
                                             :class="['form-control', errors.username ? 'is-invalid' : '']" />
                                     </div>
                                     <div v-if="errors.username" class="invalid-feedback d-block">{{ errors.username }}
@@ -172,7 +172,7 @@ const handleRegister = async () => {
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-envelope-fill"></i></span>
                                         <input id="registerEmail" type="email" v-model="formData.email"
-                                            placeholder="ban@email.com"
+                                            placeholder="abc123@gmail.com"
                                             :class="['form-control', errors.email ? 'is-invalid' : '']" />
                                     </div>
                                     <div v-if="errors.email" class="invalid-feedback d-block">{{ errors.email }}</div>

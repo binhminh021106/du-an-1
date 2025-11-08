@@ -57,6 +57,13 @@ const adminLayoutRoutes = [
         name: "admin-slides",
         component: () => import("../page/admin/content/slider.vue"),
       }
+      //coupon
+      ,
+      {
+        path: "coupons",
+        name: "admin-coupons",
+        component: () => import("../page/admin/content/coupon.vue"),
+      }
     ],
   },
 ];

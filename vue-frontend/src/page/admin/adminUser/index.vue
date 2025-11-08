@@ -4,6 +4,8 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap'; // Import Modal của Bootstrap
 
+// Thiên lý ơi!!!
+
 // --- STATE QUẢN LÝ CHUNG ---
 const API_URL = import.meta.env.VITE_API_BASE_URL;
 const users = ref([]); // Danh sách TẤT CẢ người dùng (từ /account)
@@ -118,7 +120,7 @@ async function fetchUsers() {
   isLoading.value = true;
   try {
     // Đã sửa endpoint từ /admin_Account thành /account
-    const response = await axios.get(`${API_URL}/account`);
+    const response = await axios.get(`${API_URL}/account_admin`);
     users.value = response.data.map(user => ({
       ...user,
       // Đảm bảo có created_at để hiển thị, nếu không có thì đặt là ngày hiện tại
@@ -237,13 +239,13 @@ async function handleSave() {
   try {
     if (isEditMode.value) {
       // Sửa endpoint thành /account
-      await axios.put(`${API_URL}/account/${formData.id}`, payload);
+      await axios.put(`${API_URL}/account_admin/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật người dùng!', 'success');
     } else {
       // Thêm trường created_at cho bài toán demo
       payload.created_at = new Date().toISOString(); 
       // Sửa endpoint thành /account
-      await axios.post(`${API_URL}/account`, payload);
+      await axios.post(`${API_URL}/account_admmin`, payload);
       Swal.fire('Thành công', 'Đã tạo người dùng mới!', 'success');
     }
 
@@ -281,7 +283,7 @@ async function toggleUserStatus(user) {
     isLoading.value = true;
     try {
       // Sửa endpoint thành /account
-      await axios.patch(`${API_URL}/account/${user.id}`, { status: newStatus }); // Dùng PATCH cho cập nhật nhỏ
+      await axios.patch(`${API_URL}/account_admin/${user.id}`, { status: newStatus }); // Dùng PATCH cho cập nhật nhỏ
       Swal.fire(
         'Thành công!',
         `Đã ${actionText} người dùng ${user.username}.`,
@@ -315,7 +317,7 @@ async function handleDelete(user) {
   if (result.isConfirmed) {
     try {
       // Sửa endpoint thành /account
-      await axios.delete(`${API_URL}/account/${user.id}`);
+      await axios.delete(`${API_URL}/account_admin/${user.id}`);
       Swal.fire(
         'Đã xóa!',
         'Người dùng đã được xóa.',

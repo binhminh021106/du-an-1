@@ -20,7 +20,7 @@ const formData = reactive({
   description: '',
   category_id: null,
   variants: reactive([]),
-  
+
   // --- THAY ĐỔI CHO NHIỀU ẢNH ---
   existing_images: reactive([]), // Ảnh đã có trên server (khi edit)
   new_images: [],                 // File ảnh mới chọn
@@ -112,7 +112,7 @@ function handleImageUpload(event) {
 
   // Hủy các URL blob cũ để tránh rò rỉ bộ nhớ
   newImagePreviews.value.forEach(url => URL.revokeObjectURL(url));
-  
+
   // Tạo URL preview cho các ảnh mới
   newImagePreviews.value = formData.new_images.map(file => URL.createObjectURL(file));
 }
@@ -123,7 +123,7 @@ function handleImageUpload(event) {
 function removeNewImage(index) {
   // Hủy URL blob
   URL.revokeObjectURL(newImagePreviews.value[index]);
-  
+
   // Xóa khỏi cả 2 mảng
   newImagePreviews.value.splice(index, 1);
   formData.new_images.splice(index, 1);
@@ -135,7 +135,7 @@ function removeNewImage(index) {
 function removeExistingImage(index) {
   // Lấy ảnh bị xóa ra khỏi mảng existing_images
   const removedImage = formData.existing_images.splice(index, 1);
-  
+
   // Thêm ID của nó vào mảng "cần xóa"
   if (removedImage[0]?.id) {
     formData.images_to_delete.push(removedImage[0].id);
@@ -150,7 +150,7 @@ function resetForm() {
   formData.description = '';
   formData.category_id = null;
   formData.variants = reactive([]);
-  
+
   // Hủy các URL blob cũ
   newImagePreviews.value.forEach(url => URL.revokeObjectURL(url));
 
@@ -159,7 +159,7 @@ function resetForm() {
   formData.new_images = [];
   formData.images_to_delete = [];
   newImagePreviews.value = [];
-  
+
   // Xóa file input
   const fileInput = document.getElementById('product_images');
   if (fileInput) fileInput.value = '';
@@ -182,14 +182,14 @@ function openEditModal(product) {
   formData.name = product.name;
   formData.description = product.description;
   formData.category_id = product.category_id;
-  
+
   // Giả sử API trả về product.images là một mảng [{id: 1, url: '...'}, ...]
-  formData.existing_images = reactive(product.images ? product.images.map(img => ({...img})) : []);
-  
+  formData.existing_images = reactive(product.images ? product.images.map(img => ({ ...img })) : []);
+
   formData.variants = reactive(
     product.variants.map(v => ({ ...v }))
   );
-  
+
   modalInstance.value.show();
 }
 
@@ -208,7 +208,7 @@ function validateForm() {
     errors.category_id = 'Vui lòng chọn danh mục.';
     isValid = false;
   }
-  
+
   // Kiểm tra ảnh
   // Khi tạo mới, bắt buộc phải có ảnh mới
   if (!isEditMode.value && formData.new_images.length === 0) {
@@ -246,12 +246,12 @@ async function handleSave() {
 
   isLoading.value = true;
   const payload = new FormData();
-  
+
   // Thêm các trường cơ bản
   payload.append('name', formData.name);
   payload.append('description', formData.description);
   payload.append('category_id', formData.category_id);
-  
+
   // Gửi mảng variants dưới dạng JSON string
   payload.append('variants', JSON.stringify(formData.variants));
 
@@ -261,12 +261,12 @@ async function handleSave() {
   formData.new_images.forEach((file) => {
     payload.append('new_images[]', file);
   });
-  
+
   try {
     if (isEditMode.value) {
       // --- CHẾ ĐỘ CẬP NHẬT (UPDATE) ---
-      payload.append('_method', 'PUT'); 
-      
+      payload.append('_method', 'PUT');
+
       // Thêm mảng ID ảnh cần xóa
       payload.append('images_to_delete', JSON.stringify(formData.images_to_delete));
 
@@ -287,12 +287,12 @@ async function handleSave() {
   } catch (apiError) {
     console.error("Lỗi khi lưu:", apiError);
     if (apiError.response?.data?.errors) {
-        const serverErrors = apiError.response.data.errors;
-        if(serverErrors.name) errors.name = serverErrors.name[0];
-        if(serverErrors.category_id) errors.category_id = serverErrors.category_id[0];
-        if(serverErrors.new_images) errors.images = serverErrors.new_images[0];
+      const serverErrors = apiError.response.data.errors;
+      if (serverErrors.name) errors.name = serverErrors.name[0];
+      if (serverErrors.category_id) errors.category_id = serverErrors.category_id[0];
+      if (serverErrors.new_images) errors.images = serverErrors.new_images[0];
     } else {
-        Swal.fire('Thất bại', 'Đã có lỗi xảy ra. Vui lòng thử lại.', 'error');
+      Swal.fire('Thất bại', 'Đã có lỗi xảy ra. Vui lòng thử lại.', 'error');
     }
   } finally {
     isLoading.value = false;
@@ -382,10 +382,8 @@ async function handleDelete(product) {
                   <tr v-for="product in products" :key="product.id">
                     <td>{{ product.id }}</td>
                     <td>
-                      <img :src="product.images?.[0]?.url || '/assets/img/default-150x150.png'" 
-                           alt="Ảnh SP" 
-                           class="img-thumbnail" 
-                           width="60">
+                      <img :src="product.images?.[0]?.url || '/assets/img/default-150x150.png'" alt="Ảnh SP"
+                        class="img-thumbnail" width="60">
                     </td>
                     <td>{{ product.name }}</td>
                     <td>{{ product.category?.name || 'N/A' }}</td>
@@ -409,7 +407,8 @@ async function handleDelete(product) {
     </div>
   </div>
 
-  <div class="modal fade" id="productModal" ref="modalRef" tabindex="-1" aria-labelledby="productModalLabel" aria-hidden="true">
+  <div class="modal fade" id="productModal" ref="modalRef" tabindex="-1" aria-labelledby="productModalLabel"
+    aria-hidden="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
@@ -420,7 +419,7 @@ async function handleDelete(product) {
         </div>
         <div class="modal-body">
           <form @submit.prevent="handleSave">
-            
+
             <div class="row">
               <div class="col-md-7">
                 <div class="mb-3">
@@ -449,25 +448,29 @@ async function handleDelete(product) {
                 <div class="mb-3">
                   <label for="product_images" class="form-label">Ảnh sản phẩm <span class="text-danger">*</span></label>
                   <input type="file" class="form-control" :class="{ 'is-invalid': errors.images }" id="product_images"
-                    @change="handleImageUpload" accept="image/*" multiple> <div class="form-text" v-if="isEditMode">(Chọn ảnh mới sẽ thay thế toàn bộ ảnh cũ)</div>
+                    @change="handleImageUpload" accept="image/*" multiple>
+                  <div class="form-text" v-if="isEditMode">(Chọn ảnh mới sẽ thay thế toàn bộ ảnh cũ)</div>
                   <div class="invalid-feedback" v-if="errors.images">{{ errors.images }}</div>
-                  
+
                   <div class="image-preview-container mt-2">
-                    <div v-for="(image, index) in formData.existing_images" :key="`exist-${image.id}`" class="image-preview-item">
+                    <div v-for="(image, index) in formData.existing_images" :key="`exist-${image.id}`"
+                      class="image-preview-item">
                       <img :src="image.url" class="img-thumbnail" alt="Ảnh cũ">
-                      <button class_button="btn btn-danger btn-sm btn-remove-image" @click.prevent="removeExistingImage(index)">
+                      <button class_button="btn btn-danger btn-sm btn-remove-image"
+                        @click.prevent="removeExistingImage(index)">
                         &times;
                       </button>
                     </div>
                     <div v-for="(url, index) in newImagePreviews" :key="`new-${index}`" class="image-preview-item">
                       <img :src="url" class="img-thumbnail" alt="Ảnh mới">
-                      <button class_button="btn btn-danger btn-sm btn-remove-image" @click.prevent="removeNewImage(index)">
+                      <button class_button="btn btn-danger btn-sm btn-remove-image"
+                        @click.prevent="removeNewImage(index)">
                         &times;
                       </button>
                     </div>
                   </div>
                 </div>
-                </div>
+              </div>
             </div>
 
             <hr>
@@ -485,7 +488,8 @@ async function handleDelete(product) {
               <div class="col-md-2"></div>
             </div>
 
-            <div v-for="(variant, index) in formData.variants" :key="index" class="row g-3 align-items-center mb-3 variant-row">
+            <div v-for="(variant, index) in formData.variants" :key="index"
+              class="row g-3 align-items-center mb-3 variant-row">
               <div class="col-md-3">
                 <label class="form-label d-md-none">Màu sắc</label>
                 <input type="text" class="form-control" placeholder="ví dụ: Đỏ, Xanh" v-model="variant.color">
@@ -499,7 +503,7 @@ async function handleDelete(product) {
                 <input type="number" class="form-control" placeholder="Giá" v-model.number="variant.price" min="0">
               </div>
               <div class="col-md-2">
-                 <label class="form-label d-md-none">Số lượng</label>
+                <label class="form-label d-md-none">Số lượng</label>
                 <input type="number" class="form-control" placeholder="SL" v-model.number="variant.stock" min="0">
               </div>
               <div class="col-md-2 text-md-end">
@@ -512,7 +516,7 @@ async function handleDelete(product) {
             <button class="btn btn-success btn-sm mt-2" @click.prevent="addVariantRow">
               <i class="bi bi-plus-lg"></i> Thêm biến thể
             </button>
-            
+
           </form>
         </div>
         <div class="modal-footer">
@@ -535,16 +539,19 @@ async function handleDelete(product) {
   gap: 10px;
   margin-top: 10px;
 }
+
 .image-preview-item {
   position: relative;
   width: 100px;
   height: 100px;
 }
+
 .image-preview-item .img-thumbnail {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
+
 .image-preview-item .btn-remove-image {
   position: absolute;
   top: -5px;
@@ -573,8 +580,10 @@ async function handleDelete(product) {
     padding: 1rem;
     margin-bottom: 1rem !important;
   }
+
   .variant-row .col-md-2 {
-    text-align: left !important; /* Reset cho di động */
+    text-align: left !important;
+    /* Reset cho di động */
   }
 }
 
