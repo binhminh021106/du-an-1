@@ -1,11 +1,6 @@
 <template>
   <div class="home-container">
-    <section class="hero-banner">
-      <a href="#">
-        <img src="https://images.fpt.shop/unsafe/fit-in/1200x300/filters:quality(90):fill(white)/fptshop.com.vn/Uploads/Originals/2024/5/7/638507200786016503_F-C1_1200x300.png" alt="Hero Banner">
-      </a>
-    </section>
-
+    
     <section class="quick-links">
       <a href="#" class="quick-link-item">
         <img src="https://cdn.cellphones.com.vn/media/icons/category/cate-1644.png" alt="Icon">
