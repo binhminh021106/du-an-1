@@ -4,7 +4,7 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 
 // --- STATE QUẢN LÝ ---
-const API_URL = "http://localhost:3000"; // Đảm bảo json-server đang chạy ở cổng này
+const API_URL = import.meta.env.VITE_API_BASE_URL;
 
 const reviews = ref([]);     // Danh sách đánh giá trên trang hiện tại
 const isLoading = ref(true);
