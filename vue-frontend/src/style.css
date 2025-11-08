@@ -36,3 +36,7 @@ button,
   font-weight: 500;
   letter-spacing: 0.5px;
 }
+
+.skip-link {
+  display: none !important;
+}

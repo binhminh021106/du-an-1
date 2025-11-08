@@ -1,5 +1,5 @@
 {
-  "account": [
+  "account_admin": [
     {
       "username": "binhminh21106",
       "email": "minhdzwama211@gmail.com",
@@ -15,6 +15,14 @@
       "password": "Binhminh@123",
       "role": "nhanvien",
       "status": "active"
+    },
+    {
+      "id": "d3cd",
+      "username": "binhminh0211",
+      "email": "minhdzwama211@gmail.com",
+      "password": "Binhminh@123",
+      "password_confirmation": "Binhminh@123",
+      "role": "nhanvien"
     }
   ],
   "roles": [
