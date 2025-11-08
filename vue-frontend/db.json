@@ -22,6 +22,25 @@
       "password": "Binhminh@123",
       "password_confirmation": "Binhminh@123",
       "role": "nhanvien"
+<<<<<<< Updated upstream
+=======
+    },
+    {
+      "id": "c4d1",
+      "username": "binhminh0211",
+      "email": "binhminh211@gmail.com",
+      "password": "Binhminh@123",
+      "password_confirmation": "Binhminh@123",
+      "role": "nhanvien"
+    },
+    {
+      "id": "c289",
+      "username": "tantuanhi47k1",
+      "email": "ttuann47@gmail.com",
+      "password": "123456789",
+      "password_confirmation": "123456789",
+      "role": "nhanvien"
+>>>>>>> Stashed changes
     }
   ],
   "roles": [
