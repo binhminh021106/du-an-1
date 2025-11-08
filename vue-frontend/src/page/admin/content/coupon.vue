@@ -32,7 +32,7 @@ const couponForm = reactive({
   expiresAt: '',
   usageLimit: null,
   usageCount: 0,
-  limitPerUser: 1 // (MỚI) Thêm giới hạn mỗi người, mặc định là 1
+  limitPerUser: 1 // Mặc định mỗi người được dùng 1 lần
 });
 
 // --- VÒNG ĐỜI (LIFECYCLE) ---
@@ -77,9 +77,23 @@ function formatCurrency(value) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 }
 
-function formatDate(dateString) {
+function formatDateForDisplay(dateString) {
   if (!dateString) return 'N/A';
-  return new Date(dateString).toISOString().split('T')[0];
+  try {
+    return new Date(dateString).toISOString().split('T')[0];
+  } catch (e) {
+    console.error("Lỗi formatDate:", e);
+    return 'Ngày không hợp lệ';
+  }
+}
+
+function formatDateForInput(dateString) {
+  if (!dateString) return ''; 
+  try {
+    return new Date(dateString).toISOString().split('T')[0];
+  } catch (e) {
+    return ''; 
+  }
 }
 
 function formatValue(coupon) {
@@ -99,9 +113,7 @@ function formatUsage(coupon) {
   return `${count} / ${limit}`;
 }
 
-// (SỬA) Cập nhật getStatus
 function getStatus(coupon) {
-  // Check 1: Hết hạn
   if (coupon.expiresAt) {
     const today = new Date();
     const expiryDate = new Date(coupon.expiresAt);
@@ -110,14 +122,11 @@ function getStatus(coupon) {
       return { text: 'Đã hết hạn', class: 'text-bg-danger' };
     }
   }
-
-  // Check 2: Hết lượt dùng (Tổng)
   const count = coupon.usageCount || 0;
   const limit = coupon.usageLimit;
   if (limit && limit > 0 && count >= limit) {
      return { text: 'Hết lượt dùng', class: 'text-bg-warning' };
   }
-
   return { text: 'Còn hạn', class: 'text-bg-success' };
 }
 
@@ -132,7 +141,7 @@ function resetForm() {
   couponForm.expiresAt = '';
   couponForm.usageLimit = null; 
   couponForm.usageCount = 0; 
-  couponForm.limitPerUser = 1; // (MỚI)
+  couponForm.limitPerUser = 1;
 }
 
 function openCreateModal() {
@@ -146,17 +155,38 @@ function openEditModal(coupon) {
   couponForm.code = coupon.code;
   couponForm.type = coupon.type;
   couponForm.value = coupon.value;
-  couponForm.expiresAt = formatDate(coupon.expiresAt);
+  couponForm.expiresAt = formatDateForInput(coupon.expiresAt);
   couponForm.usageLimit = coupon.usageLimit; 
   couponForm.usageCount = coupon.usageCount || 0; 
-  couponForm.limitPerUser = coupon.limitPerUser || 1; // (MỚI)
+  couponForm.limitPerUser = coupon.limitPerUser || 1;
   couponModalInstance.value.show();
 }
 
 async function handleSave() {
+  
+  // (VALIDATE)
+  if (!couponForm.name.trim() || !couponForm.code.trim()) {
+    Swal.fire('Lỗi', 'Tên/Mô tả và Mã Code không được để trống.', 'error');
+    return;
+  }
+  if (couponForm.value < 0) {
+    Swal.fire('Lỗi', 'Giá trị giảm giá không được là số âm.', 'error');
+    return;
+  }
+  // Kiểm tra nếu là % thì không được vượt quá 100
+  if (couponForm.type === 'percent' && couponForm.value > 100) {
+    Swal.fire('Lỗi', 'Giá trị phần trăm không được vượt quá 100%.', 'error');
+    return;
+  }
+  if (couponForm.limitPerUser < 1) {
+    Swal.fire('Lỗi', 'Giới hạn mỗi User phải ít nhất là 1.', 'error');
+    return;
+  }
+  // --- Hết Validate ---
+
   isSaving.value = true;
   
-  const dataToSave = { ...couponForm };
+  const dataToSave = { ...couponForm }; 
   
   if (!dataToSave.expiresAt) {
     dataToSave.expiresAt = null;
@@ -164,18 +194,17 @@ async function handleSave() {
   if (!dataToSave.usageLimit || dataToSave.usageLimit <= 0) {
     dataToSave.usageLimit = null; 
   }
-  // (MỚI) Đảm bảo limitPerUser luôn là số > 0
   if (!dataToSave.limitPerUser || dataToSave.limitPerUser <= 0) {
     dataToSave.limitPerUser = 1; 
   }
 
   try {
-    if (dataToSave.id) {
-      // Cập nhật (UPDATE)
-      const { id, ...data } = dataToSave;
-      await axios.patch(`${API_URL}/${id}`, data);
-    } else {
-      // Tạo mới (CREATE)
+    if (dataToSave.id) { 
+      // --- CẬP NHẬT (UPDATE) ---
+      await axios.patch(`${API_URL}/${dataToSave.id}`, dataToSave);
+    } else { 
+      // --- TẠO MỚI (CREATE) ---
+      delete dataToSave.id; 
       dataToSave.usageCount = 0; 
       await axios.post(API_URL, dataToSave);
     }
@@ -183,7 +212,11 @@ async function handleSave() {
     couponModalInstance.value.hide();
     Swal.fire('Thành công', 'Đã lưu mã giảm giá.', 'success');
     
-    fetchCoupons(pagination.currentPage); 
+    if (dataToSave.id) {
+        fetchCoupons(pagination.currentPage);
+    } else {
+        fetchCoupons(1); 
+    }
     
   } catch (error) {
     console.error("Lỗi khi lưu mã giảm giá:", error);
@@ -194,9 +227,15 @@ async function handleSave() {
 }
 
 async function handleDelete(coupon) {
+  
+  if (coupon.id === null || coupon.id === undefined) {
+    Swal.fire('Lỗi Dữ Liệu', 'Coupon này bị lỗi (ID=null) và không thể xóa. Vui lòng kiểm tra db.json.', 'error');
+    return;
+  }
+  
   const result = await Swal.fire({
     title: 'Bạn có chắc chắn?',
-    text: `Bạn sẽ xóa vĩnh viễn mã "${coupon.code}"!`,
+    text: `Bạn sẽ xóa vĩnh viễn mã "${coupon.code}" (ID: ${coupon.id})!`,
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#d33',
@@ -207,7 +246,7 @@ async function handleDelete(coupon) {
 
   if (result.isConfirmed) {
     try {
-      await axios.delete(`${API_URL}/${coupon.id}`);
+      await axios.delete(`${API_URL}/${coupon.id}`); 
       Swal.fire('Đã xóa!', 'Mã giảm giá đã được xóa.', 'success');
       
       if (coupons.value.length === 1 && pagination.currentPage > 1) {
@@ -217,8 +256,8 @@ async function handleDelete(coupon) {
       }
       
     } catch (error) {
-      console.error("Lỗi khi xóa mã giảm giá:", error);
-      Swal.fire('Lỗi', 'Không thể xóa mã này.', 'error');
+      console.error(`Lỗi khi xóa mã giảm giá (ID: ${coupon.id}):`, error); 
+      Swal.fire('Lỗi', 'Không thể xóa mã này. Chi tiết: ' + error.message, 'error');
     }
   }
 }
@@ -226,6 +265,7 @@ async function handleDelete(coupon) {
 </script>
 
 <template>
+  <!-- Content Header (Page header) -->
   <div class="app-content-header">
     <div class="container-fluid">
       <div class="row">
@@ -244,10 +284,12 @@ async function handleDelete(coupon) {
     </div>
   </div>
 
+  <!-- Main content -->
   <div class="app-content">
     <div class="container-fluid">
       <div class="row">
         <div class="col-12">
+          <!-- Bảng danh sách -->
           <div class="card">
             <div class="card-header">
               <h3 class="card-title">Danh sách Mã giảm giá</h3>
@@ -271,14 +313,17 @@ async function handleDelete(coupon) {
                     <th style="width: 150px">Mã Code</th>
                     <th>Tên/Mô tả</th>
                     <th style="width: 110px">Giá trị</th>
-                    <th style="width: 160px">Đã dùng / Giới hạn</th>
-                    <th style_="width: 120px">Giới hạn/User</th> <th style="width: 140px">Trạng thái</th>
+                    <th style="width: 160px">Lượt dùng (Tổng)</th>
+                    <th style="width: 130px">Lượt dùng/User</th>
+                    <th style="width: 140px">Ngày hết hạn</th>
+                    <th style="width: 140px">Trạng thái</th>
                     <th style="width: 150px">Hành động</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-if="coupons.length === 0 && !isLoading">
-                    <td colspan="8" class="text-center">Không có mã giảm giá nào.</td> </tr>
+                    <td colspan="8" class="text-center">Không có mã giảm giá nào.</td>
+                  </tr>
                   <tr v-for="coupon in coupons" :key="coupon.id">
                     <td>
                       <strong class="text-primary">{{ coupon.code }}</strong>
@@ -286,7 +331,9 @@ async function handleDelete(coupon) {
                     <td>{{ coupon.name }}</td>
                     <td>{{ formatValue(coupon) }}</td>
                     <td>{{ formatUsage(coupon) }}</td>
-                    <td>{{ coupon.limitPerUser || 1 }} lần</td> <td>
+                    <td>{{ coupon.limitPerUser || 1 }} lần</td>
+                    <td>{{ formatDateForDisplay(coupon.expiresAt) }}</td>
+                    <td>
                       <span class="badge" :class="getStatus(coupon).class">
                         {{ getStatus(coupon).text }}
                       </span>
@@ -304,6 +351,7 @@ async function handleDelete(coupon) {
               </table>
             </div>
 
+            <!-- Footer Phân trang -->
             <div class="card-footer clearfix" v-if="!isLoading && pagination.totalPages > 1">
               <ul class="pagination pagination-sm m-0 float-end">
                 <li class="page-item" :class="{ disabled: pagination.currentPage === 1 }">
@@ -325,6 +373,7 @@ async function handleDelete(coupon) {
     </div>
   </div>
 
+  <!-- Modal (Dùng chung cho Tạo mới & Cập nhật) -->
   <div class="modal fade" id="couponModal" ref="couponModalRef" tabindex="-1" aria-labelledby="couponModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
@@ -335,7 +384,7 @@ async function handleDelete(coupon) {
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
-          <form @submit.prevent="handleSave">
+          <form id="couponFormElement" @submit.prevent="handleSave">
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label for="couponName" class="form-label">Tên/Mô tả</label>
@@ -368,13 +417,13 @@ async function handleDelete(coupon) {
                 <small class="form-text text-muted">Bỏ trống nếu vô hạn.</small>
               </div>
               <div class="col-md-4 mb-3">
-                <label for="couponUsageLimit" class="form-label">Giới hạn (Tổng)</label>
+                <label for="couponUsageLimit" class="form-label">Giới hạn lượt dùng (Tổng)</label>
                 <input type="number" class="form-control" id="couponUsageLimit" v-model.number="couponForm.usageLimit" min="0">
                 <small class="form-text text-muted">Bỏ trống hoặc 0 = vô hạn.</small>
               </div>
               <div class="col-md-4 mb-3">
-                <label for="couponLimitPerUser" class="form-label">Giới hạn (User)</label>
-                <input type="number" class="form-control" id="couponLimitPerUser" v-model.number="couponForm.limitPerUser" min="1">
+                <label for="couponLimitPerUser" class="form-label">Giới hạn lượt dùng (User)</label>
+                <input type="number" class="form-control" id="couponLimitPerUser" v-model.number="couponForm.limitPerUser" required min="1">
                 <small class="form-text text-muted">V.dụ: 1 (mỗi người 1 lần)</small>
               </div>
             </div>
@@ -384,12 +433,13 @@ async function handleDelete(coupon) {
               <input type="number" class="form-control" id="couponUsageCount" v-model.number="couponForm.usageCount" min="0">
               <small class="form-text text-muted">Admin có thể chỉnh sửa số lần đã dùng.</small>
             </div>
-
+            
+            <button type="submit" style="display: none;"></button>
           </form>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
-          <button type="button" class="btn btn-primary" @click="handleSave" :disabled="isSaving">
+          <button type="submit" form="couponFormElement" class="btn btn-primary" :disabled="isSaving">
             <span v-if="isSaving" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
             Lưu thay đổi
           </button>

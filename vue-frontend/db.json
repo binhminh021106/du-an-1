@@ -22,14 +22,6 @@
       "password": "Binhminh@123",
       "password_confirmation": "Binhminh@123",
       "role": "nhanvien"
-    },
-    {
-      "id": "c4d1",
-      "username": "binhminh0211",
-      "email": "binhminh211@gmail.com",
-      "password": "Binhminh@123",
-      "password_confirmation": "Binhminh@123",
-      "role": "nhanvien"
     }
   ],
   "roles": [
@@ -211,7 +203,7 @@
   ],
   "coupons": [
     {
-      "id": 1,
+      "id": "1",
       "name": "Giảm giá 30/4",
       "code": "30THANG4",
       "type": "percent",
@@ -219,43 +211,21 @@
       "expiresAt": "2025-04-30T23:59:59",
       "usageLimit": 100,
       "usageCount": 10,
-      "limitPerUser": 1
-    },
-    {
-      "id": 2,
-      "name": "Giảm 50k",
-      "code": "GIAM50K",
-      "type": "fixed",
-      "value": 50000,
-      "expiresAt": null,
-      "usageLimit": null,
-      "usageCount": 0,
-      "limitPerUser": 1
-    },
-    {
-      "id": null,
-      "name": "",
-      "code": "",
-      "type": "percent",
-      "value": -1,
-      "expiresAt": null,
-      "usageLimit": null,
-      "usageCount": 0,
-      "limitPerUser": 1
+      "limitPerUser": 1 
     }
   ],
-  "coupon_usage": [
+  "coupon_usage": [ 
     {
-      "id": 1,
-      "couponId": 1,
-      "userId": 5,
-      "orderId": 101
+      "id": "1",
+      "couponId": "1",
+      "userId": "5",
+      "orderId": "101"
     },
     {
-      "id": 2,
-      "couponId": 1,
-      "userId": 7,
-      "orderId": 102
+      "id": "2",
+      "couponId": "1",
+      "userId": "7",
+      "orderId": "102"
     }
   ],
   "reviews": [
