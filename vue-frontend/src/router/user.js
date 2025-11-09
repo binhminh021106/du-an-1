@@ -38,6 +38,21 @@ const users = [
         name: "login",
         component: () => import("../page/user/login.vue"),
       },
+      {
+        path: "/policy",
+        name: "policy",
+        component: () => import("../page/user/PolicyPage.vue"),
+      },
+      {
+        path: "/FAQ",
+        name: "FAQ",
+        component: () => import("../page/user/FAQ.vue"),
+      },
+      {
+        path: "/blog",
+        name: "blog",
+        component: () => import("../page/user/Tintuc.vue"),
+      },
     ],
   },
 ];

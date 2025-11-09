@@ -7,7 +7,10 @@
             <li><router-link :to="{name: 'admin-login'}">Kênh Người Bán</router-link></li>
             <li><a href="#">Tải ứng dụng</a></li>
             <li><a href="#">Kết nối</a></li>
+            <li><router-link :to="{name: 'policy'}">Chính sách</router-link></li>
             <li><router-link :to="{name: 'contact'}">Liên hệ</router-link></li>
+            <li><router-link :to="{name: 'FAQ'}">FAQ</router-link></li>
+            <li><router-link :to="{name: 'blog'}">Blog/Tin tức</router-link></li>
           </ul>
         </div>
         <div class="top-bar-info">
