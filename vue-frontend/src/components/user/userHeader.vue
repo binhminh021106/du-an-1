@@ -22,7 +22,7 @@
     <div class="main-header">
       <div class="container relative-container">
 
-        <router-link to="/" class="logo">
+        <router-link :to="{name: 'home'}" class="logo">
           <img src="../img/LogoThinkHub.png" alt="ThinkHub Logo" @error="$event.target.style.display = 'none'">
         </router-link>
 

@@ -4,14 +4,6 @@
       "username": "binhminh21106",
       "email": "minhdzwama211@gmail.com",
       "role": "admin",
-      "id": "b88e",
-      "password": "Binhminh@123",
-      "status": "active"
-    },
-    {
-      "username": "binhminh21106",
-      "email": "minhdzwama211@gmail.com",
-      "role": "manager",
       "status": "active",
       "id": "3399"
     },
@@ -201,7 +193,7 @@
       "customerPhone": "0987654321",
       "customerAddress": "456 Đường XYZ, Q3, TP. HCM",
       "totalAmount": 1200000,
-      "status": "Hàng hoàn",
+      "status": "Hoàn hàng thành công",
       "createdAt": "2023-10-28T14:30:00Z",
       "return_status": ""
     }
