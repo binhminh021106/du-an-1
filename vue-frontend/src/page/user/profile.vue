@@ -3,6 +3,8 @@ import { reactive, ref } from "vue";
 
 const fileInput = ref(null);
 
+// test git checkout
+
 const user = ref({
   avatar: "https://via.placeholder.com/150",
   name: "Nguyễn Văn A",
@@ -89,7 +91,6 @@ const cancelEdit = () => {
   Object.assign(editUser, user.value);
 };
 </script>
-
 
 <template>
   <div class="profile-page">
