@@ -4,10 +4,10 @@
       <div class="container">
         <div class="top-bar-links">
           <ul>
-            <li><a href="#">Kênh Người Bán</a></li>
+            <li><router-link :to="{name: 'admin-login'}">Kênh Người Bán</router-link></li>
             <li><a href="#">Tải ứng dụng</a></li>
             <li><a href="#">Kết nối</a></li>
-            <li><router-link to="/contact">Liên hệ</router-link></li>
+            <li><router-link :to="{name: 'contact'}">Liên hệ</router-link></li>
           </ul>
         </div>
         <div class="top-bar-info">
@@ -58,11 +58,11 @@
         </form>
 
         <div class="header-actions">
-          <router-link to="/cart" class="action-item">
+          <router-link :to="{name: ''}" class="action-item">
             <i class="fa-solid fa-cart-shopping"></i>
             <span>Giỏ hàng</span>
           </router-link>
-          <router-link to="/login" class="action-item login-btn">
+          <router-link :to="{name: 'login'}" class="action-item login-btn">
             <i class="fa-regular fa-user"></i>
             <span>Đăng nhập</span>
           </router-link>

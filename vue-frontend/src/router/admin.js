@@ -33,37 +33,31 @@ const adminLayoutRoutes = [
         name: "admin-products",
         component: () => import("../page/admin/product/index.vue"),
       },
-      // order management route
       {
         path: "orders",
         name: "admin-orders",
         component: () => import("../page/admin/order/index.vue"),
       },
-      // comment
       {
         path: "comments",
         name: "admin-comments",
         component: () => import("../page/admin/content/comment.vue"),
       },
-      // review
       {
         path: "reviews",
         name: "admin-reviews",
         component: () => import("../page/admin/content/review.vue"),
       },
-      // slider
-      { 
+      {
         path: "slides",
         name: "admin-slides",
         component: () => import("../page/admin/content/slider.vue"),
-      }
-      //coupon
-      ,
+      },
       {
         path: "coupons",
         name: "admin-coupons",
         component: () => import("../page/admin/content/coupon.vue"),
-      }
+      },
     ],
   },
 ];

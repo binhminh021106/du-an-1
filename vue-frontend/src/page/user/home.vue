@@ -1,244 +1,250 @@
 <template>
     <div id="app">
-    
- 
-
-    <main class="container">
-        <section class="top-section-layout">
-            
-            <nav class="categories-sidebar">
-                <div class="category-item-sodo" 
-                     v-for="category in categories" 
-                     :key="category.id" 
-                     :class="{ active: category.id === activeCategoryId }" 
-                     @click="setActiveCategory(category.id)">
-                    <i :class="getCategoryIcon(category.name)"></i>
-                    <span>{{ category.name }}</span>
-                </div>
-            </nav>
-
-            <section class="slider" @mouseenter="stopAutoSlide" @mouseleave="startAutoSlide">
-    <div class="slider-wrapper" :style="{ transform: 'translateX(-' + (currentSlide * 100) + '%)' }">
-        <div class="slide" v-for="(slide, index) in slides" :key="index" :style="{ backgroundImage: 'url(' + slide.imageUrl + ')' }">
-            <div class="slide-content">
-                <h2>{{ slide.title }}</h2>
-                <p>{{ slide.description }}</p>
-            </div>
-        </div>
-    </div>
-
-    <button class="slider-control prev" @click="prevSlide">
-        <i class="fas fa-chevron-left"></i>
-    </button>
-    
-    <button class="slider-control next" @click="nextSlide">
-        <i class="fas fa-chevron-right"></i>
-    </button>
-    
-    <div class="slider-nav">
-        <span v-for="(slide, index) in slides" :key="index" class="slider-nav-dot" :class="{ active: index === currentSlide }" @click="goToSlide(index)"></span>
-    </div>
-</section>
-            
-            <aside class="utility-sidebar">
-                 <div class="user-info-card">
-                     <p class="user-name">Nguyễn Thị Kim Hiền</p>
-                     <p class="user-phone">0xxxxxx444</p>
-                     <p class="user-tier">⭐ Null</p>
-                     <hr style="margin: 10px 0; border: 0; border-top: 1px solid #f0f0f0;">
-                     <div class="user-loyalty-points">
-                         <span class="loyalty-icon">💰</span>
-                         <span class="loyalty-value">0đ</span>
-                         <p class="loyalty-text">Tổng tiền tích lũy</p>
-                     </div>
-                     <p class="view-store-link">Xem ưu đãi của bạn &gt;</p>
-                 </div>
-
-                 <ul class="utility-menu">
-                     <li><i class="fas fa-graduation-cap"></i> Ưu đãi cho giáo dục</li>
-                     <li><i class="fas fa-bell"></i> Đăng ký nhận ưu đãi</li>
-                     <li><i class="fas fa-retweet"></i> Thu cũ lên đời máy - Hẹn đổi</li>
-                     <li style="color: #dc3545; font-weight: bold;"><i class="fas fa-gift"></i> Laptop giảm thêm 500K</li>
-                     <li><i class="fas fa-mobile-alt"></i> iPhone trợ giá đến 5 triệu</li>
-                 </ul>
-                 
-                 <div class="quick-links-grid">
-                      <div class="quick-link-item"><i class="fab fa-samsung"></i> Samsung</div>
-                      <div class="quick-link-item"><i class="fas fa-laptop-code"></i> Laptop</div>
-                 </div>
-                 
-            </aside>
-
-        </section>
-
-        <section class="product-grid">
-            <div class="product-card" v-for="product in filteredProducts" :key="product.id">
-                <div class="product-image">
-                    [Image: {{ product.name }}]
-                    </div>
-                <div class="product-name">{{ product.name }}</div>
-                <div class="product-price">{{ formatCurrency(getMinPrice(product.variants)) }}</div>
-                <div class="product-stock">Tồn kho: {{ getTotalStock(product.variants) }}</div>
-                <div class="card-actions">
-                    <button class="btn-view" @click="openQuickView(product)"><i class="fas fa-eye"></i> Xem</button>
-                    <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i> Thêm giỏ</button>
-                </div>
-            </div>
-        </section>
-
-        <div id="app">
         <main class="container">
             <section class="top-section-layout">
+
+                <nav class="categories-sidebar">
+                    <div class="category-item-sodo" v-for="category in categories" :key="category.id"
+                        :class="{ active: category.id === activeCategoryId }" @click="setActiveCategory(category.id)">
+                        <i :class="getCategoryIcon(category.name)"></i>
+                        <span>{{ category.name }}</span>
+                    </div>
+                </nav>
+
+                <section class="slider" @mouseenter="stopAutoSlide" @mouseleave="startAutoSlide">
+                    <div class="slider-wrapper" :style="{ transform: 'translateX(-' + (currentSlide * 100) + '%)' }">
+                        <div class="slide" v-for="(slide, index) in slides" :key="index"
+                            :style="{ backgroundImage: 'url(' + slide.imageUrl + ')' }">
+                            <div class="slide-content">
+                                <h2>{{ slide.title }}</h2>
+                                <p>{{ slide.description }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="slider-control prev" @click="prevSlide">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+
+                    <button class="slider-control next" @click="nextSlide">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+
+                    <div class="slider-nav">
+                        <span v-for="(slide, index) in slides" :key="index" class="slider-nav-dot"
+                            :class="{ active: index === currentSlide }" @click="goToSlide(index)"></span>
+                    </div>
                 </section>
+
+                <aside class="utility-sidebar">
+                    <div class="user-info-card">
+                        <p class="user-name">Nguyễn Thị Kim Hiền</p>
+                        <p class="user-phone">0xxxxxx444</p>
+                        <p class="user-tier">⭐ Null</p>
+                        <hr style="margin: 10px 0; border: 0; border-top: 1px solid #f0f0f0;">
+                        <div class="user-loyalty-points">
+                            <span class="loyalty-icon">💰</span>
+                            <span class="loyalty-value">0đ</span>
+                            <p class="loyalty-text">Tổng tiền tích lũy</p>
+                        </div>
+                        <p class="view-store-link">Xem ưu đãi của bạn &gt;</p>
+                    </div>
+
+                    <ul class="utility-menu">
+                        <li><i class="fas fa-graduation-cap"></i> Ưu đãi cho giáo dục</li>
+                        <li><i class="fas fa-bell"></i> Đăng ký nhận ưu đãi</li>
+                        <li><i class="fas fa-retweet"></i> Thu cũ lên đời máy - Hẹn đổi</li>
+                        <li style="color: #dc3545; font-weight: bold;"><i class="fas fa-gift"></i> Laptop giảm thêm 500K
+                        </li>
+                        <li><i class="fas fa-mobile-alt"></i> iPhone trợ giá đến 5 triệu</li>
+                    </ul>
+
+                    <div class="quick-links-grid">
+                        <div class="quick-link-item"><i class="fab fa-samsung"></i> Samsung</div>
+                        <div class="quick-link-item"><i class="fas fa-laptop-code"></i> Laptop</div>
+                    </div>
+
+                </aside>
+
+            </section>
 
             <section class="product-grid">
-                </section>
-
-            <hr>
-
-            <section class="brand-banner" style="margin-top: 20px;">
-                <a href="#">
-                    <img src="https://images.fpt.shop/unsafe/fit-in/1200x200/filters:quality(90):fill(white)/fptshop.com.vn/Uploads/Originals/2024/5/1/638501810787167732_F-H5_1200x200%20(1).png" alt="Brand Banner">
-                </a>
-            </section>
-
-            <section class="trust-block">
-                <div class="trust-item">
-                    <span>✔️ **Bảo hành chính hãng**</span>
-                </div>
-                <div class="trust-item">
-                    <span>🚚 **Giao hàng miễn phí**</span>
-                </div>
-                <div class="trust-item">
-                    <span>🔄 **Đổi trả 30 ngày**</span>
-                </div>
-                <div class="trust-item">
-                    <span>🏪 **Hơn 100+ cửa hàng**</span>
-                </div>
-            </section>
-
-            <section class="product-section">
-                <h2 class="section-title">✨ ĐIỆN THOẠI NỔI BẬT NHẤT</h2>
-                <div class="product-grid">
-                    <div class="product-card" v-for="product in featuredPhones" :key="product.id">
-                        <img :src="product.img" :alt="product.name">
-                        <h3 class="product-name">{{ product.name }}</h3>
-                        <div class="product-price">
-                            <span class="new-price">{{ product.newPrice }}</span>
-                            <span class="old-price">{{ product.oldPrice }}</span>
-                        </div>
-                        <div class="product-promo" v-if="product.promo">
-                            {{ product.promo }}
-                        </div>
-                        <div class="card-actions-small">
-                             <button class="btn-view" @click="openQuickView(product)"><i class="fas fa-eye"></i> Xem</button>
-                             <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i> Thêm giỏ</button>
-                        </div>
+                <div class="product-card" v-for="product in filteredProducts" :key="product.id">
+                    <div class="product-image">
+                        [Image: {{ product.name }}]
+                    </div>
+                    <div class="product-name">{{ product.name }}</div>
+                    <div class="product-price">{{ formatCurrency(getMinPrice(product.variants)) }}</div>
+                    <div class="product-stock">Tồn kho: {{ getTotalStock(product.variants) }}</div>
+                    <div class="card-actions">
+                        <button class="btn-view" @click="openQuickView(product)"><i class="fas fa-eye"></i> Xem</button>
+                        <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i> Thêm
+                            giỏ</button>
                     </div>
                 </div>
             </section>
 
-            <section class="product-section">
-                <h2 class="section-title">💻 LAPTOP BÁN CHẠY</h2>
-                <div class="product-grid">
-                    <div class="product-card" v-for="product in featuredLaptops" :key="product.id">
-                        <img :src="product.img" :alt="product.name">
-                        <h3 class="product-name">{{ product.name }}</h3>
-                        <div class="product-price">
-                            <span class="new-price">{{ product.newPrice }}</span>
-                            <span class="old-price">{{ product.oldPrice }}</span>
-                        </div>
-                        <div class="product-promo" v-if="product.promo">
-                            {{ product.promo }}
-                        </div>
-                        <div class="card-actions-small">
-                             <button class="btn-view" @click="openQuickView(product)"><i class="fas fa-eye"></i> Xem</button>
-                             <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i> Thêm giỏ</button>
-                        </div>
-                    </div>
-                </div>
-            </section>
+            <div id="app">
+                <main class="container">
+                    <section class="top-section-layout">
+                    </section>
 
-            <section class="news-section">
-                <h2 class="section-title">📰 TIN TỨC CÔNG NGHỆ</h2>
-                <div class="news-grid">
-                    <div class="news-card" v-for="article in newsArticles" :key="article.id">
-                        <img :src="article.img" :alt="article.title">
-                        <h3 class="news-title">{{ article.title }}</h3>
-                        <p class="news-excerpt">{{ article.excerpt }}</p>
-                        <a href="#" class="read-more">Xem thêm &gt;</a>
-                    </div>
-                </div>
-            </section>
+                    <section class="product-grid">
+                    </section>
+
+                    <hr>
+
+                    <section class="brand-banner" style="margin-top: 20px;">
+                        <a href="#">
+                            <img src="https://images.fpt.shop/unsafe/fit-in/1200x200/filters:quality(90):fill(white)/fptshop.com.vn/Uploads/Originals/2024/5/1/638501810787167732_F-H5_1200x200%20(1).png"
+                                alt="Brand Banner">
+                        </a>
+                    </section>
+
+                    <section class="trust-block">
+                        <div class="trust-item">
+                            <span>✔️ **Bảo hành chính hãng**</span>
+                        </div>
+                        <div class="trust-item">
+                            <span>🚚 **Giao hàng miễn phí**</span>
+                        </div>
+                        <div class="trust-item">
+                            <span>🔄 **Đổi trả 30 ngày**</span>
+                        </div>
+                        <div class="trust-item">
+                            <span>🏪 **Hơn 100+ cửa hàng**</span>
+                        </div>
+                    </section>
+
+                    <section class="product-section">
+                        <h2 class="section-title">✨ ĐIỆN THOẠI NỔI BẬT NHẤT</h2>
+                        <div class="product-grid">
+                            <div class="product-card" v-for="product in featuredPhones" :key="product.id">
+                                <img :src="product.img" :alt="product.name">
+                                <h3 class="product-name">{{ product.name }}</h3>
+                                <div class="product-price">
+                                    <span class="new-price">{{ product.newPrice }}</span>
+                                    <span class="old-price">{{ product.oldPrice }}</span>
+                                </div>
+                                <div class="product-promo" v-if="product.promo">
+                                    {{ product.promo }}
+                                </div>
+                                <div class="card-actions-small">
+                                    <button class="btn-view" @click="openQuickView(product)"><i class="fas fa-eye"></i>
+                                        Xem</button>
+                                    <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i>
+                                        Thêm giỏ</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="product-section">
+                        <h2 class="section-title">💻 LAPTOP BÁN CHẠY</h2>
+                        <div class="product-grid">
+                            <div class="product-card" v-for="product in featuredLaptops" :key="product.id">
+                                <img :src="product.img" :alt="product.name">
+                                <h3 class="product-name">{{ product.name }}</h3>
+                                <div class="product-price">
+                                    <span class="new-price">{{ product.newPrice }}</span>
+                                    <span class="old-price">{{ product.oldPrice }}</span>
+                                </div>
+                                <div class="product-promo" v-if="product.promo">
+                                    {{ product.promo }}
+                                </div>
+                                <div class="card-actions-small">
+                                    <button class="btn-view" @click="openQuickView(product)"><i class="fas fa-eye"></i>
+                                        Xem</button>
+                                    <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i>
+                                        Thêm giỏ</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="news-section">
+                        <h2 class="section-title">📰 TIN TỨC CÔNG NGHỆ</h2>
+                        <div class="news-grid">
+                            <div class="news-card" v-for="article in newsArticles" :key="article.id">
+                                <img :src="article.img" :alt="article.title">
+                                <h3 class="news-title">{{ article.title }}</h3>
+                                <p class="news-excerpt">{{ article.excerpt }}</p>
+                                <a href="#" class="read-more">Xem thêm &gt;</a>
+                            </div>
+                        </div>
+                    </section>
+
+                </main>
+
+            </div>
 
         </main>
 
-        </div>
-
-    </main>
-
-    <div class="modal-overlay" :class="{ open: isModalOpen }" @click.self="closeQuickView">
-        <div class="modal-content" v-if="selectedProduct">
-            <button class="modal-close-btn" @click="closeQuickView"><i class="fas fa-times"></i></button>
-            <div class="modal-body">
-                <div class="modal-image">
-                    [Image: {{ selectedProduct.name }}]
+        <div class="modal-overlay" :class="{ open: isModalOpen }" @click.self="closeQuickView">
+            <div class="modal-content" v-if="selectedProduct">
+                <button class="modal-close-btn" @click="closeQuickView"><i class="fas fa-times"></i></button>
+                <div class="modal-body">
+                    <div class="modal-image">
+                        [Image: {{ selectedProduct.name }}]
                     </div>
-                <div class="modal-details">
-                    <h4>{{ selectedProduct.name }}</h4>
-                    <div class="price">{{ formatCurrency(selectedVariant.price) }}</div>
-                    <p class="stock">Tồn kho: {{ selectedVariant.stock }}</p>
-                    <div class="variant-selector">
-                        <label for="variant-select">Chọn phiên bản:</label>
-                        <select id="variant-select" v-model="selectedVariantIndex" @change="updateSelectedVariant">
-                            <option v-for="(variant, index) in selectedProduct.variants" :key="index" :value="index">
-                                Phiên bản {{ index + 1 }} - {{ formatCurrency(variant.price) }} (SL: {{ variant.stock }})
-                            </option>
-                        </select>
+                    <div class="modal-details">
+                        <h4>{{ selectedProduct.name }}</h4>
+                        <div class="price">{{ formatCurrency(selectedVariant.price) }}</div>
+                        <p class="stock">Tồn kho: {{ selectedVariant.stock }}</p>
+                        <div class="variant-selector">
+                            <label for="variant-select">Chọn phiên bản:</label>
+                            <select id="variant-select" v-model="selectedVariantIndex" @change="updateSelectedVariant">
+                                <option v-for="(variant, index) in selectedProduct.variants" :key="index"
+                                    :value="index">
+                                    Phiên bản {{ index + 1 }} - {{ formatCurrency(variant.price) }} (SL: {{
+                                    variant.stock }})
+                                </option>
+                            </select>
+                        </div>
+                        <p>Danh mục: {{ selectedProduct.category.name }}</p>
+                        <button class="btn-buy-now" @click="buyNow(selectedProduct, selectedVariant)">
+                            <i class="fas fa-money-bill-wave"></i> Mua Ngay
+                        </button>
                     </div>
-                    <p>Danh mục: {{ selectedProduct.category.name }}</p>
-                    <button class="btn-buy-now" @click="buyNow(selectedProduct, selectedVariant)">
-                        <i class="fas fa-money-bill-wave"></i> Mua Ngay
-                    </button>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="cart-sidebar" :class="{ open: isCartOpen }">
-        <div class="cart-header">
-            <h3><i class="fas fa-shopping-basket"></i> Giỏ Hàng</h3>
-            <button class="cart-close-btn" @click="toggleCart"><i class="fas fa-times"></i></button>
-        </div>
-        <div class="cart-items">
-            <p v-if="cartItems.length === 0">Giỏ hàng trống.</p>
-            <div class="cart-item" v-for="(item, index) in cartItems" :key="index">
-                <div class="cart-item-image"></div>
-                <div class="cart-item-info">
-                    <div class="cart-item-name">{{ item.name }}</div>
-                    <div class="cart-item-price">{{ formatCurrency(item.price) }} x {{ item.quantity }}</div>
-                    <button style="background:none; border:none; color:red; cursor:pointer;" @click="removeItemFromCart(index)">Xóa</button>
+        <div class="cart-sidebar" :class="{ open: isCartOpen }">
+            <div class="cart-header">
+                <h3><i class="fas fa-shopping-basket"></i> Giỏ Hàng</h3>
+                <button class="cart-close-btn" @click="toggleCart"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="cart-items">
+                <p v-if="cartItems.length === 0">Giỏ hàng trống.</p>
+                <div class="cart-item" v-for="(item, index) in cartItems" :key="index">
+                    <div class="cart-item-image"></div>
+                    <div class="cart-item-info">
+                        <div class="cart-item-name">{{ item.name }}</div>
+                        <div class="cart-item-price">{{ formatCurrency(item.price) }} x {{ item.quantity }}</div>
+                        <button style="background:none; border:none; color:red; cursor:pointer;"
+                            @click="removeItemFromCart(index)">Xóa</button>
+                    </div>
                 </div>
             </div>
-        </div>
-        <div class="cart-footer">
-            <div class="cart-total">
-                <span>Tổng tiền:</span>
-                <span>{{ formatCurrency(cartTotal) }}</span>
+            <div class="cart-footer">
+                <div class="cart-total">
+                    <span>Tổng tiền:</span>
+                    <span>{{ formatCurrency(cartTotal) }}</span>
+                </div>
+                <button class="btn-checkout">
+                    Tiến hành Thanh toán
+                </button>
             </div>
-            <button class="btn-checkout">
-                Tiến hành Thanh toán
-            </button>
         </div>
     </div>
-</div>
 </template>
 
 <script>
 // Dữ liệu từ database (được định nghĩa trong khối script)
 const database = {
-    "products": [{"id": "1", "image_url": "#", "name": "Chuột gaming Logitech G102", "category": {"id": 3, "name": "Phụ kiện"}, "variants": [{"price": 350000, "stock": 80}, {"price": 370000, "stock": 40}]}, {"id": "2", "image_url": "#", "name": "Bàn phím cơ Akko 3087 Ocean Star", "category": {"id": 3, "name": "Phụ kiện"}, "variants": [{"price": 1650000, "stock": 30}, {"price": 1750000, "stock": 15}]}, {"id": "3", "image_url": "#", "name": "Tai nghe Razer Kraken X", "category": {"id": 6, "name": "Âm thanh, Mic thu âm"}, "variants": [{"price": 950000, "stock": 50}, {"price": 990000, "stock": 30}]}, {"id": "4", "image_url": "#", "name": "Màn hình ASUS TUF Gaming VG249Q1A 24 inch", "category": {"id": 5, "name": "PC, Màn hình, Máy in"}, "variants": [{"price": 3650000, "stock": 20}, {"price": 3790000, "stock": 12}]}, {"id": "5", "image_url": "#", "name": "Laptop ASUS TUF Gaming F15 FX506HF", "category": {"id": 2, "name": "Laptop"}, "variants": [{"price": 18500000, "stock": 6}, {"price": 18900000, "stock": 4}]}],
-    "slides": [{"id": "1", "title": "Xiaomi 15T Series", "description": "Chạm đỉnh tuyệt tác - Giá chỉ từ 14.49 Triệu", "imageUrl": "https://placehold.co/1200x400/ff6347/ffffff?text=Xiaomi+15T+Series", "linkUrl": "/sale/summer", "status": "published", "order": 1}, {"id": "2", "title": "Ipad Pro Mới", "description": "Nâng cấp sức mạnh tuyệt đối", "imageUrl": "https://placehold.co/1200x400/4682b4/ffffff?text=New+Collection", "linkUrl": "/collections/new", "status": "published", "order": 2}]
+    "products": [{ "id": "1", "image_url": "#", "name": "Chuột gaming Logitech G102", "category": { "id": 3, "name": "Phụ kiện" }, "variants": [{ "price": 350000, "stock": 80 }, { "price": 370000, "stock": 40 }] }, { "id": "2", "image_url": "#", "name": "Bàn phím cơ Akko 3087 Ocean Star", "category": { "id": 3, "name": "Phụ kiện" }, "variants": [{ "price": 1650000, "stock": 30 }, { "price": 1750000, "stock": 15 }] }, { "id": "3", "image_url": "#", "name": "Tai nghe Razer Kraken X", "category": { "id": 6, "name": "Âm thanh, Mic thu âm" }, "variants": [{ "price": 950000, "stock": 50 }, { "price": 990000, "stock": 30 }] }, { "id": "4", "image_url": "#", "name": "Màn hình ASUS TUF Gaming VG249Q1A 24 inch", "category": { "id": 5, "name": "PC, Màn hình, Máy in" }, "variants": [{ "price": 3650000, "stock": 20 }, { "price": 3790000, "stock": 12 }] }, { "id": "5", "image_url": "#", "name": "Laptop ASUS TUF Gaming F15 FX506HF", "category": { "id": 2, "name": "Laptop" }, "variants": [{ "price": 18500000, "stock": 6 }, { "price": 18900000, "stock": 4 }] }],
+    "slides": [{ "id": "1", "title": "Xiaomi 15T Series", "description": "Chạm đỉnh tuyệt tác - Giá chỉ từ 14.49 Triệu", "imageUrl": "https://placehold.co/1200x400/ff6347/ffffff?text=Xiaomi+15T+Series", "linkUrl": "/sale/summer", "status": "published", "order": 1 }, { "id": "2", "title": "Ipad Pro Mới", "description": "Nâng cấp sức mạnh tuyệt đối", "imageUrl": "https://placehold.co/1200x400/4682b4/ffffff?text=New+Collection", "linkUrl": "/collections/new", "status": "published", "order": 2 }]
 };
 
 // Danh mục bổ sung từ hình ảnh tham khảo (để populate sidebar đầy đủ)
@@ -260,7 +266,7 @@ const supplementalCategories = [
 // Lấy danh sách danh mục duy nhất từ sản phẩm và bổ sung
 const productCategories = database.products.map(p => p.category);
 const combinedCategories = [...productCategories, ...supplementalCategories];
-        
+
 // Lọc trùng và tạo danh sách cuối cùng
 const allCategories = [...combinedCategories.reduce((map, obj) => map.set(obj.name, obj), new Map()).values()];
 
@@ -283,15 +289,15 @@ export default {
         // (Giả định 'database' và 'allCategories' đã được định nghĩa ở phạm vi ngoài)
         const productLaptop = database.products.find(p => p.category.name === 'Laptop');
 
-        const featuredLaptops = productLaptop ? 
+        const featuredLaptops = productLaptop ?
             [
-                { 
-                    id: productLaptop.id, 
+                {
+                    id: productLaptop.id,
                     name: productLaptop.name, // Lấy tên từ database
                     newPrice: formatPrice(getMinPrice(productLaptop.variants)), // Lấy giá thấp nhất từ database
                     oldPrice: formatPrice(getMinPrice(productLaptop.variants) + 3000000), // Giả lập giá cũ
-                    promo: 'Giảm 500.000đ cho sinh viên', 
-                    img: 'https://placehold.co/180x180/ffc107/000000?text=Laptop+F15' 
+                    promo: 'Giảm 500.000đ cho sinh viên',
+                    img: 'https://placehold.co/180x180/ffc107/000000?text=Laptop+F15'
                 },
                 { id: 'l2', name: 'MacBook Air M3 13"', newPrice: '24.990.000₫', oldPrice: '27.990.000₫', promo: 'Tặng chuột không dây', img: 'https://placehold.co/180x180/6c757d/ffffff?text=Macbook+Air' },
                 { id: 'l3', name: 'Laptop Văn Phòng Dell Vostro', newPrice: '12.500.000₫', oldPrice: '14.000.000₫', promo: 'Balo + Office 365', img: 'https://placehold.co/180x180/17a2b8/ffffff?text=Laptop+Dell' },
@@ -325,13 +331,13 @@ export default {
 
             // Product and Category state
             // Lấy ID của Điện thoại làm mặc định, nếu không có thì lấy ID đầu tiên
-            activeCategoryId: allCategories.length > 0 ? allCategories.find(c => c.name === 'Điện thoại')?.id || allCategories[0].id : null, 
+            activeCategoryId: allCategories.length > 0 ? allCategories.find(c => c.name === 'Điện thoại')?.id || allCategories[0].id : null,
 
             // Modal state
             isModalOpen: false,
             selectedProduct: null,
             selectedVariantIndex: 0,
-                
+
             // Cart state
             isCartOpen: false,
             cartItems: [
@@ -340,7 +346,7 @@ export default {
             ],
         };
     },
-        
+
     computed: {
         filteredProducts() {
             if (!this.activeCategoryId) {
@@ -349,11 +355,11 @@ export default {
             // Tìm tên danh mục từ ID
             const activeCategoryName = this.categories.find(c => c.id === this.activeCategoryId)?.name;
             if (!activeCategoryName) return this.products;
-                    
+
             // Lọc sản phẩm
             return this.products.filter(product => product.category.name === activeCategoryName);
         },
-                
+
         selectedVariant() {
             if (this.selectedProduct && this.selectedProduct.variants && this.selectedProduct.variants.length > 0) {
                 const index = Math.max(0, Math.min(this.selectedProduct.variants.length - 1, this.selectedVariantIndex));
@@ -361,16 +367,16 @@ export default {
             }
             return { price: 0, stock: 0 };
         },
-                
+
         cartTotal() {
             return this.cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
         }
     },
-        
+
     mounted() {
         this.startAutoSlide();
     },
-    
+
     beforeDestroy() {
         clearInterval(this.slideInterval);
     },
@@ -390,13 +396,13 @@ export default {
         getTotalStock(variants) {
             return variants.reduce((sum, v) => sum + v.stock, 0);
         },
-                
+
         getCategoryIcon(categoryName) {
             // Mapping icon Font Awesome cho các danh mục
             const iconMap = {
                 'Điện thoại': 'fas fa-mobile-alt',
                 'Laptop': 'fas fa-laptop',
-                'Âm thanh, Mic thu âm': 'fas fa-volume-up', 
+                'Âm thanh, Mic thu âm': 'fas fa-volume-up',
                 'Đồng hồ, Camera': 'fas fa-camera',
                 'Đồ gia dụng, Làm đẹp': 'fas fa-house-chimney',
                 'Phụ kiện': 'fas fa-battery-full',
@@ -415,7 +421,7 @@ export default {
             if (this.slides.length > 1 && !this.slideInterval) {
                 this.slideInterval = setInterval(() => {
                     this.currentSlide = (this.currentSlide + 1) % this.slides.length;
-                }, 5000); 
+                }, 5000);
             }
         },
         stopAutoSlide() {
@@ -443,7 +449,7 @@ export default {
         setActiveCategory(id) {
             this.activeCategoryId = id;
         },
-                
+
         // --- Modal Methods (Quick View) ---
         openQuickView(product) {
             this.selectedProduct = product;
@@ -455,11 +461,11 @@ export default {
             this.isModalOpen = false;
             this.selectedProduct = null;
         },
-                
+
         updateSelectedVariant() {
             // Logic tự động trong computed property
         },
-                
+
         buyNow(product, variant) {
             alert(`Mua ngay: ${product.name} - Giá: ${this.formatCurrency(variant.price)}`);
             this.closeQuickView();
@@ -469,7 +475,7 @@ export default {
         toggleCart() {
             this.isCartOpen = !this.isCartOpen;
         },
-                
+
         // Phương thức addToCart được sửa đổi để xử lý cả sản phẩm DB và sản phẩm mock (featured)
         addToCart(product, variant = null) {
             let itemPrice;
@@ -485,17 +491,17 @@ export default {
                 itemPrice = cheapestVariant.price;
                 itemName = product.name;
             } else {
-                 // Thêm từ Featured Card (Mock Data)
-                 // Cố gắng parse giá từ chuỗi 'newPrice' nếu là dữ liệu mock
+                // Thêm từ Featured Card (Mock Data)
+                // Cố gắng parse giá từ chuỗi 'newPrice' nếu là dữ liệu mock
                 const priceMatch = product.newPrice ? product.newPrice.replace(/[^0-9]/g, '') : 0;
                 itemPrice = priceMatch * 1;
                 itemName = product.name;
             }
-            
+
             if (!itemPrice || itemPrice === 0) return;
 
             // Tìm item có cùng ID và cùng giá (để phân biệt biến thể/mô hình)
-            const existingItemIndex = this.cartItems.findIndex(item => 
+            const existingItemIndex = this.cartItems.findIndex(item =>
                 item.id === product.id && item.price === itemPrice);
 
             if (existingItemIndex > -1) {
@@ -510,7 +516,7 @@ export default {
             }
             this.isCartOpen = true; // Tự động mở giỏ hàng khi thêm
         },
-                
+
         removeItemFromCart(index) {
             this.cartItems.splice(index, 1);
         }
@@ -520,8 +526,10 @@ export default {
 <style scoped>
 /* ------------------- Global & Variables ------------------- */
 :root {
-    --primary-color: #dc3545; /* Đỏ (CellphoneS) */
-    --secondary-color: #f8f9fa; /* Xám nhạt */
+    --primary-color: #dc3545;
+    /* Đỏ (CellphoneS) */
+    --secondary-color: #f8f9fa;
+    /* Xám nhạt */
     --text-color: #333;
     --border-radius: 8px;
     --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -560,7 +568,8 @@ a {
     color: white;
 }
 
-.header a, .logo a {
+.header a,
+.logo a {
     color: white;
 }
 
@@ -642,7 +651,8 @@ a {
     font-weight: 500;
 }
 
-.category-item-sodo:hover, .category-item-sodo.active {
+.category-item-sodo:hover,
+.category-item-sodo.active {
     background-color: #f0f0f0;
 }
 
@@ -784,7 +794,8 @@ a {
 
 .loyalty-icon {
     font-size: 1.5em;
-    margin-right: 5px; /* Giữ lại nếu muốn icon và text cùng hàng */
+    margin-right: 5px;
+    /* Giữ lại nếu muốn icon và text cùng hàng */
 }
 
 .loyalty-value {
@@ -793,7 +804,8 @@ a {
     color: #333;
 }
 
-.loyalty-text, .view-store-link {
+.loyalty-text,
+.view-store-link {
     font-size: 0.8em;
     color: #6c757d;
 }
@@ -921,7 +933,8 @@ a {
     cursor: pointer;
     font-weight: 600;
     transition: background-color var(--transition-speed), opacity var(--transition-speed);
-    color: white; /* Gộp màu chữ chung */
+    color: white;
+    /* Gộp màu chữ chung */
 }
 
 .btn-view {
@@ -1176,7 +1189,8 @@ a {
         flex-direction: column;
     }
 
-    .categories-sidebar, .utility-sidebar {
+    .categories-sidebar,
+    .utility-sidebar {
         width: 100%;
         max-height: none;
     }
@@ -1201,7 +1215,8 @@ a {
         border-radius: var(--border-radius);
     }
 
-    .category-item-sodo:hover, .category-item-sodo.active {
+    .category-item-sodo:hover,
+    .category-item-sodo.active {
         background-color: #f0f0f0;
     }
 
@@ -1250,7 +1265,8 @@ a {
         flex-direction: column;
     }
 
-    .modal-image, .modal-details {
+    .modal-image,
+    .modal-details {
         width: 100%;
     }
 
@@ -1258,6 +1274,7 @@ a {
         width: 100%;
     }
 }
+
 .trust-block {
     display: flex;
     justify-content: space-around;
