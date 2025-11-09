@@ -53,20 +53,30 @@
     }
   ],
   "categories": [
-    {
-      "id": "1",
-      "name": "Điện thoại",
-      "description": "Danh mục điện thoại di động"
+     {
+      "id": "3",
+      "name": "Phone",
+      "description": "Điện thoại di động nổi bật"
     },
     {
-      "id": "2",
+      "id": "4",
       "name": "Laptop",
-      "description": "Danh mục máy tính xách tay"
+      "description": "Máy tính xách tay bán chạy"
     },
     {
-      "id": "a4a0",
+      "id": "5",
       "name": "Watch",
-      "description": "watch"
+      "description": "Đồng hồ thông minh"
+    },
+    {
+      "id": "6",
+      "name": "Audio",
+      "description": "Âm thanh và tai nghe"
+    },
+    {
+      "id": "7",
+      "name": "Gaming",
+      "description": "Phụ kiện và thiết bị chơi game"
     }
   ],
   "products": [
@@ -265,6 +275,28 @@
       "linkUrl": "/collections/new",
       "status": "draft",
       "order": 2
+    }
+  ],"news": [
+    {
+      "id": 1,
+      "title": "Apple ra mắt iPhone 16 với chip A18 mới",
+      "excerpt": "Hiệu năng tăng 20%, tiết kiệm pin hơn 15% so với thế hệ trước.",
+      "image": "https://placehold.co/400x200?text=iPhone+16",
+      "date": "2025-10-25"
+    },
+    {
+      "id": 2,
+      "title": "ASUS trình làng dòng laptop TUF 2025",
+      "excerpt": "Dòng TUF mới có thiết kế nhẹ hơn và GPU RTX 5070 cực mạnh.",
+      "image": "https://placehold.co/400x200?text=ASUS+TUF+2025",
+      "date": "2025-10-20"
+    },
+    {
+      "id": 3,
+      "title": "Samsung công bố Galaxy Z Fold7",
+      "excerpt": "Siêu phẩm gập với độ bền cao hơn 30%, pin dùng 2 ngày.",
+      "image": "https://placehold.co/400x200?text=Fold+7",
+      "date": "2025-09-30"
     }
   ]
 }

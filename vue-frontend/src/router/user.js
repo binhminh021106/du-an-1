@@ -9,34 +9,41 @@ const users = [
         component: () => import("../page/user/home.vue"),
       },
       {
-        path: "/about",
+        path: "about",
         name: "about",
         component: () => import("../page/user/about.vue"),
       },
       {
-        path: "/contact",
+        path: "contact",
         name: "contact",
         component: () => import("../page/user/Contact.vue"),
       },
       {
-        path: "/notFound",
+        path: "notFound",
         name: "notFound",
         component: () => import("../page/user/notFound.vue"),
       },
       {
-        path: "/profile",
+        path: "profile",
         name: "profile",
         component: () => import("../page/user/profile.vue"),
       },
       {
-        path: "/register",
+        path: "register",
         name: "register",
         component: () => import("../page/user/register.vue"),
       },
       {
-        path: "/login",
+        path: "login",
         name: "login",
         component: () => import("../page/user/login.vue"),
+      },
+
+      // ✅ Bắt mọi đường dẫn lạ về notFound hoặc home
+      {
+        path: ":pathMatch(.*)*",
+        name: "catchAll",
+        component: () => import("../page/user/notFound.vue"),
       },
     ],
   },
