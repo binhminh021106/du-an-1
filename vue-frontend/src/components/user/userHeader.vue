@@ -33,20 +33,21 @@
           </button>
 
           <div class="dropdown-menu" :class="{ active: isMenuActive }">
-            <ul class="menu-list">
-              <li>
-                <router-link to="/category/phone"><i class="fa-solid fa-mobile-screen"></i> Điện thoại & Phụ
-                  kiện</router-link>
+            <ul class="menu-list" v-if="categories.length">
+              <!-- BẮT ĐẦU VÒNG LẶP DỮ LIỆU ĐỘNG -->
+              <li v-for="category in categories" :key="category.id">
+                <!-- 
+                  - Dùng v-html để render icon (do admin nhập)
+                  - Link tới /category/[name]
+                -->
+                <router-link :to="'/category/' + category.name">
+                  <span v-html="category.icon" class="icon-placeholder"></span>
+                  {{ category.name }}
+                </router-link>
               </li>
-              <li><router-link to="/category/laptop"><i class="fa-solid fa-laptop"></i> Máy tính & Laptop</router-link>
-              </li>
-              <li><router-link to="/category/watch"><i class="fa-solid fa-clock"></i> Đồng hồ thông minh</router-link>
-              </li>
-              <li><router-link to="/category/audio"><i class="fa-solid fa-headphones"></i> Thiết bị âm
-                  thanh</router-link></li>
-              <li><router-link to="/category/gaming"><i class="fa-solid fa-gamepad"></i> Gaming Gear</router-link></li>
-
+              <!-- KẾT THÚC VÒNG LẶP -->
             </ul>
+            <div v-else class="p-3 text-center text-muted small">Đang tải danh mục...</div>
           </div>
         </div>
 
@@ -72,25 +73,32 @@
     </div>
   </header>
 </template>
-<style>
-:root {
-  --primary-color: #009981;
-  --primary-light: #DBF9EB;
-  /* Đảm bảo dòng này có ở đây */
-  --primary-dark: #00483D;
-  --text-white: #ffffff;
-  --text-dark: #333333;
-  --bg-gray: #f8f9fa;
-}
-</style>
+
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios'; // Import Axios
+
+const API_URL = 'http://localhost:3000'; // Đảm bảo URL này đúng với JSON Server của bạn
 
 const router = useRouter();
 const isMenuActive = ref(false);
 const menuContainer = ref(null);
 const searchQuery = ref('');
+
+// Dữ liệu danh mục từ API
+const categories = ref([]);
+
+// Fetch data
+const fetchCategories = async () => {
+    try {
+        // Lấy danh mục, chỉ lấy các danh mục "active" và sắp xếp theo "order"
+        const response = await axios.get(`${API_URL}/categories?status=active&_sort=order&_order=asc`);
+        categories.value = response.data;
+    } catch (error) {
+        console.error("Lỗi khi tải danh mục:", error);
+    }
+};
 
 // Bật tắt menu
 const toggleMenu = () => {
@@ -108,13 +116,13 @@ const handleClickOutside = (event) => {
 const handleSearch = () => {
   if (searchQuery.value.trim()) {
     router.push({ name: 'search', query: { q: searchQuery.value } });
-    // Hoặc: window.location.href = `/search?q=${searchQuery.value}`;
   }
 };
 
-// Gắn sự kiện click global khi component được mount
+// Gắn sự kiện click global và Fetch data khi component được mount
 onMounted(() => {
   document.addEventListener('click', handleClickOutside);
+  fetchCategories();
 });
 
 // Gỡ sự kiện khi component bị hủy
@@ -124,7 +132,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* Import font awesome nếu chưa có trong index.html chính */
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css');
 
 :root {
@@ -134,13 +141,11 @@ onUnmounted(() => {
   --text-white: #ffffff;
   --text-dark: #333333;
   --bg-gray: #f8f9fa;
-  /* Màu nền nhẹ cho các nút trên nền trắng */
 }
 
 .site-header {
   font-family: Arial, sans-serif;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  /* Thêm bóng nhẹ cho header trắng */
 }
 
 a {
@@ -168,7 +173,6 @@ ul {
   gap: 20px;
 }
 
-/* Thanh trên cùng - Giữ màu chính */
 .top-bar {
   background-color: var(--primary-color);
   color: var(--text-white);
@@ -187,16 +191,13 @@ ul {
   opacity: 0.9;
 }
 
-/* Header chính - Đổi sang nền trắng */
 .main-header {
   background-color: var(--text-white);
   padding: 15px 0;
   color: var(--text-dark);
-  /* Chữ đổi sang màu tối */
   border-bottom: 1px solid #eee;
 }
 
-/* Logo - Đổi sang màu chính để nổi trên nền trắng */
 .logo {
   display: flex;
   align-items: center;
@@ -210,7 +211,6 @@ ul {
   height: 40px;
 }
 
-/* Nút danh mục - Cần nền tối hơn một chút để thấy trên nền trắng */
 .category-button {
   background-color: var(--bg-gray);
   border: 1px solid #eee;
@@ -230,7 +230,6 @@ ul {
   background-color: #e9ecef;
 }
 
-/* Menu dropdown */
 .side-menu-container {
   position: relative;
 }
@@ -238,7 +237,6 @@ ul {
 .dropdown-menu {
   position: absolute;
   top: calc(100% + 10px);
-  /* Đẩy xuống một chút cho đẹp */
   left: 0;
   width: 250px;
   background: white;
@@ -264,7 +262,6 @@ ul {
   transition: all 0.2s;
 }
 
-/* Hiệu ứng hover menu dùng màu phụ */
 .menu-list li a:hover {
   background-color: var(--primary-light);
   color: var(--primary-dark);
@@ -272,17 +269,20 @@ ul {
   font-weight: 500;
 }
 
-.menu-list li a i {
-  width: 25px;
-  text-align: center;
-  color: #999;
+/* Đảm bảo icon có khoảng cách và màu sắc */
+.icon-placeholder {
+    width: 25px;
+    text-align: center;
+    color: #999;
+    font-size: 16px; /* Kích thước icon */
+    display: inline-block;
 }
 
-.menu-list li a:hover i {
-  color: var(--primary-color);
+.menu-list li a:hover .icon-placeholder {
+    color: var(--primary-color);
 }
 
-/* Thanh tìm kiếm */
+
 .search-bar {
   flex-grow: 1;
   position: relative;
@@ -292,7 +292,6 @@ ul {
   width: 100%;
   padding: 10px 15px;
   border: 2px solid var(--primary-color);
-  /* Viền màu chính */
   border-radius: 8px;
   font-size: 14px;
   box-sizing: border-box;
@@ -323,7 +322,6 @@ ul {
   background-color: var(--primary-dark);
 }
 
-/* Nút hành động */
 .header-actions {
   display: flex;
   align-items: center;
@@ -337,7 +335,6 @@ ul {
   padding: 8px 12px;
   border-radius: 8px;
   background-color: var(--bg-gray);
-  /* Nền xám nhẹ */
   color: var(--text-dark);
   font-size: 14px;
   white-space: nowrap;
@@ -352,10 +349,8 @@ ul {
 .action-item i {
   font-size: 20px;
   color: var(--primary-color);
-  /* Icon màu chính cho nổi bật */
 }
 
-/* Nút đăng nhập nổi bật */
 .login-btn {
   background-color: var(--primary-color);
   color: var(--text-white) !important;
