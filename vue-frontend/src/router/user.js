@@ -28,6 +28,16 @@ const users = [
         name: "profile",
         component: () => import("../page/user/profile.vue"),
       },
+      {
+        path: "register",
+        name: "register",
+        component: () => import("../page/user/register.vue"),
+      },
+      {
+        path: "login",
+        name: "login",
+        component: () => import("../page/user/login.vue"),
+      },
     ],
   },
 ];
