@@ -5,7 +5,7 @@
         <div class="top-bar-links">
           <ul>
             <li><router-link :to="{name: 'admin-login'}">Kênh Người Bán</router-link></li>
-            <li><a href="#">Tải ứng dụng</a></li>
+            <li><router-link :to="{name: 'wishlish'}">Yêu thích</router-link></li>
             <li><a href="#">Kết nối</a></li>
             <li><router-link :to="{name: 'contact'}">Liên hệ</router-link></li>
           </ul>
@@ -59,7 +59,7 @@
         </form>
 
         <div class="header-actions">
-          <router-link :to="{name: ''}" class="action-item">
+          <router-link :to="{name: 'cart'}" class="action-item">
             <i class="fa-solid fa-cart-shopping"></i>
             <span>Giỏ hàng</span>
           </router-link>

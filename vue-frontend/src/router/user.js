@@ -38,8 +38,6 @@ const users = [
         name: "login",
         component: () => import("../page/user/login.vue"),
       },
-
-      // ✅ Bắt mọi đường dẫn lạ về notFound hoặc home
       {
         path: ":pathMatch(.*)*",
         name: "catchAll",
@@ -55,10 +53,15 @@ const users = [
         name: "checkout",
         component: () => import("../page/user/Checkout.vue"),
       },
-       {
+      {
         path: "/orders",
         name: "CustomerOrders",
         component: () => import("../page/user/CustomerOrders.vue"),
+      },
+      {
+        path: "/wishlish",
+        name: "wishlish",
+        component: () => import("../page/user/wishlist.vue"),
       },
     ],
   },
