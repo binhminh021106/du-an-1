@@ -5,7 +5,7 @@
         <div class="top-bar-links">
           <ul>
             <li><router-link :to="{name: 'admin-login'}">Kênh Người Bán</router-link></li>
-            <li><router-link :to="{name: 'wishlish'}">Yêu thích</router-link></li>
+            <li><router-link :to="{name: 'wishlist'}">Yêu thích</router-link></li>
             <li><a href="#">Kết nối</a></li>
             <li><router-link :to="{name: 'contact'}">Liên hệ</router-link></li>
           </ul>
