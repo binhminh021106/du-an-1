@@ -39,6 +39,22 @@ const users = [
         component: () => import("../page/user/Login.vue"),
       },
       {
+        path: "/policy",
+        name: "policy",
+        component: () => import("../page/user/PolicyPage.vue"),
+      },
+      {
+        path: "/FAQ",
+        name: "FAQ",
+        component: () => import("../page/user/FAQ.vue"),
+      },
+      {
+        path: "/blog",
+        name: "blog",
+        component: () => import("../page/user/Tintuc.vue"),
+      },
+      // ✅ Bắt mọi đường dẫn lạ về notFound hoặc home
+      {
         path: ":pathMatch(.*)*",
         name: "catchAll",
         component: () => import("../page/user/NotFound.vue"),
@@ -62,6 +78,11 @@ const users = [
        path: "wishlist",
        name: "wishlist",
        component: () => import("../page/user/wishlist.vue"),
+      },
+      {
+       path: "OrderList",
+       name: "OrderList",
+       component: () => import("../page/user/OrderList.vue"),
       },
     ],
   },
