@@ -6,12 +6,7 @@ const adminLayoutRoutes = [
       {
         path: "",
         name: "admin-dashboard",
-        component: () => import("../page/admin/index.vue"),
-      },
-      {
-        path: "users",
-        name: "admin-users",
-        component: () => import("../page/admin/adminUser/index.vue"),
+        component: () => import("../page/admin/Index.vue"),
       },
       {
         path: "products",
@@ -19,14 +14,19 @@ const adminLayoutRoutes = [
         component: () => import("../page/admin/product/index.vue"),
       },
       {
-        path: "adminUsers",
-        name: "admin-adminUsers",
-        component: () => import("../page/admin/adminUser/index.vue"),
+        path: "adminAccount",
+        name: "admin-adminAccount",
+        component: () => import("../page/admin/adminAccount/AccountAdmin.vue"),
+      },
+      {
+        path: "userAccount",
+        name: "admin-userAccount",
+        component: () => import("../page/admin/adminAccount/AccountUser.vue"),
       },
       {
         path: "categories",
         name: "admin-categories",
-        component: () => import("../page/admin/category/index.vue"),
+        component: () => import("../page/admin/category/Index.vue"),
       },
       {
         path: "products",
@@ -36,27 +36,27 @@ const adminLayoutRoutes = [
       {
         path: "orders",
         name: "admin-orders",
-        component: () => import("../page/admin/order/index.vue"),
+        component: () => import("../page/admin/order/Index.vue"),
       },
       {
         path: "comments",
         name: "admin-comments",
-        component: () => import("../page/admin/content/comment.vue"),
+        component: () => import("../page/admin/content/Comment.vue"),
       },
       {
         path: "reviews",
         name: "admin-reviews",
-        component: () => import("../page/admin/content/review.vue"),
+        component: () => import("../page/admin/content/Review.vue"),
       },
       {
         path: "slides",
         name: "admin-slides",
-        component: () => import("../page/admin/content/slider.vue"),
+        component: () => import("../page/admin/content/Slider.vue"),
       },
       {
         path: "coupons",
         name: "admin-coupons",
-        component: () => import("../page/admin/content/coupon.vue"),
+        component: () => import("../page/admin/content/Coupon.vue"),
       },
     ],
   },
@@ -66,12 +66,12 @@ const adminAuthRoutes = [
   {
     path: "/admin/register",
     name: "admin-register",
-    component: () => import("../page/admin/adminLoginRegister/register.vue"),
+    component: () => import("../page/admin/adminLoginRegister/Register.vue"),
   },
   {
     path: "/admin/login",
     name: "admin-login",
-    component: () => import("../page/admin/adminLoginRegister/login.vue"),
+    component: () => import("../page/admin/adminLoginRegister/Login.vue"),
   },
 ];
 

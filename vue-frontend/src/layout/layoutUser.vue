@@ -1,6 +1,6 @@
 <script setup>
-import userHeader from '../components/user/userHeader.vue';
-import userFooter from '../components/user/userFooter.vue';
+import userHeader from '../components/user/UserHeader.vue';
+import userFooter from '../components/user/UserFooter.vue';
 </script>
 
 <template>

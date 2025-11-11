@@ -12,7 +12,6 @@ import "@fortawesome/fontawesome-free/css/all.min.css"
 
 
 import './assets/css/adminlte.min.css'
-import './assets/js/adminlte.min.js' 
 
 
 import './style.css'

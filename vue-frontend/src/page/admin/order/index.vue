@@ -4,27 +4,27 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-// --- STATE QUẢN LÝ ---
+// Global state
 const API_URL = import.meta.env.VITE_API_BASE_URL;
 
-// (SỬA) Tách riêng các state loading
-const isMainLoading = ref(true); 
-const isReturnedLoading = ref(true); 
-const isDetailModalLoading = ref(false); 
-const isSavingStatus = ref(false); 
+// Loading states
+const isMainLoading = ref(true);
+const isReturnedLoading = ref(true);
+const isDetailModalLoading = ref(false);
+const isSavingStatus = ref(false);
 
-// State cho 2 Modal
+// Modal states
 const detailModalRef = ref(null);
 const detailModalInstance = ref(null);
 const statusModalRef = ref(null);
 const statusModalInstance = ref(null);
 
-// State lưu dữ liệu tạm thời
+// Temporary data states
 const selectedOrder = ref(null);
 const selectedOrderStatus = ref('');
 const selectedOrderItems = ref([]);
 
-// --- STATE BẢNG ĐƠN HÀNG CHÍNH ---
+// Main orders table state
 const mainOrders = ref([]);
 const mainPagination = reactive({
   currentPage: 1,
@@ -33,7 +33,7 @@ const mainPagination = reactive({
   totalPages: 1
 });
 
-// --- STATE BẢNG HÀNG HOÀN ---
+// Returned orders table state
 const returnedOrders = ref([]);
 const returnedPagination = reactive({
   currentPage: 1,
@@ -42,65 +42,64 @@ const returnedPagination = reactive({
   totalPages: 1
 });
 
-// --- (MỚI) LOGIC TRẠNG THÁI TUẦN TỰ ---
+// --- STATUS LOGIC (ENGLISH) ---
 const STATUS_HIERARCHY = {
-  'Chờ xử lý': 1,
-  'Đã duyệt': 2,
-  'Đang giao': 3,
-  'Đã hoàn thành': 4,  // Trạng thái cuối của luồng chính
-  'Đã hủy': -1,         // Trạng thái cuối (riêng biệt)
-  'Hàng hoàn': 10,       // Trạng thái đầu của luồng hoàn
-  'Hoàn hàng thành công': 11 // Trạng thái cuối của luồng hoàn
+  'pending': 1,
+  'approved': 2,
+  'shipping': 3,
+  'completed': 4,
+  'cancelled': -1,
+  'returning': 10,
+  'returned': 11
 };
 
 const ALL_STATUS_OPTIONS = [
-  { value: 'Chờ xử lý', text: 'Chờ xử lý' },
-  { value: 'Đã duyệt', text: 'Đã duyệt (Chuẩn bị hàng)' },
-  { value: 'Đang giao', text: 'Đang giao (Đang vận chuyển)' },
-  { value: 'Đã hoàn thành', text: 'Đã hoàn thành (Đã giao hàng)' },
-  { value: 'Đã hủy', text: 'Đã hủy' },
-  { value: 'Hàng hoàn', text: 'Hàng hoàn (Trả về)' },
-  { value: 'Hoàn hàng thành công', text: 'Hoàn hàng thành công' }
+  { value: 'pending', text: 'Chờ xử lý (Pending)' },
+  { value: 'approved', text: 'Đã duyệt (Approved)' },
+  { value: 'shipping', text: 'Đang giao (Shipping)' },
+  { value: 'completed', text: 'Đã hoàn thành (Completed)' },
+  { value: 'cancelled', text: 'Đã hủy (Cancelled)' },
+  { value: 'returning', text: 'Đang hoàn hàng (Returning)' },
+  { value: 'returned', text: 'Hoàn hàng thành công (Returned)' }
 ];
 
-/**
- * (MỚI) Computed property để lọc các trạng thái CÓ THỂ chọn
- */
+// Computed available statuses based on current status
 const availableStatuses = computed(() => {
-  if (!selectedOrder.value) {
-    return [];
-  }
+  if (!selectedOrder.value) return [];
 
   const currentStatus = selectedOrder.value.status;
   const currentLevel = STATUS_HIERARCHY[currentStatus];
 
-  if (currentLevel === 10) { // 'Hàng hoàn'
-    return ALL_STATUS_OPTIONS.filter(opt =>
-      opt.value === 'Hàng hoàn' || opt.value === 'Hoàn hàng thành công'
-    );
+  // If currently in return flow, can only stay in return flow
+  if (currentLevel >= 10) {
+    return ALL_STATUS_OPTIONS.filter(opt => ['returning', 'returned'].includes(opt.value));
   }
-  if (currentLevel === 11) { // 'Hoàn hàng thành công'
-    return ALL_STATUS_OPTIONS.filter(opt => opt.value === 'Hoàn hàng thành công');
+
+  // If cancelled, can only stay cancelled (usually)
+  if (currentLevel === -1) {
+    return ALL_STATUS_OPTIONS.filter(opt => opt.value === 'cancelled');
   }
-  if (currentLevel === -1) { // 'Đã hủy'
-    return ALL_STATUS_OPTIONS.filter(opt => opt.value === 'Đã hủy');
+
+  // If shipping or completed, can move to returning
+  if (currentLevel === 3 || currentLevel === 4) {
+     // Shipping can go to completed, returning, or stay shipping
+     // Completed can go to returning or stay completed
+      const allowed = ['returning'];
+      if (currentLevel === 3) allowed.push('completed', 'shipping');
+      if (currentLevel === 4) allowed.push('completed');
+      
+      return ALL_STATUS_OPTIONS.filter(opt => allowed.includes(opt.value));
   }
-  if (currentLevel === 4) { // 'Đã hoàn thành'
-    return ALL_STATUS_OPTIONS.filter(opt =>
-      opt.value === 'Đã hoàn thành' || opt.value === 'Hàng hoàn'
-    );
-  }
-  // Luồng chính (Chờ, Duyệt, Giao)
+
+  // Main flow (pending, approved) -> can move forward OR cancel
   return ALL_STATUS_OPTIONS.filter(opt => {
     const optLevel = STATUS_HIERARCHY[opt.value];
-    if (optLevel === -1 || optLevel === 10) return true; // Cho phép nhảy sang Hủy/Hoàn
-    return optLevel >= currentLevel && optLevel < 10; // Chỉ đi tới
+    if (optLevel === -1) return true; // Allow jump to Cancelled
+    return optLevel >= currentLevel && optLevel < 10; // Forward only, no jumping to return yet (except from shipping/completed handled above)
   });
 });
-// --- KẾT THÚC LOGIC TRẠNG THÁI ---
 
-
-// --- VÒNG ĐỜI (LIFECYCLE) ---
+// Lifecycle hooks
 onMounted(() => {
   fetchMainOrders(1);
   fetchReturnedOrders(1);
@@ -113,42 +112,30 @@ onMounted(() => {
   }
 });
 
-// --- CÁC HÀM TẢI DỮ LIỆU ---
-
-/**
- * NOTE:
- * Để đảm bảo 2 bảng hoàn toàn tách biệt và pagination đúng với dữ liệu đã lọc,
- * ta fetch TOÀN BỘ đơn từ json-server (nhỏ) rồi lọc và slice theo trang.
- * Nếu dataset lớn, có thể thay bằng API backend hỗ trợ filter server-side.
- */
-
-/**
- * Tải danh sách đơn hàng CHÍNH
- */
+// Data fetching functions
 async function fetchMainOrders(page = 1) {
-  isMainLoading.value = true; 
+  isMainLoading.value = true;
   if (page < 1) {
     isMainLoading.value = false;
     return;
   }
 
   try {
-    // Lấy toàn bộ đơn (sắp xếp desc)
+    // Fetch all orders sorted desc
     const response = await axios.get(`${API_URL}/orders?_sort=id&_order=desc`);
     const allOrders = response.data || [];
 
-    // Lọc: chỉ lấy đơn KHÔNG PHẢI là 'Hàng hoàn' và KHÔNG PHẢI là 'Hoàn hàng thành công'
-    const filtered = allOrders.filter(order => !['Hàng hoàn', 'Hoàn hàng thành công'].includes(order.status));
+    // Filter: EXCLUDE 'returning' and 'returned'
+    const filtered = allOrders.filter(order => !['returning', 'returned'].includes(order.status));
 
-    // Cập nhật pagination dựa trên filtered
+    // Update pagination
     mainPagination.totalItems = filtered.length;
     mainPagination.totalPages = Math.max(1, Math.ceil(mainPagination.totalItems / mainPagination.itemsPerPage));
 
-    // Điều chỉnh page nếu quá lớn
     if (page > mainPagination.totalPages) page = mainPagination.totalPages;
     mainPagination.currentPage = page;
 
-    // Lấy page slice
+    // Slice for current page
     const start = (mainPagination.currentPage - 1) * mainPagination.itemsPerPage;
     const end = start + mainPagination.itemsPerPage;
     mainOrders.value = filtered.slice(start, end);
@@ -157,33 +144,39 @@ async function fetchMainOrders(page = 1) {
     console.error("Lỗi khi tải đơn hàng chính:", error);
     Swal.fire('Lỗi', 'Không thể tải danh sách đơn hàng. Bạn đã chạy "json-server" chưa?', 'error');
   } finally {
-    isMainLoading.value = false; 
+    isMainLoading.value = false;
   }
 }
 
-/**
- * Tải danh sách đơn hàng HOÀN
- */
 async function fetchReturnedOrders(page = 1) {
   isReturnedLoading.value = true;
-  if (page < 1 || (page > returnedPagination.totalPages && returnedPagination.totalItems > 0)) {
+  if (page < 1) {
     isReturnedLoading.value = false;
     return;
   }
-  returnedPagination.currentPage = page;
 
   try {
-    const response = await axios.get(
-      `${API_URL}/orders?_page=${returnedPagination.currentPage}&_limit=${returnedPagination.itemsPerPage}&_sort=id&_order=desc`
-    );
+    // Fetch all orders sorted desc
+    const response = await axios.get(`${API_URL}/orders?_sort=id&_order=desc`);
+    const allOrders = response.data || [];
 
-    // ✅ Lọc chuẩn: chỉ lấy đơn có trạng thái là “Hàng hoàn” hoặc “Hoàn hàng thành công”
-    returnedOrders.value = response.data.filter(order =>
-      order.status.toLowerCase().includes('hoàn')
-    );
+    // Filter: ONLY 'returning' and 'returned'
+    const filtered = allOrders.filter(order => ['returning', 'returned'].includes(order.status));
 
-    returnedPagination.totalItems = parseInt(response.headers['x-total-count'] || 0);
-    returnedPagination.totalPages = Math.ceil(returnedPagination.totalItems / returnedPagination.itemsPerPage);
+    // Update pagination
+    returnedPagination.totalItems = filtered.length;
+    returnedPagination.totalPages = Math.max(1, Math.ceil(returnedPagination.totalItems / returnedPagination.itemsPerPage));
+
+    if (page > returnedPagination.totalPages && returnedPagination.totalPages > 0) {
+        page = returnedPagination.totalPages;
+    }
+    returnedPagination.currentPage = page;
+
+    // Slice for current page
+    const start = (returnedPagination.currentPage - 1) * returnedPagination.itemsPerPage;
+    const end = start + returnedPagination.itemsPerPage;
+    returnedOrders.value = filtered.slice(start, end);
+
   } catch (error) {
     console.error("Lỗi khi tải đơn hàng hoàn:", error);
   } finally {
@@ -191,9 +184,7 @@ async function fetchReturnedOrders(page = 1) {
   }
 }
 
-
-// --- CÁC HÀM HELPER ---
-
+// Helper functions
 function formatCurrency(value) {
   if (!value && value !== 0) return '0 đ';
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -204,24 +195,24 @@ function formatDate(dateString) {
   return new Date(dateString).toLocaleString('vi-VN');
 }
 
+// Translated status badges
 function getStatusBadge(status) {
   switch (status) {
-    case 'Chờ xử lý': return 'text-bg-warning';
-    case 'Đã duyệt': return 'text-bg-info';
-    case 'Đang giao': return 'text-bg-primary';
-    case 'Đã hoàn thành': return 'text-bg-success';
-    case 'Đã hủy': return 'text-bg-danger';
-    case 'Hàng hoàn': return 'text-bg-secondary';
-    case 'Hoàn hàng thành công': return 'text-bg-dark'; 
-    default: return 'text-bg-dark';
+    case 'pending': return { class: 'text-bg-warning', text: 'Chờ xử lý' };
+    case 'approved': return { class: 'text-bg-info', text: 'Đã duyệt' };
+    case 'shipping': return { class: 'text-bg-primary', text: 'Đang giao' };
+    case 'completed': return { class: 'text-bg-success', text: 'Hoàn thành' };
+    case 'cancelled': return { class: 'text-bg-danger', text: 'Đã hủy' };
+    case 'returning': return { class: 'text-bg-secondary', text: 'Đang hoàn' };
+    case 'returned': return { class: 'text-bg-dark', text: 'Đã hoàn' };
+    default: return { class: 'text-bg-light', text: status };
   }
 }
 
-// --- CÁC HÀM CRUD MODAL ---
-
+// Modal & CRUD operations
 async function openDetailModal(order) {
   selectedOrder.value = order;
-  isDetailModalLoading.value = true; 
+  isDetailModalLoading.value = true;
   detailModalInstance.value.show();
 
   try {
@@ -234,7 +225,7 @@ async function openDetailModal(order) {
     detailModalInstance.value.hide();
     Swal.fire('Lỗi', 'Không thể tải chi tiết đơn hàng.', 'error');
   } finally {
-    isDetailModalLoading.value = false; 
+    isDetailModalLoading.value = false;
   }
 }
 
@@ -247,7 +238,7 @@ function openStatusModal(order) {
 async function handleUpdateStatus() {
   if (!selectedOrder.value) return;
 
-  isSavingStatus.value = true; 
+  isSavingStatus.value = true;
 
   try {
     await axios.patch(`${API_URL}/orders/${selectedOrder.value.id}`, {
@@ -257,7 +248,7 @@ async function handleUpdateStatus() {
     statusModalInstance.value.hide();
     Swal.fire('Thành công', 'Đã cập nhật trạng thái đơn hàng.', 'success');
 
-    // Reload lại 2 bảng (vẫn theo phân trang hiện tại)
+    // Reload both tables to reflect changes (e.g., moving from main to returned list)
     fetchMainOrders(mainPagination.currentPage);
     fetchReturnedOrders(returnedPagination.currentPage);
 
@@ -265,7 +256,47 @@ async function handleUpdateStatus() {
     console.error("Lỗi khi cập nhật trạng thái:", error);
     Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
   } finally {
-    isSavingStatus.value = false; 
+    isSavingStatus.value = false;
+  }
+}
+
+// Quick status update without modal
+async function quickUpdateStatus(order, newStatus) {
+  const statusTextMap = {
+    'approved': 'Duyệt đơn hàng',
+    'shipping': 'Bắt đầu giao hàng',
+    'completed': 'Hoàn thành đơn hàng',
+    'cancelled': 'Hủy đơn hàng',
+    'returning': 'Chuyển sang hoàn hàng',
+    'returned': 'Xác nhận đã hoàn hàng'
+  };
+  
+  const actionText = statusTextMap[newStatus] || 'Cập nhật trạng thái';
+  const confirmButtonColor = newStatus === 'cancelled' ? '#d33' : '#3085d6';
+
+  const result = await Swal.fire({
+    title: 'Xác nhận',
+    text: `Bạn có chắc chắn muốn "${actionText}" cho đơn hàng #${order.id}?`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: confirmButtonColor,
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: 'Đồng ý',
+    cancelButtonText: 'Hủy'
+  });
+
+  if (result.isConfirmed) {
+    try {
+      await axios.patch(`${API_URL}/orders/${order.id}`, {
+        status: newStatus
+      });
+      Swal.fire('Thành công', `Đã ${actionText} thành công.`, 'success');
+      fetchMainOrders(mainPagination.currentPage);
+      fetchReturnedOrders(returnedPagination.currentPage);
+    } catch (error) {
+      console.error("Lỗi khi cập nhật trạng thái:", error);
+      Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
+    }
   }
 }
 
@@ -291,21 +322,9 @@ async function handleDelete(order) {
       await axios.delete(`${API_URL}/orders/${order.id}`);
       Swal.fire('Đã xóa!', 'Đơn hàng đã được xóa.', 'success');
 
-      if (STATUS_HIERARCHY[order.status] >= 10) { 
-        if (returnedOrders.value.length === 1 && returnedPagination.currentPage > 1) {
-          fetchReturnedOrders(returnedPagination.currentPage - 1);
-        } else {
-          fetchReturnedOrders(returnedPagination.currentPage);
-        }
-        fetchMainOrders(mainPagination.currentPage);
-      } else { 
-        if (mainOrders.value.length === 1 && mainPagination.currentPage > 1) {
-          fetchMainOrders(mainPagination.currentPage - 1);
-        } else {
-          fetchMainOrders(mainPagination.currentPage);
-        }
-        fetchReturnedOrders(returnedPagination.currentPage);
-      }
+      // Reload tables
+      fetchMainOrders(mainPagination.currentPage);
+      fetchReturnedOrders(returnedPagination.currentPage);
 
     } catch (error) {
       console.error("Lỗi khi xóa đơn hàng:", error);
@@ -351,7 +370,7 @@ async function handleDelete(order) {
                 </div>
               </div>
 
-              <table v-else class="table table-hover table-striped">
+              <table v-else class="table table-hover table-striped align-middle">
                 <thead>
                   <tr>
                     <th style="width: 80px">Mã ĐH</th>
@@ -360,7 +379,7 @@ async function handleDelete(order) {
                     <th>Tổng tiền</th>
                     <th style="width: 150px">Trạng thái</th>
                     <th style="width: 160px">Ngày đặt</th>
-                    <th style="width: 250px">Hành động</th>
+                    <th style="width: 350px">Hành động</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -373,26 +392,55 @@ async function handleDelete(order) {
                     <td>{{ order.customerPhone }}</td>
                     <td>{{ formatCurrency(order.totalAmount) }}</td>
                     <td>
-                      <span class="badge" :class="getStatusBadge(order.status)">
-                        {{ order.status }}
+                      <span class="badge" :class="getStatusBadge(order.status).class">
+                        {{ getStatusBadge(order.status).text }}
                       </span>
                     </td>
                     <td>{{ formatDate(order.createdAt) }}</td>
                     <td>
-                      <button class="btn btn-info btn-sm me-2" @click="openDetailModal(order)">
-                        <i class="bi bi-eye"></i> Xem
+                      <button class="btn btn-info btn-sm me-1" @click="openDetailModal(order)" title="Xem chi tiết">
+                        <i class="bi bi-eye"></i>
                       </button>
+
+                      <!-- Quick Action Buttons based on status -->
+                      <template v-if="order.status === 'pending'">
+                        <button class="btn btn-success btn-sm me-1" @click="quickUpdateStatus(order, 'approved')" title="Duyệt đơn hàng">
+                          <i class="bi bi-check-lg"></i> Duyệt
+                        </button>
+                        <button class="btn btn-danger btn-sm me-1" @click="quickUpdateStatus(order, 'cancelled')" title="Hủy đơn hàng">
+                          <i class="bi bi-x-lg"></i> Hủy
+                        </button>
+                      </template>
+
+                      <template v-if="order.status === 'approved'">
+                        <button class="btn btn-primary btn-sm me-1" @click="quickUpdateStatus(order, 'shipping')" title="Bắt đầu giao hàng">
+                          <i class="bi bi-truck"></i> Giao hàng
+                        </button>
+                      </template>
+
+                      <template v-if="order.status === 'shipping'">
+                        <button class="btn btn-success btn-sm me-1" @click="quickUpdateStatus(order, 'completed')" title="Hoàn thành đơn hàng">
+                          <i class="bi bi-check2-circle"></i> Hoàn thành
+                        </button>
+                        <button class="btn btn-secondary btn-sm me-1" @click="quickUpdateStatus(order, 'returning')" title="Chuyển sang hoàn hàng">
+                          <i class="bi bi-arrow-counterclockwise"></i> Hoàn hàng
+                        </button>
+                      </template>
                       
-                      <button 
-                        v-if="!['Đã hoàn thành', 'Đã hủy'].includes(order.status)"
-                        class="btn btn-warning btn-sm me-2" 
-                        @click="openStatusModal(order)"
-                      >
-                        <i class="bi bi-pencil-square"></i> Trạng thái
+                      <template v-if="order.status === 'completed'">
+                         <button class="btn btn-secondary btn-sm me-1" @click="quickUpdateStatus(order, 'returning')" title="Chuyển sang hoàn hàng">
+                          <i class="bi bi-arrow-counterclockwise"></i> Hoàn hàng
+                        </button>
+                      </template>
+                      
+                      <!-- Fallback for other statuses or manual edit -->
+                       <button v-if="!['pending', 'approved', 'shipping', 'completed', 'cancelled'].includes(order.status)"
+                        class="btn btn-warning btn-sm me-1" @click="openStatusModal(order)" title="Cập nhật trạng thái thủ công">
+                        <i class="bi bi-pencil-square"></i>
                       </button>
-                      
-                      <button class="btn btn-danger btn-sm" @click="handleDelete(order)">
-                        <i class="bi bi-trash"></i> Xóa
+
+                      <button class="btn btn-outline-danger btn-sm" @click="handleDelete(order)" title="Xóa đơn hàng">
+                        <i class="bi bi-trash"></i>
                       </button>
                     </td>
                   </tr>
@@ -433,14 +481,14 @@ async function handleDelete(order) {
                   <span class="visually-hidden">Loading...</span>
                 </div>
               </div>
-              <table v-else class="table table-hover table-striped">
+              <table v-else class="table table-hover table-striped align-middle">
                 <thead>
                   <tr>
                     <th style="width: 80px">Mã ĐH</th>
                     <th>Khách hàng</th>
                     <th>Điện thoại</th>
                     <th>Tổng tiền</th>
-                    <th style="width: 170px">Trạng thái</th> 
+                    <th style="width: 170px">Trạng thái</th>
                     <th style="width: 160px">Ngày đặt</th>
                     <th style="width: 250px">Hành động</th>
                   </tr>
@@ -455,26 +503,29 @@ async function handleDelete(order) {
                     <td>{{ order.customerPhone }}</td>
                     <td>{{ formatCurrency(order.totalAmount) }}</td>
                     <td>
-                      <span class="badge" :class="getStatusBadge(order.status)">
-                        {{ order.status }}
+                      <span class="badge" :class="getStatusBadge(order.status).class">
+                        {{ getStatusBadge(order.status).text }}
                       </span>
                     </td>
                     <td>{{ formatDate(order.createdAt) }}</td>
                     <td>
-                      <button class="btn btn-info btn-sm me-2" @click="openDetailModal(order)">
-                        <i class="bi bi-eye"></i> Xem
+                      <button class="btn btn-info btn-sm me-1" @click="openDetailModal(order)" title="Xem chi tiết">
+                        <i class="bi bi-eye"></i>
                       </button>
-                      
-                      <button 
-                        v-if="order.status !== 'Hoàn hàng thành công'"
-                        class="btn btn-warning btn-sm me-2" 
-                        @click="openStatusModal(order)"
-                      >
-                        <i class="bi bi-pencil-square"></i> Sửa TT
+
+                      <template v-if="order.status === 'returning'">
+                        <button class="btn btn-dark btn-sm me-1" @click="quickUpdateStatus(order, 'returned')" title="Xác nhận đã hoàn hàng">
+                          <i class="bi bi-box-seam"></i> Đã nhận hoàn
+                        </button>
+                      </template>
+
+                      <button v-if="order.status !== 'returned' && order.status !== 'returning'" class="btn btn-warning btn-sm me-1"
+                        @click="openStatusModal(order)" title="Cập nhật trạng thái thủ công">
+                        <i class="bi bi-pencil-square"></i>
                       </button>
-                      
-                      <button class="btn btn-danger btn-sm" @click="handleDelete(order)">
-                        <i class="bi bi-trash"></i> Xóa
+
+                      <button class="btn btn-outline-danger btn-sm" @click="handleDelete(order)" title="Xóa đơn hàng">
+                        <i class="bi bi-trash"></i>
                       </button>
                     </td>
                   </tr>
@@ -582,13 +633,9 @@ async function handleDelete(order) {
         <div class="modal-body">
           <div class="mb-3">
             <label for="statusSelect" class="form-label">Trạng thái đơn hàng</label>
-            
+
             <select class="form-select" id="statusSelect" v-model="selectedOrderStatus">
-              <option 
-                v-for="status in availableStatuses" 
-                :key="status.value" 
-                :value="status.value"
-              >
+              <option v-for="status in availableStatuses" :key="status.value" :value="status.value">
                 {{ status.text }}
               </option>
             </select>
@@ -597,7 +644,7 @@ async function handleDelete(order) {
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
-          
+
           <button type="button" class="btn btn-primary" @click="handleUpdateStatus" :disabled="isSavingStatus">
             <span v-if="isSavingStatus" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
             Lưu thay đổi

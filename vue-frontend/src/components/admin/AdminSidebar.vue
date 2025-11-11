@@ -1,14 +1,14 @@
 <template>
   <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
     <div class="sidebar-brand">
-      <a href="#" class="brand-link">
+      <router-link to="/admin" class="brand-link">
         <img src="../img/logo.png" alt="AdminLTE Logo" class="brand-image opacity-75 shadow">
         <span class="brand-text fw-light">ThinkHub</span>
-      </a>
+      </router-link>
     </div>
     <div class="sidebar-wrapper">
       <nav class="mt-2">
-        <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="menu" data-accordion="false">
+        <ul class="nav sidebar-menu flex-column" role="menu" data-accordion="false">
           <li class="nav-item">
             <router-link to="/admin" class="nav-link">
               <i class="nav-icon bi bi-speedometer"></i>
@@ -16,9 +16,15 @@
             </router-link>
           </li>
           <li class="nav-item">
-            <router-link to="/admin/adminUsers" class="nav-link">
+            <router-link to="/admin/adminAccount" class="nav-link">
+              <i class="nav-icon fa-solid fa-user-tie"></i>
+              <p> Tài khoản nội bộ</p>
+            </router-link>
+          </li>
+          <li class="nav-item">
+            <router-link to="/admin/userAccount" class="nav-link">
               <i class="nav-icon fas fa-user"></i>
-              <p> Quản lý tài khoản</p>
+              <p> Tài khoản khách hàng</p>
             </router-link>
           </li>
           <li class="nav-item">
@@ -70,7 +76,7 @@
 </template>
 <style scoped>
 .nav-item p{
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 700;
   margin: 8px 0;
 }

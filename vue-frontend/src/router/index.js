@@ -7,6 +7,7 @@ const routes = [...admin, ...users];
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  linkExactActiveClass: 'active' 
 })
 
 export default router
