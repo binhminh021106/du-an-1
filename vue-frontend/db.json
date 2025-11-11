@@ -111,8 +111,8 @@
       "description": "Điện thoại di động nổi bật",
       "icon": "<i class=\"fa-solid fa-mobile\"></i>",
       "order": 1,
-      "id": "3",
-      "status": "active"
+      "status": "active",
+      "id": "3"
     },
     {
       "name": "Laptop",
