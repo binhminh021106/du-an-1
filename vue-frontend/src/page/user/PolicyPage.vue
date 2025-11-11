@@ -111,11 +111,6 @@
       </section>
     </main>
 
-    <footer class="footer-v2">
-      <div class="footer-inner-v2">
-        <p>© 2025 YourTechShop — Bán lẻ & Phân phối thiết bị công nghệ chính hãng.</p>
-      </div>
-    </footer>
   </section>
 </template>
 <style scoped>
