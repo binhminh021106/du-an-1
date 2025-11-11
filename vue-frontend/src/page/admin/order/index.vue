@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, watch } from 'vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
@@ -23,6 +23,9 @@ const statusModalInstance = ref(null);
 const selectedOrder = ref(null);
 const selectedOrderStatus = ref('');
 const selectedOrderItems = ref([]);
+
+// Search state
+const searchQuery = ref('');
 
 // Main orders table state
 const mainOrders = ref([]);
@@ -70,32 +73,22 @@ const availableStatuses = computed(() => {
   const currentStatus = selectedOrder.value.status;
   const currentLevel = STATUS_HIERARCHY[currentStatus];
 
-  // If currently in return flow, can only stay in return flow
   if (currentLevel >= 10) {
     return ALL_STATUS_OPTIONS.filter(opt => ['returning', 'returned'].includes(opt.value));
   }
-
-  // If cancelled, can only stay cancelled (usually)
   if (currentLevel === -1) {
     return ALL_STATUS_OPTIONS.filter(opt => opt.value === 'cancelled');
   }
-
-  // If shipping or completed, can move to returning
   if (currentLevel === 3 || currentLevel === 4) {
-     // Shipping can go to completed, returning, or stay shipping
-     // Completed can go to returning or stay completed
-      const allowed = ['returning'];
-      if (currentLevel === 3) allowed.push('completed', 'shipping');
-      if (currentLevel === 4) allowed.push('completed');
-      
-      return ALL_STATUS_OPTIONS.filter(opt => allowed.includes(opt.value));
+    const allowed = ['returning'];
+    if (currentLevel === 3) allowed.push('completed', 'shipping');
+    if (currentLevel === 4) allowed.push('completed');
+    return ALL_STATUS_OPTIONS.filter(opt => allowed.includes(opt.value));
   }
-
-  // Main flow (pending, approved) -> can move forward OR cancel
   return ALL_STATUS_OPTIONS.filter(opt => {
     const optLevel = STATUS_HIERARCHY[opt.value];
-    if (optLevel === -1) return true; // Allow jump to Cancelled
-    return optLevel >= currentLevel && optLevel < 10; // Forward only, no jumping to return yet (except from shipping/completed handled above)
+    if (optLevel === -1) return true;
+    return optLevel >= currentLevel && optLevel < 10;
   });
 });
 
@@ -112,6 +105,12 @@ onMounted(() => {
   }
 });
 
+// Watcher for search query
+watch(searchQuery, () => {
+  fetchMainOrders(1);
+  fetchReturnedOrders(1);
+});
+
 // Data fetching functions
 async function fetchMainOrders(page = 1) {
   isMainLoading.value = true;
@@ -121,21 +120,28 @@ async function fetchMainOrders(page = 1) {
   }
 
   try {
-    // Fetch all orders sorted desc
     const response = await axios.get(`${API_URL}/orders?_sort=id&_order=desc`);
     const allOrders = response.data || [];
 
-    // Filter: EXCLUDE 'returning' and 'returned'
-    const filtered = allOrders.filter(order => !['returning', 'returned'].includes(order.status));
+    // --- TÍCH HỢP TÌM KIẾM ---
+    const query = searchQuery.value.toLowerCase().trim();
+    const preFiltered = allOrders.filter(order =>
+      (
+        order.id.toString().includes(query) ||
+        order.customerName.toLowerCase().includes(query) ||
+        order.customerPhone.toLowerCase().includes(query)
+      )
+    );
 
-    // Update pagination
+    // Filter: EXCLUDE 'returning' and 'returned'
+    const filtered = preFiltered.filter(order => !['returning', 'returned'].includes(order.status));
+
     mainPagination.totalItems = filtered.length;
     mainPagination.totalPages = Math.max(1, Math.ceil(mainPagination.totalItems / mainPagination.itemsPerPage));
 
     if (page > mainPagination.totalPages) page = mainPagination.totalPages;
     mainPagination.currentPage = page;
 
-    // Slice for current page
     const start = (mainPagination.currentPage - 1) * mainPagination.itemsPerPage;
     const end = start + mainPagination.itemsPerPage;
     mainOrders.value = filtered.slice(start, end);
@@ -156,23 +162,30 @@ async function fetchReturnedOrders(page = 1) {
   }
 
   try {
-    // Fetch all orders sorted desc
     const response = await axios.get(`${API_URL}/orders?_sort=id&_order=desc`);
     const allOrders = response.data || [];
 
-    // Filter: ONLY 'returning' and 'returned'
-    const filtered = allOrders.filter(order => ['returning', 'returned'].includes(order.status));
+    // --- TÍCH HỢP TÌM KIẾM ---
+    const query = searchQuery.value.toLowerCase().trim();
+    const preFiltered = allOrders.filter(order =>
+      (
+        order.id.toString().includes(query) ||
+        order.customerName.toLowerCase().includes(query) ||
+        order.customerPhone.toLowerCase().includes(query)
+      )
+    );
 
-    // Update pagination
+    // Filter: ONLY 'returning' and 'returned'
+    const filtered = preFiltered.filter(order => ['returning', 'returned'].includes(order.status));
+
     returnedPagination.totalItems = filtered.length;
     returnedPagination.totalPages = Math.max(1, Math.ceil(returnedPagination.totalItems / returnedPagination.itemsPerPage));
 
     if (page > returnedPagination.totalPages && returnedPagination.totalPages > 0) {
-        page = returnedPagination.totalPages;
+      page = returnedPagination.totalPages;
     }
     returnedPagination.currentPage = page;
 
-    // Slice for current page
     const start = (returnedPagination.currentPage - 1) * returnedPagination.itemsPerPage;
     const end = start + returnedPagination.itemsPerPage;
     returnedOrders.value = filtered.slice(start, end);
@@ -195,7 +208,6 @@ function formatDate(dateString) {
   return new Date(dateString).toLocaleString('vi-VN');
 }
 
-// Translated status badges
 function getStatusBadge(status) {
   switch (status) {
     case 'pending': return { class: 'text-bg-warning', text: 'Chờ xử lý' };
@@ -248,7 +260,7 @@ async function handleUpdateStatus() {
     statusModalInstance.value.hide();
     Swal.fire('Thành công', 'Đã cập nhật trạng thái đơn hàng.', 'success');
 
-    // Reload both tables to reflect changes (e.g., moving from main to returned list)
+    // Tải lại cả hai bảng
     fetchMainOrders(mainPagination.currentPage);
     fetchReturnedOrders(returnedPagination.currentPage);
 
@@ -260,7 +272,6 @@ async function handleUpdateStatus() {
   }
 }
 
-// Quick status update without modal
 async function quickUpdateStatus(order, newStatus) {
   const statusTextMap = {
     'approved': 'Duyệt đơn hàng',
@@ -270,7 +281,7 @@ async function quickUpdateStatus(order, newStatus) {
     'returning': 'Chuyển sang hoàn hàng',
     'returned': 'Xác nhận đã hoàn hàng'
   };
-  
+
   const actionText = statusTextMap[newStatus] || 'Cập nhật trạng thái';
   const confirmButtonColor = newStatus === 'cancelled' ? '#d33' : '#3085d6';
 
@@ -322,7 +333,7 @@ async function handleDelete(order) {
       await axios.delete(`${API_URL}/orders/${order.id}`);
       Swal.fire('Đã xóa!', 'Đơn hàng đã được xóa.', 'success');
 
-      // Reload tables
+      // Tải lại
       fetchMainOrders(mainPagination.currentPage);
       fetchReturnedOrders(returnedPagination.currentPage);
 
@@ -359,93 +370,114 @@ async function handleDelete(order) {
       <div class="row">
         <div class="col-12">
           <div class="card">
+            <!-- Card Header với Thanh tìm kiếm -->
             <div class="card-header">
-              <h3 class="card-title">Danh sách Đơn hàng</h3>
+              <div class="row align-items-center">
+                <div class="col-md-6 col-12 mb-2 mb-md-0">
+                  <h3 class="card-title mb-0">Danh sách Đơn hàng</h3>
+                </div>
+                <div class="col-md-6 col-12">
+                  <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0">
+                      <i class="bi bi-search text-muted"></i>
+                    </span>
+                    <input type="text" class="form-control border-start-0 ps-0"
+                      placeholder="Tìm theo Mã ĐH, Tên khách hàng, SĐT..." v-model="searchQuery">
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="card-body p-0">
+              <!-- SỬA LỖI: v-if ở đây -->
               <div v-if="isMainLoading && mainOrders.length === 0" class="text-center p-5">
                 <div class="spinner-border text-primary" role="status">
                   <span class="visually-hidden">Loading...</span>
                 </div>
               </div>
 
-              <table v-else class="table table-hover table-striped align-middle">
-                <thead>
-                  <tr>
-                    <th style="width: 80px">Mã ĐH</th>
-                    <th>Khách hàng</th>
-                    <th>Điện thoại</th>
-                    <th>Tổng tiền</th>
-                    <th style="width: 150px">Trạng thái</th>
-                    <th style="width: 160px">Ngày đặt</th>
-                    <th style="width: 350px">Hành động</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-if="mainOrders.length === 0 && !isMainLoading">
-                    <td colspan="7" class="text-center">Không có đơn hàng nào</td>
-                  </tr>
-                  <tr v-for="order in mainOrders" :key="order.id">
-                    <td>#{{ order.id }}</td>
-                    <td>{{ order.customerName }}</td>
-                    <td>{{ order.customerPhone }}</td>
-                    <td>{{ formatCurrency(order.totalAmount) }}</td>
-                    <td>
-                      <span class="badge" :class="getStatusBadge(order.status).class">
-                        {{ getStatusBadge(order.status).text }}
-                      </span>
-                    </td>
-                    <td>{{ formatDate(order.createdAt) }}</td>
-                    <td>
-                      <button class="btn btn-info btn-sm me-1" @click="openDetailModal(order)" title="Xem chi tiết">
-                        <i class="bi bi-eye"></i>
-                      </button>
+              <!-- SỬA LỖI: v-else ở đây -->
+              <div v-else class="table-responsive">
+                <!-- Xóa v-else khỏi <table> -->
+                <table class="table table-hover table-striped align-middle">
+                  <thead>
+                    <tr>
+                      <th style="width: 80px">Mã ĐH</th>
+                      <th>Khách hàng</th>
+                      <th>Điện thoại</th>
+                      <th>Tổng tiền</th>
+                      <th style="width: 150px">Trạng thái</th>
+                      <th style="width: 160px">Ngày đặt</th>
+                      <th style="width: 350px">Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="mainOrders.length === 0 && !isMainLoading">
+                      <td colspan="7" class="text-center">
+                        {{ searchQuery ? 'Không tìm thấy đơn hàng nào.' : 'Không có đơn hàng nào.' }}
+                      </td>
+                    </tr>
+                    <tr v-for="order in mainOrders" :key="order.id">
+                      <td>#{{ order.id }}</td>
+                      <td>{{ order.customerName }}</td>
+                      <td>{{ order.customerPhone }}</td>
+                      <td>{{ formatCurrency(order.totalAmount) }}</td>
+                      <td>
+                        <span class="badge" :class="getStatusBadge(order.status).class">
+                          {{ getStatusBadge(order.status).text }}
+                        </span>
+                      </td>
+                      <td>{{ formatDate(order.createdAt) }}</td>
+                      <td>
+                        <!-- TRẢ LẠI NÚT NHƯ CŨ (KHÔNG DÙNG BTN-GROUP) -->
+                        <button class="btn btn-info btn-sm me-1" @click="openDetailModal(order)" title="Xem chi tiết">
+                          <i class="bi bi-eye"></i>
+                        </button>
 
-                      <!-- Quick Action Buttons based on status -->
-                      <template v-if="order.status === 'pending'">
-                        <button class="btn btn-success btn-sm me-1" @click="quickUpdateStatus(order, 'approved')" title="Duyệt đơn hàng">
-                          <i class="bi bi-check-lg"></i> Duyệt
-                        </button>
-                        <button class="btn btn-danger btn-sm me-1" @click="quickUpdateStatus(order, 'cancelled')" title="Hủy đơn hàng">
-                          <i class="bi bi-x-lg"></i> Hủy
-                        </button>
-                      </template>
+                        <template v-if="order.status === 'pending'">
+                          <button class="btn btn-success btn-sm me-1" @click="quickUpdateStatus(order, 'approved')" title="Duyệt đơn hàng">
+                            <i class="bi bi-check-lg"></i> Duyệt
+                          </button>
+                          <button class="btn btn-danger btn-sm me-1" @click="quickUpdateStatus(order, 'cancelled')" title="Hủy đơn hàng">
+                            <i class="bi bi-x-lg"></i> Hủy
+                          </button>
+                        </template>
 
-                      <template v-if="order.status === 'approved'">
-                        <button class="btn btn-primary btn-sm me-1" @click="quickUpdateStatus(order, 'shipping')" title="Bắt đầu giao hàng">
-                          <i class="bi bi-truck"></i> Giao hàng
-                        </button>
-                      </template>
+                        <template v-if="order.status === 'approved'">
+                          <button class="btn btn-primary btn-sm me-1" @click="quickUpdateStatus(order, 'shipping')" title="Bắt đầu giao hàng">
+                            <i class="bi bi-truck"></i> Giao hàng
+                          </button>
+                        </template>
 
-                      <template v-if="order.status === 'shipping'">
-                        <button class="btn btn-success btn-sm me-1" @click="quickUpdateStatus(order, 'completed')" title="Hoàn thành đơn hàng">
-                          <i class="bi bi-check2-circle"></i> Hoàn thành
-                        </button>
-                        <button class="btn btn-secondary btn-sm me-1" @click="quickUpdateStatus(order, 'returning')" title="Chuyển sang hoàn hàng">
-                          <i class="bi bi-arrow-counterclockwise"></i> Hoàn hàng
-                        </button>
-                      </template>
-                      
-                      <template v-if="order.status === 'completed'">
-                         <button class="btn btn-secondary btn-sm me-1" @click="quickUpdateStatus(order, 'returning')" title="Chuyển sang hoàn hàng">
-                          <i class="bi bi-arrow-counterclockwise"></i> Hoàn hàng
-                        </button>
-                      </template>
-                      
-                      <!-- Fallback for other statuses or manual edit -->
-                       <button v-if="!['pending', 'approved', 'shipping', 'completed', 'cancelled'].includes(order.status)"
-                        class="btn btn-warning btn-sm me-1" @click="openStatusModal(order)" title="Cập nhật trạng thái thủ công">
-                        <i class="bi bi-pencil-square"></i>
-                      </button>
+                        <template v-if="order.status === 'shipping'">
+                          <button class="btn btn-success btn-sm me-1" @click="quickUpdateStatus(order, 'completed')" title="Hoàn thành đơn hàng">
+                            <i class="bi bi-check2-circle"></i> Hoàn thành
+                          </button>
+                          <button class="btn btn-secondary btn-sm me-1" @click="quickUpdateStatus(order, 'returning')" title="Chuyển sang hoàn hàng">
+                            <i class="bi bi-arrow-counterclockwise"></i> Hoàn hàng
+                          </button>
+                        </template>
 
-                      <button class="btn btn-outline-danger btn-sm" @click="handleDelete(order)" title="Xóa đơn hàng">
-                        <i class="bi bi-trash"></i>
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                        <template v-if="order.status === 'completed'">
+                          <button class="btn btn-secondary btn-sm me-1" @click="quickUpdateStatus(order, 'returning')" title="Chuyển sang hoàn hàng">
+                            <i class="bi bi-arrow-counterclockwise"></i> Hoàn hàng
+                          </button>
+                        </template>
+
+                        <button v-if="!['pending', 'approved', 'shipping', 'completed', 'cancelled'].includes(order.status)"
+                          class="btn btn-warning btn-sm me-1" @click="openStatusModal(order)" title="Cập nhật trạng thái thủ công">
+                          <i class="bi bi-pencil-square"></i>
+                        </button>
+
+                        <button class="btn btn-outline-danger btn-sm" @click="handleDelete(order)" title="Xóa đơn hàng">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                        <!-- KẾT THÚC HOÀN TÁC -->
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div class="card-footer clearfix" v-if="!isMainLoading && mainPagination.totalPages > 1">
@@ -476,61 +508,70 @@ async function handleDelete(order) {
             </div>
 
             <div class="card-body p-0">
+              <!-- SỬA LỖI: v-if ở đây -->
               <div v-if="isReturnedLoading && returnedOrders.length === 0" class="text-center p-5">
                 <div class="spinner-border text-primary" role="status">
                   <span class="visually-hidden">Loading...</span>
                 </div>
               </div>
-              <table v-else class="table table-hover table-striped align-middle">
-                <thead>
-                  <tr>
-                    <th style="width: 80px">Mã ĐH</th>
-                    <th>Khách hàng</th>
-                    <th>Điện thoại</th>
-                    <th>Tổng tiền</th>
-                    <th style="width: 170px">Trạng thái</th>
-                    <th style="width: 160px">Ngày đặt</th>
-                    <th style="width: 250px">Hành động</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-if="returnedOrders.length === 0 && !isReturnedLoading">
-                    <td colspan="7" class="text-center">Không có đơn hàng hoàn nào</td>
-                  </tr>
-                  <tr v-for="order in returnedOrders" :key="order.id">
-                    <td>#{{ order.id }}</td>
-                    <td>{{ order.customerName }}</td>
-                    <td>{{ order.customerPhone }}</td>
-                    <td>{{ formatCurrency(order.totalAmount) }}</td>
-                    <td>
-                      <span class="badge" :class="getStatusBadge(order.status).class">
-                        {{ getStatusBadge(order.status).text }}
-                      </span>
-                    </td>
-                    <td>{{ formatDate(order.createdAt) }}</td>
-                    <td>
-                      <button class="btn btn-info btn-sm me-1" @click="openDetailModal(order)" title="Xem chi tiết">
-                        <i class="bi bi-eye"></i>
-                      </button>
-
-                      <template v-if="order.status === 'returning'">
-                        <button class="btn btn-dark btn-sm me-1" @click="quickUpdateStatus(order, 'returned')" title="Xác nhận đã hoàn hàng">
-                          <i class="bi bi-box-seam"></i> Đã nhận hoàn
+              <!-- SỬA LỖI: v-else ở đây -->
+              <div v-else class="table-responsive">
+                <!-- Xóa v-else khỏi <table> -->
+                <table class="table table-hover table-striped align-middle">
+                  <thead>
+                    <tr>
+                      <th style="width: 80px">Mã ĐH</th>
+                      <th>Khách hàng</th>
+                      <th>Điện thoại</th>
+                      <th>Tổng tiền</th>
+                      <th style="width: 170px">Trạng thái</th>
+                      <th style="width: 160px">Ngày đặt</th>
+                      <th style="width: 250px">Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="returnedOrders.length === 0 && !isReturnedLoading">
+                      <td colspan="7" class="text-center">
+                        {{ searchQuery ? 'Không tìm thấy đơn hàng nào.' : 'Không có đơn hàng hoàn nào.' }}
+                      </td>
+                    </tr>
+                    <tr v-for="order in returnedOrders" :key="order.id">
+                      <td>#{{ order.id }}</td>
+                      <td>{{ order.customerName }}</td>
+                      <td>{{ order.customerPhone }}</td>
+                      <td>{{ formatCurrency(order.totalAmount) }}</td>
+                      <td>
+                        <span class="badge" :class="getStatusBadge(order.status).class">
+                          {{ getStatusBadge(order.status).text }}
+                        </span>
+                      </td>
+                      <td>{{ formatDate(order.createdAt) }}</td>
+                      <td>
+                        <!-- TRẢ LẠI NÚT NHƯ CŨ (KHÔNG DÙNG BTN-GROUP) -->
+                        <button class="btn btn-info btn-sm me-1" @click="openDetailModal(order)" title="Xem chi tiết">
+                          <i class="bi bi-eye"></i>
                         </button>
-                      </template>
 
-                      <button v-if="order.status !== 'returned' && order.status !== 'returning'" class="btn btn-warning btn-sm me-1"
-                        @click="openStatusModal(order)" title="Cập nhật trạng thái thủ công">
-                        <i class="bi bi-pencil-square"></i>
-                      </button>
+                        <template v-if="order.status === 'returning'">
+                          <button class="btn btn-dark btn-sm me-1" @click="quickUpdateStatus(order, 'returned')" title="Xác nhận đã hoàn hàng">
+                            <i class="bi bi-box-seam"></i> Đã nhận hoàn
+                          </button>
+                        </template>
 
-                      <button class="btn btn-outline-danger btn-sm" @click="handleDelete(order)" title="Xóa đơn hàng">
-                        <i class="bi bi-trash"></i>
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                        <button v-if="order.status !== 'returned' && order.status !== 'returning'" class="btn btn-warning btn-sm me-1"
+                          @click="openStatusModal(order)" title="Cập nhật trạng thái thủ công">
+                          <i class="bi bi-pencil-square"></i>
+                        </button>
+
+                        <button class="btn btn-outline-danger btn-sm" @click="handleDelete(order)" title="Xóa đơn hàng">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                        <!-- KẾT THÚC HOÀN TÁC -->
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div class="card-footer clearfix" v-if="!isReturnedLoading && returnedPagination.totalPages > 1">
@@ -556,6 +597,7 @@ async function handleDelete(order) {
     </div>
   </div>
 
+  <!-- Modal Chi tiết -->
   <div class="modal fade" id="detailModal" ref="detailModalRef" tabindex="-1" aria-labelledby="detailModalLabel"
     aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -576,6 +618,7 @@ async function handleDelete(order) {
               <li><strong>Tên:</strong> {{ selectedOrder.customerName }}</li>
               <li><strong>SĐT:</strong> {{ selectedOrder.customerPhone }}</li>
               <li><strong>Địa chỉ:</strong> {{ selectedOrder.customerAddress }}</li>
+              <li><strong>Ghi chú:</strong> {{ selectedOrder.note || 'Không có' }}</li>
             </ul>
             <hr>
 
@@ -598,6 +641,8 @@ async function handleDelete(order) {
                 <tr v-for="item in selectedOrderItems" :key="item.id">
                   <td>
                     {{ item.product?.name || `(SP ID: ${item.productId})` }}
+                    <br>
+                    <small class="text-muted">({{ item.color || 'N/A' }} - {{ item.size || 'N/A' }})</small>
                   </td>
                   <td>{{ formatCurrency(item.price) }}</td>
                   <td>x {{ item.quantity }}</td>
@@ -620,6 +665,7 @@ async function handleDelete(order) {
     </div>
   </div>
 
+  <!-- Modal Cập nhật Trạng thái -->
   <div class="modal fade" id="statusModal" ref="statusModalRef" tabindex="-1" aria-labelledby="statusModalLabel"
     aria-hidden="true">
     <div class="modal-dialog">
@@ -663,5 +709,12 @@ async function handleDelete(order) {
 
 .card-body.p-0 .table {
   margin-bottom: 0;
+}
+
+/* Đảm bảo btn-group không bị vỡ trên màn hình nhỏ */
+.btn-group-sm>.btn {
+  padding: .25rem .5rem;
+  font-size: .875rem;
+  line-height: 1.5;
 }
 </style>

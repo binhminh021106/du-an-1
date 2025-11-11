@@ -1,3 +1,187 @@
+<script setup>
+import { ref, computed, onMounted } from 'vue';
+import axios from 'axios';
+import { useRouter } from 'vue-router';
+
+// Giả định VueApexCharts được đăng ký toàn cục trong main.js
+// import VueApexCharts from 'vue3-apexcharts';
+
+// --- STATE QUẢN LÝ ---
+const API_URL = import.meta.env.VITE_API_BASE_URL;
+const router = useRouter();
+
+// State lưu trữ dữ liệu
+const orders = ref([]);
+const products = ref([]);
+const customers = ref([]);
+const reviews = ref([]); // Thêm state cho reviews
+const isLoading = ref(true);
+
+// --- TẢI DỮ LIỆU ---
+onMounted(() => {
+  fetchDashboardData();
+});
+
+async function fetchDashboardData() {
+  isLoading.value = true;
+  try {
+    // Tải song song các nguồn dữ liệu
+    const [orderRes, productRes, customerRes, reviewRes] = await Promise.all([ // Thêm reviewRes
+      axios.get(`${API_URL}/orders?_sort=id&_order=desc`),
+      axios.get(`${API_URL}/products`),
+      axios.get(`${API_URL}/account_user?_sort=id&_order=desc`),
+      // Lấy 5 đánh giá mới nhất, expand product và user
+      axios.get(`${API_URL}/reviews?_sort=id&_order=desc&_limit=5&_expand=product&_expand=user`) 
+    ]);
+
+    orders.value = orderRes.data;
+    products.value = productRes.data;
+    customers.value = customerRes.data;
+    reviews.value = reviewRes.data; // Gán dữ liệu reviews
+
+  } catch (error) {
+    console.error("Lỗi khi tải dữ liệu Dashboard:", error);
+    // Có thể thêm thông báo lỗi ở đây
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+// --- HÀM HELPER ---
+const formatCurrency = (value) => {
+  if (!value) return '0 đ';
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+};
+
+const getStatusBadge = (status) => {
+  switch (status) {
+    case 'pending': return { class: 'text-bg-warning', text: 'Chờ xử lý' };
+    case 'approved': return { class: 'text-bg-info', text: 'Đã duyệt' };
+    case 'shipping': return { class: 'text-bg-primary', text: 'Đang giao' };
+    case 'completed': return { class: 'text-bg-success', text: 'Hoàn thành' };
+    case 'cancelled': return { class: 'text-bg-danger', text: 'Đã hủy' };
+    case 'returning': return { class: 'text-bg-secondary', text: 'Đang hoàn' };
+    case 'returned': return { class: 'text-bg-dark', text: 'Đã hoàn' };
+    default: return { class: 'text-bg-light', text: status };
+  }
+};
+
+// Hàm helper render sao (mới)
+const renderStars = (rating) => {
+  let stars = '';
+  for (let i = 0; i < 5; i++) {
+    stars += (i < rating) ? '★' : '☆';
+  }
+  return stars;
+};
+
+// --- COMPUTED PROPERTIES ---
+
+// 1. Info Box: Tổng đơn hàng
+const totalOrders = computed(() => orders.value.length);
+
+// 2. Info Box: Tổng doanh thu (chỉ tính đơn "completed")
+const totalRevenue = computed(() => {
+  return orders.value
+    .filter(order => order.status === 'completed')
+    .reduce((acc, order) => acc + (order.totalAmount || 0), 0);
+});
+
+// 3. Info Box: Tổng sản phẩm
+const totalProducts = computed(() => products.value.length);
+
+// 4. Info Box: Tổng khách hàng
+const totalCustomers = computed(() => customers.value.length);
+
+// 5. Bảng: Đơn hàng mới nhất
+const latestOrders = computed(() => orders.value.slice(0, 7));
+
+// 6. Danh sách: Người dùng mới nhất (như hình ảnh)
+const latestCustomers = computed(() => customers.value.slice(0, 8));
+
+// 7. Danh sách: Đánh giá mới nhất (mới)
+const latestReviews = computed(() => reviews.value);
+
+
+// --- DỮ LIỆU BIỂU ĐỒ (Giữ nguyên phần giao diện) ---
+
+// Biểu đồ Sales (Giữ nguyên dữ liệu mẫu vì cần logic backend phức tạp hơn)
+const salesChartSeries = ref([
+  { name: "Doanh thu", data: [28, 48, 40, 19, 86, 27, 90] },
+  { name: "Đơn hàng", data: [65, 59, 80, 81, 56, 55, 40] }
+]);
+const salesChartOptions = ref({
+  chart: { height: 180, type: "area", toolbar: { show: false } },
+  legend: { show: false },
+  colors: ["#0d6efd", "#20c997"],
+  dataLabels: { enabled: false },
+  stroke: { curve: "smooth" },
+  xaxis: {
+    type: "datetime",
+    categories: [
+      "2025-01-01", "2025-02-01", "2025-03-01", "2025-04-01",
+      "2025-05-01", "2025-06-01", "2025-07-01"
+    ]
+  },
+  tooltip: { x: { format: "MMMM yyyy" } }
+});
+
+// Biểu đồ Pie (Tình trạng đơn hàng - Dữ liệu thực)
+const orderStatusChart = computed(() => {
+  const statusCounts = {
+    pending: 0,
+    approved: 0,
+    shipping: 0,
+    completed: 0,
+    cancelled: 0,
+    returning: 0,
+    returned: 0
+  };
+  const statusLabels = {
+    pending: 'Chờ xử lý',
+    approved: 'Đã duyệt',
+    shipping: 'Đang giao',
+    completed: 'Hoàn thành',
+    cancelled: 'Đã hủy',
+    returning: 'Đang hoàn',
+    returned: 'Đã hoàn'
+  };
+
+  for (const order of orders.value) {
+    if (order.status in statusCounts) {
+      statusCounts[order.status]++;
+    }
+  }
+
+  const labels = Object.keys(statusCounts).map(key => statusLabels[key]);
+  const series = Object.values(statusCounts);
+  
+  // Lọc ra các series > 0 và label tương ứng
+  const activeLabels = [];
+  const activeSeries = [];
+  series.forEach((count, index) => {
+    if (count > 0) {
+      activeSeries.push(count);
+      activeLabels.push(labels[index]);
+    }
+  });
+
+  return {
+    series: activeSeries,
+    options: {
+      chart: { type: 'donut' },
+      labels: activeLabels,
+      colors: ['#ffc107', '#0dcaf0', '#0d6efd', '#198754', '#dc3545', '#6c757d', '#212529'],
+      dataLabels: { 
+        enabled: true,
+        formatter: (val, opts) => opts.w.globals.labels[opts.seriesIndex]
+      },
+      legend: { position: 'bottom' }
+    }
+  };
+});
+</script>
+
 <template>
   <div>
     <div class="app-content-header">
@@ -8,7 +192,7 @@
           </div>
           <div class="col-sm-6">
             <ol class="breadcrumb float-sm-end">
-              <li class="breadcrumb-item"><a href="#">Trang Chủ</a></li>
+              <li class="breadcrumb-item"><router-link to="/admin">Trang Chủ</router-link></li>
               <li class="breadcrumb-item active" aria-current="page">
                 Admin ThinkHub
               </li>
@@ -20,55 +204,61 @@
     
     <div class="app-content">
       <div class="container-fluid">
+        <!-- HÀNG 1: INFO BOXES (DỮ LIỆU THẬT) -->
         <div class="row">
+          <!-- Tổng Đơn Hàng -->
           <div class="col-12 col-sm-6 col-md-3">
             <div class="info-box">
               <span class="info-box-icon text-bg-primary shadow-sm">
-                <i class="bi bi-gear-fill"></i>
+                <i class="fa-solid fa-file-invoice-dollar"></i>
               </span>
               <div class="info-box-content">
-                <span class="info-box-text">Lưu Lượng CPU</span>
-                <span class="info-box-number">10<small>%</small></span>
+                <span class="info-box-text">Tổng Đơn Hàng</span>
+                <span class="info-box-number">{{ isLoading ? '...' : totalOrders }}</span>
               </div>
             </div>
           </div>
-          <div class="col-12 col-sm-6 col-md-3">
-            <div class="info-box">
-              <span class="info-box-icon text-bg-danger shadow-sm">
-                <i class="bi bi-hand-thumbs-up-fill"></i>
-              </span>
-              <div class="info-box-content">
-                <span class="info-box-text">Lượt Thích</span>
-                <span class="info-box-number">41,410</span>
-              </div>
-            </div>
-          </div>
+          <!-- Tổng Doanh Thu -->
           <div class="col-12 col-sm-6 col-md-3">
             <div class="info-box">
               <span class="info-box-icon text-bg-success shadow-sm">
-                <i class="bi bi-cart-fill"></i>
+                <i class="bi bi-cash-stack"></i>
               </span>
               <div class="info-box-content">
-                <span class="info-box-text">Doanh Số</span>
-                <span class="info-box-number">760</span>
+                <span class="info-box-text">Tổng Doanh Thu</span>
+                <span class="info-box-number">{{ isLoading ? '...' : formatCurrency(totalRevenue) }}</span>
               </div>
             </div>
           </div>
+          <!-- Tổng Sản Phẩm -->
+          <div class="col-12 col-sm-6 col-md-3">
+            <div class="info-box">
+              <span class="info-box-icon text-bg-danger shadow-sm">
+                <i class="bi bi-box-seam-fill"></i>
+              </span>
+              <div class="info-box-content">
+                <span class="info-box-text">Tổng Sản Phẩm</span>
+                <span class="info-box-number">{{ isLoading ? '...' : totalProducts }}</span>
+              </div>
+            </div>
+          </div>
+          <!-- Tổng Khách Hàng -->
           <div class="col-12 col-sm-6 col-md-3">
             <div class="info-box">
               <span class="info-box-icon text-bg-warning shadow-sm">
                 <i class="bi bi-people-fill"></i>
               </span>
               <div class="info-box-content">
-                <span class="info-box-text">Thành Viên Mới</span>
-                <span class="info-box-number">2,000</span>
+                <span class="info-box-text">Tổng Khách Hàng</span>
+                <span class="info-box-number">{{ isLoading ? '...' : totalCustomers }}</span>
               </div>
             </div>
           </div>
         </div>
         
+        <!-- HÀNG 2: BIỂU ĐỒ CHÍNH (Full-width) -->
         <div class="row">
-          <div class="col-md-8">
+          <div class="col-md-12">
             <div class="card mb-4">
               <div class="card-header">
                 <h5 class="card-title">Báo Cáo Tóm Tắt Hàng Tháng</h5>
@@ -77,7 +267,7 @@
                 <div class="row">
                   <div class="col-md-8">
                     <p class="text-center">
-                      <strong>Doanh Số: 1 Thg 1, 2023 - 30 Thg 7, 2023</strong>
+                      <strong>Doanh Số (Dữ liệu mẫu): 1 Thg 1 - 30 Thg 7, 2025</strong>
                     </p>
                     <VueApexCharts
                       type="area"
@@ -88,7 +278,7 @@
                   </div>
                   <div class="col-md-4">
                     <p class="text-center">
-                      <strong>Hoàn Thành Mục Tiêu</strong>
+                      <strong>Hoàn Thành Mục Tiêu (Dữ liệu mẫu)</strong>
                     </p>
                     <div class="progress-group">
                       Thêm Sản Phẩm vào Giỏ
@@ -127,35 +317,42 @@
                     <div class="text-center border-end">
                       <span class="text-success"><i class="bi bi-caret-up-fill"></i> 17%</span>
                       <h5 class="fw-bold mb-0">$35,210.43</h5>
-                      <span class="text-uppercase">TỔNG DOANH THU</span>
+                      <span class="text-uppercase">TỔNG DOANH THU (MẪU)</span>
                     </div>
                   </div>
                   <div class="col-md-3 col-6">
                     <div class="text-center border-end">
                       <span class="text-info"><i class="bi bi-caret-left-fill"></i> 0%</span>
                       <h5 class="fw-bold mb-0">$10,390.90</h5>
-                      <span class="text-uppercase">TỔNG CHI PHÍ</span>
+                      <span class="text-uppercase">TỔNG CHI PHÍ (MẪU)</span>
                     </div>
                   </div>
                   <div class="col-md-3 col-6">
                     <div class="text-center border-end">
                       <span class="text-success"><i class="bi bi-caret-up-fill"></i> 20%</span>
                       <h5 class="fw-bold mb-0">$24,813.53</h5>
-                      <span class="text-uppercase">TỔNG LỢI NHUẬN</span>
+                      <span class="text-uppercase">TỔNG LỢI NHUẬN (MẪU)</span>
                     </div>
                   </div>
                   <div class="col-md-3 col-6">
                     <div class="text-center">
                       <span class="text-danger"><i class="bi bi-caret-down-fill"></i> 18%</span>
                       <h5 class="fw-bold mb-0">1200</h5>
-                      <span class="text-uppercase">HOÀN THÀNH MỤC TIÊU</span>
+                      <span class="text-uppercase">MỤC TIÊU (MẪU)</span>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-            
-            <div class="card">
+          </div>
+        </div>
+
+        <!-- HÀNG 3: ĐƠN HÀNG MỚI, ĐÁNH GIÁ MỚI & THÀNH VIÊN MỚI -->
+        <div class="row">
+          <!-- Cột bên trái (8) -->
+          <div class="col-md-8">
+            <!-- Đơn hàng mới nhất -->
+            <div class="card mb-4">
               <div class="card-header">
                 <h3 class="card-title">Đơn Hàng Mới Nhất</h3>
               </div>
@@ -165,24 +362,66 @@
                     <thead>
                       <tr>
                         <th>Mã ĐH</th>
-                        <th>Sản Phẩm</th>
+                        <th>Khách Hàng</th>
                         <th>Trạng Thái</th>
-                        <th>Độ Phổ Biến</th>
+                        <th>Tổng Tiền</th>
                       </tr>
                     </thead>
                     <tbody>
+                      <tr v-if="isLoading">
+                        <td colspan="4" class="text-center">Đang tải...</td>
+                      </tr>
+                       <tr v-else-if="latestOrders.length === 0">
+                        <td colspan="4" class="text-center">Chưa có đơn hàng nào.</td>
+                      </tr>
                       <tr v-for="order in latestOrders" :key="order.id">
-                        <td><a href="#">{{ order.id }}</a></td>
-                        <td>{{ order.item }}</td>
-                        <td><span :class="getStatusClass(order.status)">{{ mapStatus(order.status) }}</span></td>
+                        <td><router-link :to="{ name: 'admin-orders' }">#{{ order.id }}</router-link></td>
+                        <td>{{ order.customerName }}</td>
+                        <td><span :class="getStatusBadge(order.status).class" class="badge">{{ getStatusBadge(order.status).text }}</span></td>
+                        <td>{{ formatCurrency(order.totalAmount) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="card-footer clearfix">
+                <router-link :to="{ name: 'admin-orders' }" class="btn btn-sm btn-secondary float-end">
+                  Xem Tất Cả Đơn Hàng
+                </router-link>
+              </div>
+            </div>
+
+            <!-- Đánh giá mới nhất (MỚI) -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">Đánh Giá Mới Nhất</h3>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table m-0">
+                    <thead>
+                      <tr>
+                        <th>Sản phẩm</th>
+                        <th>Người gửi</th>
+                        <th>Đánh giá</th>
+                        <th>Nội dung</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-if="isLoading">
+                        <td colspan="4" class="text-center">Đang tải...</td>
+                      </tr>
+                       <tr v-else-if="latestReviews.length === 0">
+                        <td colspan="4" class="text-center">Chưa có đánh giá nào.</td>
+                      </tr>
+                      <tr v-for="review in latestReviews" :key="review.id">
+                        <td>{{ review.product?.name || 'N/A' }}</td>
+                        <td>{{ review.user?.username || 'N/A' }}</td>
                         <td>
-                          <VueApexCharts
-                            type="line"
-                            height="30"
-                            width="150"
-                            :options="sparklineOptions"
-                            :series="[{ data: order.sparklineData }]"
-                          />
+                          <span class="text-warning">{{ renderStars(review.rating) }}</span>
+                        </td>
+                        <td :title="review.content">
+                          {{ review.content.length > 30 ? review.content.substring(0, 30) + '...' : review.content }}
                         </td>
                       </tr>
                     </tbody>
@@ -190,66 +429,52 @@
                 </div>
               </div>
               <div class="card-footer clearfix">
-                <a href="#" class="btn btn-sm btn-primary float-start">Đặt Hàng Mới</a>
-                <a href="#" class="btn btn-sm btn-secondary float-end">Xem Tất Cả Đơn Hàng</a>
+                <router-link :to="{ name: 'admin-reviews' }" class="btn btn-sm btn-secondary float-end">
+                  Xem Tất Cả Đánh Giá
+                </router-link>
               </div>
             </div>
+            
           </div>
           
+          <!-- Cột bên phải (4) -->
           <div class="col-md-4">
-            <div class="info-box mb-3 text-bg-warning">
-              <span class="info-box-icon"><i class="bi bi-tag-fill"></i></span>
-              <div class="info-box-content">
-                <span class="info-box-text">Kho Hàng</span>
-                <span class="info-box-number">5,200</span>
-              </div>
-            </div>
-            <div class="info-box mb-3 text-bg-success">
-              <span class="info-box-icon"><i class="bi bi-heart-fill"></i></span>
-              <div class="info-box-content">
-                <span class="info-box-text">Lượt Đề Cập</span>
-                <span class="info-box-number">92,050</span>
-              </div>
-            </div>
-            <div class="info-box mb-3 text-bg-danger">
-              <span class="info-box-icon"><i class="bi bi-cloud-download"></i></span>
-              <div class="info-box-content">
-                <span class="info-box-text">Lượt Tải Xuống</span>
-                <span class="info-box-number">114,381</span>
-              </div>
-            </div>
-            <div class="info-box mb-3 text-bg-info">
-              <span class="info-box-icon"><i class="bi bi-chat-fill"></i></span>
-              <div class="info-box-content">
-                <span class="info-box-text">Tin Nhắn Trực Tiếp</span>
-                <span class="info-box-number">163,921</span>
-              </div>
-            </div>
-
+            <!-- Biểu đồ tình trạng đơn hàng -->
             <div class="card mb-4">
               <div class="card-header">
-                <h3 class="card-title">Sử Dụng Trình Duyệt</h3>
+                <h3 class="card-title">Tình Trạng Đơn Hàng</h3>
               </div>
               <div class="card-body">
                 <VueApexCharts
                   type="donut"
-                  :options="pieChartOptions"
-                  :series="pieChartSeries"
+                  :options="orderStatusChart.options"
+                  :series="orderStatusChart.series"
                 />
               </div>
-              <div class="card-footer p-0">
-                <ul class="nav nav-pills flex-column">
-                  <li v-for="item in browserUsage" :key="item.name" class="nav-item">
-                    <a href="#" class="nav-link">
-                      {{ item.name }}
-                      <span :class="`float-end text-${item.color}`">
-                        <i :class="`bi bi-arrow-${item.arrow} fs-7`"></i>
-                        {{ item.value }}%
-                      </span>
-                    </a>
-                  </li>
-                </ul>
-              </div>
+            </div>
+
+            <!-- Thành viên mới -->
+            <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">Thành Viên Mới Nhất</h3>
+                </div>
+                <div class="card-body p-0">
+                  <ul class="list-group list-group-flush">
+                    <li v-if="isLoading" class="list-group-item text-center">Đang tải...</li>
+                    <li v-else-if="latestCustomers.length === 0" class="list-group-item text-center">Chưa có khách hàng nào.</li>
+                    <li v-for="customer in latestCustomers" :key="customer.id" class="list-group-item d-flex align-items-center">
+                       <img :src="customer.avatar || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${customer.name.charAt(0).toUpperCase()}`"
+                           class="rounded-circle me-3" alt="Avatar"
+                           style="width: 40px; height: 40px; object-fit: cover;">
+                      <span>{{ customer.name }}</span>
+                    </li>
+                  </ul>
+                </div>
+                <div class="card-footer text-center">
+                  <router-link :to="{ name: 'admin-userAccount' }" class="text-decoration-none">
+                    Xem tất cả khách hàng
+                  </router-link>
+                </div>
             </div>
           </div>
         </div>
@@ -258,90 +483,13 @@
   </div>
 </template>
 
-<script setup>
-import { ref } from 'vue';
-
-// Biểu đồ Sales
-const salesChartSeries = ref([
-  { name: "Hàng Kỹ Thuật Số", data: [28, 48, 40, 19, 86, 27, 90] },
-  { name: "Thiết Bị Điện Tử", data: [65, 59, 80, 81, 56, 55, 40] }
-]);
-const salesChartOptions = ref({
-  chart: { height: 180, type: "area", toolbar: { show: false } },
-  legend: { show: false },
-  colors: ["#0d6efd", "#20c997"],
-  dataLabels: { enabled: false },
-  stroke: { curve: "smooth" },
-  xaxis: {
-    type: "datetime",
-    categories: [
-      "2023-01-01", "2023-02-01", "2023-03-01", "2023-04-01",
-      "2023-05-01", "2023-06-01", "2023-07-01"
-    ]
-  },
-  tooltip: { x: { format: "MMMM yyyy" } }
-});
-
-// Biểu đồ Trình duyệt (Pie)
-const pieChartSeries = ref([700, 500, 400, 600, 300, 100]);
-const pieChartOptions = ref({
-  chart: { type: "donut" },
-  labels: ["Chrome", "Edge", "FireFox", "Safari", "Opera", "IE"], 
-  dataLabels: { enabled: false },
-  colors: ["#0d6efd", "#20c997", "#ffc107", "#d63384", "#6f42c1", "#adb5bd"]
-});
-
-// Danh sách Trình duyệt
-const browserUsage = ref([
-  { name: 'Hoa Kỳ', value: 12, color: 'danger', arrow: 'down' },
-  { name: 'Ấn Độ', value: 4, color: 'success', arrow: 'up' },
-  { name: 'Trung Quốc', value: 0, color: 'info', arrow: 'left' }
-]);
-
-// Bảng Đơn hàng mới nhất
-const latestOrders = ref([
-  { id: 'OR9842', item: 'Call of Duty IV', status: 'Shipped', sparklineData: [25, 66, 41, 89, 63, 25, 44, 12, 36, 9, 54] },
-  { id: 'OR1848', item: 'TV Thông Minh Samsung', status: 'Pending', sparklineData: [12, 56, 21, 39, 73, 45, 64, 52, 36, 59, 44] },
-  { id: 'OR7429', item: 'iPhone 6 Plus', status: 'Delivered', sparklineData: [15, 46, 21, 59, 33, 15, 34, 42, 56, 19, 64] },
-  { id: 'OR7429', item: 'TV Thông Minh Samsung', status: 'Processing', sparklineData: [30, 56, 31, 69, 43, 35, 24, 32, 46, 29, 64] },
-  { id: 'OR1848', item: 'TV Thông Minh Samsung', status: 'Pending', sparklineData: [20, 76, 51, 79, 53, 35, 54, 22, 36, 49, 64] },
-  { id: 'OR7429', item: 'iPhone 6 Plus', status: 'Delivered', sparklineData: [5, 36, 11, 69, 23, 15, 14, 42, 26, 19, 44] },
-  { id: 'OR9842', item: 'Call of Duty IV', status: 'Shipped', sparklineData: [12, 56, 21, 39, 73, 45, 64, 52, 36, 59, 74] }
-]);
-
-// Cấu hình Sparklines
-const sparklineOptions = ref({
-  chart: { type: "line", width: 150, height: 30, sparkline: { enabled: true } },
-  colors: ["var(--bs-primary)"],
-  stroke: { width: 2 },
-  tooltip: {
-    fixed: { enabled: false },
-    x: { show: false },
-    y: { title: { formatter: () => '' } },
-    marker: { show: false }
-  }
-});
-
-// Helpers
-const mapStatus = (status) => {
-  switch (status) {
-    case 'Shipped': return 'Đã Giao';
-    case 'Pending': return 'Đang Chờ';
-    case 'Delivered': return 'Đã Giao';
-    case 'Processing': return 'Đang Xử Lý';
-    default: return 'Khác';
-  }
-};
-const getStatusClass = (status) => {
-  switch (status) {
-    case 'Shipped': return 'badge text-bg-success';
-    case 'Pending': return 'badge text-bg-warning';
-    case 'Delivered': return 'badge text-bg-danger';
-    case 'Processing': return 'badge text-bg-info';
-    default: return 'badge text-bg-secondary';
-  }
-};
-</script>
-
 <style scoped>
+.list-group-item {
+  padding: 0.75rem 1rem;
+}
+.table .text-warning {
+  color: #ffc107 !important;
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+}
 </style>

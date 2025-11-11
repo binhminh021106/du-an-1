@@ -186,6 +186,7 @@ ul {
 .top-bar-info ul {
   display: flex;
   gap: 20px;
+  color: #ffffff;
 }
 
 .top-bar a:hover {

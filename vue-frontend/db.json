@@ -643,16 +643,6 @@
   ],
   "orders": [
     {
-      "id": "ORDER-001",
-      "customerName": "Nguyễn Văn A",
-      "customerPhone": "0901234567",
-      "customerAddress": "123 Lê Lợi, Quận 1, TP.HCM",
-      "totalAmount": 1500000,
-      "status": "returned",
-      "createdAt": "2025-11-10T09:00:00Z",
-      "return_status": ""
-    },
-    {
       "id": "ORDER-002",
       "customerName": "Trần Thị B",
       "customerPhone": "0909876543",
@@ -668,7 +658,7 @@
       "customerPhone": "0912345678",
       "customerAddress": "789 Điện Biên Phủ, Quận 3, TP.HCM",
       "totalAmount": 850000,
-      "status": "shipping",
+      "status": "returned",
       "createdAt": "2025-11-10T14:15:00Z",
       "return_status": ""
     },
@@ -678,7 +668,7 @@
       "customerPhone": "0987123456",
       "customerAddress": "321 Hai Bà Trưng, Quận 3, TP.HCM",
       "totalAmount": 3200000,
-      "status": "returning",
+      "status": "returned",
       "createdAt": "2025-11-10T16:45:00Z",
       "return_status": ""
     },
@@ -688,19 +678,12 @@
       "customerPhone": "0933456789",
       "customerAddress": "654 Cách Mạng Tháng 8, Quận 10, TP.HCM",
       "totalAmount": 1200000,
-      "status": "pending",
+      "status": "returning",
       "createdAt": "2025-11-11T08:00:00Z",
       "return_status": ""
     }
   ],
   "order_items": [
-    {
-      "id": "ITEM-001",
-      "orderId": "ORDER-001",
-      "productId": 101,
-      "quantity": 2,
-      "price": 750000
-    },
     {
       "id": "ITEM-002",
       "orderId": "ORDER-002",
@@ -741,7 +724,7 @@
     {
       "id": "1",
       "content": "Sản phẩm này rất tốt, tôi rất thích!",
-      "status": "rejected",
+      "status": "approved",
       "createdAt": "2023-10-27T10:00:00Z",
       "productId": 1,
       "userId": 1
