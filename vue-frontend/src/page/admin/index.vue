@@ -193,9 +193,6 @@ const orderStatusChart = computed(() => {
           <div class="col-sm-6">
             <ol class="breadcrumb float-sm-end">
               <li class="breadcrumb-item"><router-link to="/admin">Trang Chủ</router-link></li>
-              <li class="breadcrumb-item active" aria-current="page">
-                Admin ThinkHub
-              </li>
             </ol>
           </div>
         </div>

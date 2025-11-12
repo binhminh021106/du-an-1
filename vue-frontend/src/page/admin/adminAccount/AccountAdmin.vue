@@ -4,23 +4,26 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-// State chung
+// --- State Chung ---
 const API_URL = import.meta.env.VITE_API_BASE_URL;
-const users = ref([]);
+const users = ref([]); // Chỉ chứa admin/nhanvien (không chứa user)
 const isLoading = ref(true);
 const searchQuery = ref('');
 
-// Modal user (Thêm/Sửa)
+// --- State Modals ---
 const userModalInstance = ref(null);
 const userModalRef = ref(null);
 const isEditMode = ref(false);
 
-// Modal xem
 const viewModalInstance = ref(null);
 const viewModalRef = ref(null);
 const viewingUser = ref({});
 
-// Dữ liệu form user
+const roleModalInstance = ref(null);
+const roleModalRef = ref(null);
+const isRoleEditMode = ref(false);
+
+// --- State Forms ---
 const formData = reactive({
   id: null,
   username: '',
@@ -31,7 +34,6 @@ const formData = reactive({
   status: 'active'
 });
 
-// Lỗi form user
 const errors = reactive({
   username: '',
   email: '',
@@ -39,27 +41,20 @@ const errors = reactive({
   confirmPassword: '',
 });
 
-// State vai trò
-const roles = ref([]);
-const roleModalInstance = ref(null);
-const roleModalRef = ref(null);
-const isRoleEditMode = ref(false);
-
-// Dữ liệu form vai trò
 const roleFormData = reactive({
   id: null,
-  value: '', // Giá trị backend
-  label: '', // Nhãn hiển thị
-  badgeClass: 'text-bg-secondary', // CSS class
+  value: '',
+  label: '',
+  badgeClass: 'text-bg-secondary',
 });
 
-// Lỗi form vai trò
 const roleErrors = reactive({
   value: '',
   label: '',
 });
 
-// Phân trang user
+// --- State Vai trò & Phân trang ---
+const roles = ref([]); // Chứa TẤT CẢ vai trò (để lấy nhãn)
 const otherUsersCurrentPage = ref(1);
 const otherUsersItemsPerPage = ref(5);
 
@@ -69,12 +64,12 @@ const otherUsersItemsPerPage = ref(5);
 const filteredUsers = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
   if (!query) {
-    return users.value;
+    return users.value; // users đã được lọc ở fetchUsers
   }
   return users.value.filter(user =>
     user.username.toLowerCase().includes(query) ||
     user.email.toLowerCase().includes(query) ||
-    getRoleLabel(user.role).toLowerCase().includes(query) // Tìm theo nhãn vai trò
+    getRoleLabel(user.role).toLowerCase().includes(query)
   );
 });
 
@@ -83,9 +78,14 @@ const adminUsers = computed(() => {
   return filteredUsers.value.filter(user => user.role === 'admin');
 });
 
-// Lọc user khác từ danh sách đã lọc
+// Lọc user khác (nhanvien, ketoan...)
 const otherUsers = computed(() => {
   return filteredUsers.value.filter(user => user.role !== 'admin');
+});
+
+// Lọc các vai trò có thể chọn (không bao gồm 'user')
+const availableRoles = computed(() => {
+  return roles.value.filter(r => r.value !== 'user');
 });
 
 // Tính tổng số trang cho user khác
@@ -107,19 +107,16 @@ watch(searchQuery, () => {
 
 // --- Hàm Helper ---
 
-// Lấy badge vai trò
 function getRoleBadge(roleValue) {
   const role = roles.value.find(r => r.value === roleValue);
   return role ? role.badgeClass : 'text-bg-secondary';
 }
 
-// Lấy nhãn vai trò
 function getRoleLabel(roleValue) {
   const role = roles.value.find(r => r.value === roleValue);
   return role ? role.label : roleValue;
 }
 
-// Lấy ngày đã định dạng
 function getFormattedDate(dateString) {
   if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleDateString('vi-VN');
@@ -127,8 +124,8 @@ function getFormattedDate(dateString) {
 
 // --- Hooks ---
 onMounted(() => {
-  fetchUsers();
-  fetchRoles();
+  fetchUsers(); // Tải user (admin, nhanvien...)
+  fetchRoles(); // Tải tất cả role để hiển thị badge
 
   if (userModalRef.value) {
     userModalInstance.value = new Modal(userModalRef.value, { backdrop: 'static' });
@@ -145,75 +142,63 @@ onMounted(() => {
 async function fetchUsers() {
   isLoading.value = true;
   try {
-    const response = await axios.get(`${API_URL}/account_admin`);
+    // Gọi /users và lọc ra những ai KHÔNG PHẢI 'user'
+    const response = await axios.get(`${API_URL}/users?role_ne=user`);
+
     users.value = response.data.map(user => ({
       ...user,
-      created_at: user.created_at || new Date().toISOString(), // Đảm bảo created_at tồn tại
+      username: user.username || user.name, // Đảm bảo username tồn tại
+      created_at: user.created_at || new Date().toISOString(),
       status: user.status || 'active'
     }));
     otherUsersCurrentPage.value = 1;
   } catch (error) {
     console.error("Lỗi khi tải danh sách người dùng:", error);
-    Swal.fire({
-      icon: 'error',
-      title: 'Lỗi',
-      text: 'Không thể tải danh sách người dùng. Vui lòng thử lại sau.',
-    });
+    Swal.fire('Lỗi', 'Không thể tải danh sách người dùng.', 'error');
   } finally {
     isLoading.value = false;
   }
 }
 
-// Reset form
 function resetForm() {
   formData.id = null;
   formData.username = '';
   formData.email = '';
   formData.password = '';
   formData.confirmPassword = '';
-  formData.role = 'nhanvien';
+  formData.role = 'nhanvien'; // Mặc định khi tạo là nhân viên
   formData.status = 'active';
   Object.keys(errors).forEach(key => errors[key] = '');
 }
 
-// Mở modal tạo
 function openCreateModal() {
   resetForm();
   isEditMode.value = false;
   userModalInstance.value.show();
 }
 
-// Mở modal sửa
 function openEditModal(user) {
   resetForm();
   isEditMode.value = true;
-
   formData.id = user.id;
   formData.username = user.username;
   formData.email = user.email;
   formData.role = user.role;
   formData.status = user.status;
-
   userModalInstance.value.show();
 }
 
-// Mở modal xem
 function openViewModal(user) {
   viewingUser.value = user;
   viewModalInstance.value.show();
 }
 
-// Kiểm tra form
 function validateForm() {
   Object.keys(errors).forEach(key => errors[key] = '');
   let isValid = true;
-  const re = /^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]+$/;
 
   if (!formData.username.trim()) {
     errors.username = 'Vui lòng nhập tên đăng nhập.';
-    isValid = false;
-  } else if (!re.test(formData.username)) {
-    errors.username = 'Tên đăng nhập chỉ được dùng chữ và số.'
     isValid = false;
   }
 
@@ -225,7 +210,6 @@ function validateForm() {
     isValid = false;
   }
 
-  // Chỉ kiểm tra pass khi tạo mới, hoặc khi sửa mà có nhập pass
   if (!isEditMode.value || formData.password) {
     if (!formData.password) {
       errors.password = 'Vui lòng nhập mật khẩu.';
@@ -234,29 +218,29 @@ function validateForm() {
       errors.password = 'Mật khẩu phải có ít nhất 8 ký tự.';
       isValid = false;
     }
-
     if (formData.password !== formData.confirmPassword) {
       errors.confirmPassword = 'Mật khẩu xác nhận không khớp!';
       isValid = false;
     }
   }
-
   return isValid;
 }
 
-// Lưu user (Tạo/Cập nhật)
 async function handleSave() {
   if (!validateForm()) {
     return;
   }
-
   isLoading.value = true;
 
   const payload = {
     username: formData.username,
+    name: formData.username, // Đồng bộ name = username
     email: formData.email,
     role: formData.role,
     status: formData.status,
+    phone: '', // Thêm các trường chuẩn hóa
+    address: '',
+    avatar: '',
   };
 
   if (formData.password) {
@@ -265,14 +249,13 @@ async function handleSave() {
 
   try {
     if (isEditMode.value) {
-      await axios.patch(`${API_URL}/account_admin/${formData.id}`, payload);
+      await axios.patch(`${API_URL}/users/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật người dùng!', 'success');
     } else {
       payload.created_at = new Date().toISOString();
-      await axios.post(`${API_URL}/account_admmin`, payload);
+      await axios.post(`${API_URL}/users`, payload);
       Swal.fire('Thành công', 'Đã tạo người dùng mới!', 'success');
     }
-
     userModalInstance.value.hide();
     fetchUsers();
   } catch (apiError) {
@@ -283,11 +266,9 @@ async function handleSave() {
   }
 }
 
-// Đổi trạng thái user
 async function toggleUserStatus(user) {
   const newStatus = user.status === 'active' ? 'inactive' : 'active';
   const actionText = newStatus === 'inactive' ? 'vô hiệu hóa' : 'kích hoạt';
-  const confirmText = newStatus === 'inactive' ? 'Đồng ý vô hiệu hóa!' : 'Đồng ý kích hoạt!';
 
   const result = await Swal.fire({
     title: 'Bạn có chắc chắn?',
@@ -296,30 +277,26 @@ async function toggleUserStatus(user) {
     showCancelButton: true,
     confirmButtonColor: '#3085d6',
     cancelButtonColor: '#d33',
-    confirmButtonText: confirmText,
+    confirmButtonText: 'Đồng ý',
     cancelButtonText: 'Hủy bỏ'
   });
 
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      await axios.patch(`${API_URL}/account_admin/${user.id}`, { status: newStatus });
-      Swal.fire(
-        'Thành công!',
-        `Đã ${actionText} người dùng ${user.username}.`,
-        'success'
-      );
-      fetchUsers();
+      await axios.patch(`${API_URL}/users/${user.id}`, { status: newStatus });
+      Swal.fire('Thành công!', `Đã ${actionText} người dùng ${user.username}.`, 'success');
+      user.status = newStatus; // Cập nhật UI
     } catch (error) {
       console.error(`Lỗi khi ${actionText} người dùng:`, error);
       Swal.fire('Lỗi', `Không thể ${actionText} người dùng này.`, 'error');
+      fetchUsers(); // Tải lại nếu lỗi
     } finally {
       isLoading.value = false;
     }
   }
 }
 
-// Xóa user
 async function handleDelete(user) {
   const result = await Swal.fire({
     title: 'Bạn có chắc chắn?',
@@ -334,12 +311,8 @@ async function handleDelete(user) {
 
   if (result.isConfirmed) {
     try {
-      await axios.delete(`${API_URL}/account_admin/${user.id}`);
-      Swal.fire(
-        'Đã xóa!',
-        'Người dùng đã được xóa.',
-        'success'
-      );
+      await axios.delete(`${API_URL}/users/${user.id}`);
+      Swal.fire('Đã xóa!', 'Người dùng đã được xóa.', 'success');
       fetchUsers();
     } catch (error) {
       console.error("Lỗi khi xóa người dùng:", error);
@@ -360,11 +333,11 @@ async function fetchRoles() {
       { value: 'manager', label: 'Quản lý', badgeClass: 'text-bg-info', id: 2 },
       { value: 'nhanvien', label: 'Nhân viên', badgeClass: 'text-bg-success', id: 3 },
       { value: 'ketoan', label: 'Kế toán', badgeClass: 'text-bg-primary', id: 4 },
+      { value: 'user', label: 'Khách hàng (User)', badgeClass: 'text-bg-light', id: 5 }
     ];
   }
 }
 
-// Reset form vai trò
 function resetRoleForm() {
   roleFormData.id = null;
   roleFormData.value = '';
@@ -373,11 +346,9 @@ function resetRoleForm() {
   Object.keys(roleErrors).forEach(key => roleErrors[key] = '');
 }
 
-// Kiểm tra form vai trò
 function validateRoleForm() {
   Object.keys(roleErrors).forEach(key => roleErrors[key] = '');
   let isValid = true;
-
   if (!roleFormData.value.trim()) {
     roleErrors.value = 'Vui lòng nhập giá trị vai trò (viết liền không dấu).';
     isValid = false;
@@ -385,16 +356,13 @@ function validateRoleForm() {
     roleErrors.value = 'Giá trị chỉ được dùng chữ thường không dấu và số.';
     isValid = false;
   }
-
   if (!roleFormData.label.trim()) {
     roleErrors.label = 'Vui lòng nhập nhãn hiển thị.';
     isValid = false;
   }
-
   return isValid;
 }
 
-// Mở modal tạo vai trò
 function openCreateRoleModal() {
   resetRoleForm();
   isRoleEditMode.value = false;
@@ -402,34 +370,28 @@ function openCreateRoleModal() {
   roleModalInstance.value.show();
 }
 
-// Mở modal sửa vai trò
 function openEditRoleModal(role) {
   resetRoleForm();
   isRoleEditMode.value = true;
-
   roleFormData.id = role.id;
   roleFormData.value = role.value;
   roleFormData.label = role.label;
   roleFormData.badgeClass = role.badgeClass;
-
   userModalInstance.value?.hide();
   nextTick(() => {
     roleModalInstance.value.show();
   });
 }
 
-// Lưu vai trò
 async function handleSaveRole() {
   if (!validateRoleForm()) {
     return;
   }
-
   const payload = {
     value: roleFormData.value.toLowerCase(),
     label: roleFormData.label,
     badgeClass: roleFormData.badgeClass,
   };
-
   try {
     if (isRoleEditMode.value) {
       await axios.put(`${API_URL}/roles/${roleFormData.id}`, payload);
@@ -438,7 +400,6 @@ async function handleSaveRole() {
       await axios.post(`${API_URL}/roles`, payload);
       Swal.fire('Thành công', 'Đã tạo vai trò mới!', 'success');
     }
-
     roleModalInstance.value.hide();
     fetchRoles();
   } catch (apiError) {
@@ -447,8 +408,11 @@ async function handleSaveRole() {
   }
 }
 
-// Xóa vai trò
 async function handleDeleteRole(role) {
+  if (role.value === 'admin' || role.value === 'user') {
+    Swal.fire('Không thể xóa', `Không được phép xóa vai trò "${role.label}".`, 'error');
+    return;
+  }
   const result = await Swal.fire({
     title: 'Bạn có chắc chắn?',
     text: `Bạn sẽ xóa vĩnh viễn vai trò "${role.label}"!`,
@@ -459,15 +423,10 @@ async function handleDeleteRole(role) {
     confirmButtonText: 'Đồng ý xóa!',
     cancelButtonText: 'Hủy bỏ'
   });
-
   if (result.isConfirmed) {
     try {
       await axios.delete(`${API_URL}/roles/${role.id}`);
-      Swal.fire(
-        'Đã xóa!',
-        'Vai trò đã được xóa.',
-        'success'
-      );
+      Swal.fire('Đã xóa!', 'Vai trò đã được xóa.', 'success');
       fetchRoles();
     } catch (error) {
       console.error("Lỗi khi xóa vai trò:", error);
@@ -482,11 +441,9 @@ function goToOtherUsersPage(page) {
     otherUsersCurrentPage.value = page;
   }
 }
-
 function prevOtherUsersPage() {
   goToOtherUsersPage(otherUsersCurrentPage.value - 1);
 }
-
 function nextOtherUsersPage() {
   goToOtherUsersPage(otherUsersCurrentPage.value + 1);
 }
@@ -497,13 +454,13 @@ function nextOtherUsersPage() {
     <div class="container-fluid">
       <div class="row">
         <div class="col-sm-6">
-          <h3 class="mb-0">Quản lý Người dùng và Vai trò</h3>
+          <h3 class="mb-0">Quản lý Nhân sự (Nội bộ)</h3>
         </div>
         <div class="col-sm-6">
           <ol class="breadcrumb float-sm-end">
             <li class="breadcrumb-item"><router-link to="/admin">Trang chủ</router-link></li>
             <li class="breadcrumb-item active" aria-current="page">
-              Người dùng
+              Tài khoản nội bộ
             </li>
           </ol>
         </div>
@@ -514,24 +471,31 @@ function nextOtherUsersPage() {
   <div class="app-content">
     <div class="container-fluid">
 
-      <div class="row mb-3">
-        <div class="col-12 text-end">
-          <button type="button" class="btn btn-secondary me-2" @click="openCreateRoleModal">
-            <i class="bi bi-people-fill"></i> Quản lý Vai trò
-          </button>
-          <button type="button" class="btn btn-primary" @click="openCreateModal">
-            <i class="bi bi-plus-lg"></i> Thêm mới Tài khoản
-          </button>
-        </div>
-      </div>
+      <!-- Card điều khiển (Tìm kiếm + Nút) -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <div class="row align-items-center">
+            <!-- Cột tìm kiếm bên trái -->
+            <div class="col-md-6 col-12 mb-2 mb-md-0">
+              <div class="input-group">
+                <span class="input-group-text bg-white border-end-0">
+                  <i class="bi bi-search text-muted"></i>
+                </span>
+                <input type="text" class="form-control border-start-0 ps-0"
+                  placeholder="Tìm kiếm theo tên đăng nhập, email, vai trò..." v-model="searchQuery">
+              </div>
+            </div>
 
-      <!-- THANH TÌM KIẾM -->
-      <div class="row mb-3">
-        <div class="col-12">
-          <div class="input-group">
-            <span class="input-group-text"><i class="bi bi-search"></i></span>
-            <input type="text" class="form-control" placeholder="Tìm kiếm theo tên đăng nhập, email, vai trò..."
-              v-model="searchQuery">
+            <!-- Cột nút bên phải -->
+            <div class="col-md-6 col-12 text-md-end">
+              <button type="button" class="btn btn-outline-info me-2" @click="openCreateRoleModal">
+                <i class="bi bi-people-fill"></i> Quản lý Vai trò
+              </button>
+              <button type="button" class="btn btn-primary" @click="openCreateModal">
+                <i class="bi bi-plus-lg"></i> Thêm mới Tài khoản
+              </button>
+            </div>
+
           </div>
         </div>
       </div>
@@ -550,150 +514,170 @@ function nextOtherUsersPage() {
               <div class="card-header">
                 <h3 class="card-title">Danh sách Quản trị viên</h3>
               </div>
-              <div class="card-body">
-                <table class="table table-bordered table-hover align-middle">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Tên đăng nhập</th>
-                      <th>Email</th>
-                      <th>Vai trò</th>
-                      <th>Trạng thái</th>
-                      <th>Ngày tạo</th>
-                      <th class="text-center">Hành động</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-if="adminUsers.length === 0">
-                      <td colspan="7" class="text-center">
-                        {{ searchQuery ? 'Không tìm thấy quản trị viên phù hợp' : 'Không có quản trị viên nào' }}
-                      </td>
-                    </tr>
-                    <tr v-for="user in adminUsers" :key="user.id">
-                      <td>{{ user.id }}</td>
-                      <td>
-                        <div class="d-flex align-items-center">
-                          <img :src="`https://placehold.co/40x40/EBF4FF/1D62F0?text=${user.username.charAt(0).toUpperCase()}`"
-                            class="rounded-circle me-3" alt="Avatar"
-                            style="width: 40px; height: 40px; object-fit: cover;">
-                          <div>
-                            <div class="fw-bold">{{ user.username }}</div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table table-bordered table-hover align-middle">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Tên đăng nhập</th>
+                        <th>Liên hệ</th>
+                        <th>Vai trò</th>
+                        <th>Trạng thái</th>
+                        <th>Ngày tạo</th>
+                        <th class="text-center">Hành động</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-if="adminUsers.length === 0">
+                        <td colspan="7" class="text-center">
+                          {{ searchQuery ? 'Không tìm thấy quản trị viên phù hợp' : 'Không có quản trị viên nào' }}
+                        </td>
+                      </tr>
+                      <!-- THAY ĐỔI 1: Thêm class binding cho <tr> -->
+                      <tr v-for="user in adminUsers" :key="user.id"
+                        :class="{ 'inactive-row': user.status !== 'active' }">
+                        <td>{{ user.id }}</td>
+                        <td>
+                          <div class="d-flex align-items-center">
+                            <img
+                              :src="user.avatar || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${user.username.charAt(0).toUpperCase()}`"
+                              class="rounded-circle me-3" alt="Avatar"
+                              style="width: 40px; height: 40px; object-fit: cover;">
+                            <div>
+                              <div class="fw-bold">{{ user.username }}</div>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td>{{ user.email }}</td>
-                      <td>
-                        <span :class="['badge', getRoleBadge(user.role)]">{{ getRoleLabel(user.role) }}</span>
-                      </td>
-                      <td>
-                        <span :class="['badge', user.status === 'active' ? 'text-bg-success' : 'text-bg-warning']">
-                          {{ user.status === 'active' ? 'Đang hoạt động' : 'Vô hiệu hóa' }}
-                        </span>
-                      </td>
-                      <td>{{ getFormattedDate(user.created_at) }}</td>
-                      <td class="text-center">
-                        <div class="d-flex justify-content-center align-items-center">
-                          <div class="form-check form-switch d-inline-block align-middle me-3"
-                            title="Kích hoạt/Vô hiệu hóa">
-                            <input class="form-check-input" type="checkbox" role="switch"
-                              style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                              :checked="user.status === 'active'" @click.prevent="toggleUserStatus(user)">
-                          </div>
+                        </td>
+                        <td>
+                          <div v-if="user.email"><i class="bi bi-envelope me-1 text-muted"></i> {{ user.email }}</div>
+                          <div v-if="user.phone"><i class="bi bi-telephone me-1 text-muted"></i> {{ user.phone }}</div>
+                        </td>
+                        <td>
+                          <span :class="['badge', getRoleBadge(user.role)]">{{ getRoleLabel(user.role) }}</span>
+                        </td>
+                        <td>
+                          <!-- THAY ĐỔI 2: Đổi text-bg-warning sang text-bg-danger cho nổi bật -->
+                          <span :class="['badge', user.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
+                            {{ user.status === 'active' ? 'Đang hoạt động' : 'Vô hiệu hóa' }}
+                          </span>
+                        </td>
+                        <td>{{ getFormattedDate(user.created_at) }}</td>
+                        <td class="text-center">
+                          <div class="d-flex justify-content-center align-items-center">
+                            <div class="form-check form-switch d-inline-block align-middle me-3"
+                              title="Kích hoạt/Vô hiệu hóa">
+                              <input class="form-check-input" type="checkbox" role="switch"
+                                style="width: 2.5em; height: 1.25em; cursor: pointer;"
+                                :checked="user.status === 'active'" @click.prevent="toggleUserStatus(user)">
+                            </div>
 
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-secondary" title="Xem chi tiết" @click="openViewModal(user)">
-                              <i class="bi bi-eye"></i>
-                            </button>
-                            <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(user)">
-                              <i class="bi bi-pencil"></i>
-                            </button>
-                            <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(user)">
-                              <i class="bi bi-trash"></i>
-                            </button>
+                            <div class="btn-group btn-group-sm">
+                              <button class="btn btn-outline-secondary" title="Xem chi tiết"
+                                @click="openViewModal(user)">
+                                <i class="bi bi-eye"></i>
+                              </button>
+                              <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(user)">
+                                <i class="bi bi-pencil"></i>
+                              </button>
+                              <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(user)">
+                                <i class="bi bi-trash"></i>
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- BẢNG USER KHÁC -->
+        <!-- BẢNG USER KHÁC (NHANVIEN, KETOAN...) -->
         <div class="row mt-4">
           <div class="col-12">
             <div class="card">
               <div class="card-header">
-                <h3 class="card-title">Danh sách Người dùng khác</h3>
+                <h3 class="card-title">Danh sách Nhân viên & Vai trò khác</h3>
               </div>
-              <div class="card-body">
-                <table class="table table-bordered table-hover align-middle">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Tên đăng nhập</th>
-                      <th>Email</th>
-                      <th>Vai trò</th>
-                      <th>Trạng thái</th>
-                      <th>Ngày tạo</th>
-                      <th class="text-center">Hành động</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-if="otherUsers.length === 0">
-                      <td colspan="7" class="text-center">
-                        {{ searchQuery ? 'Không tìm thấy người dùng phù hợp' : 'Không có người dùng nào khác' }}
-                      </td>
-                    </tr>
-                    <tr v-for="user in paginatedOtherUsers" :key="user.id">
-                      <td>{{ user.id }}</td>
-                      <td>
-                        <div class="d-flex align-items-center">
-                          <img :src="`https://placehold.co/40x40/EBF4FF/1D62F0?text=${user.username.charAt(0).toUpperCase()}`"
-                            class="rounded-circle me-3" alt="Avatar"
-                            style="width: 40px; height: 40px; object-fit: cover;">
-                          <div>
-                            <div class="fw-bold">{{ user.username }}</div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table table-bordered table-hover align-middle">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Tên đăng nhập</th>
+                        <th>Liên hệ</th>
+                        <th>Vai trò</th>
+                        <th>Trạng thái</th>
+                        <th>Ngày tạo</th>
+                        <th class="text-center">Hành động</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-if="otherUsers.length === 0">
+                        <td colspan="7" class="text-center">
+                          {{ searchQuery ? 'Không tìm thấy người dùng phù hợp' : 'Không có người dùng nào khác' }}
+                        </td>
+                      </tr>
+                      <!-- THAY ĐỔI 3: Thêm class binding cho <tr> -->
+                      <tr v-for="user in paginatedOtherUsers" :key="user.id"
+                        :class="{ 'inactive-row': user.status !== 'active' }">
+                        <td>{{ user.id }}</td>
+                        <td>
+                          <div class="d-flex align-items-center">
+                            <img
+                              :src="user.avatar || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${user.username.charAt(0).toUpperCase()}`"
+                              class="rounded-circle me-3" alt="Avatar"
+                              style="width: 40px; height: 40px; object-fit: cover;">
+                            <div>
+                              <div class="fw-bold">{{ user.username }}</div>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td>{{ user.email }}</td>
-                      <td>
-                        <span :class="['badge', getRoleBadge(user.role)]">{{ getRoleLabel(user.role) }}</span>
-                      </td>
-                      <td>
-                        <span :class="['badge', user.status === 'active' ? 'text-bg-success' : 'text-bg-warning']">
-                          {{ user.status === 'active' ? 'Đang hoạt động' : 'Vô hiệu hóa' }}
-                        </span>
-                      </td>
-                      <td>{{ getFormattedDate(user.created_at) }}</td>
-                      <td class="text-center">
-                        <div class="d-flex justify-content-center align-items-center">
-                          <div class="form-check form-switch d-inline-block align-middle me-3"
-                            title="Kích hoạt/Vô hiệu hóa">
-                            <input class="form-check-input" type="checkbox" role="switch"
-                              style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                              :checked="user.status === 'active'" @click.prevent="toggleUserStatus(user)">
-                          </div>
+                        </td>
+                        <td>
+                          <div v-if="user.email"><i class="bi bi-envelope me-1 text-muted"></i> {{ user.email }}</div>
+                          <div v-if="user.phone"><i class="bi bi-telephone me-1 text-muted"></i> {{ user.phone }}</div>
+                        </td>
+                        <td>
+                          <span :class="['badge', getRoleBadge(user.role)]">{{ getRoleLabel(user.role) }}</span>
+                        </td>
+                        <td>
+                          <!-- THAY ĐỔI 4: Đổi text-bg-warning sang text-bg-danger cho nổi bật -->
+                          <span :class="['badge', user.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
+                            {{ user.status === 'active' ? 'Đang hoạt động' : 'Vô hiệu hóa' }}
+                          </span>
+                        </td>
+                        <td>{{ getFormattedDate(user.created_at) }}</td>
+                        <td class="text-center">
+                          <div class="d-flex justify-content-center align-items-center">
+                            <div class="form-check form-switch d-inline-block align-middle me-3"
+                              title="Kích hoạt/Vô hiệu hóa">
+                              <input class="form-check-input" type="checkbox" role="switch"
+                                style="width: 2.5em; height: 1.25em; cursor: pointer;"
+                                :checked="user.status === 'active'" @click.prevent="toggleUserStatus(user)">
+                            </div>
 
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-secondary" title="Xem chi tiết" @click="openViewModal(user)">
-                              <i class="bi bi-eye"></i>
-                            </button>
-                            <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(user)">
-                              <i class="bi bi-pencil"></i>
-                            </button>
-                            <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(user)">
-                              <i class="bi bi-trash"></i>
-                            </button>
+                            <div class="btn-group btn-group-sm">
+                              <button class="btn btn-outline-secondary" title="Xem chi tiết"
+                                @click="openViewModal(user)">
+                                <i class="bi bi-eye"></i>
+                              </button>
+                              <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(user)">
+                                <i class="bi bi-pencil"></i>
+                              </button>
+                              <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(user)">
+                                <i class="bi bi-trash"></i>
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               <!-- PHÂN TRANG CHO USER KHÁC -->
@@ -703,12 +687,10 @@ function nextOtherUsersPage() {
                     <li class="page-item" :class="{ disabled: otherUsersCurrentPage === 1 }">
                       <a class="page-link" href="#" @click.prevent="prevOtherUsersPage">&laquo;</a>
                     </li>
-
                     <li v-for="page in otherUsersTotalPages" :key="page" class="page-item"
                       :class="{ active: page === otherUsersCurrentPage }">
                       <a class="page-link" href="#" @click.prevent="goToOtherUsersPage(page)">{{ page }}</a>
                     </li>
-
                     <li class="page-item" :class="{ disabled: otherUsersCurrentPage === otherUsersTotalPages }">
                       <a class="page-link" href="#" @click.prevent="nextOtherUsersPage">&raquo;</a>
                     </li>
@@ -745,9 +727,9 @@ function nextOtherUsersPage() {
                     style="width: 150px; height: 150px; object-fit: cover;">
                 </div>
                 <div class="mb-3">
-                  <label for="role" class="form-label fw-bold">Vai trò</label>
+                  <label for="role" class="form-label fw-bold required">Vai trò</label>
                   <select class="form-select" id="role" v-model="formData.role">
-                    <option v-for="role in roles" :key="role.value" :value="role.value">
+                    <option v-for="role in availableRoles" :key="role.value" :value="role.value">
                       {{ role.label }}
                     </option>
                   </select>
@@ -820,16 +802,15 @@ function nextOtherUsersPage() {
           <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal"
             aria-label="Close"></button>
 
-          <!-- Status Badge in View Modal -->
           <div class="position-absolute top-0 start-0 m-3">
-            <span :class="['badge', viewingUser.status === 'active' ? 'text-bg-success' : 'text-bg-warning']">
+            <span :class="['badge', viewingUser.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
               {{ viewingUser.status === 'active' ? 'Đang hoạt động' : 'Vô hiệu hóa' }}
             </span>
           </div>
 
           <div class="text-center mb-4 mt-3">
             <img
-              :src="`https://placehold.co/120x120/EBF4FF/1D62F0?text=${viewingUser.username ? viewingUser.username.charAt(0).toUpperCase() : 'U'}`"
+              :src="viewingUser.avatar || `https://placehold.co/120x120/EBF4FF/1D62F0?text=${viewingUser.username ? viewingUser.username.charAt(0).toUpperCase() : 'U'}`"
               class="rounded-circle img-thumbnail shadow-sm" alt="Avatar"
               style="width: 120px; height: 120px; object-fit: cover;">
             <h4 class="mt-3 mb-1">{{ viewingUser.username }}</h4>
@@ -838,6 +819,9 @@ function nextOtherUsersPage() {
           <div class="list-group list-group-flush">
             <div class="list-group-item px-0">
               <i class="bi bi-envelope me-3 text-primary"></i> {{ viewingUser.email }}
+            </div>
+            <div class="list-group-item px-0">
+              <i class="bi bi-telephone me-3 text-success"></i> {{ viewingUser.phone || '(Chưa có SĐT)' }}
             </div>
             <div class="list-group-item px-0">
               <i class="bi bi-person-badge me-3 text-info"></i>
@@ -903,6 +887,7 @@ function nextOtherUsersPage() {
                     <option value="text-bg-warning">Vàng</option>
                     <option value="text-bg-secondary">Xám</option>
                     <option value="text-bg-dark">Đen</option>
+                    <option value="text-bg-light">Sáng (User)</option>
                   </select>
                   <span :class="['badge', 'mt-1', roleFormData.badgeClass]">{{ roleFormData.label || 'Xem trước'
                   }}</span>
@@ -915,28 +900,31 @@ function nextOtherUsersPage() {
           </div>
 
           <h6 class="mt-4">Danh sách Vai trò hiện tại</h6>
-          <table class="table table-bordered table-striped">
-            <thead>
-              <tr>
-                <th>Giá trị (Value)</th>
-                <th>Nhãn hiển thị</th>
-                <th>Hành động</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="roles.length === 0">
-                <td colspan="3" class="text-center">Chưa có vai trò nào được tạo.</td>
-              </tr>
-              <tr v-for="role in roles" :key="role.id">
-                <td>{{ role.value }}</td>
-                <td><span :class="['badge', role.badgeClass]">{{ role.label }}</span></td>
-                <td>
-                  <button class="btn btn-sm btn-outline-info me-2" @click="openEditRoleModal(role)">Sửa</button>
-                  <button class="btn btn-sm btn-outline-danger" @click="handleDeleteRole(role)">Xóa</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+              <thead>
+                <tr>
+                  <th>Giá trị (Value)</th>
+                  <th>Nhãn hiển thị</th>
+                  <th>Hành động</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="roles.length === 0">
+                  <td colspan="3" class="text-center">Chưa có vai trò nào được tạo.</td>
+                </tr>
+                <tr v-for="role in roles" :key="role.id">
+                  <td>{{ role.value }}</td>
+                  <td><span :class="['badge', role.badgeClass]">{{ role.label }}</span></td>
+                  <td>
+                    <button class="btn btn-sm btn-outline-info me-2" @click="openEditRoleModal(role)">Sửa</button>
+                    <button class="btn btn-sm btn-outline-danger" @click="handleDeleteRole(role)"
+                      :disabled="role.value === 'admin' || role.value === 'user'">Xóa</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
@@ -952,10 +940,36 @@ function nextOtherUsersPage() {
   margin-top: 2px;
   margin-bottom: 2px;
 }
+.table td .btn-group {
+  min-width: 95px; /* Đảm bảo các nút căn đều */
+  justify-content: center;
+}
+.table td .form-check-input {
+   margin-right: 0.5rem; /* Tách nút switch ra khỏi btn-group */
+}
 
 /* Thêm CSS cho label bắt buộc */
 .required::after {
   content: " *";
   color: red;
+}
+.form-check-input {
+  width: 2.5em;
+  height: 1.25em;
+}
+/* Đảm bảo bảng không bị tràn */
+.card-body {
+  overflow-x: auto;
+}
+
+/* (MỚI) Thêm style để làm mờ hàng bị vô hiệu hóa */
+.inactive-row {
+  opacity: 0.65;
+  background-color: #f8f9fa; /* Màu bg-light của Bootstrap */
+  transition: opacity 0.2s ease-in-out, background-color 0.2s ease-in-out;
+}
+.inactive-row:hover {
+  opacity: 1; /* Hiển thị rõ khi hover */
+  background-color: #f1f3f5;
 }
 </style>

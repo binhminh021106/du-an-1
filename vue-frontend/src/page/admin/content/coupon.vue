@@ -388,14 +388,14 @@ async function handleDelete(coupon) {
                       </td>
                       <td>
                         <!-- Thêm nút Xem -->
-                        <button class="btn btn-info btn-sm me-1" @click="openViewModal(coupon)" title="Xem chi tiết">
+                        <button class="btn btn-outline-info btn-sm me-1" @click="openViewModal(coupon)" title="Xem chi tiết">
                            <i class="bi bi-eye"></i>
                         </button>
-                        <button class="btn btn-warning btn-sm me-1" @click="openEditModal(coupon)">
-                          <i class="bi bi-pencil"></i> Sửa
+                        <button class="btn btn-outline-warning btn-sm me-1" @click="openEditModal(coupon)">
+                          <i class="bi bi-pencil"></i>
                         </button>
-                        <button class="btn btn-danger btn-sm" @click="handleDelete(coupon)">
-                          <i class="bi bi-trash"></i> Xóa
+                        <button class="btn btn-outline-danger btn-sm" @click="handleDelete(coupon)">
+                          <i class="bi bi-trash"></i>
                         </button>
                       </td>
                     </tr>

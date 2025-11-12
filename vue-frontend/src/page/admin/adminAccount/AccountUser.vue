@@ -11,7 +11,7 @@ const searchQuery = ref('');
 const currentPage = ref(1);
 const itemsPerPage = ref(10);
 
-// Modal refs
+// State Modal
 const customerModalRef = ref(null);
 const customerModalInstance = ref(null);
 const viewModalRef = ref(null);
@@ -20,7 +20,7 @@ const viewModalInstance = ref(null);
 const isEditMode = ref(false);
 const viewingCustomer = ref({});
 
-// Form data for create/edit
+// Form data
 const formData = reactive({
   id: null,
   name: '',
@@ -29,8 +29,8 @@ const formData = reactive({
   password: '',
   password_confirmation: '',
   address: '',
-  avatar: '', // Stores URL or base64
-  status: 'active', // Default status
+  avatar: '', 
+  status: 'active', 
 });
 
 const avatarFile = ref(null);
@@ -76,7 +76,7 @@ watch(searchQuery, () => {
 onMounted(() => {
   fetchCustomers();
   if (customerModalRef.value) {
-    customerModalInstance.value = new Modal(customerModalRef.value);
+    customerModalInstance.value = new Modal(customerModalRef.value, { backdrop: 'static' });
   }
   if (viewModalRef.value) {
     viewModalInstance.value = new Modal(viewModalRef.value);
@@ -88,12 +88,15 @@ onMounted(() => {
 async function fetchCustomers() {
   isLoading.value = true;
   try {
-    const response = await axios.get(`${API_URL}/account_user`);
-    // Sort by newest first and ensure status exists
+    // THAY ĐỔI 1: Gọi /users?role=user để CHỈ lấy khách hàng
+    const response = await axios.get(`${API_URL}/users?role=user`);
+    
+    // Sắp xếp theo ID mới nhất
     customers.value = response.data.map(customer => ({
       ...customer,
-      status: customer.status || 'active' // Default to 'active' if missing
-    })).reverse();
+      status: customer.status || 'active' 
+    })).sort((a, b) => (b.id > a.id) ? 1 : -1); // Sắp xếp mới nhất lên đầu
+    
   } catch (error) {
     console.error("Lỗi tải danh sách khách hàng:", error);
     Swal.fire('Lỗi', 'Không thể tải danh sách khách hàng.', 'error');
@@ -152,13 +155,12 @@ function validateForm() {
     isValid = false;
   }
 
-  // Basic phone validation (can be improved with regex specific to locale)
   if (formData.phone && !/^[0-9]{10,11}$/.test(formData.phone)) {
     errors.phone = 'Số điện thoại không hợp lệ (10-11 số).';
     isValid = false;
   }
 
-  if (!isEditMode.value) {
+  if (!isEditMode.value) { // Khi tạo mới
     if (!formData.password) {
       errors.password = 'Vui lòng nhập mật khẩu.';
       isValid = false;
@@ -170,10 +172,9 @@ function validateForm() {
       errors.password_confirmation = 'Mật khẩu xác nhận không khớp.';
       isValid = false;
     }
-  } else {
-    // If editing and password field is filled, validate it
-    if (formData.password) {
-       if (formData.password.length < 6) {
+  } else { // Khi chỉnh sửa
+    if (formData.password) { // Nếu có nhập mật khẩu mới
+      if (formData.password.length < 6) {
         errors.password = 'Mật khẩu phải có ít nhất 6 ký tự.';
         isValid = false;
       }
@@ -219,18 +220,16 @@ async function handleSave() {
 
   isLoading.value = true;
   try {
-    // Prepare payload
     const payload = {
       name: formData.name,
       email: formData.email,
       phone: formData.phone,
       address: formData.address,
+      avatar: formData.avatar,
       avatar: formData.avatar, // Default to existing URL
       status: formData.status,
     };
 
-    // If new avatar selected, use the preview data URL (simulating upload)
-    // In real app, you'd upload 'avatarFile.value' to a server and get a URL back.
     if (avatarPreview.value && avatarFile.value) {
        payload.avatar = avatarPreview.value;
     }
@@ -238,15 +237,22 @@ async function handleSave() {
     if (isEditMode.value) {
       if (formData.password) {
         payload.password = formData.password;
-        payload.password_confirmation = formData.password_confirmation;
+        // Bỏ qua password_confirmation vì db.json không cần
       }
-      await axios.patch(`${API_URL}/account_user/${formData.id}`, payload);
+      // THAY ĐỔI 2: PATCH đến /users/:id
+      await axios.patch(`${API_URL}/users/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật thông tin khách hàng!', 'success');
     } else {
       payload.password = formData.password;
-      payload.password_confirmation = formData.password_confirmation;
-      // Assuming backend handles ID generation, or json-server does it automatically
-      await axios.post(`${API_URL}/account_user`, payload);
+      
+      // THAY ĐỔI 3: Thêm các trường chuẩn hóa cho bảng /users
+      payload.role = 'user'; // Gán vai trò là user
+      // Tạo username giả lập từ email
+      payload.username = formData.email.split('@')[0] + `_${Math.random().toString(36).substr(2, 4)}`;
+      payload.created_at = new Date().toISOString();
+      
+      // THAY ĐỔI 4: POST đến /users
+      await axios.post(`${API_URL}/users`, payload);
       Swal.fire('Thành công', 'Đã thêm khách hàng mới!', 'success');
     }
 
@@ -270,7 +276,7 @@ async function toggleCustomerStatus(customer) {
     text: `Bạn muốn ${actionText} tài khoản khách hàng "${customer.name}"?`,
     icon: 'warning',
     showCancelButton: true,
-    confirmButtonColor: newStatus === 'inactive' ? '#d33' : '#3085d6', // Red for lock, blue for unlock
+    confirmButtonColor: newStatus === 'inactive' ? '#d33' : '#3085d6',
     cancelButtonColor: '#6c757d',
     confirmButtonText: confirmText,
     cancelButtonText: 'Hủy bỏ'
@@ -279,16 +285,18 @@ async function toggleCustomerStatus(customer) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      await axios.patch(`${API_URL}/account_user/${customer.id}`, { status: newStatus });
+      // THAY ĐỔI 5: PATCH đến /users/:id
+      await axios.patch(`${API_URL}/users/${customer.id}`, { status: newStatus });
       Swal.fire(
         'Thành công!',
         `Đã ${actionText} tài khoản khách hàng.`,
         'success'
       );
-      fetchCustomers();
+      customer.status = newStatus; // Cập nhật UI ngay
     } catch (error) {
       console.error(`Lỗi khi ${actionText} khách hàng:`, error);
       Swal.fire('Lỗi', `Không thể ${actionText} tài khoản này.`, 'error');
+      fetchCustomers(); // Tải lại nếu lỗi
     } finally {
       isLoading.value = false;
     }
@@ -310,9 +318,10 @@ async function handleDelete(customer) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      await axios.delete(`${API_URL}/account_user/${customer.id}`);
+      // THAY ĐỔI 6: DELETE đến /users/:id
+      await axios.delete(`${API_URL}/users/${customer.id}`);
       Swal.fire('Đã xóa!', 'Khách hàng đã được xóa thành công.', 'success');
-      // If current page becomes empty after deletion, go to previous page
+      
       if (paginatedCustomers.value.length === 1 && currentPage.value > 1) {
         currentPage.value--;
       }
@@ -362,7 +371,7 @@ function goToPage(page) {
                   <i class="bi bi-search text-muted"></i>
                 </span>
                 <input type="text" class="form-control border-start-0 ps-0"
-                       placeholder="Tìm kiếm theo tên, email, SĐT..." v-model="searchQuery">
+                  placeholder="Tìm kiếm theo tên, email, SĐT..." v-model="searchQuery">
               </div>
             </div>
             <div class="col-md-6 col-12 text-md-end">
@@ -374,8 +383,8 @@ function goToPage(page) {
         </div>
 
         <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
               <thead class="table-light">
                 <tr>
                   <th class="ps-3">Khách hàng</th>
@@ -395,15 +404,18 @@ function goToPage(page) {
                 <tr v-else-if="filteredCustomers.length === 0">
                   <td colspan="4" class="text-center py-4 text-muted">
                     <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                    Không tìm thấy khách hàng nào.
+                    {{ searchQuery ? 'Không tìm thấy khách hàng nào.' : 'Không có khách hàng nào.' }}
                   </td>
                 </tr>
-                <tr v-for="customer in paginatedCustomers" :key="customer.id">
+                <!-- THAY ĐỔI 7: Thêm class binding và đổi badge -->
+                <tr v-for="customer in paginatedCustomers" :key="customer.id" 
+                    :class="{ 'inactive-row': customer.status !== 'active' }">
                   <td class="ps-3">
                     <div class="d-flex align-items-center">
-                      <img :src="customer.avatar || 'https://placehold.co/40x40?text=' + customer.name.charAt(0).toUpperCase()"
-                           class="rounded-circle me-3" alt="Avatar"
-                           style="width: 40px; height: 40px; object-fit: cover;">
+                      <img
+                        :src="customer.avatar || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${customer.name.charAt(0).toUpperCase()}`"
+                        class="rounded-circle me-3" alt="Avatar"
+                        style="width: 40px; height: 40px; object-fit: cover;">
                       <div>
                         <div class="fw-bold">{{ customer.name }}</div>
                         <div class="small text-muted">ID: {{ customer.id }}</div>
@@ -415,7 +427,7 @@ function goToPage(page) {
                     <div v-if="customer.phone"><i class="bi bi-telephone me-1 text-muted"></i> {{ customer.phone }}</div>
                   </td>
                   <td>
-                    <span :class="['badge', customer.status === 'active' ? 'bg-success' : 'bg-secondary']">
+                    <span :class="['badge', customer.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
                       {{ customer.status === 'active' ? 'Hoạt động' : 'Đã khóa' }}
                     </span>
                   </td>
@@ -424,9 +436,8 @@ function goToPage(page) {
                       <!-- Toggle Switch -->
                       <div class="form-check form-switch me-3" title="Khóa/Mở khóa tài khoản">
                         <input class="form-check-input" type="checkbox" role="switch"
-                               style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                               :checked="customer.status === 'active'"
-                               @click.prevent="toggleCustomerStatus(customer)">
+                          style="width: 2.5em; height: 1.25em; cursor: pointer;"
+                          :checked="customer.status === 'active'" @click.prevent="toggleCustomerStatus(customer)">
                       </div>
 
                       <div class="btn-group btn-group-sm">
@@ -473,7 +484,8 @@ function goToPage(page) {
   </div>
 
   <!-- Create/Edit Modal -->
-  <div class="modal fade" id="customerModal" ref="customerModalRef" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal fade" id="customerModal" ref="customerModalRef" tabindex="-1" aria-hidden="true"
+    data-bs-backdrop="static">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
@@ -487,8 +499,8 @@ function goToPage(page) {
               <div class="col-md-4 text-center mb-3">
                 <div class="mb-3">
                   <img :src="avatarPreview || 'https://placehold.co/150x150?text=Avatar'"
-                       class="img-thumbnail rounded-circle" alt="Avatar Preview"
-                       style="width: 150px; height: 150px; object-fit: cover;">
+                    class="img-thumbnail rounded-circle" alt="Avatar Preview"
+                    style="width: 150px; height: 150px; object-fit: cover;">
                 </div>
                 <div class="mb-3">
                   <label for="avatarInput" class="form-label btn btn-sm btn-outline-primary">
@@ -510,19 +522,22 @@ function goToPage(page) {
               <div class="col-md-8">
                 <div class="mb-3">
                   <label for="name" class="form-label required">Họ và tên</label>
-                  <input type="text" class="form-control" :class="{ 'is-invalid': errors.name }" id="name" v-model="formData.name">
+                  <input type="text" class="form-control" :class="{ 'is-invalid': errors.name }" id="name"
+                    v-model="formData.name">
                   <div class="invalid-feedback">{{ errors.name }}</div>
                 </div>
                 <div class="row">
                   <div class="col-md-6 mb-3">
                     <label for="email" class="form-label required">Email</label>
-                    <input type="email" class="form-control" :class="{ 'is-invalid': errors.email }" id="email" v-model="formData.email" :readonly="isEditMode">
+                    <input type="email" class="form-control" :class="{ 'is-invalid': errors.email }" id="email"
+                      v-model="formData.email" :readonly="isEditMode">
                     <div class="invalid-feedback">{{ errors.email }}</div>
                     <div v-if="isEditMode" class="form-text">Không thể thay đổi email.</div>
                   </div>
                   <div class="col-md-6 mb-3">
                     <label for="phone" class="form-label">Số điện thoại</label>
-                    <input type="tel" class="form-control" :class="{ 'is-invalid': errors.phone }" id="phone" v-model="formData.phone">
+                    <input type="tel" class="form-control" :class="{ 'is-invalid': errors.phone }" id="phone"
+                      v-model="formData.phone">
                     <div class="invalid-feedback">{{ errors.phone }}</div>
                   </div>
                 </div>
@@ -539,15 +554,16 @@ function goToPage(page) {
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label for="password" class="form-label" :class="{ 'required': !isEditMode }">Mật khẩu</label>
-                <input type="password" class="form-control" :class="{ 'is-invalid': errors.password }" id="password" v-model="formData.password"
-                       autocomplete="new-password">
+                <input type="password" class="form-control" :class="{ 'is-invalid': errors.password }" id="password"
+                  v-model="formData.password" autocomplete="new-password">
                 <div class="form-text" v-if="isEditMode">Chỉ nhập nếu muốn đổi mật khẩu mới.</div>
                 <div class="invalid-feedback">{{ errors.password }}</div>
               </div>
               <div class="col-md-6 mb-3">
-                <label for="password_confirmation" class="form-label" :class="{ 'required': !isEditMode || formData.password }">Xác nhận mật khẩu</label>
-                <input type="password" class="form-control" :class="{ 'is-invalid': errors.password_confirmation }" id="password_confirmation" v-model="formData.password_confirmation"
-                       autocomplete="new-password">
+                <label for="password_confirmation" class="form-label"
+                  :class="{ 'required': !isEditMode || formData.password }">Xác nhận mật khẩu</label>
+                <input type="password" class="form-control" :class="{ 'is-invalid': errors.password_confirmation }"
+                  id="password_confirmation" v-model="formData.password_confirmation" autocomplete="new-password">
                 <div class="invalid-feedback">{{ errors.password_confirmation }}</div>
               </div>
             </div>
@@ -556,7 +572,8 @@ function goToPage(page) {
         <div class="modal-footer bg-light">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
           <button type="submit" form="customerForm" class="btn btn-primary" :disabled="isLoading">
-             <span v-if="isLoading" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+            <span v-if="isLoading" class="spinner-border spinner-border-sm me-1" role="status"
+              aria-hidden="true"></span>
             {{ isEditMode ? 'Lưu thay đổi' : 'Tạo khách hàng' }}
           </button>
         </div>
@@ -569,19 +586,22 @@ function goToPage(page) {
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-body p-4 position-relative">
-          <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal"
+            aria-label="Close"></button>
 
           <!-- Status Badge in View Modal -->
           <div class="position-absolute top-0 start-0 m-3">
-             <span :class="['badge', viewingCustomer.status === 'active' ? 'bg-success' : 'bg-secondary']">
-                {{ viewingCustomer.status === 'active' ? 'Đang hoạt động' : 'Đã khóa' }}
-             </span>
+            <!-- THAY ĐỔI 8: Cập nhật badge trong modal xem -->
+            <span :class="['badge', viewingCustomer.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
+              {{ viewingCustomer.status === 'active' ? 'Đang hoạt động' : 'Đã khóa' }}
+            </span>
           </div>
 
           <div class="text-center mb-4 mt-3">
-            <img :src="viewingCustomer.avatar || 'https://placehold.co/120x120?text=' + (viewingCustomer.name ? viewingCustomer.name.charAt(0).toUpperCase() : 'U')"
-                 class="rounded-circle img-thumbnail shadow-sm" alt="Avatar"
-                 style="width: 120px; height: 120px; object-fit: cover;">
+            <img
+              :src="viewingCustomer.avatar || 'https://placehold.co/120x120?text=' + (viewingCustomer.name ? viewingCustomer.name.charAt(0).toUpperCase() : 'U')"
+              class="rounded-circle img-thumbnail shadow-sm" alt="Avatar"
+              style="width: 120px; height: 120px; object-fit: cover;">
             <h4 class="mt-3 mb-1">{{ viewingCustomer.name }}</h4>
             <p class="text-muted mb-0">ID: {{ viewingCustomer.id }}</p>
           </div>
@@ -598,9 +618,10 @@ function goToPage(page) {
           </div>
         </div>
         <div class="modal-footer bg-light justify-content-center">
-           <button type="button" class="btn btn-primary px-4" @click="() => { viewModalInstance.hide(); openEditModal(viewingCustomer); }">
-             <i class="bi bi-pencil me-2"></i> Chỉnh sửa thông tin
-           </button>
+          <button type="button" class="btn btn-primary px-4"
+            @click="() => { viewModalInstance.hide(); openEditModal(viewingCustomer); }">
+            <i class="bi bi-pencil me-2"></i> Chỉnh sửa thông tin
+          </button>
         </div>
       </div>
     </div>
@@ -616,5 +637,20 @@ function goToPage(page) {
 /* Smooth transition for table rows */
 .table-hover tbody tr {
   transition: background-color 0.2s;
+}
+.form-check-input {
+  width: 2.5em; 
+  height: 1.25em;
+}
+
+/* (MỚI) Thêm style để làm mờ hàng bị vô hiệu hóa */
+.inactive-row {
+  opacity: 0.65;
+  background-color: #f8f9fa; /* Màu bg-light của Bootstrap */
+  transition: opacity 0.2s ease-in-out, background-color 0.2s ease-in-out;
+}
+.inactive-row:hover {
+  opacity: 1; /* Hiển thị rõ khi hover */
+  background-color: #f1f3f5;
 }
 </style>

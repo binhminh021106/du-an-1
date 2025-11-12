@@ -1,88 +1,134 @@
 {
-  "account_admin": [
+  "users": [
     {
+      "id": "3399",
       "username": "binhminh21106",
+      "name": "binhminh21106",
       "email": "minhdzwama211@gmail.com",
+      "password": "Binhminh@123",
       "role": "admin",
       "status": "active",
-      "password": "Binhminh@123",
-      "id": "3399"
+      "phone": "0123456789",
+      "address": "",
+      "avatar": "",
+      "created_at": "2025-11-12T05:16:34.939Z"
     },
     {
       "id": "d3cd",
       "username": "binhminh0211",
+      "name": "binhminh0211",
       "email": "minhdzwama211@gmail.com",
       "password": "Binhminh@123",
       "role": "nhanvien",
-      "status": "active"
+      "status": "active",
+      "phone": "",
+      "address": "",
+      "avatar": "",
+      "created_at": "2025-11-12T05:16:34.939Z"
     },
     {
       "id": "c4d1",
       "username": "binhminh0211",
+      "name": "binhminh0211",
       "email": "binhminh211@gmail.com",
       "password": "Binhminh@123",
       "role": "nhanvien",
-      "status": "active"
+      "status": "active",
+      "phone": "",
+      "address": "",
+      "avatar": "",
+      "created_at": "2025-11-12T05:16:34.939Z"
     },
     {
       "id": "c289",
       "username": "tantuanhi47k1",
+      "name": "tantuanhi47k1",
       "email": "ttuann47@gmail.com",
       "password": "123456789",
-      "role": "nhanvien"
+      "role": "nhanvien",
+      "status": "active",
+      "phone": "",
+      "address": "",
+      "avatar": "",
+      "created_at": "2025-11-12T05:16:34.939Z"
     },
     {
       "id": "71e5",
       "username": "hieuht123",
+      "name": "hieuht123",
       "email": "hieuhtpk04060@gmail.com",
       "password": "123123123",
-      "password_confirmation": "123123123",
-      "role": "nhanvien"
+      "role": "nhanvien",
+      "status": "active",
+      "phone": "",
+      "address": "",
+      "avatar": "",
+      "created_at": "2025-11-12T05:16:34.939Z"
     },
     {
       "id": "1a8b",
       "username": "hieuht02",
+      "name": "hieuht02",
       "email": "hieuhtpk04060@gmail.com",
       "password": "123123123",
-      "password_confirmation": "123123123",
-      "role": "nhanvien"
-    }
-  ],
-  "account_user": [
+      "role": "nhanvien",
+      "status": "active",
+      "phone": "",
+      "address": "",
+      "avatar": "",
+      "created_at": "2025-11-12T05:16:34.939Z"
+    },
     {
       "id": "dbf0",
+      "username": "nguyntrnbnhminh_dbf0",
       "name": "Nguyễn Trần Bình Minh",
       "email": "minhntbpk04039@gmail.com",
-      "phone": "0358090730",
       "password": "Binhminh@123",
-      "password_confirmation": "Binhminh@123"
+      "role": "user",
+      "status": "active",
+      "phone": "0358090730",
+      "address": "",
+      "avatar": "",
+      "created_at": "2025-11-12T05:16:34.939Z"
     },
     {
       "id": "7de4",
+      "username": "nguyntrnbnhminh_7de4",
       "name": "Nguyễn Trần Bình Minh",
       "email": "minhntbpk04039@gmail.com",
-      "phone": "0358090730",
       "password": "Binhminh@123",
-      "password_confirmation": "Binhminh@123",
+      "role": "user",
+      "status": "active",
+      "phone": "0358090730",
       "address": "123 Đường ABC, Quận 1, TP. HCM",
-      "avatar": "https://placehold.co/100x100"
+      "avatar": "https://placehold.co/100x100",
+      "created_at": "2025-11-12T05:16:34.939Z"
     },
     {
       "id": "ea65",
+      "username": "nguyntrnbnhminh_ea65",
       "name": "Nguyễn Trần Bình Minh",
       "email": "minhntbpk04039@gmail.com",
-      "phone": "0358090730",
       "password": "Binhminh@123",
-      "password_confirmation": "Binhminh@123"
+      "role": "user",
+      "status": "active",
+      "phone": "0358090730",
+      "address": "",
+      "avatar": "",
+      "created_at": "2025-11-12T05:16:34.939Z"
     },
     {
       "id": "8323",
+      "username": "hieuht_8323",
       "name": "hieuht",
       "email": "hieuhtpk04060@gmail.com",
-      "phone": "0377975276",
       "password": "123123123",
-      "password_confirmation": "123123123",
-      "status": "active"
+      "role": "user",
+      "status": "active",
+      "phone": "0377975276",
+      "address": "",
+      "avatar": "",
+      "created_at": "2025-11-12T05:16:34.939Z"
     }
   ],
   "roles": [
