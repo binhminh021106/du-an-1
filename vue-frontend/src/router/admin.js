@@ -41,7 +41,7 @@ const adminLayoutRoutes = [
       {
         path: "news",
         name: "admin-news",
-        component: () => import("../page/admin/content/news.vue"),
+        component: () => import("../page/admin/content/News.vue"),
       },
       {
         path: "comments",
@@ -61,7 +61,7 @@ const adminLayoutRoutes = [
       {
         path: "coupons",
         name: "admin-coupons",
-        component: () => import("../page/admin/content/Coupon.vue"),
+        component: () => import("../page/admin/content/coupon.vue"),
       },
     ],
   },
