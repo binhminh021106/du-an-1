@@ -89,10 +89,8 @@ onMounted(() => {
 async function fetchCoupons() {
   isLoading.value = true;
   try {
-    // Tải tất cả, sắp xếp theo ID
-    const response = await apiService.get(
-      `?_sort=id&_order=desc`
-    );
+    const response = await apiService.get(`/coupons?_sort=id&_order=desc`);
+    console.log('Dữ liệu tải về:', response.data);
     allCoupons.value = response.data;
   } catch (error) {
     console.error("Lỗi khi tải mã giảm giá:", error);
@@ -242,12 +240,12 @@ async function handleSave() {
   try {
     if (dataToSave.id) {
       // --- CẬP NHẬT (UPDATE) ---
-      await apiService.patch(`/${dataToSave.id}`, dataToSave);
+      await axios.patch(`${API_URL}/${dataToSave.id}`, dataToSave);
     } else {
       // --- TẠO MỚI (CREATE) ---
       delete dataToSave.id;
       dataToSave.usageCount = 0;
-      await apiService.post('/', dataToSave);
+      await axios.post(API_URL, dataToSave);
     }
 
     couponModalInstance.value.hide();
@@ -283,7 +281,7 @@ async function handleDelete(coupon) {
 
   if (result.isConfirmed) {
     try {
-      await apiService.delete(`/${coupon.id}`);
+      await axios.delete(`${API_URL}/${coupon.id}`);
       Swal.fire('Đã xóa!', 'Mã giảm giá đã được xóa.', 'success');
       
       fetchCoupons(); // Tải lại tất cả
