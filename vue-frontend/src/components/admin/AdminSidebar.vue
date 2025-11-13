@@ -46,6 +46,12 @@
             </router-link>
           </li>
           <li class="nav-item">
+            <router-link to="/admin/news" class="nav-link">
+              <i class="nav-icon  fas fa-newspaper"></i>
+              <p>Quản lý tin tức</p>
+            </router-link>
+          </li>
+          <li class="nav-item">
             <router-link :to="{ name: 'admin-comments' }" class="nav-link">
               <i class="nav-icon  fas fa-comments"></i>
               <p>Quản lý bình luận</p>
