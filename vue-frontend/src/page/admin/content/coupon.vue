@@ -1,11 +1,10 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-import axios from 'axios';
+import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
 // --- STATE QUẢN LÝ ---
-const API_URL = "http://localhost:3000/coupons";
 const isLoading = ref(true);
 const isSaving = ref(false);
 
@@ -91,8 +90,8 @@ async function fetchCoupons() {
   isLoading.value = true;
   try {
     // Tải tất cả, sắp xếp theo ID
-    const response = await axios.get(
-      `${API_URL}?_sort=id&_order=desc`
+    const response = await apiService.get(
+      `?_sort=id&_order=desc`
     );
     allCoupons.value = response.data;
   } catch (error) {
@@ -243,12 +242,12 @@ async function handleSave() {
   try {
     if (dataToSave.id) {
       // --- CẬP NHẬT (UPDATE) ---
-      await axios.patch(`${API_URL}/${dataToSave.id}`, dataToSave);
+      await apiService.patch(`/${dataToSave.id}`, dataToSave);
     } else {
       // --- TẠO MỚI (CREATE) ---
       delete dataToSave.id;
       dataToSave.usageCount = 0;
-      await axios.post(API_URL, dataToSave);
+      await apiService.post('/', dataToSave);
     }
 
     couponModalInstance.value.hide();
@@ -284,7 +283,7 @@ async function handleDelete(coupon) {
 
   if (result.isConfirmed) {
     try {
-      await axios.delete(`${API_URL}/${coupon.id}`);
+      await apiService.delete(`/${coupon.id}`);
       Swal.fire('Đã xóa!', 'Mã giảm giá đã được xóa.', 'success');
       
       fetchCoupons(); // Tải lại tất cả

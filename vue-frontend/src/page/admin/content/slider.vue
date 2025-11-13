@@ -1,11 +1,10 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-import axios from 'axios';
+import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
 // --- STATE CHUNG ---
-const API_URL = import.meta.env.VITE_API_BASE_URL;
 const isLoading = ref(true);
 const isLoadingBrands = ref(true);
 
@@ -111,7 +110,7 @@ function goToBrandPage(page) {
 async function fetchAllSlides() {
   isLoading.value = true;
   try {
-    const response = await axios.get(`${API_URL}/slides?_sort=order&_order=asc`);
+    const response = await apiService.get(`/slides?_sort=order&_order=asc`);
     allSlides.value = response.data.map(s => ({ ...s, created_at: s.created_at || new Date().toISOString() }));
   } catch (error) {
     console.error("Lỗi khi tải slide:", error);
@@ -124,7 +123,7 @@ async function fetchAllSlides() {
 async function fetchAllBrands() {
   isLoadingBrands.value = true;
   try {
-    const response = await axios.get(`${API_URL}/brands?_sort=order&_order=asc`);
+    const response = await apiService.get(`/brands?_sort=order&_order=asc`);
     allBrands.value = response.data.map(b => ({ ...b, status: b.status || 'published' }));
   } catch (error) {
     console.error("Lỗi khi tải brand:", error);
@@ -203,12 +202,12 @@ async function handleSaveSlide() {
 
   try {
     if (isEditMode.value) {
-      await axios.put(`${API_URL}/slides/${payload.id}`, payload);
+      await apiService.put(`/slides/${payload.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật slide!', 'success');
     } else {
       delete payload.id;
       payload.created_at = new Date().toISOString();
-      await axios.post(`${API_URL}/slides`, payload);
+      await apiService.post(`/slides`, payload);
       Swal.fire('Thành công', 'Đã tạo slide mới!', 'success');
     }
     slideModalInstance.value.hide();
@@ -234,7 +233,7 @@ async function handleDeleteSlide(slide) {
   });
   if (result.isConfirmed) {
     try {
-      await axios.delete(`${API_URL}/slides/${slide.id}`);
+      await apiService.delete(`/slides/${slide.id}`);
       Swal.fire('Đã xóa!', 'Slide đã được xóa.', 'success');
       fetchAllSlides();
     } catch (error) {
@@ -297,11 +296,11 @@ async function handleSaveBrand() {
 
   try {
     if (isBrandEditMode.value) {
-      await axios.put(`${API_URL}/brands/${payload.id}`, payload);
+      await apiService.put(`/brands/${payload.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật brand!', 'success');
     } else {
       delete payload.id;
-      await axios.post(`${API_URL}/brands`, payload);
+      await apiService.post(`/brands`, payload);
       Swal.fire('Thành công', 'Đã tạo brand mới!', 'success');
     }
     brandModalInstance.value.hide();
@@ -319,7 +318,7 @@ async function handleBrandToggleStatus(brand) {
   const actionText = newStatus === 'published' ? 'hiển thị' : 'ẩn';
   try {
     brand.status = newStatus; // Cập nhật UI trước
-    await axios.patch(`${API_URL}/brands/${brand.id}`, { status: newStatus });
+    await apiService.patch(`/brands/${brand.id}`, { status: newStatus });
     Swal.fire({
       toast: true,
       position: 'top-end',
@@ -348,7 +347,7 @@ async function handleDeleteBrand(brand) {
   });
   if (result.isConfirmed) {
     try {
-      await axios.delete(`${API_URL}/brands/${brand.id}`);
+      await apiService.delete(`/brands/${brand.id}`);
       Swal.fire('Đã xóa!', 'Brand đã được xóa.', 'success');
       fetchAllBrands();
     } catch (error) {

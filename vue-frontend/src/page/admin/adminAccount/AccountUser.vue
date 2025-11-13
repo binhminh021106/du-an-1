@@ -1,10 +1,9 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-import axios from 'axios';
+import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-const API_URL = import.meta.env.VITE_API_BASE_URL;
 const customers = ref([]);
 const isLoading = ref(true);
 const searchQuery = ref('');
@@ -89,7 +88,7 @@ async function fetchCustomers() {
   isLoading.value = true;
   try {
     // THAY ĐỔI 1: Gọi /users?role=user để CHỈ lấy khách hàng
-    const response = await axios.get(`${API_URL}/users?role=user`);
+    const response = await apiService.get(`/users?role=user`);
     
     // Sắp xếp theo ID mới nhất
     customers.value = response.data.map(customer => ({
@@ -240,7 +239,7 @@ async function handleSave() {
         // Bỏ qua password_confirmation vì db.json không cần
       }
       // THAY ĐỔI 2: PATCH đến /users/:id
-      await axios.patch(`${API_URL}/users/${formData.id}`, payload);
+      await apiService.patch(`/users/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật thông tin khách hàng!', 'success');
     } else {
       payload.password = formData.password;
@@ -252,7 +251,7 @@ async function handleSave() {
       payload.created_at = new Date().toISOString();
       
       // THAY ĐỔI 4: POST đến /users
-      await axios.post(`${API_URL}/users`, payload);
+      await apiService.post(`/users`, payload);
       Swal.fire('Thành công', 'Đã thêm khách hàng mới!', 'success');
     }
 
@@ -286,7 +285,7 @@ async function toggleCustomerStatus(customer) {
     isLoading.value = true;
     try {
       // THAY ĐỔI 5: PATCH đến /users/:id
-      await axios.patch(`${API_URL}/users/${customer.id}`, { status: newStatus });
+      awapiService.patch(`/users/${customer.id}`, { status: newStatus });
       Swal.fire(
         'Thành công!',
         `Đã ${actionText} tài khoản khách hàng.`,
@@ -319,7 +318,7 @@ async function handleDelete(customer) {
     isLoading.value = true;
     try {
       // THAY ĐỔI 6: DELETE đến /users/:id
-      await axios.delete(`${API_URL}/users/${customer.id}`);
+      awapiService.delete(`/users/${customer.id}`);
       Swal.fire('Đã xóa!', 'Khách hàng đã được xóa thành công.', 'success');
       
       if (paginatedCustomers.value.length === 1 && currentPage.value > 1) {

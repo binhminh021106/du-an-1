@@ -1,10 +1,9 @@
 <script setup>
 import { reactive, ref } from 'vue';
-import axios from 'axios';
+import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { useRouter } from 'vue-router';
 
-const API_URL = import.meta.env.VITE_API_BASE_URL;
 const router = useRouter();
 
 const formData = reactive({
@@ -95,7 +94,7 @@ const handleRegister = async () => {
     };
 
     try {
-        const res = await axios.post(`${API_URL}/users`, payload);
+        const res = await apiService.post(`/users`, payload);
         if (res.status === 201 || res.status === 200) {
             Swal.fire({
                 icon: 'success',

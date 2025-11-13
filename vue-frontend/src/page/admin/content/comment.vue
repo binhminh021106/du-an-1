@@ -1,11 +1,10 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-import axios from 'axios';
+import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
 // --- STATE QUẢN LÝ ---
-const API_URL = import.meta.env.VITE_API_BASE_URL;
 
 const allComments = ref([]); // Danh sách TẤT CẢ bình luận
 const isLoading = ref(true);
@@ -74,8 +73,8 @@ onMounted(() => {
 async function fetchComments() {
   isLoading.value = true;
   try {
-    const response = await axios.get(
-      `${API_URL}/comments?_sort=id&_order=desc&_expand=product&_expand=user`
+    const response = await apiService.get(
+      `/comments?_sort=id&_order=desc&_expand=product&_expand=user`
     );
     allComments.value = response.data;
   } catch (error) {
@@ -132,7 +131,7 @@ function openViewModal(comment) {
  */
 async function handleUpdateStatus(comment, newStatus) {
   try {
-    const response = await axios.patch(`${API_URL}/comments/${comment.id}`, {
+    const response = await apiService.patch(`/comments/${comment.id}`, {
       status: newStatus
     });
     // Cập nhật lại dữ liệu trên giao diện mà không cần tải lại
@@ -172,7 +171,7 @@ async function handleDelete(comment) {
 
   if (result.isConfirmed) {
     try {
-      await axios.delete(`${API_URL}/comments/${comment.id}`);
+      await apiService.delete(`/comments/${comment.id}`);
       Swal.fire(
         'Đã xóa!',
         'Bình luận đã được xóa.',

@@ -1,11 +1,10 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-import axios from 'axios';
+import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
 // --- STATE QUẢN LÝ ---
-const API_URL = import.meta.env.VITE_API_BASE_URL;
 
 const allReviews = ref([]); // Danh sách TẤT CẢ đánh giá
 const isLoading = ref(true);
@@ -76,8 +75,8 @@ async function fetchReviews() {
   isLoading.value = true;
   try {
     // Tải tất cả, sắp xếp theo ID, và lấy kèm product, user
-    const response = await axios.get(
-      `${API_URL}/reviews?_sort=id&_order=desc&_expand=product&_expand=user`
+    const response = await apiService.get(
+      `/reviews?_sort=id&_order=desc&_expand=product&_expand=user`
     );
 
     allReviews.value = response.data;
@@ -148,7 +147,7 @@ function openViewModal(review) {
  */
 async function handleUpdateStatus(review, newStatus) {
   try {
-    const response = await axios.patch(`${API_URL}/reviews/${review.id}`, {
+    const response = await apiService.patch(`/reviews/${review.id}`, {
       status: newStatus
     });
 
@@ -189,7 +188,7 @@ async function handleDelete(review) {
 
   if (result.isConfirmed) {
     try {
-      await axios.delete(`${API_URL}/reviews/${review.id}`);
+      await apiService.delete(`/reviews/${review.id}`);
       Swal.fire(
         'Đã xóa!',
         'Đánh giá đã được xóa.',
