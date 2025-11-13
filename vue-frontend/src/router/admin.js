@@ -39,6 +39,11 @@ const adminLayoutRoutes = [
         component: () => import("../page/admin/order/Index.vue"),
       },
       {
+        path: "news",
+        name: "admin-news",
+        component: () => import("../page/admin/content/news.vue"),
+      },
+      {
         path: "comments",
         name: "admin-comments",
         component: () => import("../page/admin/content/Comment.vue"),
