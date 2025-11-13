@@ -24,6 +24,8 @@ const editorConfig = {
     ],
     removePlugins: 'liststyle,scayt,menubutton',
     disableNativeSpellChecker: false,
+    // SỬA LỖI: Xóa 'baseHref' đi, chúng ta sẽ dùng cách khác
+    // baseHref: '/ckeditor/', 
 };
 
 
@@ -67,23 +69,34 @@ function loadCKEditorScript(callback) {
         return;
     }
     const script = document.createElement('script');
-    script.src = 'https://cdn.ckeditor.com/4.22.1/standard/ckeditor.js';
+    // SỬA LỖI: Trỏ đến file ckeditor.js trong thư mục /public
+    script.src = '/ckeditor/ckeditor.js';
+
     script.onload = () => {
         window.CKEDITOR.disableAutoInline = true;
+
+        // *** THÊM DÒNG NÀY ĐỂ SỬA LỖI ***
+        // Chỉ định đường dẫn gốc cho CKEditor để nó biết tải plugin/lang/skin từ đâu
+        window.CKEDITOR.basePath = '/ckeditor/';
+
         callback();
     };
     script.onerror = () => {
-        console.error("Không thể tải CKEditor 4 script.");
-        Swal.fire('Lỗi', 'Không thể tải trình soạn thảo. Vui lòng tải lại trang.', 'error');
+        console.error("Không thể tải CKEditor 4 script từ /ckeditor/ckeditor.js.");
+        Swal.fire('Lỗi', 'Không thể tải trình soạn thảo. Vui lòng kiểm tra thư mục public.', 'error');
     };
     document.body.appendChild(script);
 }
 
 // --- LIFECYCLE ---
 onMounted(() => {
+    // SỬA LỖI: Không tải script ở đây.
+    // Chúng ta sẽ tải script khi modal được mở để tránh lỗi race condition.
+    /*
     loadCKEditorScript(() => {
         console.log('CKEditor 4 script đã được tải.');
     });
+    */
     initializeModals();
     fetchAuthors();
     fetchNews();
@@ -116,26 +129,27 @@ function initializeModals() {
 }
 
 function initializeCKEditor() {
-    if (window.CKEDITOR && !ckeditorInstance.value) {
-        try {
-            ckeditorInstance.value = window.CKEDITOR.replace('contentEditor', editorConfig);
-            ckeditorInstance.value.setData(formData.content || '');
-            ckeditorInstance.value.on('change', () => {
-                if (ckeditorInstance.value) {
-                    formData.content = ckeditorInstance.value.getData();
-                    if (errors.content) {
-                        errors.content = '';
+    // SỬA LỖI: Tải script CHỈ KHI modal được mở.
+    // Hàm callback (chứa logic replace) sẽ chỉ chạy sau khi script đã tải xong.
+    loadCKEditorScript(() => {
+        if (window.CKEDITOR && !ckeditorInstance.value) {
+            try {
+                // ID của textarea trong template là 'contentEditor'
+                ckeditorInstance.value = window.CKEDITOR.replace('contentEditor', editorConfig);
+                ckeditorInstance.value.setData(formData.content || '');
+                ckeditorInstance.value.on('change', () => {
+                    if (ckeditorInstance.value) {
                     }
-                }
-            });
-            ckeditorInstance.value.on('instanceReady', () => {
-                updateEditorValidationState(errors.content);
-            });
-        } catch (error) {
-            console.error("Lỗi khởi tạo CKEditor 4:", error);
-            Swal.fire('Lỗi', 'Không thể khởi tạo trình soạn thảo.', 'error');
+                });
+                ckeditorInstance.value.on('instanceReady', () => {
+                    updateEditorValidationState(errors.content);
+                });
+            } catch (error) {
+                console.error("Lỗi khởi tạo CKEditor 4:", error);
+                Swal.fire('Lỗi', 'Không thể khởi tạo trình soạn thảo.', 'error');
+            }
         }
-    }
+    });
 }
 
 function destroyCKEditor() {
@@ -275,7 +289,7 @@ function openEditModal(newsItem) {
     Object.assign(formData, itemCopy);
     Object.assign(errors, { title: '', slug: '', author_id: '', content: '' });
     isEditMode.value = true;
-    
+
     if (modalInstance.value) {
         modalInstance.value.show();
     }
@@ -292,9 +306,11 @@ function openViewModal(newsItem) {
 // --- API METHODS (MOCK) ---
 async function fetchAuthors() {
     try {
+        // Giả sử API server (json-server) của bạn có endpoint /users
         const response = await apiService.get(`/users`);
         authors.value = response.data.filter(u => u.role === 'admin' || u.role === 'editor').map(u => ({ id: u.id, name: u.name }));
         if (authors.value.length === 0) {
+            // Fallback nếu API không trả về admin/editor
             authors.value = [
                 { id: 1, name: 'Admin (Mock)' },
                 { id: 2, name: 'Biên tập viên (Mock)' },
@@ -302,6 +318,7 @@ async function fetchAuthors() {
         }
     } catch (error) {
         console.error("Lỗi tải tác giả, dùng mock data:", error);
+        // Fallback cứng nếu API /users lỗi
         authors.value = [
             { id: 1, name: 'Admin (Mock)' },
             { id: 2, name: 'Biên tập viên (Mock)' },
@@ -568,9 +585,12 @@ function goToPage(page) {
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="contentEditor">Nội dung</label>
-                                    <textarea id="contentEditor" name="contentEditor" rows="10"></textarea>
-                                    <div class="invalid-feedback d-block" v-if="errors.content">{{ errors.content }}</div>
+                                    <label for="contentEditor" class="required">Nội dung</label>
+                                    <textarea class="form-control" rows="5" name="contentEditor" id="contentEditor"
+                                        placeholder="Nhập nội dung sản phẩm"></textarea>
+
+                                    <div class="invalid-feedback d-block" v-if="errors.content">{{ errors.content }}
+                                    </div>
                                 </div>
 
                             </div>
@@ -646,7 +666,7 @@ function goToPage(page) {
                     </span>
                     <span class="text-muted mx-2">|</span>
                     <span class="text-muted">Tác giả: <strong>{{ getAuthorName(viewingNewsItem.author_id)
-                    }}</strong></span>
+                            }}</strong></span>
                     <span class="text-muted mx-2">|</span>
                     <span class="text-muted">Ngày tạo: {{ getFormattedDate(viewingNewsItem.created_at) }}</span>
 
@@ -680,6 +700,10 @@ function goToPage(page) {
     </div>
 
 </template>
+
+<!-- SỬA LỖI: Xóa bỏ thẻ <script> thừa ở đây. 
+Việc gọi CKEDITOR.replace() đã được xử lý trong hàm initializeCKEditor() 
+bên trong <script setup> -->
 
 <style scoped>
 /* Thêm CSS cho label bắt buộc */
