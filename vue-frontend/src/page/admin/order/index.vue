@@ -1,11 +1,8 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-import axios from 'axios';
+import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
-
-// Global state
-const API_URL = import.meta.env.VITE_API_BASE_URL;
 
 // Loading states
 const isMainLoading = ref(true);
@@ -120,17 +117,17 @@ async function fetchMainOrders(page = 1) {
   }
 
   try {
-    const response = await axios.get(`${API_URL}/orders?_sort=id&_order=desc`);
+    const response = await apiService.get(`/orders?_sort=id&_order=desc`);
     const allOrders = response.data || [];
 
     // --- TÍCH HỢP TÌM KIẾM ---
     const query = searchQuery.value.toLowerCase().trim();
     const preFiltered = allOrders.filter(order =>
-      (
-        order.id.toString().includes(query) ||
-        order.customerName.toLowerCase().includes(query) ||
-        order.customerPhone.toLowerCase().includes(query)
-      )
+    (
+      order.id.toString().includes(query) ||
+      order.customerName.toLowerCase().includes(query) ||
+      order.customerPhone.toLowerCase().includes(query)
+    )
     );
 
     // Filter: EXCLUDE 'returning' and 'returned'
@@ -162,17 +159,17 @@ async function fetchReturnedOrders(page = 1) {
   }
 
   try {
-    const response = await axios.get(`${API_URL}/orders?_sort=id&_order=desc`);
+    const response = await apiService.get(`/orders?_sort=id&_order=desc`);
     const allOrders = response.data || [];
 
     // --- TÍCH HỢP TÌM KIẾM ---
     const query = searchQuery.value.toLowerCase().trim();
     const preFiltered = allOrders.filter(order =>
-      (
-        order.id.toString().includes(query) ||
-        order.customerName.toLowerCase().includes(query) ||
-        order.customerPhone.toLowerCase().includes(query)
-      )
+    (
+      order.id.toString().includes(query) ||
+      order.customerName.toLowerCase().includes(query) ||
+      order.customerPhone.toLowerCase().includes(query)
+    )
     );
 
     // Filter: ONLY 'returning' and 'returned'
@@ -228,8 +225,8 @@ async function openDetailModal(order) {
   detailModalInstance.value.show();
 
   try {
-    const response = await axios.get(
-      `${API_URL}/order_items?orderId=${order.id}&_expand=product`
+    const response = await apiService.get(
+      `/order_items?orderId=${order.id}&_expand=product`
     );
     selectedOrderItems.value = response.data;
   } catch (error) {
@@ -253,7 +250,7 @@ async function handleUpdateStatus() {
   isSavingStatus.value = true;
 
   try {
-    await axios.patch(`${API_URL}/orders/${selectedOrder.value.id}`, {
+    await apiService.patch(`/orders/${selectedOrder.value.id}`, {
       status: selectedOrderStatus.value
     });
 
@@ -298,7 +295,7 @@ async function quickUpdateStatus(order, newStatus) {
 
   if (result.isConfirmed) {
     try {
-      await axios.patch(`${API_URL}/orders/${order.id}`, {
+      await apiService.patch(`/orders/${order.id}`, {
         status: newStatus
       });
       Swal.fire('Thành công', `Đã ${actionText} thành công.`, 'success');
@@ -325,12 +322,12 @@ async function handleDelete(order) {
 
   if (result.isConfirmed) {
     try {
-      const itemsToDelete = (await axios.get(`${API_URL}/order_items?orderId=${order.id}`)).data;
+      const itemsToDelete = (await apiService.get(`/order_items?orderId=${order.id}`)).data;
       await Promise.all(
-        itemsToDelete.map(item => axios.delete(`${API_URL}/order_items/${item.id}`))
+        itemsToDelete.map(item => apiService.delete(`/order_items/${item.id}`))
       );
 
-      await axios.delete(`${API_URL}/orders/${order.id}`);
+      await apiService.delete(`/orders/${order.id}`);
       Swal.fire('Đã xóa!', 'Đơn hàng đã được xóa.', 'success');
 
       // Tải lại
@@ -435,37 +432,45 @@ async function handleDelete(order) {
                         </button>
 
                         <template v-if="order.status === 'pending'">
-                          <button class="btn btn-success btn-sm me-1" @click="quickUpdateStatus(order, 'approved')" title="Duyệt đơn hàng">
+                          <button class="btn btn-success btn-sm me-1" @click="quickUpdateStatus(order, 'approved')"
+                            title="Duyệt đơn hàng">
                             <i class="bi bi-check-lg"></i> Duyệt
                           </button>
-                          <button class="btn btn-danger btn-sm me-1" @click="quickUpdateStatus(order, 'cancelled')" title="Hủy đơn hàng">
+                          <button class="btn btn-danger btn-sm me-1" @click="quickUpdateStatus(order, 'cancelled')"
+                            title="Hủy đơn hàng">
                             <i class="bi bi-x-lg"></i> Hủy
                           </button>
                         </template>
 
                         <template v-if="order.status === 'approved'">
-                          <button class="btn btn-primary btn-sm me-1" @click="quickUpdateStatus(order, 'shipping')" title="Bắt đầu giao hàng">
+                          <button class="btn btn-primary btn-sm me-1" @click="quickUpdateStatus(order, 'shipping')"
+                            title="Bắt đầu giao hàng">
                             <i class="bi bi-truck"></i> Giao hàng
                           </button>
                         </template>
 
                         <template v-if="order.status === 'shipping'">
-                          <button class="btn btn-success btn-sm me-1" @click="quickUpdateStatus(order, 'completed')" title="Hoàn thành đơn hàng">
+                          <button class="btn btn-success btn-sm me-1" @click="quickUpdateStatus(order, 'completed')"
+                            title="Hoàn thành đơn hàng">
                             <i class="bi bi-check2-circle"></i> Hoàn thành
                           </button>
-                          <button class="btn btn-secondary btn-sm me-1" @click="quickUpdateStatus(order, 'returning')" title="Chuyển sang hoàn hàng">
+                          <button class="btn btn-secondary btn-sm me-1" @click="quickUpdateStatus(order, 'returning')"
+                            title="Chuyển sang hoàn hàng">
                             <i class="bi bi-arrow-counterclockwise"></i> Hoàn hàng
                           </button>
                         </template>
 
                         <template v-if="order.status === 'completed'">
-                          <button class="btn btn-secondary btn-sm me-1" @click="quickUpdateStatus(order, 'returning')" title="Chuyển sang hoàn hàng">
+                          <button class="btn btn-secondary btn-sm me-1" @click="quickUpdateStatus(order, 'returning')"
+                            title="Chuyển sang hoàn hàng">
                             <i class="bi bi-arrow-counterclockwise"></i> Hoàn hàng
                           </button>
                         </template>
 
-                        <button v-if="!['pending', 'approved', 'shipping', 'completed', 'cancelled'].includes(order.status)"
-                          class="btn btn-warning btn-sm me-1" @click="openStatusModal(order)" title="Cập nhật trạng thái thủ công">
+                        <button
+                          v-if="!['pending', 'approved', 'shipping', 'completed', 'cancelled'].includes(order.status)"
+                          class="btn btn-warning btn-sm me-1" @click="openStatusModal(order)"
+                          title="Cập nhật trạng thái thủ công">
                           <i class="bi bi-pencil-square"></i>
                         </button>
 
@@ -553,13 +558,15 @@ async function handleDelete(order) {
                         </button>
 
                         <template v-if="order.status === 'returning'">
-                          <button class="btn btn-dark btn-sm me-1" @click="quickUpdateStatus(order, 'returned')" title="Xác nhận đã hoàn hàng">
+                          <button class="btn btn-dark btn-sm me-1" @click="quickUpdateStatus(order, 'returned')"
+                            title="Xác nhận đã hoàn hàng">
                             <i class="bi bi-box-seam"></i> Đã nhận hoàn
                           </button>
                         </template>
 
-                        <button v-if="order.status !== 'returned' && order.status !== 'returning'" class="btn btn-warning btn-sm me-1"
-                          @click="openStatusModal(order)" title="Cập nhật trạng thái thủ công">
+                        <button v-if="order.status !== 'returned' && order.status !== 'returning'"
+                          class="btn btn-warning btn-sm me-1" @click="openStatusModal(order)"
+                          title="Cập nhật trạng thái thủ công">
                           <i class="bi bi-pencil-square"></i>
                         </button>
 

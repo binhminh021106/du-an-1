@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import axios from 'axios';
+import apiService from '../../apiService.js';
 import { useRouter } from 'vue-router';
 
 // Giả định VueApexCharts được đăng ký toàn cục trong main.js
@@ -27,12 +27,12 @@ async function fetchDashboardData() {
   try {
     // Tải song song các nguồn dữ liệu
     const [orderRes, productRes, customerRes, reviewRes] = await Promise.all([ // Thêm reviewRes
-      axios.get(`${API_URL}/orders?_sort=id&_order=desc`),
-      axios.get(`${API_URL}/products`),
+      apiService.get(`/orders?_sort=id&_order=desc`),
+      apiService.get(`/products`),
       // THAY ĐỔI: Gọi đến /users?role=user thay vì /account_user
-      axios.get(`${API_URL}/users?role=user&_sort=id&_order=desc`),
+      apiService.get(`/users?role=user&_sort=id&_order=desc`),
       // Lấy 5 đánh giá mới nhất, expand product và user
-      axios.get(`${API_URL}/reviews?_sort=id&_order=desc&_limit=5&_expand=product&_expand=user`)
+      apiService.get(`/reviews?_sort=id&_order=desc&_limit=5&_expand=product&_expand=user`)
     ]);
 
     orders.value = orderRes.data;
