@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import apiService from '../../apiService.js';
-import { useRouter } from 'vue-router';
+// SỬA ĐỔI: Thêm import Vue Router để sử dụng trong script (nếu cần logic điều hướng phức tạp)
+import { useRouter } from 'vue-router'; 
 
 // Khởi tạo router
 const router = useRouter();
@@ -81,7 +82,7 @@ const goToSlide = (index) => { stopAutoSlide(); currentSlide.value = index; };
 
 // SỬA ĐỔI: Chỉ giữ lại việc gán activeCategoryId để CSS vẫn hoạt động nếu cần.
 // Việc điều hướng đã được xử lý bởi <router-link>
-const setActiveCategory = (id) => { activeCategoryId.value = String(id); };
+const setActiveCategory = (id) => { activeCategoryId.value = String(id); }; 
 
 const getUserRoleLabel = (roleValue) => {
     if (!roles.value.length) return roleValue || 'Khách';
@@ -108,6 +109,7 @@ onMounted(async () => {
 onBeforeUnmount(stopAutoSlide);
 </script>
 
+
 <template>
     <div id="app">
         <main class="container">
@@ -115,21 +117,24 @@ onBeforeUnmount(stopAutoSlide);
             <section class="top-section-layout">
                 <nav class="categories-sidebar">
                     <h3 class="sidebar-title">Danh mục</h3>
-                    <router-link v-for="category in categories" :key="category.id"
-                        :to="{ path: '/Shop', query: { categoryId: category.id } }" class="category-item-sodo"
+                    <router-link 
+                        v-for="category in categories" 
+                        :key="category.id" 
+                        :to="{ path: '/Shop', query: { categoryId: category.id } }"
+                        class="category-item-sodo" 
                         :class="{ active: String(category.id) === String(activeCategoryId) }"
-                        @click="setActiveCategory(category.id)">
+                        @click="setActiveCategory(category.id)"
+                    >
                         <span v-html="category.icon" class="icon"></span>
                         <span>{{ category.name }}</span>
                     </router-link>
-                </nav>
+                    </nav>
 
                 <section class="slider" @mouseenter="stopAutoSlide" @mouseleave="startAutoSlide">
                     <div class="slider-wrapper" :style="{ transform: 'translateX(-' + currentSlide * 100 + '%)' }">
                         <div class="slide" v-for="slide in slides" :key="slide.id"
                             :style="{ backgroundImage: 'url(' + slide.imageUrl + ')' }">
-                            <a :href="slide.link || '#'" style="display: block; width: 100%; height: 100%;"
-                                aria-label="Xem chi tiết"></a>
+                            <a :href="slide.link || '#'" style="display: block; width: 100%; height: 100%;" aria-label="Xem chi tiết"></a>
                         </div>
                     </div>
 
@@ -156,7 +161,7 @@ onBeforeUnmount(stopAutoSlide);
                         style="width: 100%; height: 200px; background: #eee; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #aaa; font-style: italic;">
                 </router-link>
             </section>
-
+            
             <section class="trust-block">
                 <div class="trust-item"><span>✔️ Bảo hành chính hãng</span></div>
                 <div class="trust-item"><span>🚚 Giao hàng miễn phí</span></div>
@@ -186,10 +191,9 @@ onBeforeUnmount(stopAutoSlide);
                                 <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
                             </div>
                             <div class="card-actions-small">
-                                <button class="btn-view"
-                                    @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
-                                    <i class="fas fa-eye"></i> Xem
-                                </button>
+                             <button class="btn-view" @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
+  <i class="fas fa-eye"></i> Xem
+</button>
 
                                 <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i>
                                     Thêm</button>
@@ -223,10 +227,12 @@ onBeforeUnmount(stopAutoSlide);
                                     <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
                                 </div>
                                 <div class="card-actions-small">
-                                    <button class="btn-view"
-                                        @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
-                                        <i class="fas fa-eye"></i> Xem
-                                    </button>
+                                   <button
+  class="btn-view"
+  @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })"
+>
+  <i class="fas fa-eye"></i> Xem
+</button>
                                     <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i>
                                         Thêm</button>
                                 </div>
@@ -249,8 +255,7 @@ onBeforeUnmount(stopAutoSlide);
                     </div>
                 </section>
 
-            </section>
-        </main>
+            </section> </main>
     </div>
 </template>
 
@@ -538,7 +543,7 @@ a {
     justify-content: center;
     /* <-- ĐÃ SỬA LẠI CĂN GIỮA */
     margin-top: 15px;
-
+    
 }
 
 .card-actions-small button {
