@@ -1,3 +1,222 @@
+<script setup>
+import { ref, watch, onMounted, computed, watchEffect } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import apiService from '../../apiService.js';
+
+const route = useRoute();
+const router = useRouter();
+
+const product = ref(null);
+const reviews = ref([]);
+const quantity = ref(1);
+const loading = ref(true);
+
+// 🔹 DỮ LIỆU MUA KÈM (GIẢ)
+const bundleDeals = ref([
+  { id: 101, name: "Sạc dự phòng 10000mAh", image: "https://placehold.co/150x150/f0f0f0/333?text=Sac+Du+Phong", newPrice: 350000, oldPrice: 500000 },
+  { id: 102, name: "Tai nghe True Wireless", image: "https://placehold.co/150x150/f0f0f0/333?text=Tai+Nghe", newPrice: 590000, oldPrice: 890000 },
+  { id: 103, name: "Củ sạc nhanh 30W", image: "https://placehold.co/150x150/f0f0f0/333?text=Cu+Sac", newPrice: 250000, oldPrice: 400000 },
+  { id: 104, name: "Cáp sạc C to L", image: "https://placehold.co/150x150/f0f0f0/333?text=Cap+Sac", newPrice: 190000, oldPrice: 300000 },
+]);
+
+
+// 🔹 GỘP THÀNH MỘT BIẾN paymentOffers DUY NHẤT
+const paymentOffers = ref([
+  {
+    id: 1,
+    partner: "HSBC",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/5/5a/HSBC_logo_%282018%29.svg",
+    description: "Giảm <b>2 triệu</b> khi thanh toán bằng thẻ tín dụng HSBC."
+  },
+  {
+    id: 2,
+    partner: "Home Credit",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/8/86/Home_Credit_logo.svg",
+    description: "Ưu đãi <b>0% lãi suất</b> khi trả góp qua Home Credit."
+  },
+  {
+    id: 3,
+    partner: "MOMO",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/0/0c/MoMo_Logo.png",
+    description: "Giảm <b>200K</b> khi thanh toán qua ví MOMO."
+  },
+  {
+    id: 4,
+    partner: "TPBank",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/4/4d/TPBank_logo.svg",
+    description: "Nhận <b>50K hoàn tiền</b> khi thanh toán bằng thẻ TPBank EVO."
+  }
+]);
+
+// 🔹 DỮ LIỆU GÓI DỊCH VỤ BẢO HÀNH
+const warrantyPackages = ref([
+  { name: "Gói cơ bản", desc: "Bảo hành 6 tháng, 1 đổi 1 trong 30 ngày", price: 199000 },
+  { name: "Gói nâng cao", desc: "Bảo hành 12 tháng, đổi mới miễn phí lỗi NSX", price: 299000 },
+  { name: "Gói VIP", desc: "Bảo hành 24 tháng, đổi mới toàn diện", price: 499000 },
+]);
+
+const selectedPackage = ref(null);
+
+
+const selectedVariantIndex = ref(0);
+const selectedImage = ref('');
+
+const allProducts = ref([]);
+const relatedProducts = ref([]);
+const tradeInSearchTerm = ref('');
+const tradeInResultsVisible = ref(false);
+
+const activeVariant = computed(() => {
+  if (!product.value || !product.value.variants) return null;
+  return product.value.variants[selectedVariantIndex.value];
+});
+
+const tradeInSearchResults = computed(() => {
+  if (tradeInSearchTerm.value.length < 2) return [];
+  const term = tradeInSearchTerm.value.toLowerCase();
+  return allProducts.value
+    .filter(p => (p.name || '').toLowerCase().includes(term))
+    .slice(0, 5);
+});
+
+const viewAllOffers = () => {
+  alert("Hiển thị toàn bộ danh sách ưu đãi thanh toán (sẽ cập nhật sau)");
+};
+
+const fetchAllProducts = async () => {
+  try {
+    const res = await apiService.get(`/products`);
+    allProducts.value = res.data || [];
+  } catch (err) {
+    console.error("Lỗi tải tất cả sản phẩm:", err);
+  }
+};
+
+const loadProductById = async (id) => {
+  try {
+    loading.value = true;
+    const productRes = await apiService.get(`/products/${id}`);
+
+    // đảm bảo variants tồn tại
+    if (!productRes.data.variants || !productRes.data.variants.length) {
+      productRes.data.variants = [{ price: 0, original_price: 0, stock: 0 }];
+    }
+
+    productRes.data.variants.forEach((v, i) => {
+      v.name = v.name || `Phiên bản ${i + 1}`;
+      // đảm bảo có stock numeric
+      v.stock = Number.isFinite(+v.stock) ? +v.stock : 0;
+      v.price = Number.isFinite(+v.price) ? +v.price : 0;
+      v.original_price = Number.isFinite(+v.original_price) ? +v.original_price : v.price;
+    });
+
+    productRes.data.gallery_images = [
+      productRes.data.image_url || 'https://placehold.co/500x500/009981/white?text=Main+Image',
+      'https://placehold.co/500x500/009981/white?text=Anh+2',
+      'https://placehold.co/500x500/009981/white?text=Anh+3',
+      'https://placehold.co/500x500/009981/white?text=Anh+4'
+    ];
+
+    product.value = productRes.data;
+
+    selectedVariantIndex.value = 0;
+    selectedImage.value = product.value.gallery_images[0] || product.value.image_url || '';
+    quantity.value = 1;
+
+    const reviewRes = await apiService.get(`/reviews?productId=${id}`);
+    reviews.value = reviewRes.data || [];
+
+  } catch (error) {
+    console.error("Lỗi tải sản phẩm:", error);
+    // nếu lỗi thì chuyển trang not-found (giữ nguyên hành vi cũ)
+    router.replace("/not-found");
+  } finally {
+    loading.value = false;
+  }
+};
+
+const selectVariant = (index) => {
+  selectedVariantIndex.value = index;
+  // nếu thay đổi phiên bản mà stock nhỏ hơn quantity hiện tại => điều chỉnh
+  validateQty();
+};
+
+const selectImage = (imageUrl) => {
+  selectedImage.value = imageUrl;
+};
+
+const navigateToProduct = (productId) => {
+  router.push(`/products/${productId}`);
+  tradeInResultsVisible.value = false;
+  tradeInSearchTerm.value = '';
+};
+
+const getMinPrice = (variants) => {
+  if (!variants || !variants.length) return 0;
+  return Math.min(...variants.map(v => v.price));
+};
+
+const formatCurrency = (num) => {
+  if (num === null || num === undefined || isNaN(num)) return "";
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+  }).format(num);
+};
+
+const decreaseQty = () => {
+  if (quantity.value > 1) quantity.value = Number(quantity.value) - 1;
+};
+
+const increaseQty = () => {
+  if (!activeVariant.value) return;
+  const max = activeVariant.value.stock ?? 1;
+  if (quantity.value < max) quantity.value = Number(quantity.value) + 1;
+};
+
+const validateQty = () => {
+  if (!activeVariant.value) return;
+  const max = activeVariant.value.stock ?? 1;
+  if (quantity.value > max) quantity.value = max;
+  if (quantity.value < 1 || !Number.isFinite(Number(quantity.value))) quantity.value = 1;
+  // force number
+  quantity.value = Number(quantity.value);
+};
+
+const addToCart = (productItem) => {
+  if (!activeVariant.value) return;
+  alert(`Đã thêm ${quantity.value} x ${productItem.name} (${activeVariant.value.name}) vào giỏ hàng!`);
+};
+
+const toggleFavorite = (productItem) => {
+  // nếu chưa có thuộc tính isFavorite thì tạo
+  productItem.isFavorite = !productItem.isFavorite;
+};
+
+// --- LIFECYCLE HOOKS ---
+onMounted(() => {
+  const id = route.params.id;
+  if (id) loadProductById(id);
+  fetchAllProducts();
+});
+
+watch(() => route.params.id, (newId, oldId) => {
+  if (newId && newId !== oldId) loadProductById(newId);
+});
+
+watchEffect(() => {
+  if (product.value && allProducts.value.length > 0) {
+    const currentProductId = product.value.id;
+    const categoryId = product.value.category?.id;
+    if (categoryId) {
+      relatedProducts.value = allProducts.value
+        .filter(p => p.category?.id === categoryId && p.id !== currentProductId)
+        .slice(0, 5);
+    }
+  }
+});
+</script>
+
 <template>
   <div class="container py-5 product-detail-page">
     <div v-if="!loading && product && activeVariant" class="row g-4">
@@ -277,226 +496,6 @@
     </div>
   </div>
 </template>
-
-<script setup>
-import { ref, watch, onMounted, computed, watchEffect } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import axios from "axios";
-
-const API_URL = "http://localhost:3000";
-const route = useRoute();
-const router = useRouter();
-
-const product = ref(null);
-const reviews = ref([]);
-const quantity = ref(1);
-const loading = ref(true);
-
-// 🔹 DỮ LIỆU MUA KÈM (GIẢ)
-const bundleDeals = ref([
-  { id: 101, name: "Sạc dự phòng 10000mAh", image: "https://placehold.co/150x150/f0f0f0/333?text=Sac+Du+Phong", newPrice: 350000, oldPrice: 500000 },
-  { id: 102, name: "Tai nghe True Wireless", image: "https://placehold.co/150x150/f0f0f0/333?text=Tai+Nghe", newPrice: 590000, oldPrice: 890000 },
-  { id: 103, name: "Củ sạc nhanh 30W", image: "https://placehold.co/150x150/f0f0f0/333?text=Cu+Sac", newPrice: 250000, oldPrice: 400000 },
-  { id: 104, name: "Cáp sạc C to L", image: "https://placehold.co/150x150/f0f0f0/333?text=Cap+Sac", newPrice: 190000, oldPrice: 300000 },
-]);
-
-
-// 🔹 GỘP THÀNH MỘT BIẾN paymentOffers DUY NHẤT
-const paymentOffers = ref([
-  {
-    id: 1,
-    partner: "HSBC",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/5/5a/HSBC_logo_%282018%29.svg",
-    description: "Giảm <b>2 triệu</b> khi thanh toán bằng thẻ tín dụng HSBC."
-  },
-  {
-    id: 2,
-    partner: "Home Credit",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/8/86/Home_Credit_logo.svg",
-    description: "Ưu đãi <b>0% lãi suất</b> khi trả góp qua Home Credit."
-  },
-  {
-    id: 3,
-    partner: "MOMO",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/0/0c/MoMo_Logo.png",
-    description: "Giảm <b>200K</b> khi thanh toán qua ví MOMO."
-  },
-  {
-    id: 4,
-    partner: "TPBank",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/4/4d/TPBank_logo.svg",
-    description: "Nhận <b>50K hoàn tiền</b> khi thanh toán bằng thẻ TPBank EVO."
-  }
-]);
-
-// 🔹 DỮ LIỆU GÓI DỊCH VỤ BẢO HÀNH
-const warrantyPackages = ref([
-  { name: "Gói cơ bản", desc: "Bảo hành 6 tháng, 1 đổi 1 trong 30 ngày", price: 199000 },
-  { name: "Gói nâng cao", desc: "Bảo hành 12 tháng, đổi mới miễn phí lỗi NSX", price: 299000 },
-  { name: "Gói VIP", desc: "Bảo hành 24 tháng, đổi mới toàn diện", price: 499000 },
-]);
-
-const selectedPackage = ref(null);
-
-
-const selectedVariantIndex = ref(0);
-const selectedImage = ref('');
-
-const allProducts = ref([]);
-const relatedProducts = ref([]);
-const tradeInSearchTerm = ref('');
-const tradeInResultsVisible = ref(false);
-
-const activeVariant = computed(() => {
-  if (!product.value || !product.value.variants) return null;
-  return product.value.variants[selectedVariantIndex.value];
-});
-
-const tradeInSearchResults = computed(() => {
-  if (tradeInSearchTerm.value.length < 2) return [];
-  const term = tradeInSearchTerm.value.toLowerCase();
-  return allProducts.value
-    .filter(p => (p.name || '').toLowerCase().includes(term))
-    .slice(0, 5);
-});
-
-const viewAllOffers = () => {
-  alert("Hiển thị toàn bộ danh sách ưu đãi thanh toán (sẽ cập nhật sau)");
-};
-
-const fetchAllProducts = async () => {
-  try {
-    const res = await axios.get(`${API_URL}/products`);
-    allProducts.value = res.data || [];
-  } catch (err) {
-    console.error("Lỗi tải tất cả sản phẩm:", err);
-  }
-};
-
-const loadProductById = async (id) => {
-  try {
-    loading.value = true;
-    const productRes = await axios.get(`${API_URL}/products/${id}`);
-
-    // đảm bảo variants tồn tại
-    if (!productRes.data.variants || !productRes.data.variants.length) {
-      productRes.data.variants = [{ price: 0, original_price: 0, stock: 0 }];
-    }
-
-    productRes.data.variants.forEach((v, i) => {
-      v.name = v.name || `Phiên bản ${i + 1}`;
-      // đảm bảo có stock numeric
-      v.stock = Number.isFinite(+v.stock) ? +v.stock : 0;
-      v.price = Number.isFinite(+v.price) ? +v.price : 0;
-      v.original_price = Number.isFinite(+v.original_price) ? +v.original_price : v.price;
-    });
-
-    productRes.data.gallery_images = [
-      productRes.data.image_url || 'https://placehold.co/500x500/009981/white?text=Main+Image',
-      'https://placehold.co/500x500/009981/white?text=Anh+2',
-      'https://placehold.co/500x500/009981/white?text=Anh+3',
-      'https://placehold.co/500x500/009981/white?text=Anh+4'
-    ];
-
-    product.value = productRes.data;
-
-    selectedVariantIndex.value = 0;
-    selectedImage.value = product.value.gallery_images[0] || product.value.image_url || '';
-    quantity.value = 1;
-
-    const reviewRes = await axios.get(`${API_URL}/reviews?productId=${id}`);
-    reviews.value = reviewRes.data || [];
-
-  } catch (error) {
-    console.error("Lỗi tải sản phẩm:", error);
-    // nếu lỗi thì chuyển trang not-found (giữ nguyên hành vi cũ)
-    router.replace("/not-found");
-  } finally {
-    loading.value = false;
-  }
-};
-
-const selectVariant = (index) => {
-  selectedVariantIndex.value = index;
-  // nếu thay đổi phiên bản mà stock nhỏ hơn quantity hiện tại => điều chỉnh
-  validateQty();
-};
-
-const selectImage = (imageUrl) => {
-  selectedImage.value = imageUrl;
-};
-
-const navigateToProduct = (productId) => {
-  router.push(`/products/${productId}`);
-  tradeInResultsVisible.value = false;
-  tradeInSearchTerm.value = '';
-};
-
-const getMinPrice = (variants) => {
-  if (!variants || !variants.length) return 0;
-  return Math.min(...variants.map(v => v.price));
-};
-
-const formatCurrency = (num) => {
-  if (num === null || num === undefined || isNaN(num)) return "";
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-  }).format(num);
-};
-
-const decreaseQty = () => {
-  if (quantity.value > 1) quantity.value = Number(quantity.value) - 1;
-};
-
-const increaseQty = () => {
-  if (!activeVariant.value) return;
-  const max = activeVariant.value.stock ?? 1;
-  if (quantity.value < max) quantity.value = Number(quantity.value) + 1;
-};
-
-const validateQty = () => {
-  if (!activeVariant.value) return;
-  const max = activeVariant.value.stock ?? 1;
-  if (quantity.value > max) quantity.value = max;
-  if (quantity.value < 1 || !Number.isFinite(Number(quantity.value))) quantity.value = 1;
-  // force number
-  quantity.value = Number(quantity.value);
-};
-
-const addToCart = (productItem) => {
-  if (!activeVariant.value) return;
-  alert(`Đã thêm ${quantity.value} x ${productItem.name} (${activeVariant.value.name}) vào giỏ hàng!`);
-};
-
-const toggleFavorite = (productItem) => {
-  // nếu chưa có thuộc tính isFavorite thì tạo
-  productItem.isFavorite = !productItem.isFavorite;
-};
-
-// --- LIFECYCLE HOOKS ---
-onMounted(() => {
-  const id = route.params.id;
-  if (id) loadProductById(id);
-  fetchAllProducts();
-});
-
-watch(() => route.params.id, (newId, oldId) => {
-  if (newId && newId !== oldId) loadProductById(newId);
-});
-
-watchEffect(() => {
-  if (product.value && allProducts.value.length > 0) {
-    const currentProductId = product.value.id;
-    const categoryId = product.value.category?.id;
-    if (categoryId) {
-      relatedProducts.value = allProducts.value
-        .filter(p => p.category?.id === categoryId && p.id !== currentProductId)
-        .slice(0, 5);
-    }
-  }
-});
-</script>
 
 <style scoped>
 /* Định nghĩa màu chủ đạo */

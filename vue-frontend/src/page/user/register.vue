@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive } from 'vue';
-import axios from 'axios';
+import apiService from '../../apiService.js';
 import Swal from 'sweetalert2';
 import { useRouter } from 'vue-router';
 
@@ -114,7 +114,7 @@ const handleRegister = async () => {
     };
 
     try {
-        const res = await axios.post(`${API_URL}/users`, payload);
+        const res = await apiService.post(`/users`, payload);
 
         if (res.status === 201 || res.status === 200) {
             Swal.fire({

@@ -1,3 +1,225 @@
+<script setup>
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import apiService from '../../apiService.js';
+
+// --- CẤU HÌNH & KHỞI TẠO ---
+const route = useRoute()
+const router = useRouter()
+
+// --- THAY ĐỔI: Bỏ các hàm liên quan đến nút tìm kiếm
+// const timKiemSanPham = ... (đã xóa)
+// const apDungLoc = ... (đã xóa)
+// const huyTimKiem = ... (đã xóa)
+
+// THAY ĐỔI: Hàm clearAllFilters cập nhật lại state
+const clearAllFilters = () => {
+  searchKeyword.value = "";
+  searchTerm.value = "";
+  priceMax.value = 100000000;
+  // Thay vì resetFilters(), chúng ta push về query rỗng
+  router.push({ query: {} });
+};
+
+// THAY ĐỔI: searchKeyword (input) và searchTerm (filter)
+const searchKeyword = ref("")  // keyword trong ô input, v-model
+// const isSearching = ref(false) // Đã xóa
+
+// --- STATE ---
+const allProducts = ref([])
+const categories = ref([])
+const news = ref([])
+const searchTerm = ref(route.query.search || '') // State dùng để lọc
+
+// SỬA ĐỔI STATE GIÁ
+const priceMin = ref(0); // giá thấp nhất (luôn là 0)
+const priceMax = ref(100000000); // giá cao nhất (mặc định 100 triệu)
+
+const hotSaleProducts = ref([])
+
+// Countdown State
+const saleEndTime = new Date();
+saleEndTime.setDate(saleEndTime.getDate() + 1); // Kết thúc sau 1 ngày
+const countdownInterval = ref(null);
+const countdownDisplay = ref('00 : 00 : 00 : 00');
+
+
+const getMinPrice = (variants) => {
+  if (!variants || !variants.length) return 0
+  return Math.min(...variants.map(v => v.price))
+}
+const formatCurrency = (value) =>
+  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
+
+
+const addToCart = (product) => {
+  alert(`Đã thêm ${product.name} vào giỏ hàng.`)
+}
+
+
+const updateCountdown = () => {
+  const now = new Date();
+  const distance = saleEndTime - now;
+
+  if (distance < 0) {
+    clearInterval(countdownInterval.value);
+    countdownDisplay.value = 'Hết hạn Sale!';
+    return;
+  }
+
+  const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+  const pad = (num) => String(num).padStart(2, '0');
+
+  countdownDisplay.value = `${pad(days)} : ${pad(hours)} : ${pad(minutes)} : ${pad(seconds)}`;
+};
+
+
+
+const fetchData = async () => {
+  try {
+    const [prodRes, catRes, newsRes] = await Promise.all([
+      apiService.get(`/products`),
+      apiService.get(`/categories?status=active`),
+
+      // === SỬA TỪ 4 SANG 5 ===
+      apiService.get(`/news?_limit=5`)
+    ])
+    allProducts.value = prodRes.data
+    categories.value = catRes.data
+    news.value = newsRes.data
+
+    hotSaleProducts.value = prodRes.data.slice(0, 5).map(p => {
+      const minPrice = getMinPrice(p.variants);
+      return {
+        ...p,
+        sale_price: minPrice * 0.85,
+        old_price: minPrice,
+        discount: 15
+      }
+    })
+
+  } catch (err) {
+    console.error('Lỗi tải dữ liệu cửa hàng:', err)
+  }
+}
+
+
+const currentCategoryId = computed(() => route.query.categoryId ? String(route.query.categoryId) : null)
+const currentCategoryName = computed(() => {
+  if (!currentCategoryId.value) return 'Tất cả sản phẩm'
+  const category = categories.value.find(c => String(c.id) === currentCategoryId.value)
+  return category ? category.name : 'Danh mục không xác định'
+})
+
+const selectCategory = (id) => {
+
+  const query = { ...route.query, categoryId: id || undefined };
+  if (!id) delete query.categoryId;
+  router.push({ query });
+}
+
+// THAY ĐỔI: Bỏ hàm setSearchTerm
+// const setSearchTerm = ... (đã xóa)
+
+
+const applyFilters = () => {
+  const query = { ...route.query };
+
+  // THAY ĐỔI: Luôn đọc từ searchTerm (sẽ được cập nhật bởi watch)
+  if (searchTerm.value) {
+    query.search = searchTerm.value;
+  } else {
+    delete query.search;
+  }
+
+
+  delete query.price_min;
+
+
+  if (priceMax.value > 0 && priceMax.value < 100000000) {
+    query.price_max = priceMax.value;
+  } else {
+    delete query.price_max;
+  }
+
+  router.push({ query });
+}
+
+// THAY ĐỔI: Bỏ hàm resetFilters
+// const resetFilters = () => { ... } (đã xóa)
+
+// ===== HÀM MỚI ĐỂ CHUYỂN TRANG =====
+const goToProduct = (productId) => {
+  if (!productId) return;
+  router.push(`/products/${productId}`);
+}
+// ===================================
+
+// Bộ lọc sản phẩm chính (Computed property)
+const filteredProducts = computed(() => {
+  let products = [...allProducts.value]
+
+  // Lọc theo Danh mục
+  if (currentCategoryId.value)
+    products = products.filter(p => String(p.category?.id) === currentCategoryId.value)
+
+  // Lọc theo Tìm kiếm (Tên sản phẩm)
+  if (searchTerm.value.trim()) {
+    const term = searchTerm.value.toLowerCase()
+    products = products.filter(p => p.name.toLowerCase().includes(term))
+  }
+
+  // Lọc theo Khoảng giá (priceMin luôn là 0)
+  products = products.filter(p => {
+    const price = getMinPrice(p.variants)
+    // if (priceMin.value && price < priceMin.value) return false // Bỏ vì priceMin luôn là 0
+    if (priceMax.value && price > priceMax.value) return false
+    return true
+  })
+  return products
+})
+
+// --- LIFECYCLE HOOKS & WATCHERS ---
+onMounted(() => {
+  fetchData();
+  countdownInterval.value = setInterval(updateCountdown, 1000);
+});
+
+// --- THAY ĐỔI: Thêm Debounce cho tìm kiếm ---
+let debounceTimer = null;
+const debouncedApplyFilters = () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    applyFilters();
+  }, 500); // Chờ 500ms sau khi người dùng ngừng gõ
+};
+
+// --- THAY ĐỔI: Watch searchKeyword (ô input) ---
+watch(searchKeyword, (newVal) => {
+  searchTerm.value = newVal; // Cập nhật state lọc
+  debouncedApplyFilters(); // Gọi hàm lọc đã debounce
+});
+
+
+// Watch URL changes (search/price) để đồng bộ lại input form
+// SỬA ĐỔI HÀM NÀY
+watch(route, (newRoute) => {
+  searchTerm.value = newRoute.query.search || '';
+  // priceMin.value = Number(newRoute.query.price_min) || 0; // Bỏ vì min luôn là 0
+  priceMax.value = Number(newRoute.query.price_max) || 100000000; // Đặt mặc định là 100 triệu
+
+  // Cập nhật lại ô input nếu URL thay đổi (ví dụ: nhấn reset)
+  searchKeyword.value = searchTerm.value;
+
+  // THAY ĐỔI: Bỏ isSearching
+  // isSearching.value = !!newRoute.query.search;
+}, { deep: true, immediate: true }); // Thêm immediate để chạy ngay khi load
+</script>
+
 <template>
   <div class="shop-wrapper container">
 
@@ -180,229 +402,6 @@
   </div>
 
 </template>
-
-<script setup>
-import { ref, computed, watch, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
-
-// --- CẤU HÌNH & KHỞI TẠO ---
-const API_URL = 'http://localhost:3000'
-const route = useRoute()
-const router = useRouter()
-
-// --- THAY ĐỔI: Bỏ các hàm liên quan đến nút tìm kiếm
-// const timKiemSanPham = ... (đã xóa)
-// const apDungLoc = ... (đã xóa)
-// const huyTimKiem = ... (đã xóa)
-
-// THAY ĐỔI: Hàm clearAllFilters cập nhật lại state
-const clearAllFilters = () => {
-  searchKeyword.value = "";
-  searchTerm.value = "";
-  priceMax.value = 100000000;
-  // Thay vì resetFilters(), chúng ta push về query rỗng
-  router.push({ query: {} });
-};
-
-// THAY ĐỔI: searchKeyword (input) và searchTerm (filter)
-const searchKeyword = ref("")  // keyword trong ô input, v-model
-// const isSearching = ref(false) // Đã xóa
-
-// --- STATE ---
-const allProducts = ref([])
-const categories = ref([])
-const news = ref([])
-const searchTerm = ref(route.query.search || '') // State dùng để lọc
-
-// SỬA ĐỔI STATE GIÁ
-const priceMin = ref(0); // giá thấp nhất (luôn là 0)
-const priceMax = ref(100000000); // giá cao nhất (mặc định 100 triệu)
-
-const hotSaleProducts = ref([])
-
-// Countdown State
-const saleEndTime = new Date();
-saleEndTime.setDate(saleEndTime.getDate() + 1); // Kết thúc sau 1 ngày
-const countdownInterval = ref(null);
-const countdownDisplay = ref('00 : 00 : 00 : 00');
-
-
-const getMinPrice = (variants) => {
-  if (!variants || !variants.length) return 0
-  return Math.min(...variants.map(v => v.price))
-}
-const formatCurrency = (value) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
-
-
-const addToCart = (product) => {
-  alert(`Đã thêm ${product.name} vào giỏ hàng.`)
-}
-
-
-const updateCountdown = () => {
-  const now = new Date();
-  const distance = saleEndTime - now;
-
-  if (distance < 0) {
-    clearInterval(countdownInterval.value);
-    countdownDisplay.value = 'Hết hạn Sale!';
-    return;
-  }
-
-  const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-  const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-  const pad = (num) => String(num).padStart(2, '0');
-
-  countdownDisplay.value = `${pad(days)} : ${pad(hours)} : ${pad(minutes)} : ${pad(seconds)}`;
-};
-
-
-
-const fetchData = async () => {
-  try {
-    const [prodRes, catRes, newsRes] = await Promise.all([
-      axios.get(`${API_URL}/products`),
-      axios.get(`${API_URL}/categories?status=active`),
-
-      // === SỬA TỪ 4 SANG 5 ===
-      axios.get(`${API_URL}/news?_limit=5`)
-    ])
-    allProducts.value = prodRes.data
-    categories.value = catRes.data
-    news.value = newsRes.data
-
-    hotSaleProducts.value = prodRes.data.slice(0, 5).map(p => {
-      const minPrice = getMinPrice(p.variants);
-      return {
-        ...p,
-        sale_price: minPrice * 0.85,
-        old_price: minPrice,
-        discount: 15
-      }
-    })
-
-  } catch (err) {
-    console.error('Lỗi tải dữ liệu cửa hàng:', err)
-  }
-}
-
-
-const currentCategoryId = computed(() => route.query.categoryId ? String(route.query.categoryId) : null)
-const currentCategoryName = computed(() => {
-  if (!currentCategoryId.value) return 'Tất cả sản phẩm'
-  const category = categories.value.find(c => String(c.id) === currentCategoryId.value)
-  return category ? category.name : 'Danh mục không xác định'
-})
-
-const selectCategory = (id) => {
-
-  const query = { ...route.query, categoryId: id || undefined };
-  if (!id) delete query.categoryId;
-  router.push({ query });
-}
-
-// THAY ĐỔI: Bỏ hàm setSearchTerm
-// const setSearchTerm = ... (đã xóa)
-
-
-const applyFilters = () => {
-  const query = { ...route.query };
-
-  // THAY ĐỔI: Luôn đọc từ searchTerm (sẽ được cập nhật bởi watch)
-  if (searchTerm.value) {
-    query.search = searchTerm.value;
-  } else {
-    delete query.search;
-  }
-
-
-  delete query.price_min;
-
-
-  if (priceMax.value > 0 && priceMax.value < 100000000) {
-    query.price_max = priceMax.value;
-  } else {
-    delete query.price_max;
-  }
-
-  router.push({ query });
-}
-
-// THAY ĐỔI: Bỏ hàm resetFilters
-// const resetFilters = () => { ... } (đã xóa)
-
-// ===== HÀM MỚI ĐỂ CHUYỂN TRANG =====
-const goToProduct = (productId) => {
-  if (!productId) return;
-  router.push(`/products/${productId}`);
-}
-// ===================================
-
-// Bộ lọc sản phẩm chính (Computed property)
-const filteredProducts = computed(() => {
-  let products = [...allProducts.value]
-
-  // Lọc theo Danh mục
-  if (currentCategoryId.value)
-    products = products.filter(p => String(p.category?.id) === currentCategoryId.value)
-
-  // Lọc theo Tìm kiếm (Tên sản phẩm)
-  if (searchTerm.value.trim()) {
-    const term = searchTerm.value.toLowerCase()
-    products = products.filter(p => p.name.toLowerCase().includes(term))
-  }
-
-  // Lọc theo Khoảng giá (priceMin luôn là 0)
-  products = products.filter(p => {
-    const price = getMinPrice(p.variants)
-    // if (priceMin.value && price < priceMin.value) return false // Bỏ vì priceMin luôn là 0
-    if (priceMax.value && price > priceMax.value) return false
-    return true
-  })
-  return products
-})
-
-// --- LIFECYCLE HOOKS & WATCHERS ---
-onMounted(() => {
-  fetchData();
-  countdownInterval.value = setInterval(updateCountdown, 1000);
-});
-
-// --- THAY ĐỔI: Thêm Debounce cho tìm kiếm ---
-let debounceTimer = null;
-const debouncedApplyFilters = () => {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    applyFilters();
-  }, 500); // Chờ 500ms sau khi người dùng ngừng gõ
-};
-
-// --- THAY ĐỔI: Watch searchKeyword (ô input) ---
-watch(searchKeyword, (newVal) => {
-  searchTerm.value = newVal; // Cập nhật state lọc
-  debouncedApplyFilters(); // Gọi hàm lọc đã debounce
-});
-
-
-// Watch URL changes (search/price) để đồng bộ lại input form
-// SỬA ĐỔI HÀM NÀY
-watch(route, (newRoute) => {
-  searchTerm.value = newRoute.query.search || '';
-  // priceMin.value = Number(newRoute.query.price_min) || 0; // Bỏ vì min luôn là 0
-  priceMax.value = Number(newRoute.query.price_max) || 100000000; // Đặt mặc định là 100 triệu
-
-  // Cập nhật lại ô input nếu URL thay đổi (ví dụ: nhấn reset)
-  searchKeyword.value = searchTerm.value;
-
-  // THAY ĐỔI: Bỏ isSearching
-  // isSearching.value = !!newRoute.query.search;
-}, { deep: true, immediate: true }); // Thêm immediate để chạy ngay khi load
-</script>
 
 <style scoped>
 :root {

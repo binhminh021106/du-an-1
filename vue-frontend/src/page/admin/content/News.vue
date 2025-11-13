@@ -662,7 +662,7 @@ function goToPage(page) {
 
                     <hr>
 
-                    <div classs="news-content-view" v-html="viewingNewsItem.content || '<p>Không có nội dung.</p>'">
+                    <div class="news-content-view" v-html="viewingNewsItem.content || '<p>Không có nội dung.</p>'">
                     </div>
 
                     <hr>
