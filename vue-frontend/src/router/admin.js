@@ -6,7 +6,7 @@ const adminLayoutRoutes = [
       {
         path: "",
         name: "admin-dashboard",
-        component: () => import("../page/admin/Index.vue"),
+        component: () => import("../page/admin/index.vue"),
       },
       {
         path: "products",
