@@ -9,40 +9,44 @@ const ckeditorInstance = ref(null);
 const editorConfig = {
     language: 'vi',
     toolbar: [
-        { name: 'document', items: ['Source', '-', 'NewPage', 'Preview', '-', 'Templates'] },
-        { name: 'clipboard', items: ['Cut', 'Copy', 'Paste', 'PasteText', 'PasteFromWord', '-', 'Undo', 'Redo'] },
+        { name: 'document', items: ['Source', '-', 'Preview'] },
+        { name: 'clipboard', items: ['Cut', 'Copy', 'PasteText', '-', 'Undo', 'Redo'] },
         { name: 'editing', items: ['Find', 'Replace', '-', 'SelectAll'] },
         '/',
-        { name: 'basicstyles', items: ['Bold', 'Italic', 'Underline', 'Strike', 'Subscript', 'Superscript', '-', 'RemoveFormat'] },
-        { name: 'paragraph', items: ['NumberedList', 'BulletedList', '-', 'Outdent', 'Indent', '-', 'Blockquote', 'CreateDiv', '-', 'JustifyLeft', 'JustifyCenter', 'JustifyRight', 'JustifyBlock'] },
-        { name: 'links', items: ['Link', 'Unlink', 'Anchor'] },
-        { name: 'insert', items: ['Image', 'Table', 'HorizontalRule', 'SpecialChar', 'PageBreak'] },
+        { name: 'basicstyles', items: ['Bold', 'Italic', 'Underline', 'Strike', '-', 'RemoveFormat'] },
+        { name: 'paragraph', items: ['NumberedList', 'BulletedList', '-', 'Outdent', 'Indent', '-', 'Blockquote', 'JustifyLeft', 'JustifyCenter', 'JustifyRight', 'JustifyBlock'] },
+        { name: 'links', items: ['Link', 'Unlink'] },
+        { name: 'insert', items: ['Image', 'Table', 'HorizontalRule', 'SpecialChar'] },
         '/',
         { name: 'styles', items: ['Styles', 'Format', 'Font', 'FontSize'] },
         { name: 'colors', items: ['TextColor', 'BGColor'] },
-        { name: 'tools', items: ['Maximize', 'ShowBlocks'] }
+        { name: 'tools', items: ['Maximize'] }
     ],
     removePlugins: 'liststyle,scayt,menubutton',
     disableNativeSpellChecker: false,
-    // SỬA LỖI: Xóa 'baseHref' đi, chúng ta sẽ dùng cách khác
-    // baseHref: '/ckeditor/', 
 };
 
-
-// --- STATE ---
+// --- STATE (Giống categories.vue) ---
 const isLoading = ref(true);
 const isEditMode = ref(false);
 const news = ref([]);
 const authors = ref([]);
+
+// State cho Modal Thêm/Sửa
 const modalInstance = ref(null);
 const modalRef = ref(null);
+
+// State cho Modal Xem
 const viewModalInstance = ref(null);
 const viewModalRef = ref(null);
 const viewingNewsItem = ref({});
+
+// State cho Tìm kiếm và Phân trang
 const searchQuery = ref('');
 const currentPage = ref(1);
-const itemsPerPage = ref(10);
+const itemsPerPage = ref(10); // Nhất quán 10 mục/trang
 
+// Form data & Validation
 const formData = reactive({
     id: null,
     title: '',
@@ -62,57 +66,37 @@ const errors = reactive({
     content: ''
 });
 
-// --- HELPERS ---
+// --- HELPERS (Load CKEditor) ---
 function loadCKEditorScript(callback) {
     if (window.CKEDITOR) {
         callback();
         return;
     }
     const script = document.createElement('script');
-    // SỬA LỖI: Trỏ đến file ckeditor.js trong thư mục /public
     script.src = '/ckeditor/ckeditor.js';
-
     script.onload = () => {
         window.CKEDITOR.disableAutoInline = true;
-
-        // *** THÊM DÒNG NÀY ĐỂ SỬA LỖI ***
-        // Chỉ định đường dẫn gốc cho CKEditor để nó biết tải plugin/lang/skin từ đâu
         window.CKEDITOR.basePath = '/ckeditor/';
-
         callback();
     };
-    script.onerror = () => {
-        console.error("Không thể tải CKEditor 4 script từ /ckeditor/ckeditor.js.");
-        Swal.fire('Lỗi', 'Không thể tải trình soạn thảo. Vui lòng kiểm tra thư mục public.', 'error');
-    };
+    script.onerror = () => console.error("Không thể tải CKEditor script.");
     document.body.appendChild(script);
 }
 
 // --- LIFECYCLE ---
 onMounted(() => {
-    // SỬA LỖI: Không tải script ở đây.
-    // Chúng ta sẽ tải script khi modal được mở để tránh lỗi race condition.
-    /*
-    loadCKEditorScript(() => {
-        console.log('CKEditor 4 script đã được tải.');
-    });
-    */
     initializeModals();
     fetchAuthors();
     fetchNews();
 });
 
 onBeforeUnmount(() => {
-    if (ckeditorInstance.value) {
-        ckeditorInstance.value.destroy();
-        ckeditorInstance.value = null;
-    }
+    destroyCKEditor();
     if (modalRef.value) {
         modalRef.value.removeEventListener('shown.bs.modal', initializeCKEditor);
         modalRef.value.removeEventListener('hidden.bs.modal', destroyCKEditor);
     }
 });
-
 
 // --- MODALS & CKEDITOR ---
 function initializeModals() {
@@ -129,24 +113,16 @@ function initializeModals() {
 }
 
 function initializeCKEditor() {
-    // SỬA LỖI: Tải script CHỈ KHI modal được mở.
-    // Hàm callback (chứa logic replace) sẽ chỉ chạy sau khi script đã tải xong.
     loadCKEditorScript(() => {
         if (window.CKEDITOR && !ckeditorInstance.value) {
             try {
-                // ID của textarea trong template là 'contentEditor'
                 ckeditorInstance.value = window.CKEDITOR.replace('contentEditor', editorConfig);
                 ckeditorInstance.value.setData(formData.content || '');
-                ckeditorInstance.value.on('change', () => {
-                    if (ckeditorInstance.value) {
-                    }
-                });
                 ckeditorInstance.value.on('instanceReady', () => {
                     updateEditorValidationState(errors.content);
                 });
             } catch (error) {
                 console.error("Lỗi khởi tạo CKEditor 4:", error);
-                Swal.fire('Lỗi', 'Không thể khởi tạo trình soạn thảo.', 'error');
             }
         }
     });
@@ -158,7 +134,6 @@ function destroyCKEditor() {
         ckeditorInstance.value = null;
     }
 }
-
 
 // --- COMPUTED ---
 const filteredNews = computed(() => {
@@ -192,17 +167,10 @@ watch(() => formData.title, (newTitle) => {
     }
 });
 
-watch(() => errors.content, (newError) => {
-    updateEditorValidationState(newError);
-});
-
-// --- HELPERS (FORMATTING & VALIDATION) ---
+// --- HELPER FUNCTIONS ---
 function updateEditorValidationState(errorMsg) {
-    if (ckeditorInstance.value) {
-        const editorContainer = ckeditorInstance.value.container;
-        if (editorContainer) {
-            editorContainer.$.style.borderColor = errorMsg ? '#dc3545' : '';
-        }
+    if (ckeditorInstance.value?.container) {
+        ckeditorInstance.value.container.$.style.borderColor = errorMsg ? '#dc3545' : '';
     }
 }
 
@@ -229,12 +197,13 @@ const getAuthorName = (authorId) => {
     return author ? author.name : 'Không rõ';
 };
 
-const getStatusText = (status) => {
+// Trả về Text và Class màu nhất quán BS5+
+const getStatusInfo = (status) => {
     switch (status) {
-        case 'published': return 'Xuất bản';
-        case 'draft': return 'Bản nháp';
-        case 'pending': return 'Chờ duyệt';
-        default: return 'Không xác định';
+        case 'published': return { text: 'Xuất bản', class: 'text-bg-success' };
+        case 'draft': return { text: 'Bản nháp', class: 'text-bg-warning' };
+        case 'pending': return { text: 'Chờ duyệt', class: 'text-bg-info' };
+        default: return { text: 'Không rõ', class: 'text-bg-secondary' };
     }
 };
 
@@ -255,22 +224,11 @@ function validateForm() {
     Object.assign(errors, { title: '', slug: '', author_id: '', content: '' });
     let isValid = true;
 
-    if (!formData.title.trim()) {
-        errors.title = 'Vui lòng nhập tiêu đề.';
-        isValid = false;
-    }
-    if (!formData.slug.trim()) {
-        errors.slug = 'Vui lòng nhập đường dẫn (slug).';
-        isValid = false;
-    }
-    if (!formData.author_id) {
-        errors.author_id = 'Vui lòng chọn tác giả.';
-        isValid = false;
-    }
-    if (!formData.content.trim()) {
-        errors.content = 'Vui lòng nhập nội dung.';
-        isValid = false;
-    }
+    if (!formData.title.trim()) { errors.title = 'Vui lòng nhập tiêu đề.'; isValid = false; }
+    if (!formData.slug.trim()) { errors.slug = 'Vui lòng nhập đường dẫn (slug).'; isValid = false; }
+    if (!formData.author_id) { errors.author_id = 'Vui lòng chọn tác giả.'; isValid = false; }
+    if (!formData.content.trim()) { errors.content = 'Vui lòng nhập nội dung.'; isValid = false; }
+    
     updateEditorValidationState(errors.content);
     return isValid;
 }
@@ -279,9 +237,7 @@ function validateForm() {
 function openCreateModal() {
     resetForm();
     isEditMode.value = false;
-    if (modalInstance.value) {
-        modalInstance.value.show();
-    }
+    modalInstance.value?.show();
 }
 
 function openEditModal(newsItem) {
@@ -289,46 +245,29 @@ function openEditModal(newsItem) {
     Object.assign(formData, itemCopy);
     Object.assign(errors, { title: '', slug: '', author_id: '', content: '' });
     isEditMode.value = true;
-
-    if (modalInstance.value) {
-        modalInstance.value.show();
-    }
+    modalInstance.value?.show();
 }
 
 function openViewModal(newsItem) {
     viewingNewsItem.value = newsItem;
-    if (viewModalInstance.value) {
-        viewModalInstance.value.show();
-    }
+    viewModalInstance.value?.show();
 }
 
-
-// --- API METHODS (MOCK) ---
+// --- API METHODS ---
 async function fetchAuthors() {
     try {
-        // Giả sử API server (json-server) của bạn có endpoint /users
         const response = await apiService.get(`/users`);
-        authors.value = response.data.filter(u => u.role === 'admin' || u.role === 'editor').map(u => ({ id: u.id, name: u.name }));
-        if (authors.value.length === 0) {
-            // Fallback nếu API không trả về admin/editor
-            authors.value = [
-                { id: 1, name: 'Admin (Mock)' },
-                { id: 2, name: 'Biên tập viên (Mock)' },
-            ];
-        }
+        authors.value = response.data.map(u => ({ id: u.id, name: u.name }));
     } catch (error) {
-        console.error("Lỗi tải tác giả, dùng mock data:", error);
-        // Fallback cứng nếu API /users lỗi
-        authors.value = [
-            { id: 1, name: 'Admin (Mock)' },
-            { id: 2, name: 'Biên tập viên (Mock)' },
-        ];
+        console.error("Lỗi tải tác giả:", error);
+        authors.value = [{ id: 1, name: 'Admin (Mock)' }]; // Fallback
     }
 }
 
 async function fetchNews() {
     isLoading.value = true;
     try {
+        // Sắp xếp theo ID giảm dần (mới nhất trước)
         const response = await apiService.get(`/news?_sort=id&_order=desc`);
         news.value = response.data.map(item => ({
             ...item,
@@ -336,13 +275,7 @@ async function fetchNews() {
         }));
     } catch (error) {
         console.error("Lỗi tải tin tức:", error);
-        Swal.fire('Lỗi', 'Không thể tải danh sách tin tức. Vui lòng kiểm tra db.json.', 'error');
-        if (news.value.length === 0) {
-            news.value = [
-                { id: 1, title: 'Bài viết tiêu chuẩn về TCPDF (Mock)', excerpt: 'Mô tả ngắn...', content: '<p>Nội dung <strong>TCPDF</strong>.</p>', image_url: 'https://placehold.co/600x400/3498db/ffffff?text=TCPDF+PHP', slug: 'bai-viet-tcpdf', author_id: 1, status: 'published', created_at: '2025-11-13T19:00:00Z' },
-                { id: 2, title: 'Tin tức thị trường (Mock)', excerpt: 'Giá cả tăng...', content: '<p>Chi tiết...</p>', image_url: 'https://placehold.co/600x400/2ecc71/ffffff?text=Market+News', slug: 'tin-tuc-thi-truong', author_id: 2, status: 'draft', created_at: '2025-11-12T10:30:00Z' }
-            ];
-        }
+        Swal.fire('Lỗi', 'Không thể tải danh sách tin tức.', 'error');
     } finally {
         isLoading.value = false;
     }
@@ -353,26 +286,19 @@ async function handleSave() {
 
     isLoading.value = true;
     let payload = JSON.parse(JSON.stringify(formData));
-
-    if (!isEditMode.value) {
-        delete payload.id;
-        payload.created_at = new Date().toISOString();
-        payload.updated_at = new Date().toISOString();
-    } else {
-        payload.updated_at = new Date().toISOString();
-    }
+    payload.updated_at = new Date().toISOString();
 
     try {
         if (isEditMode.value) {
             await apiService.put(`/news/${payload.id}`, payload);
             Swal.fire('Thành công', 'Đã cập nhật tin tức!', 'success');
         } else {
+            delete payload.id;
+            payload.created_at = new Date().toISOString();
             await apiService.post(`/news`, payload);
             Swal.fire('Thành công', 'Đã tạo tin tức mới!', 'success');
         }
-        if (modalInstance.value) {
-            modalInstance.value.hide();
-        }
+        modalInstance.value?.hide();
         fetchNews();
     } catch (apiError) {
         console.error("Lỗi lưu tin tức:", apiError);
@@ -380,6 +306,57 @@ async function handleSave() {
     } finally {
         isLoading.value = false;
     }
+}
+
+// *** HÀM TOGGLE "THẬT" - Giống 100% logic categories.vue ***
+async function handleToggleStatus(newsItem) {
+    const originalStatus = newsItem.status;
+    const newStatus = originalStatus === 'published' ? 'draft' : 'published';
+    
+    const actionText = newStatus === 'published' ? 'XUẤT BẢN' : 'CHUYỂN VỀ BẢN NHÁP';
+    const confirmText = `Bạn có chắc chắn muốn ${actionText} bài viết "${newsItem.title}" không?`;
+
+    const result = await Swal.fire({
+        title: 'Thay đổi trạng thái',
+        text: confirmText,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Đồng ý',
+        cancelButtonText: 'Hủy'
+    });
+
+    if (result.isConfirmed) {
+        // Cập nhật trạng thái mới và ngày update
+        const payload = { 
+            status: newStatus, 
+            updated_at: new Date().toISOString() 
+        };
+
+        try {
+            // Dùng PATCH chỉ để update 2 trường này (giống categories.vue)
+            await apiService.patch(`/news/${newsItem.id}`, payload);
+            
+            // Cập nhật UI
+            newsItem.status = newStatus; 
+            
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'Đã cập nhật trạng thái!',
+                showConfirmButton: false,
+                timer: 2000
+            });
+        } catch (error) {
+            console.error("Lỗi cập nhật trạng thái:", error);
+            Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
+            // Không cần fetchNews() vì optimistic UI đã bị hủy bỏ (chưa đổi)
+            // Hoặc có thể fetch lại nếu logic của bạn cần
+        }
+    }
+    // Nếu hủy, không làm gì cả, @click.prevent sẽ giữ nguyên checkbox
 }
 
 async function handleDelete(newsItem) {
@@ -391,7 +368,13 @@ async function handleDelete(newsItem) {
         confirmButtonColor: '#d33',
         cancelButtonColor: '#3085d6',
         confirmButtonText: 'Xóa',
-        cancelButtonText: 'Hủy'
+        cancelButtonText: 'Hủy',
+        // Thêm icon nhất quán
+        customClass: {
+            confirmButton: 'btn btn-danger me-2',
+            cancelButton: 'btn btn-secondary'
+        },
+        buttonsStyling: false
     });
 
     if (result.isConfirmed) {
@@ -417,45 +400,53 @@ function goToPage(page) {
 }
 </script>
 
-
 <template>
-    <!-- HEADER -->
-    <section class="content-header">
+    <!-- HEADER (Giống categories.vue) -->
+    <div class="app-content-header">
         <div class="container-fluid">
-            <div class="row mb-2">
+            <div class="row">
                 <div class="col-sm-6">
-                    <h1>Quản lý Tin tức</h1>
+                    <h3 class="mb-0">Quản lý Tin tức</h3>
                 </div>
                 <div class="col-sm-6">
-                    <ol class="breadcrumb float-sm-right">
+                    <ol class="breadcrumb float-sm-end">
                         <li class="breadcrumb-item"><router-link to="/admin">Trang chủ</router-link></li>
-                        <li class="breadcrumb-item active">Tin tức</li>
+                        <li class="breadcrumb-item active" aria-current="page">Tin tức</li>
                     </ol>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
 
-    <!-- MAIN CONTENT -->
-    <section class="content">
+    <!-- MAIN CONTENT (Giống categories.vue) -->
+    <div class="app-content">
         <div class="container-fluid">
-            <div class="card card-primary card-outline">
-                <!-- Card Header -->
+            <div class="card mb-4">
+                <!-- Card Header (Giống categories.vue) -->
                 <div class="card-header">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <input type="text" class="form-control" style="max-width: 300px;"
-                            placeholder="Tìm kiếm theo tiêu đề..." v-model="searchQuery">
-                        <button type="button" class="btn btn-primary" @click="openCreateModal">
-                            <i class="fas fa-plus"></i> Thêm mới
-                        </button>
+                    <div class="row align-items-center">
+                        <div class="col-md-6 col-12 mb-2 mb-md-0">
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0">
+                                    <i class="bi bi-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0 ps-0"
+                                    placeholder="Tìm kiếm theo tiêu đề..." v-model="searchQuery">
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-12 text-md-end">
+                            <button type="button" class="btn btn-primary" @click="openCreateModal">
+                                <i class="bi bi-plus-lg"></i> Thêm mới Tin tức
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Card Body - Bảng -->
+                <!-- Card Body - Bảng Dữ Liệu -->
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
-                            <thead class="thead-light">
+                            <thead class="table-light">
                                 <tr>
                                     <th style="width: 50px;">ID</th>
                                     <th style="width: 100px;">Hình ảnh</th>
@@ -471,14 +462,14 @@ function goToPage(page) {
                                 <tr v-if="isLoading">
                                     <td colspan="7" class="text-center py-4">
                                         <div class="spinner-border text-primary" role="status">
-                                            <span class="sr-only">Loading...</span>
+                                            <span class="visually-hidden">Loading...</span>
                                         </div>
                                     </td>
                                 </tr>
                                 <!-- Empty State -->
                                 <tr v-else-if="filteredNews.length === 0">
                                     <td colspan="7" class="text-center py-4 text-muted">
-                                        <i class="fas fa-inbox fa-2x d-block mb-2"></i>
+                                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
                                         {{ searchQuery ? 'Không tìm thấy tin tức nào.' : 'Chưa có tin tức nào.' }}
                                     </td>
                                 </tr>
@@ -486,35 +477,47 @@ function goToPage(page) {
                                 <tr v-for="newsItem in paginatedNews" :key="newsItem.id">
                                     <td>{{ newsItem.id }}</td>
                                     <td>
-                                        <img :src="newsItem.image_url || 'https://placehold.co/100x50/eeeeee/333333?text=No+Image'"
+                                        <img :src="newsItem.image_url || 'https://placehold.co/100x50/eeeeee/333333?text=No+Img'"
                                             alt="News Image"
                                             style="width: 100%; height: auto; max-width: 100px; border-radius: 5px;"
                                             onerror="this.src='https://placehold.co/100x50/eeeeee/333333?text=Error'">
                                     </td>
-                                    <td class="font-weight-bold" style="white-space: normal; min-width: 250px;">{{
-                                        newsItem.title }}</td>
+                                    <td class="fw-bold" style="white-space: normal; min-width: 250px;">
+                                        {{ newsItem.title }}
+                                    </td>
                                     <td class="d-none d-md-table-cell">{{ getAuthorName(newsItem.author_id) }}</td>
                                     <td>
-                                        <span
-                                            :class="['badge', newsItem.status === 'published' ? 'badge-success' : (newsItem.status === 'draft' ? 'badge-warning' : 'badge-info')]">
-                                            {{ getStatusText(newsItem.status) }}
+                                        <!-- Badge Trạng thái (Giống categories.vue BS5+) -->
+                                        <span :class="['badge', getStatusInfo(newsItem.status).class]">
+                                            {{ getStatusInfo(newsItem.status).text }}
                                         </span>
                                     </td>
                                     <td class="d-none d-lg-table-cell">{{ getFormattedDate(newsItem.created_at) }}</td>
                                     <td class="text-center">
-                                        <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-secondary" title="Xem chi tiết"
-                                                @click="openViewModal(newsItem)">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="btn btn-outline-primary" title="Chỉnh sửa"
-                                                @click="openEditModal(newsItem)">
-                                                <i class="fas fa-pen"></i>
-                                            </button>
-                                            <button class="btn btn-outline-danger" title="Xóa"
-                                                @click="handleDelete(newsItem)">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
+                                        <!-- d-flex (Giống categories.vue) -->
+                                        <div class="d-flex justify-content-center align-items-center">
+                                            
+                                            <!-- Toggle Switch (Giống categories.vue) -->
+                                            <div class="form-check form-switch d-inline-block align-middle me-3" title="Kích hoạt/Vô hiệu hóa">
+                                                <input class="form-check-input" type="checkbox" role="switch"
+                                                    style="width: 2.5em; height: 1.25em; cursor: pointer;"
+                                                    :id="'statusSwitch-' + newsItem.id"
+                                                    :checked="newsItem.status === 'published'"
+                                                    @click.prevent="handleToggleStatus(newsItem)">
+                                            </div>
+
+                                            <!-- Nhóm nút (Giống categories.vue) -->
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-secondary" title="Xem chi tiết" @click="openViewModal(newsItem)">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                                <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(newsItem)">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(newsItem)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -523,7 +526,7 @@ function goToPage(page) {
                     </div>
                 </div>
 
-                <!-- Card Footer - Phân Trang -->
+                <!-- Card Footer - Phân Trang (Giống categories.vue) -->
                 <div class="card-footer clearfix" v-if="!isLoading && totalPages > 1">
                     <div class="d-flex justify-content-between align-items-center">
                         <small class="text-muted">
@@ -547,10 +550,11 @@ function goToPage(page) {
                 </div>
             </div>
         </div>
-    </section>
+    </div>
 
     <!-- MODAL (Create/Edit) -->
     <div class="modal fade" id="newsModal" ref="modalRef" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+        <!-- Dùng modal-xl vì tin tức cần nhiều không gian cho CKEditor -->
         <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
@@ -562,53 +566,49 @@ function goToPage(page) {
                 <div class="modal-body">
                     <form @submit.prevent="handleSave" id="newsForm">
                         <div class="row">
-                            <!-- CỘT TRÁI -->
+                            <!-- CỘT TRÁI: NỘI DUNG CHÍNH -->
                             <div class="col-md-8">
-                                <div class="form-group">
-                                    <label for="title" class="required">Tiêu đề</label>
+                                <div class="mb-3">
+                                    <label for="title" class="form-label required">Tiêu đề</label>
                                     <input type="text" class="form-control" :class="{ 'is-invalid': errors.title }"
                                         id="title" v-model="formData.title" placeholder="Nhập tiêu đề">
                                     <div class="invalid-feedback" v-if="errors.title">{{ errors.title }}</div>
                                 </div>
 
-                                <div class="form-group">
-                                    <label for="slug" class="required">Đường dẫn (Slug)</label>
+                                <div class="mb-3">
+                                    <label for="slug" class="form-label required">Đường dẫn (Slug)</label>
                                     <input type="text" class="form-control" :class="{ 'is-invalid': errors.slug }"
                                         id="slug" v-model="formData.slug" placeholder="duong-dan-bai-viet">
                                     <div class="invalid-feedback" v-if="errors.slug">{{ errors.slug }}</div>
                                 </div>
 
-                                <div class="form-group">
-                                    <label for="excerpt">Mô tả ngắn (Excerpt)</label>
+                                <div class="mb-3">
+                                    <label for="excerpt" class="form-label">Mô tả ngắn (Excerpt)</label>
                                     <textarea class="form-control" id="excerpt" rows="3" v-model="formData.excerpt"
                                         placeholder="Mô tả ngắn gọn về bài viết..."></textarea>
                                 </div>
 
-                                <div class="form-group">
-                                    <label for="contentEditor" class="required">Nội dung</label>
-                                    <textarea class="form-control" rows="5" name="contentEditor" id="contentEditor"
-                                        placeholder="Nhập nội dung sản phẩm"></textarea>
-
-                                    <div class="invalid-feedback d-block" v-if="errors.content">{{ errors.content }}
-                                    </div>
+                                <div class="mb-3">
+                                    <label for="contentEditor" class="form-label required">Nội dung</label>
+                                    <textarea class="form-control" name="contentEditor" id="contentEditor"></textarea>
+                                    <div class="text-danger small mt-1" v-if="errors.content">{{ errors.content }}</div>
                                 </div>
-
                             </div>
 
-                            <!-- CỘT PHẢI -->
+                            <!-- CỘT PHẢI: THÔNG TIN PHỤ -->
                             <div class="col-md-4">
-                                <div class="form-group">
-                                    <label for="status" class="required">Trạng thái</label>
-                                    <select class="form-control" id="status" v-model="formData.status">
+                                <div class="mb-3">
+                                    <label for="status" class="form-label required">Trạng thái</label>
+                                    <select class="form-select" id="status" v-model="formData.status">
                                         <option value="published">Xuất bản</option>
                                         <option value="draft">Bản nháp</option>
                                         <option value="pending">Chờ duyệt</option>
                                     </select>
                                 </div>
 
-                                <div class="form-group">
-                                    <label for="author_id" class="required">Tác giả</label>
-                                    <select class="form-control" :class="{ 'is-invalid': errors.author_id }"
+                                <div class="mb-3">
+                                    <label for="author_id" class="form-label required">Tác giả</label>
+                                    <select class="form-select" :class="{ 'is-invalid': errors.author_id }"
                                         id="author_id" v-model.number="formData.author_id">
                                         <option :value="null" disabled>-- Chọn tác giả --</option>
                                         <option v-for="author in authors" :key="author.id" :value="author.id">
@@ -618,31 +618,32 @@ function goToPage(page) {
                                     <div class="invalid-feedback" v-if="errors.author_id">{{ errors.author_id }}</div>
                                 </div>
 
-                                <div class="form-group">
-                                    <label for="image_url">URL Hình ảnh đại diện</label>
+                                <div class="mb-3">
+                                    <label for="image_url" class="form-label">URL Hình ảnh đại diện</label>
                                     <input type="text" class="form-control" id="image_url" v-model="formData.image_url"
                                         placeholder="https://...">
                                 </div>
 
-                                <div class="form-group">
-                                    <label>Xem trước hình ảnh</label>
+                                <div class="mb-3">
+                                    <label class="form-label">Xem trước hình ảnh</label>
                                     <img v-if="formData.image_url" :src="formData.image_url"
                                         class="img-fluid mt-2 rounded" alt="Preview"
                                         onerror="this.src='https://placehold.co/300x200/eeeeee/333333?text=Invalid+Image'">
                                     <div v-else
                                         class="img-thumbnail d-flex align-items-center justify-content-center bg-light"
                                         style="height: 150px; width: 100%;">
-                                        <span class="text-muted">Chưa có hình ảnh</span>
+                                        <i class="bi bi-image text-muted fs-1"></i>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </form>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
+                <!-- Footer (Giống categories.vue) -->
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
                     <button type="submit" form="newsForm" class="btn btn-primary" :disabled="isLoading">
-                        <span v-if="isLoading" class="spinner-border spinner-border-sm mr-1" role="status"
+                        <span v-if="isLoading" class="spinner-border spinner-border-sm me-1" role="status"
                             aria-hidden="true"></span>
                         {{ isEditMode ? 'Lưu thay đổi' : 'Tạo tin tức' }}
                     </button>
@@ -651,49 +652,67 @@ function goToPage(page) {
         </div>
     </div>
 
-    <!-- MODAL (Xem Chi Tiết) -->
+    <!-- MODAL (Xem Chi Tiết) - Style giống categories.vue -->
     <div class="modal fade" id="viewNewsModal" ref="viewModalRef" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">{{ viewingNewsItem.title }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <span
-                        :class="['badge', viewingNewsItem.status === 'published' ? 'badge-success' : (viewingNewsItem.status === 'draft' ? 'badge-warning' : 'badge-info')]">
-                        {{ getStatusText(viewingNewsItem.status) }}
-                    </span>
-                    <span class="text-muted mx-2">|</span>
-                    <span class="text-muted">Tác giả: <strong>{{ getAuthorName(viewingNewsItem.author_id)
-                            }}</strong></span>
-                    <span class="text-muted mx-2">|</span>
-                    <span class="text-muted">Ngày tạo: {{ getFormattedDate(viewingNewsItem.created_at) }}</span>
+                 <div class="modal-body p-4 position-relative">
+                    <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
 
-                    <hr>
-
-                    <img v-if="viewingNewsItem.image_url" :src="viewingNewsItem.image_url"
-                        class="img-fluid rounded mb-3" alt="News Image">
-
-                    <p class="font-italic text-muted">
-                        <strong>Mô tả ngắn:</strong> {{ viewingNewsItem.excerpt ? viewingNewsItem.excerpt : 'Không có.'
-                        }}
-                    </p>
-
-                    <hr>
-
-                    <div class="news-content-view" v-html="viewingNewsItem.content || '<p>Không có nội dung.</p>'">
+                    <!-- Status Badge -->
+                    <div class="position-absolute top-0 start-0 m-3">
+                        <span :class="['badge', getStatusInfo(viewingNewsItem.status).class]">
+                            {{ getStatusInfo(viewingNewsItem.status).text }}
+                        </span>
                     </div>
 
-                    <hr>
-                    <p class="text-muted small"><strong>Slug:</strong> <code>{{ viewingNewsItem.slug }}</code></p>
-                </div>
-                <div class="modal-footer justify-content-center">
-                    <button type="button" class="btn btn-primary"
-                        @click="() => { viewModalInstance.value.hide(); openEditModal(viewingNewsItem); }">
-                        <i class="fas fa-pen mr-2"></i> Chỉnh sửa
+                    <!-- Header -->
+                    <div class="text-center mb-4 mt-4">
+                         <h3 class="mt-3 mb-1">{{ viewingNewsItem.title }}</h3>
+                         <p class="text-muted mb-0">ID: {{ viewingNewsItem.id }}</p>
+                    </div>
+
+                    <!-- Image -->
+                    <img v-if="viewingNewsItem.image_url" :src="viewingNewsItem.image_url"
+                        class="img-fluid rounded mb-3" alt="News Image">
+                    
+                    <!-- Details List -->
+                    <div class="list-group list-group-flush mb-3">
+                         <div class="list-group-item px-0">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1"><i class="bi bi-person-circle me-3 text-primary"></i>Tác giả</h6>
+                                <span class="text-muted">{{ getAuthorName(viewingNewsItem.author_id) }}</span>
+                            </div>
+                        </div>
+                         <div class="list-group-item px-0">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1"><i class="bi bi-calendar-event me-3 text-muted"></i>Ngày tạo</h6>
+                                <span class="text-muted">{{ getFormattedDate(viewingNewsItem.created_at) }}</span>
+                            </div>
+                        </div>
+                        <div class="list-group-item px-0">
+                            <h6 class="mb-2"><i class="bi bi-link-45deg me-3 text-muted"></i>Đường dẫn (Slug)</h6>
+                            <code class="mb-1 text-dark small">{{ viewingNewsItem.slug }}</code>
+                        </div>
+                         <div class="list-group-item px-0">
+                            <h6 class="mb-2"><i class="bi bi-card-text me-3 text-muted"></i>Mô tả ngắn</h6>
+                            <p class="mb-1 text-muted small fst-italic">{{ viewingNewsItem.excerpt || 'Không có mô tả ngắn.' }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Content -->
+                    <h5 class="mb-3">Nội dung chi tiết</h5>
+                    <div class="news-content-view p-3 rounded border bg-light" v-html="viewingNewsItem.content || '<p>Không có nội dung.</p>'">
+                    </div>
+
+                 </div>
+                 <!-- Footer (Giống categories.vue) -->
+                <div class="modal-footer bg-light justify-content-center">
+                    <button type="button" class="btn btn-primary px-4"
+                        @click="() => { viewModalInstance.hide(); openEditModal(viewingNewsItem); }">
+                        <i class="bi bi-pencil me-2"></i> Chỉnh sửa tin tức
                     </button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
                 </div>
             </div>
         </div>
@@ -701,13 +720,9 @@ function goToPage(page) {
 
 </template>
 
-<!-- SỬA LỖI: Xóa bỏ thẻ <script> thừa ở đây. 
-Việc gọi CKEDITOR.replace() đã được xử lý trong hàm initializeCKEditor() 
-bên trong <script setup> -->
-
 <style scoped>
-/* Thêm CSS cho label bắt buộc */
-.required::after {
+/* Thêm CSS cho label bắt buộc (Giống categories.vue) */
+.form-label.required::after {
     content: " *";
     color: red;
 }
@@ -721,10 +736,6 @@ bên trong <script setup> -->
 .news-content-view {
     max-height: 400px;
     overflow-y: auto;
-    border: 1px solid #eee;
-    padding: 15px;
-    border-radius: 5px;
-    background: #fdfdfd;
 }
 
 .news-content-view :deep(img) {
