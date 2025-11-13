@@ -1,3 +1,406 @@
+<script setup>
+import { ref, reactive, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue';
+import apiService from '../../../apiService.js';
+import Swal from 'sweetalert2';
+import { Modal } from 'bootstrap';
+
+// --- CKEDITOR 4 ---
+const ckeditorInstance = ref(null);
+const editorConfig = {
+    language: 'vi',
+    toolbar: [
+        { name: 'document', items: ['Source', '-', 'NewPage', 'Preview', '-', 'Templates'] },
+        { name: 'clipboard', items: ['Cut', 'Copy', 'Paste', 'PasteText', 'PasteFromWord', '-', 'Undo', 'Redo'] },
+        { name: 'editing', items: ['Find', 'Replace', '-', 'SelectAll'] },
+        '/',
+        { name: 'basicstyles', items: ['Bold', 'Italic', 'Underline', 'Strike', 'Subscript', 'Superscript', '-', 'RemoveFormat'] },
+        { name: 'paragraph', items: ['NumberedList', 'BulletedList', '-', 'Outdent', 'Indent', '-', 'Blockquote', 'CreateDiv', '-', 'JustifyLeft', 'JustifyCenter', 'JustifyRight', 'JustifyBlock'] },
+        { name: 'links', items: ['Link', 'Unlink', 'Anchor'] },
+        { name: 'insert', items: ['Image', 'Table', 'HorizontalRule', 'SpecialChar', 'PageBreak'] },
+        '/',
+        { name: 'styles', items: ['Styles', 'Format', 'Font', 'FontSize'] },
+        { name: 'colors', items: ['TextColor', 'BGColor'] },
+        { name: 'tools', items: ['Maximize', 'ShowBlocks'] }
+    ],
+    removePlugins: 'liststyle,scayt,menubutton',
+    disableNativeSpellChecker: false,
+};
+
+
+// --- STATE ---
+const isLoading = ref(true);
+const isEditMode = ref(false);
+const news = ref([]);
+const authors = ref([]);
+const modalInstance = ref(null);
+const modalRef = ref(null);
+const viewModalInstance = ref(null);
+const viewModalRef = ref(null);
+const viewingNewsItem = ref({});
+const searchQuery = ref('');
+const currentPage = ref(1);
+const itemsPerPage = ref(10);
+
+const formData = reactive({
+    id: null,
+    title: '',
+    excerpt: '',
+    content: '',
+    image_url: '',
+    slug: '',
+    author_id: null,
+    status: 'draft',
+    created_at: null,
+    updated_at: null
+});
+const errors = reactive({
+    title: '',
+    slug: '',
+    author_id: '',
+    content: ''
+});
+
+// --- HELPERS ---
+function loadCKEditorScript(callback) {
+    if (window.CKEDITOR) {
+        callback();
+        return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.ckeditor.com/4.22.1/standard/ckeditor.js';
+    script.onload = () => {
+        window.CKEDITOR.disableAutoInline = true;
+        callback();
+    };
+    script.onerror = () => {
+        console.error("Không thể tải CKEditor 4 script.");
+        Swal.fire('Lỗi', 'Không thể tải trình soạn thảo. Vui lòng tải lại trang.', 'error');
+    };
+    document.body.appendChild(script);
+}
+
+// --- LIFECYCLE ---
+onMounted(() => {
+    loadCKEditorScript(() => {
+        console.log('CKEditor 4 script đã được tải.');
+    });
+    initializeModals();
+    fetchAuthors();
+    fetchNews();
+});
+
+onBeforeUnmount(() => {
+    if (ckeditorInstance.value) {
+        ckeditorInstance.value.destroy();
+        ckeditorInstance.value = null;
+    }
+    if (modalRef.value) {
+        modalRef.value.removeEventListener('shown.bs.modal', initializeCKEditor);
+        modalRef.value.removeEventListener('hidden.bs.modal', destroyCKEditor);
+    }
+});
+
+
+// --- MODALS & CKEDITOR ---
+function initializeModals() {
+    nextTick(() => {
+        if (modalRef.value) {
+            modalInstance.value = new Modal(modalRef.value, { backdrop: 'static' });
+            modalRef.value.addEventListener('shown.bs.modal', initializeCKEditor);
+            modalRef.value.addEventListener('hidden.bs.modal', destroyCKEditor);
+        }
+        if (viewModalRef.value) {
+            viewModalInstance.value = new Modal(viewModalRef.value);
+        }
+    });
+}
+
+function initializeCKEditor() {
+    if (window.CKEDITOR && !ckeditorInstance.value) {
+        try {
+            ckeditorInstance.value = window.CKEDITOR.replace('contentEditor', editorConfig);
+            ckeditorInstance.value.setData(formData.content || '');
+            ckeditorInstance.value.on('change', () => {
+                if (ckeditorInstance.value) {
+                    formData.content = ckeditorInstance.value.getData();
+                    if (errors.content) {
+                        errors.content = '';
+                    }
+                }
+            });
+            ckeditorInstance.value.on('instanceReady', () => {
+                updateEditorValidationState(errors.content);
+            });
+        } catch (error) {
+            console.error("Lỗi khởi tạo CKEditor 4:", error);
+            Swal.fire('Lỗi', 'Không thể khởi tạo trình soạn thảo.', 'error');
+        }
+    }
+}
+
+function destroyCKEditor() {
+    if (ckeditorInstance.value) {
+        ckeditorInstance.value.destroy();
+        ckeditorInstance.value = null;
+    }
+}
+
+
+// --- COMPUTED ---
+const filteredNews = computed(() => {
+    const query = searchQuery.value.toLowerCase().trim();
+    if (!query) {
+        return news.value;
+    }
+    return news.value.filter(item =>
+        item.title.toLowerCase().includes(query)
+    );
+});
+
+const totalPages = computed(() => {
+    return Math.ceil(filteredNews.value.length / itemsPerPage.value);
+});
+
+const paginatedNews = computed(() => {
+    const start = (currentPage.value - 1) * itemsPerPage.value;
+    const end = start + itemsPerPage.value;
+    return filteredNews.value.slice(start, end);
+});
+
+// --- WATCHERS ---
+watch(searchQuery, () => {
+    currentPage.value = 1;
+});
+
+watch(() => formData.title, (newTitle) => {
+    if (!isEditMode.value) {
+        formData.slug = slugify(newTitle);
+    }
+});
+
+watch(() => errors.content, (newError) => {
+    updateEditorValidationState(newError);
+});
+
+// --- HELPERS (FORMATTING & VALIDATION) ---
+function updateEditorValidationState(errorMsg) {
+    if (ckeditorInstance.value) {
+        const editorContainer = ckeditorInstance.value.container;
+        if (editorContainer) {
+            editorContainer.$.style.borderColor = errorMsg ? '#dc3545' : '';
+        }
+    }
+}
+
+const slugify = (text) => {
+    if (!text) return '';
+    return text.toString().toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/[^\w\-]+/g, '')
+        .replace(/\-\-+/g, '-')
+        .replace(/^-+/, '')
+        .replace(/-+$/, '');
+};
+
+function getFormattedDate(dateString) {
+    if (!dateString) return 'N/A';
+    const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
+    return new Date(dateString).toLocaleDateString('vi-VN', options);
+}
+
+const getAuthorName = (authorId) => {
+    const author = authors.value.find(a => a.id === authorId);
+    return author ? author.name : 'Không rõ';
+};
+
+const getStatusText = (status) => {
+    switch (status) {
+        case 'published': return 'Xuất bản';
+        case 'draft': return 'Bản nháp';
+        case 'pending': return 'Chờ duyệt';
+        default: return 'Không xác định';
+    }
+};
+
+function resetForm() {
+    Object.assign(formData, {
+        id: null, title: '', excerpt: '', content: '', image_url: '',
+        slug: '', author_id: null, status: 'draft',
+        created_at: null, updated_at: null
+    });
+    Object.assign(errors, { title: '', slug: '', author_id: '', content: '' });
+    updateEditorValidationState(null);
+}
+
+function validateForm() {
+    if (ckeditorInstance.value) {
+        formData.content = ckeditorInstance.value.getData();
+    }
+    Object.assign(errors, { title: '', slug: '', author_id: '', content: '' });
+    let isValid = true;
+
+    if (!formData.title.trim()) {
+        errors.title = 'Vui lòng nhập tiêu đề.';
+        isValid = false;
+    }
+    if (!formData.slug.trim()) {
+        errors.slug = 'Vui lòng nhập đường dẫn (slug).';
+        isValid = false;
+    }
+    if (!formData.author_id) {
+        errors.author_id = 'Vui lòng chọn tác giả.';
+        isValid = false;
+    }
+    if (!formData.content.trim()) {
+        errors.content = 'Vui lòng nhập nội dung.';
+        isValid = false;
+    }
+    updateEditorValidationState(errors.content);
+    return isValid;
+}
+
+// --- MODAL TRIGGERS ---
+function openCreateModal() {
+    resetForm();
+    isEditMode.value = false;
+    if (modalInstance.value) {
+        modalInstance.value.show();
+    }
+}
+
+function openEditModal(newsItem) {
+    const itemCopy = JSON.parse(JSON.stringify(newsItem));
+    Object.assign(formData, itemCopy);
+    Object.assign(errors, { title: '', slug: '', author_id: '', content: '' });
+    isEditMode.value = true;
+    
+    if (modalInstance.value) {
+        modalInstance.value.show();
+    }
+}
+
+function openViewModal(newsItem) {
+    viewingNewsItem.value = newsItem;
+    if (viewModalInstance.value) {
+        viewModalInstance.value.show();
+    }
+}
+
+
+// --- API METHODS (MOCK) ---
+async function fetchAuthors() {
+    try {
+        const response = await apiService.get(`/users`);
+        authors.value = response.data.filter(u => u.role === 'admin' || u.role === 'editor').map(u => ({ id: u.id, name: u.name }));
+        if (authors.value.length === 0) {
+            authors.value = [
+                { id: 1, name: 'Admin (Mock)' },
+                { id: 2, name: 'Biên tập viên (Mock)' },
+            ];
+        }
+    } catch (error) {
+        console.error("Lỗi tải tác giả, dùng mock data:", error);
+        authors.value = [
+            { id: 1, name: 'Admin (Mock)' },
+            { id: 2, name: 'Biên tập viên (Mock)' },
+        ];
+    }
+}
+
+async function fetchNews() {
+    isLoading.value = true;
+    try {
+        const response = await apiService.get(`/news?_sort=id&_order=desc`);
+        news.value = response.data.map(item => ({
+            ...item,
+            created_at: item.created_at || new Date().toISOString()
+        }));
+    } catch (error) {
+        console.error("Lỗi tải tin tức:", error);
+        Swal.fire('Lỗi', 'Không thể tải danh sách tin tức. Vui lòng kiểm tra db.json.', 'error');
+        if (news.value.length === 0) {
+            news.value = [
+                { id: 1, title: 'Bài viết tiêu chuẩn về TCPDF (Mock)', excerpt: 'Mô tả ngắn...', content: '<p>Nội dung <strong>TCPDF</strong>.</p>', image_url: 'https://placehold.co/600x400/3498db/ffffff?text=TCPDF+PHP', slug: 'bai-viet-tcpdf', author_id: 1, status: 'published', created_at: '2025-11-13T19:00:00Z' },
+                { id: 2, title: 'Tin tức thị trường (Mock)', excerpt: 'Giá cả tăng...', content: '<p>Chi tiết...</p>', image_url: 'https://placehold.co/600x400/2ecc71/ffffff?text=Market+News', slug: 'tin-tuc-thi-truong', author_id: 2, status: 'draft', created_at: '2025-11-12T10:30:00Z' }
+            ];
+        }
+    } finally {
+        isLoading.value = false;
+    }
+}
+
+async function handleSave() {
+    if (!validateForm()) return;
+
+    isLoading.value = true;
+    let payload = JSON.parse(JSON.stringify(formData));
+
+    if (!isEditMode.value) {
+        delete payload.id;
+        payload.created_at = new Date().toISOString();
+        payload.updated_at = new Date().toISOString();
+    } else {
+        payload.updated_at = new Date().toISOString();
+    }
+
+    try {
+        if (isEditMode.value) {
+            await apiService.put(`/news/${payload.id}`, payload);
+            Swal.fire('Thành công', 'Đã cập nhật tin tức!', 'success');
+        } else {
+            await apiService.post(`/news`, payload);
+            Swal.fire('Thành công', 'Đã tạo tin tức mới!', 'success');
+        }
+        if (modalInstance.value) {
+            modalInstance.value.hide();
+        }
+        fetchNews();
+    } catch (apiError) {
+        console.error("Lỗi lưu tin tức:", apiError);
+        Swal.fire('Thất bại', 'Đã có lỗi xảy ra khi lưu.', 'error');
+    } finally {
+        isLoading.value = false;
+    }
+}
+
+async function handleDelete(newsItem) {
+    const result = await Swal.fire({
+        title: 'Bạn chắc chắn chứ?',
+        text: `Sẽ xóa vĩnh viễn "${newsItem.title}"!`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Xóa',
+        cancelButtonText: 'Hủy'
+    });
+
+    if (result.isConfirmed) {
+        try {
+            await apiService.delete(`/news/${newsItem.id}`);
+            Swal.fire('Đã xóa!', 'Tin tức đã bị xóa.', 'success');
+            if (paginatedNews.value.length === 1 && currentPage.value > 1) {
+                currentPage.value--;
+            }
+            fetchNews();
+        } catch (error) {
+            console.error("Lỗi xóa:", error);
+            Swal.fire('Lỗi', 'Không thể xóa tin tức này.', 'error');
+        }
+    }
+}
+
+// --- PAGINATION ---
+function goToPage(page) {
+    if (page >= 1 && page <= totalPages.value) {
+        currentPage.value = page;
+    }
+}
+</script>
+
+
 <template>
     <!-- HEADER -->
     <section class="content-header">
@@ -277,409 +680,6 @@
     </div>
 
 </template>
-
-<script setup>
-import { ref, reactive, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue';
-import axios from 'axios';
-import Swal from 'sweetalert2';
-import { Modal } from 'bootstrap';
-
-// --- CKEDITOR 4 ---
-const ckeditorInstance = ref(null);
-const editorConfig = {
-    language: 'vi',
-    toolbar: [
-        { name: 'document', items: ['Source', '-', 'NewPage', 'Preview', '-', 'Templates'] },
-        { name: 'clipboard', items: ['Cut', 'Copy', 'Paste', 'PasteText', 'PasteFromWord', '-', 'Undo', 'Redo'] },
-        { name: 'editing', items: ['Find', 'Replace', '-', 'SelectAll'] },
-        '/',
-        { name: 'basicstyles', items: ['Bold', 'Italic', 'Underline', 'Strike', 'Subscript', 'Superscript', '-', 'RemoveFormat'] },
-        { name: 'paragraph', items: ['NumberedList', 'BulletedList', '-', 'Outdent', 'Indent', '-', 'Blockquote', 'CreateDiv', '-', 'JustifyLeft', 'JustifyCenter', 'JustifyRight', 'JustifyBlock'] },
-        { name: 'links', items: ['Link', 'Unlink', 'Anchor'] },
-        { name: 'insert', items: ['Image', 'Table', 'HorizontalRule', 'SpecialChar', 'PageBreak'] },
-        '/',
-        { name: 'styles', items: ['Styles', 'Format', 'Font', 'FontSize'] },
-        { name: 'colors', items: ['TextColor', 'BGColor'] },
-        { name: 'tools', items: ['Maximize', 'ShowBlocks'] }
-    ],
-    removePlugins: 'liststyle,scayt,menubutton',
-    disableNativeSpellChecker: false,
-};
-
-
-// --- STATE ---
-const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
-const isLoading = ref(true);
-const isEditMode = ref(false);
-const news = ref([]);
-const authors = ref([]);
-const modalInstance = ref(null);
-const modalRef = ref(null);
-const viewModalInstance = ref(null);
-const viewModalRef = ref(null);
-const viewingNewsItem = ref({});
-const searchQuery = ref('');
-const currentPage = ref(1);
-const itemsPerPage = ref(10);
-
-const formData = reactive({
-    id: null,
-    title: '',
-    excerpt: '',
-    content: '',
-    image_url: '',
-    slug: '',
-    author_id: null,
-    status: 'draft',
-    created_at: null,
-    updated_at: null
-});
-const errors = reactive({
-    title: '',
-    slug: '',
-    author_id: '',
-    content: ''
-});
-
-// --- HELPERS ---
-function loadCKEditorScript(callback) {
-    if (window.CKEDITOR) {
-        callback();
-        return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://cdn.ckeditor.com/4.22.1/standard/ckeditor.js';
-    script.onload = () => {
-        window.CKEDITOR.disableAutoInline = true;
-        callback();
-    };
-    script.onerror = () => {
-        console.error("Không thể tải CKEditor 4 script.");
-        Swal.fire('Lỗi', 'Không thể tải trình soạn thảo. Vui lòng tải lại trang.', 'error');
-    };
-    document.body.appendChild(script);
-}
-
-// --- LIFECYCLE ---
-onMounted(() => {
-    loadCKEditorScript(() => {
-        console.log('CKEditor 4 script đã được tải.');
-    });
-    initializeModals();
-    fetchAuthors();
-    fetchNews();
-});
-
-onBeforeUnmount(() => {
-    if (ckeditorInstance.value) {
-        ckeditorInstance.value.destroy();
-        ckeditorInstance.value = null;
-    }
-    if (modalRef.value) {
-        modalRef.value.removeEventListener('shown.bs.modal', initializeCKEditor);
-        modalRef.value.removeEventListener('hidden.bs.modal', destroyCKEditor);
-    }
-});
-
-
-// --- MODALS & CKEDITOR ---
-function initializeModals() {
-    nextTick(() => {
-        if (modalRef.value) {
-            modalInstance.value = new Modal(modalRef.value, { backdrop: 'static' });
-            modalRef.value.addEventListener('shown.bs.modal', initializeCKEditor);
-            modalRef.value.addEventListener('hidden.bs.modal', destroyCKEditor);
-        }
-        if (viewModalRef.value) {
-            viewModalInstance.value = new Modal(viewModalRef.value);
-        }
-    });
-}
-
-function initializeCKEditor() {
-    if (window.CKEDITOR && !ckeditorInstance.value) {
-        try {
-            ckeditorInstance.value = window.CKEDITOR.replace('contentEditor', editorConfig);
-            ckeditorInstance.value.setData(formData.content || '');
-            ckeditorInstance.value.on('change', () => {
-                if (ckeditorInstance.value) {
-                    formData.content = ckeditorInstance.value.getData();
-                    if (errors.content) {
-                        errors.content = '';
-                    }
-                }
-            });
-            ckeditorInstance.value.on('instanceReady', () => {
-                updateEditorValidationState(errors.content);
-            });
-        } catch (error) {
-            console.error("Lỗi khởi tạo CKEditor 4:", error);
-            Swal.fire('Lỗi', 'Không thể khởi tạo trình soạn thảo.', 'error');
-        }
-    }
-}
-
-function destroyCKEditor() {
-    if (ckeditorInstance.value) {
-        ckeditorInstance.value.destroy();
-        ckeditorInstance.value = null;
-    }
-}
-
-
-// --- COMPUTED ---
-const filteredNews = computed(() => {
-    const query = searchQuery.value.toLowerCase().trim();
-    if (!query) {
-        return news.value;
-    }
-    return news.value.filter(item =>
-        item.title.toLowerCase().includes(query)
-    );
-});
-
-const totalPages = computed(() => {
-    return Math.ceil(filteredNews.value.length / itemsPerPage.value);
-});
-
-const paginatedNews = computed(() => {
-    const start = (currentPage.value - 1) * itemsPerPage.value;
-    const end = start + itemsPerPage.value;
-    return filteredNews.value.slice(start, end);
-});
-
-// --- WATCHERS ---
-watch(searchQuery, () => {
-    currentPage.value = 1;
-});
-
-watch(() => formData.title, (newTitle) => {
-    if (!isEditMode.value) {
-        formData.slug = slugify(newTitle);
-    }
-});
-
-watch(() => errors.content, (newError) => {
-    updateEditorValidationState(newError);
-});
-
-// --- HELPERS (FORMATTING & VALIDATION) ---
-function updateEditorValidationState(errorMsg) {
-    if (ckeditorInstance.value) {
-        const editorContainer = ckeditorInstance.value.container;
-        if (editorContainer) {
-            editorContainer.$.style.borderColor = errorMsg ? '#dc3545' : '';
-        }
-    }
-}
-
-const slugify = (text) => {
-    if (!text) return '';
-    return text.toString().toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/[^\w\-]+/g, '')
-        .replace(/\-\-+/g, '-')
-        .replace(/^-+/, '')
-        .replace(/-+$/, '');
-};
-
-function getFormattedDate(dateString) {
-    if (!dateString) return 'N/A';
-    const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
-    return new Date(dateString).toLocaleDateString('vi-VN', options);
-}
-
-const getAuthorName = (authorId) => {
-    const author = authors.value.find(a => a.id === authorId);
-    return author ? author.name : 'Không rõ';
-};
-
-const getStatusText = (status) => {
-    switch (status) {
-        case 'published': return 'Xuất bản';
-        case 'draft': return 'Bản nháp';
-        case 'pending': return 'Chờ duyệt';
-        default: return 'Không xác định';
-    }
-};
-
-function resetForm() {
-    Object.assign(formData, {
-        id: null, title: '', excerpt: '', content: '', image_url: '',
-        slug: '', author_id: null, status: 'draft',
-        created_at: null, updated_at: null
-    });
-    Object.assign(errors, { title: '', slug: '', author_id: '', content: '' });
-    updateEditorValidationState(null);
-}
-
-function validateForm() {
-    if (ckeditorInstance.value) {
-        formData.content = ckeditorInstance.value.getData();
-    }
-    Object.assign(errors, { title: '', slug: '', author_id: '', content: '' });
-    let isValid = true;
-
-    if (!formData.title.trim()) {
-        errors.title = 'Vui lòng nhập tiêu đề.';
-        isValid = false;
-    }
-    if (!formData.slug.trim()) {
-        errors.slug = 'Vui lòng nhập đường dẫn (slug).';
-        isValid = false;
-    }
-    if (!formData.author_id) {
-        errors.author_id = 'Vui lòng chọn tác giả.';
-        isValid = false;
-    }
-    if (!formData.content.trim()) {
-        errors.content = 'Vui lòng nhập nội dung.';
-        isValid = false;
-    }
-    updateEditorValidationState(errors.content);
-    return isValid;
-}
-
-// --- MODAL TRIGGERS ---
-function openCreateModal() {
-    resetForm();
-    isEditMode.value = false;
-    if (modalInstance.value) {
-        modalInstance.value.show();
-    }
-}
-
-function openEditModal(newsItem) {
-    const itemCopy = JSON.parse(JSON.stringify(newsItem));
-    Object.assign(formData, itemCopy);
-    Object.assign(errors, { title: '', slug: '', author_id: '', content: '' });
-    isEditMode.value = true;
-    
-    if (modalInstance.value) {
-        modalInstance.value.show();
-    }
-}
-
-function openViewModal(newsItem) {
-    viewingNewsItem.value = newsItem;
-    if (viewModalInstance.value) {
-        viewModalInstance.value.show();
-    }
-}
-
-
-// --- API METHODS (MOCK) ---
-async function fetchAuthors() {
-    try {
-        const response = await axios.get(`${API_URL}/users`);
-        authors.value = response.data.filter(u => u.role === 'admin' || u.role === 'editor').map(u => ({ id: u.id, name: u.name }));
-        if (authors.value.length === 0) {
-            authors.value = [
-                { id: 1, name: 'Admin (Mock)' },
-                { id: 2, name: 'Biên tập viên (Mock)' },
-            ];
-        }
-    } catch (error) {
-        console.error("Lỗi tải tác giả, dùng mock data:", error);
-        authors.value = [
-            { id: 1, name: 'Admin (Mock)' },
-            { id: 2, name: 'Biên tập viên (Mock)' },
-        ];
-    }
-}
-
-async function fetchNews() {
-    isLoading.value = true;
-    try {
-        const response = await axios.get(`${API_URL}/news?_sort=id&_order=desc`);
-        news.value = response.data.map(item => ({
-            ...item,
-            created_at: item.created_at || new Date().toISOString()
-        }));
-    } catch (error) {
-        console.error("Lỗi tải tin tức:", error);
-        Swal.fire('Lỗi', 'Không thể tải danh sách tin tức. Vui lòng kiểm tra db.json.', 'error');
-        if (news.value.length === 0) {
-            news.value = [
-                { id: 1, title: 'Bài viết tiêu chuẩn về TCPDF (Mock)', excerpt: 'Mô tả ngắn...', content: '<p>Nội dung <strong>TCPDF</strong>.</p>', image_url: 'https://placehold.co/600x400/3498db/ffffff?text=TCPDF+PHP', slug: 'bai-viet-tcpdf', author_id: 1, status: 'published', created_at: '2025-11-13T19:00:00Z' },
-                { id: 2, title: 'Tin tức thị trường (Mock)', excerpt: 'Giá cả tăng...', content: '<p>Chi tiết...</p>', image_url: 'https://placehold.co/600x400/2ecc71/ffffff?text=Market+News', slug: 'tin-tuc-thi-truong', author_id: 2, status: 'draft', created_at: '2025-11-12T10:30:00Z' }
-            ];
-        }
-    } finally {
-        isLoading.value = false;
-    }
-}
-
-async function handleSave() {
-    if (!validateForm()) return;
-
-    isLoading.value = true;
-    let payload = JSON.parse(JSON.stringify(formData));
-
-    if (!isEditMode.value) {
-        delete payload.id;
-        payload.created_at = new Date().toISOString();
-        payload.updated_at = new Date().toISOString();
-    } else {
-        payload.updated_at = new Date().toISOString();
-    }
-
-    try {
-        if (isEditMode.value) {
-            await axios.put(`${API_URL}/news/${payload.id}`, payload);
-            Swal.fire('Thành công', 'Đã cập nhật tin tức!', 'success');
-        } else {
-            await axios.post(`${API_URL}/news`, payload);
-            Swal.fire('Thành công', 'Đã tạo tin tức mới!', 'success');
-        }
-        if (modalInstance.value) {
-            modalInstance.value.hide();
-        }
-        fetchNews();
-    } catch (apiError) {
-        console.error("Lỗi lưu tin tức:", apiError);
-        Swal.fire('Thất bại', 'Đã có lỗi xảy ra khi lưu.', 'error');
-    } finally {
-        isLoading.value = false;
-    }
-}
-
-async function handleDelete(newsItem) {
-    const result = await Swal.fire({
-        title: 'Bạn chắc chắn chứ?',
-        text: `Sẽ xóa vĩnh viễn "${newsItem.title}"!`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Xóa',
-        cancelButtonText: 'Hủy'
-    });
-
-    if (result.isConfirmed) {
-        try {
-            await axios.delete(`${API_URL}/news/${newsItem.id}`);
-            Swal.fire('Đã xóa!', 'Tin tức đã bị xóa.', 'success');
-            if (paginatedNews.value.length === 1 && currentPage.value > 1) {
-                currentPage.value--;
-            }
-            fetchNews();
-        } catch (error) {
-            console.error("Lỗi xóa:", error);
-            Swal.fire('Lỗi', 'Không thể xóa tin tức này.', 'error');
-        }
-    }
-}
-
-// --- PAGINATION ---
-function goToPage(page) {
-    if (page >= 1 && page <= totalPages.value) {
-        currentPage.value = page;
-    }
-}
-</script>
 
 <style scoped>
 /* Thêm CSS cho label bắt buộc */

@@ -89,10 +89,8 @@ onMounted(() => {
 async function fetchCoupons() {
   isLoading.value = true;
   try {
-    // Tải tất cả, sắp xếp theo ID
-    const response = await apiService.get(
-      `?_sort=id&_order=desc`
-    );
+    const response = await apiService.get(`/coupons?_sort=id&_order=desc`);
+    console.log('Dữ liệu tải về:', response.data);
     allCoupons.value = response.data;
   } catch (error) {
     console.error("Lỗi khi tải mã giảm giá:", error);
@@ -207,54 +205,32 @@ function openViewModal(coupon) {
 }
 
 async function handleSave() {
-  // (VALIDATE)
   if (!couponForm.name.trim() || !couponForm.code.trim()) {
     Swal.fire('Lỗi', 'Tên/Mô tả và Mã Code không được để trống.', 'error');
     return;
   }
-  if (couponForm.value < 0) {
-    Swal.fire('Lỗi', 'Giá trị giảm giá không được là số âm.', 'error');
-    return;
-  }
-  if (couponForm.type === 'percent' && couponForm.value > 100) {
-    Swal.fire('Lỗi', 'Giá trị phần trăm không được vượt quá 100%.', 'error');
-    return;
-  }
-  if (couponForm.limitPerUser < 1) {
-    Swal.fire('Lỗi', 'Giới hạn mỗi User phải ít nhất là 1.', 'error');
-    return;
-  }
-  // --- Hết Validate ---
 
   isSaving.value = true;
   const dataToSave = { ...couponForm };
 
-  if (!dataToSave.expiresAt) {
-    dataToSave.expiresAt = null;
-  }
-  if (!dataToSave.usageLimit || dataToSave.usageLimit <= 0) {
-    dataToSave.usageLimit = null;
-  }
-  if (!dataToSave.limitPerUser || dataToSave.limitPerUser <= 0) {
-    dataToSave.limitPerUser = 1;
-  }
+  if (!dataToSave.expiresAt) dataToSave.expiresAt = null;
+  if (!dataToSave.usageLimit || dataToSave.usageLimit <= 0) dataToSave.usageLimit = null;
+  if (!dataToSave.limitPerUser || dataToSave.limitPerUser <= 0) dataToSave.limitPerUser = 1;
 
   try {
     if (dataToSave.id) {
       // --- CẬP NHẬT (UPDATE) ---
-      await apiService.patch(`/${dataToSave.id}`, dataToSave);
+      await apiService.patch(`/coupons/${dataToSave.id}`, dataToSave);
     } else {
       // --- TẠO MỚI (CREATE) ---
       delete dataToSave.id;
       dataToSave.usageCount = 0;
-      await apiService.post('/', dataToSave);
+      await apiService.post("/coupons", dataToSave);
     }
 
     couponModalInstance.value.hide();
     Swal.fire('Thành công', 'Đã lưu mã giảm giá.', 'success');
-    
     fetchCoupons(); // Tải lại tất cả
-
   } catch (error) {
     console.error("Lỗi khi lưu mã giảm giá:", error);
     Swal.fire('Lỗi', 'Không thể lưu mã giảm giá.', 'error');
@@ -263,36 +239,33 @@ async function handleSave() {
   }
 }
 
+// --- XÓA MÃ GIẢM GIÁ ---
 async function handleDelete(coupon) {
-
-  if (coupon.id === null || coupon.id === undefined) {
-    Swal.fire('Lỗi Dữ Liệu', 'Coupon này bị lỗi (ID=null) và không thể xóa. Vui lòng kiểm tra db.json.', 'error');
-    return;
-  }
-
-  const result = await Swal.fire({
-    title: 'Bạn có chắc chắn?',
-    text: `Bạn sẽ xóa vĩnh viễn mã "${coupon.code}" (ID: ${coupon.id})!`,
+  Swal.fire({
+    title: 'Bạn có chắc chắn muốn xóa?',
+    text: `Mã giảm giá "${coupon.name}" sẽ bị xóa vĩnh viễn.`,
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#d33',
     cancelButtonColor: '#3085d6',
-    confirmButtonText: 'Đồng ý xóa!',
-    cancelButtonText: 'Hủy bỏ'
-  });
+    confirmButtonText: 'Xóa',
+    cancelButtonText: 'Hủy'
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      try {
+        // ✅ Gọi API đúng endpoint /coupons/:id
+        await apiService.delete(`/coupons/${coupon.id}`);
 
-  if (result.isConfirmed) {
-    try {
-      await apiService.delete(`/${coupon.id}`);
-      Swal.fire('Đã xóa!', 'Mã giảm giá đã được xóa.', 'success');
-      
-      fetchCoupons(); // Tải lại tất cả
+        Swal.fire('Đã xóa!', 'Mã giảm giá đã được xóa.', 'success');
 
-    } catch (error) {
-      console.error(`Lỗi khi xóa mã giảm giá (ID: ${coupon.id}):`, error);
-      Swal.fire('Lỗi', 'Không thể xóa mã này. Chi tiết: ' + error.message, 'error');
+        // ✅ Cập nhật lại danh sách sau khi xóa
+        fetchCoupons();
+      } catch (error) {
+        console.error("Lỗi khi xóa mã giảm giá:", error);
+        Swal.fire('Lỗi', 'Không thể xóa mã giảm giá.', 'error');
+      }
     }
-  }
+  });
 }
 
 </script>
