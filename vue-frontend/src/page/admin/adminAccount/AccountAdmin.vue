@@ -1,11 +1,9 @@
 <script setup>
 import { ref, reactive, onMounted, computed, nextTick, watch } from 'vue';
-import axios from 'axios';
+import apiService from '@/apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-// --- State Chung ---
-const API_URL = import.meta.env.VITE_API_BASE_URL;
 const users = ref([]); // Chỉ chứa admin/nhanvien (không chứa user)
 const isLoading = ref(true);
 const searchQuery = ref('');
@@ -143,7 +141,7 @@ async function fetchUsers() {
   isLoading.value = true;
   try {
     // Gọi /users và lọc ra những ai KHÔNG PHẢI 'user'
-    const response = await axios.get(`${API_URL}/users?role_ne=user`);
+    const response = await apiService.get(`${API_URL}/users?role_ne=user`);
 
     users.value = response.data.map(user => ({
       ...user,
