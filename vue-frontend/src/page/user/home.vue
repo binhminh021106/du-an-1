@@ -1,159 +1,8 @@
-<template>
-    <div id="app">
-        <main class="container">
-
-            <section class="top-section-layout">
-                <nav class="categories-sidebar">
-                    <h3 class="sidebar-title">Danh mục</h3>
-                    <router-link 
-                        v-for="category in categories" 
-                        :key="category.id" 
-                        :to="{ path: '/Shop', query: { categoryId: category.id } }"
-                        class="category-item-sodo" 
-                        :class="{ active: String(category.id) === String(activeCategoryId) }"
-                        @click="setActiveCategory(category.id)"
-                    >
-                        <span v-html="category.icon" class="icon"></span>
-                        <span>{{ category.name }}</span>
-                    </router-link>
-                    </nav>
-
-                <section class="slider" @mouseenter="stopAutoSlide" @mouseleave="startAutoSlide">
-                    <div class="slider-wrapper" :style="{ transform: 'translateX(-' + currentSlide * 100 + '%)' }">
-                        <div class="slide" v-for="slide in slides" :key="slide.id"
-                            :style="{ backgroundImage: 'url(' + slide.imageUrl + ')' }">
-                            <a :href="slide.link || '#'" style="display: block; width: 100%; height: 100%;" aria-label="Xem chi tiết"></a>
-                        </div>
-                    </div>
-
-                    <button class="slider-control prev" @click="prevSlide"><i class="fas fa-chevron-left"></i></button>
-                    <button class="slider-control next" @click="nextSlide"><i class="fas fa-chevron-right"></i></button>
-
-                    <div class="slider-nav">
-                        <span v-for="(slide, index) in slides" :key="slide.id" class="slider-nav-dot"
-                            :class="{ active: index === currentSlide }" @click="goToSlide(index)"></span>
-                    </div>
-                </section>
-
-                <aside class="utility-sidebar">
-                    <div class="user-info-card" v-if="users.length">
-                        <p class="user-name">{{ users[0].username }}</p>
-                        <p class="user-tier">⭐ {{ getUserRoleLabel(users[0].role) }}</p>
-                    </div>
-                </aside>
-            </section>
-
-            <section class="brand-banner" style="margin-top: 15px;">
-                <router-link to="/khuyen-mai">
-                    <img src="#" alt="Brand Banner"
-                        style="width: 100%; height: 200px; background: #eee; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #aaa; font-style: italic;">
-                </router-link>
-            </section>
-            
-            <section class="trust-block">
-                <div class="trust-item"><span>✔️ Bảo hành chính hãng</span></div>
-                <div class="trust-item"><span>🚚 Giao hàng miễn phí</span></div>
-                <div class="trust-item"><span>🔄 Đổi trả 30 ngày</span></div>
-                <div class="trust-item"><span>🏪 Hơn 100+ cửa hàng</span></div>
-            </section>
-
-            <section class="product-section-container">
-
-                <section class="product-group hot-products">
-                    <h2 class="section-title">❤️ Sản phẩm được yêu thích nhất</h2>
-                    <div class="product-grid">
-                        <div class="product-card" v-for="product in topFavoriteProducts" :key="product.id">
-                            <img :src="product.image_url || '#'" :alt="product.name">
-                            <h3 class="product-name">{{ product.name }}</h3>
-
-                            <div class="product-stats">
-                                <span class="rating">
-                                    <i class="fas fa-star text-warning"></i> {{ product.average_rating || 0 }}
-                                </span>
-                                <span class="favorite-count ms-3">
-                                    <i class="fas fa-heart text-danger"></i> {{ product.favorite_count || 0 }}
-                                </span>
-                            </div>
-
-                            <div class="product-price">
-                                <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
-                            </div>
-                            <div class="card-actions-small">
-                             <button class="btn-view" @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
-  <i class="fas fa-eye"></i> Xem
-</button>
-
-                                <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i>
-                                    Thêm</button>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <template v-for="category in categoriesWithProducts" :key="category.id">
-                    <section class="product-group category-group" :id="'cat-' + category.id">
-                        <h2 class="section-title">
-                            <span v-html="category.icon" style="margin-right: 10px;"></span>
-                            {{ category.name }} nổi bật
-                        </h2>
-
-                        <div class="product-grid">
-                            <div class="product-card" v-for="product in category.products" :key="product.id">
-                                <img :src="product.image_url || '#'" :alt="product.name">
-                                <h3 class="product-name">{{ product.name }}</h3>
-
-                                <div class="product-stats">
-                                    <span class="rating">
-                                        <i class="fas fa-star text-warning"></i> {{ product.average_rating || 0 }}
-                                    </span>
-                                    <span class="sold-count ms-2" style="font-size: 0.8em; color: #888;">
-                                        (Đã bán: {{ product.sold_count || 0 }})
-                                    </span>
-                                </div>
-
-                                <div class="product-price">
-                                    <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
-                                </div>
-                                <div class="card-actions-small">
-                                   <button
-  class="btn-view"
-  @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })"
->
-  <i class="fas fa-eye"></i> Xem
-</button>
-                                    <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i>
-                                        Thêm</button>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                </template>
-
-                <section class="product-group news-group" style="margin-top: 60px;">
-                    <h2 class="section-title">📰 Tin tức công nghệ</h2>
-                    <div class="news-grid">
-                        <div class="news-card" v-for="news in newsList" :key="news.id">
-                            <img :src="news.image_url || news.image || '#'" :alt="news.title">
-                            <h3 class="news-title">{{ news.title }}</h3>
-                            <p class="news-excerpt">
-                                {{ (news.content || news.excerpt || '').substring(0, 120) + '...' }}
-                            </p>
-                            <router-link to="/tin-tuc" class="read-more">Đọc thêm</router-link>
-                        </div>
-                    </div>
-                </section>
-
-            </section> </main>
-    </div>
-</template>
-
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
-import axios from 'axios';
-// SỬA ĐỔI: Thêm import Vue Router để sử dụng trong script (nếu cần logic điều hướng phức tạp)
-import { useRouter } from 'vue-router'; 
+import apiService from '../../apiService.js';
+import { useRouter } from 'vue-router';
 
-const API_URL = 'http://localhost:3000';
 // Khởi tạo router
 const router = useRouter();
 
@@ -174,13 +23,13 @@ let interval = null;
 const fetchData = async () => {
     try {
         const [catRes, slideRes, prodRes, userRes, newsRes, rolesRes] = await Promise.all([
-            axios.get(`${API_URL}/categories?_sort=order&_order=asc&status=active`),
-            axios.get(`${API_URL}/slides`),
-            axios.get(`${API_URL}/products`),
+            apiService.get(`/categories?_sort=order&_order=asc&status=active`),
+            apiService.get(`/slides`),
+            apiService.get(`/products`),
             // SỬA ĐỔI: Thay đổi endpoint từ 'account_admin' thành 'users?role_ne=user'
-            axios.get(`${API_URL}/users?role_ne=user`),
-            axios.get(`${API_URL}/news`),
-            axios.get(`${API_URL}/roles`)
+            apiService.get(`/users?role_ne=user`),
+            apiService.get(`/news`),
+            apiService.get(`/roles`)
         ]);
 
         categories.value = catRes.data;
@@ -232,7 +81,7 @@ const goToSlide = (index) => { stopAutoSlide(); currentSlide.value = index; };
 
 // SỬA ĐỔI: Chỉ giữ lại việc gán activeCategoryId để CSS vẫn hoạt động nếu cần.
 // Việc điều hướng đã được xử lý bởi <router-link>
-const setActiveCategory = (id) => { activeCategoryId.value = String(id); }; 
+const setActiveCategory = (id) => { activeCategoryId.value = String(id); };
 
 const getUserRoleLabel = (roleValue) => {
     if (!roles.value.length) return roleValue || 'Khách';
@@ -258,6 +107,152 @@ onMounted(async () => {
 });
 onBeforeUnmount(stopAutoSlide);
 </script>
+
+<template>
+    <div id="app">
+        <main class="container">
+
+            <section class="top-section-layout">
+                <nav class="categories-sidebar">
+                    <h3 class="sidebar-title">Danh mục</h3>
+                    <router-link v-for="category in categories" :key="category.id"
+                        :to="{ path: '/Shop', query: { categoryId: category.id } }" class="category-item-sodo"
+                        :class="{ active: String(category.id) === String(activeCategoryId) }"
+                        @click="setActiveCategory(category.id)">
+                        <span v-html="category.icon" class="icon"></span>
+                        <span>{{ category.name }}</span>
+                    </router-link>
+                </nav>
+
+                <section class="slider" @mouseenter="stopAutoSlide" @mouseleave="startAutoSlide">
+                    <div class="slider-wrapper" :style="{ transform: 'translateX(-' + currentSlide * 100 + '%)' }">
+                        <div class="slide" v-for="slide in slides" :key="slide.id"
+                            :style="{ backgroundImage: 'url(' + slide.imageUrl + ')' }">
+                            <a :href="slide.link || '#'" style="display: block; width: 100%; height: 100%;"
+                                aria-label="Xem chi tiết"></a>
+                        </div>
+                    </div>
+
+                    <button class="slider-control prev" @click="prevSlide"><i class="fas fa-chevron-left"></i></button>
+                    <button class="slider-control next" @click="nextSlide"><i class="fas fa-chevron-right"></i></button>
+
+                    <div class="slider-nav">
+                        <span v-for="(slide, index) in slides" :key="slide.id" class="slider-nav-dot"
+                            :class="{ active: index === currentSlide }" @click="goToSlide(index)"></span>
+                    </div>
+                </section>
+
+                <aside class="utility-sidebar">
+                    <div class="user-info-card" v-if="users.length">
+                        <p class="user-name">{{ users[0].username }}</p>
+                        <p class="user-tier">⭐ {{ getUserRoleLabel(users[0].role) }}</p>
+                    </div>
+                </aside>
+            </section>
+
+            <section class="brand-banner" style="margin-top: 15px;">
+                <router-link to="/khuyen-mai">
+                    <img src="#" alt="Brand Banner"
+                        style="width: 100%; height: 200px; background: #eee; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #aaa; font-style: italic;">
+                </router-link>
+            </section>
+
+            <section class="trust-block">
+                <div class="trust-item"><span>✔️ Bảo hành chính hãng</span></div>
+                <div class="trust-item"><span>🚚 Giao hàng miễn phí</span></div>
+                <div class="trust-item"><span>🔄 Đổi trả 30 ngày</span></div>
+                <div class="trust-item"><span>🏪 Hơn 100+ cửa hàng</span></div>
+            </section>
+
+            <section class="product-section-container">
+
+                <section class="product-group hot-products">
+                    <h2 class="section-title">❤️ Sản phẩm được yêu thích nhất</h2>
+                    <div class="product-grid">
+                        <div class="product-card" v-for="product in topFavoriteProducts" :key="product.id">
+                            <img :src="product.image_url || '#'" :alt="product.name">
+                            <h3 class="product-name">{{ product.name }}</h3>
+
+                            <div class="product-stats">
+                                <span class="rating">
+                                    <i class="fas fa-star text-warning"></i> {{ product.average_rating || 0 }}
+                                </span>
+                                <span class="favorite-count ms-3">
+                                    <i class="fas fa-heart text-danger"></i> {{ product.favorite_count || 0 }}
+                                </span>
+                            </div>
+
+                            <div class="product-price">
+                                <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
+                            </div>
+                            <div class="card-actions-small">
+                                <button class="btn-view"
+                                    @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
+                                    <i class="fas fa-eye"></i> Xem
+                                </button>
+
+                                <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i>
+                                    Thêm</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <template v-for="category in categoriesWithProducts" :key="category.id">
+                    <section class="product-group category-group" :id="'cat-' + category.id">
+                        <h2 class="section-title">
+                            <span v-html="category.icon" style="margin-right: 10px;"></span>
+                            {{ category.name }} nổi bật
+                        </h2>
+
+                        <div class="product-grid">
+                            <div class="product-card" v-for="product in category.products" :key="product.id">
+                                <img :src="product.image_url || '#'" :alt="product.name">
+                                <h3 class="product-name">{{ product.name }}</h3>
+
+                                <div class="product-stats">
+                                    <span class="rating">
+                                        <i class="fas fa-star text-warning"></i> {{ product.average_rating || 0 }}
+                                    </span>
+                                    <span class="sold-count ms-2" style="font-size: 0.8em; color: #888;">
+                                        (Đã bán: {{ product.sold_count || 0 }})
+                                    </span>
+                                </div>
+
+                                <div class="product-price">
+                                    <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
+                                </div>
+                                <div class="card-actions-small">
+                                    <button class="btn-view"
+                                        @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
+                                        <i class="fas fa-eye"></i> Xem
+                                    </button>
+                                    <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i>
+                                        Thêm</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </template>
+
+                <section class="product-group news-group" style="margin-top: 60px;">
+                    <h2 class="section-title">📰 Tin tức công nghệ</h2>
+                    <div class="news-grid">
+                        <div class="news-card" v-for="news in newsList" :key="news.id">
+                            <img :src="news.image_url || news.image || '#'" :alt="news.title">
+                            <h3 class="news-title">{{ news.title }}</h3>
+                            <p class="news-excerpt">
+                                {{ (news.content || news.excerpt || '').substring(0, 120) + '...' }}
+                            </p>
+                            <router-link to="/tin-tuc" class="read-more">Đọc thêm</router-link>
+                        </div>
+                    </div>
+                </section>
+
+            </section>
+        </main>
+    </div>
+</template>
 
 <style scoped>
 :root {
@@ -543,7 +538,7 @@ a {
     justify-content: center;
     /* <-- ĐÃ SỬA LẠI CĂN GIỮA */
     margin-top: 15px;
-    
+
 }
 
 .card-actions-small button {

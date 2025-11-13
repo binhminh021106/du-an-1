@@ -704,7 +704,7 @@
       "customerPhone": "0912345678",
       "customerAddress": "789 Điện Biên Phủ, Quận 3, TP.HCM",
       "totalAmount": 850000,
-      "status": "returned",
+      "status": "pending",
       "createdAt": "2025-11-10T14:15:00Z",
       "return_status": ""
     },
