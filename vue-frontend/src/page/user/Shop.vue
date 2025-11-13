@@ -1,36 +1,5 @@
 <template>
   <div class="shop-wrapper container">
-    <section class="hot-sale-section">
-      <div class="hot-sale-header">
-        <h2><i class="fas fa-fire"></i> HOT SALE <span>Cuối tuần</span></h2>
-        <div class="countdown">
-          Kết thúc sau:
-          <b class="timer">{{ countdownDisplay }}</b>
-        </div>
-      </div>
-
-      <div class="hot-sale-scroll">
-        <div class="hot-sale-card" v-for="product in hotSaleProducts" :key="product.id">
-          <div class="discount-badge">Giảm {{ product.discount || 10 }}%</div>
-          <div class="hot-sale-image">
-            <img :src="product.image_url || 'https://placehold.co/250x250?text=Sale+Item'
-              " :alt="product.name" />
-          </div>
-          <h3 class="hot-sale-name">{{ product.name }}</h3>
-          <p class="hot-sale-price">{{ formatCurrency(product.sale_price) }}</p>
-          <p class="hot-sale-old-price">
-            {{ formatCurrency(product.old_price) }}
-          </p>
-          <div class="hot-sale-actions">
-            <button class="btn-love hot-sale-btn">
-              <i class="fas fa-heart"></i>
-            </button>
-            <button class="btn-cart hot-sale-btn" @click.stop="addToCart(product)"> <i class="fas fa-cart-plus"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
 
     <div class="shop-page">
       <div class="shop-layout">
@@ -108,6 +77,38 @@
         </main>
       </div>
       <div>
+        <section class="hot-sale-section">
+          <div class="hot-sale-header">
+            <h2><i class="fas fa-fire"></i> HOT SALE <span>Cuối tuần</span></h2>
+            <div class="countdown">
+              Kết thúc sau:
+              <b class="timer">{{ countdownDisplay }}</b>
+            </div>
+          </div>
+
+          <div class="hot-sale-scroll">
+            <div class="hot-sale-card" v-for="product in hotSaleProducts" :key="product.id">
+              <div class="discount-badge">Giảm {{ product.discount || 10 }}%</div>
+              <div class="hot-sale-image">
+                <img :src="product.image_url || 'https://placehold.co/250x250?text=Sale+Item'
+                  " :alt="product.name" />
+              </div>
+              <h3 class="hot-sale-name">{{ product.name }}</h3>
+              <p class="hot-sale-price">{{ formatCurrency(product.sale_price) }}</p>
+              <p class="hot-sale-old-price">
+                {{ formatCurrency(product.old_price) }}
+              </p>
+              <div class="hot-sale-actions">
+                <button class="btn-love hot-sale-btn">
+                  <i class="fas fa-heart"></i>
+                </button>
+                <button class="btn-cart hot-sale-btn" @click.stop="addToCart(product)"> <i class="fas fa-cart-plus"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="promo-section-wrapper">
           <div class="promo-grid">
 

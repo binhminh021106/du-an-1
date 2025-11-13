@@ -8,7 +8,7 @@
                     <router-link 
                         v-for="category in categories" 
                         :key="category.id" 
-                        :to="{ path: '/trangcuahang', query: { categoryId: category.id } }"
+                        :to="{ path: '/Shop', query: { categoryId: category.id } }"
                         class="category-item-sodo" 
                         :class="{ active: String(category.id) === String(activeCategoryId) }"
                         @click="setActiveCategory(category.id)"

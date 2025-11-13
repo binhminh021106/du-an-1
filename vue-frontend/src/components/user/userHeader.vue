@@ -37,18 +37,12 @@
 
           <div class="dropdown-menu" :class="{ active: isMenuActive }">
             <ul class="menu-list" v-if="categories.length">
-              <!-- BẮT ĐẦU VÒNG LẶP DỮ LIỆU ĐỘNG -->
               <li v-for="category in categories" :key="category.id">
-                <!-- 
-                  - Dùng v-html để render icon (do admin nhập)
-                  - Link tới /category/[name]
-                -->
-                <router-link :to="'/category/' + category.name">
+                <router-link :to="'/Shop?categoryId=' + category.id">
                   <span v-html="category.icon" class="icon-placeholder"></span>
                   {{ category.name }}
                 </router-link>
               </li>
-              <!-- KẾT THÚC VÒNG LẶP -->
             </ul>
             <div v-else class="p-3 text-center text-muted small">Đang tải danh mục...</div>
           </div>
