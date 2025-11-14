@@ -6,6 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+use App\Models\Category;
+use App\Models\Variant;
+use App\Models\ImageProduct;
+use App\Models\Comment;
+use App\Models\Review;
+
 class Product extends Model
 {
     use HasFactory;
@@ -35,14 +41,43 @@ class Product extends Model
         'review_count',
         'average_rating',
         'status',
-        'description', 
+        'description',
     ];
 
+    public function category()
+    {
+        return $this->belongsTo(Category::class, 'category_id', 'id');
+    }
 
     /**
-     * Ghi chú: Nếu bảng của bạn KHÔNG có 2 cột 'created_at' và 'updated_at',
-     * hãy thêm dòng này vào để tắt tính năng timestamps của Laravel:
+     * Lấy tất cả các biến thể của sản phẩm.
      */
-    // public $timestamps = false;
+    public function variants()
+    {
+        return $this->hasMany(Variant::class, 'product_id', 'id');
+    }
 
+    /**
+     * Lấy tất cả hình ảnh của sản phẩm.
+     */
+    public function images()
+    {
+        return $this->hasMany(ImageProduct::class, 'product_id', 'id');
+    }
+
+    /**
+     * Lấy tất cả bình luận của sản phẩm.
+     */
+    public function comments()
+    {
+        return $this->hasMany(Comment::class, 'product_id', 'id');
+    }
+
+    /**
+     * Lấy tất cả đánh giá của sản phẩm.
+     */
+    public function reviews()
+    {
+        return $this->hasMany(Review::class, 'product_id', 'id');
+    }
 }
