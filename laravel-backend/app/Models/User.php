@@ -45,4 +45,30 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    // Một user có nhiều đơn hàng
+    public function orders()
+    {
+        return $this->hasMany(Order::class, 'user_id', 'id');
+    }
+    // Một user có nhiều review
+    public function reviews()
+    {
+        return $this->hasMany(Review::class, 'user_id', 'id');
+    }
+    // Một user có nhiều comment
+    public function comments()
+    {
+        return $this->hasMany(Comment::class, 'user_id', 'id');
+    }
+    // Một user có một giỏ hàng
+    public function cart()
+    {
+        return $this->hasOne(Cart::class, 'user_id', 'id');
+    }
+    // Một user có nhiều địa chỉ
+    public function addresses()
+    {
+        return $this->hasMany(UserAddress::class, 'user_id', 'id');
+    }
 }
