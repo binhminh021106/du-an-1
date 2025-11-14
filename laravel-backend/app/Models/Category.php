@@ -25,10 +25,8 @@ class Category extends Model
     ];
 
 
-    /**
-     * Ghi chú: Nếu bảng của bạn KHÔNG có 2 cột 'created_at' và 'updated_at',
-     * hãy thêm dòng này vào để tắt tính năng timestamps của Laravel:
-     */
-    // public $timestamps = false;
-
+    public function parent()
+    {
+        return $this->belongsTo(self::class, 'parent_id', 'id');
+    }
 }

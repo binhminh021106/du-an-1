@@ -8,8 +8,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 // Thêm các model sẽ liên kết
 use App\Models\User;
+use App\Models\OrderItem;
 use App\Models\Coupon;
-use App\Models\OrderDetail;
 
 class Order extends Model
 {

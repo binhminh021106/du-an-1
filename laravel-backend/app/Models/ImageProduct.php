@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Image_product extends Model
+class ImageProduct extends Model
 {
     /** @use HasFactory<\Database\Factories\ImageProductFactory> */
     use HasFactory;

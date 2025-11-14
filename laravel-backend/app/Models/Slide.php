@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 
-class Slides extends Model
+class Slide extends Model
 {
     /** @use HasFactory<\Database\Factories\SlidesFactory> */
     use HasFactory;
