@@ -8,7 +8,7 @@ const users = ref([]); // Chỉ chứa admin/nhanvien (không chứa user)
 const isLoading = ref(true);
 const searchQuery = ref('');
 
-// --- State Modals ---
+// --- Modals ---
 const userModalInstance = ref(null);
 const userModalRef = ref(null);
 const isEditMode = ref(false);
@@ -21,13 +21,13 @@ const roleModalInstance = ref(null);
 const roleModalRef = ref(null);
 const isRoleEditMode = ref(false);
 
-// --- State Forms ---
+// --- Forms ---
 const formData = reactive({
   id: null,
   username: '',
   email: '',
-  password: '',
-  confirmPassword: '',
+  phone: '', // Thêm SĐT
+  address: '', // Thêm Địa chỉ
   role: 'nhanvien',
   status: 'active'
 });
@@ -35,8 +35,8 @@ const formData = reactive({
 const errors = reactive({
   username: '',
   email: '',
-  password: '',
-  confirmPassword: '',
+  phone: '', // Thêm SĐT
+  address: '', // Thêm Địa chỉ
 });
 
 const roleFormData = reactive({
@@ -51,18 +51,18 @@ const roleErrors = reactive({
   label: '',
 });
 
-// --- State Vai trò & Phân trang ---
+// --- Roles & Pagination ---
 const roles = ref([]); // Chứa TẤT CẢ vai trò (để lấy nhãn)
 const otherUsersCurrentPage = ref(1);
 const otherUsersItemsPerPage = ref(5);
 
 // --- Computed ---
 
-// Lọc người dùng dựa trên tìm kiếm
+// Lọc users theo tìm kiếm
 const filteredUsers = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
   if (!query) {
-    return users.value; // users đã được lọc ở fetchUsers
+    return users.value;
   }
   return users.value.filter(user =>
     user.username.toLowerCase().includes(query) ||
@@ -71,34 +71,34 @@ const filteredUsers = computed(() => {
   );
 });
 
-// Lọc admin từ danh sách đã lọc
+// Lọc admins
 const adminUsers = computed(() => {
   return filteredUsers.value.filter(user => user.role === 'admin');
 });
 
-// Lọc user khác (nhanvien, ketoan...)
+// Lọc other users (nhanvien, ketoan...)
 const otherUsers = computed(() => {
   return filteredUsers.value.filter(user => user.role !== 'admin');
 });
 
-// Lọc các vai trò có thể chọn (không bao gồm 'user')
+// Lọc vai trò (trừ 'user')
 const availableRoles = computed(() => {
   return roles.value.filter(r => r.value !== 'user');
 });
 
-// Tính tổng số trang cho user khác
+// Tổng trang (other users)
 const otherUsersTotalPages = computed(() => {
   return Math.ceil(otherUsers.value.length / otherUsersItemsPerPage.value);
 });
 
-// Lấy danh sách user khác đã phân trang
+// Phân trang (other users)
 const paginatedOtherUsers = computed(() => {
   const start = (otherUsersCurrentPage.value - 1) * otherUsersItemsPerPage.value;
   const end = start + otherUsersItemsPerPage.value;
   return otherUsers.value.slice(start, end);
 });
 
-// Reset về trang 1 khi tìm kiếm
+// Reset trang khi tìm kiếm
 watch(searchQuery, () => {
   otherUsersCurrentPage.value = 1;
 });
@@ -162,8 +162,8 @@ function resetForm() {
   formData.id = null;
   formData.username = '';
   formData.email = '';
-  formData.password = '';
-  formData.confirmPassword = '';
+  formData.phone = '';
+  formData.address = ''; // Reset địa chỉ
   formData.role = 'nhanvien'; // Mặc định khi tạo là nhân viên
   formData.status = 'active';
   Object.keys(errors).forEach(key => errors[key] = '');
@@ -181,6 +181,8 @@ function openEditModal(user) {
   formData.id = user.id;
   formData.username = user.username;
   formData.email = user.email;
+  formData.phone = user.phone || '';
+  formData.address = user.address || ''; // Thêm địa chỉ
   formData.role = user.role;
   formData.status = user.status;
   userModalInstance.value.show();
@@ -208,19 +210,18 @@ function validateForm() {
     isValid = false;
   }
 
-  if (!isEditMode.value || formData.password) {
-    if (!formData.password) {
-      errors.password = 'Vui lòng nhập mật khẩu.';
-      isValid = false;
-    } else if (formData.password.length < 8) {
-      errors.password = 'Mật khẩu phải có ít nhất 8 ký tự.';
-      isValid = false;
-    }
-    if (formData.password !== formData.confirmPassword) {
-      errors.confirmPassword = 'Mật khẩu xác nhận không khớp!';
-      isValid = false;
-    }
+  // Validate SĐT: Cho phép trống, nhưng nếu nhập phải đúng 10 số, bắt đầu bằng 0
+  if (formData.phone.trim() && !/^0\d{9}$/.test(formData.phone.trim())) {
+    errors.phone = 'SĐT không hợp lệ (phải đủ 10 số, bắt đầu bằng 0).';
+    isValid = false;
   }
+  
+  // Validate Địa chỉ: Cho phép trống, nhưng nếu nhập thì không quá 255 ký tự
+  if (formData.address.trim() && formData.address.trim().length > 255) {
+    errors.address = 'Địa chỉ không được vượt quá 255 ký tự.';
+    isValid = false;
+  }
+
   return isValid;
 }
 
@@ -234,16 +235,12 @@ async function handleSave() {
     username: formData.username,
     name: formData.username, // Đồng bộ name = username
     email: formData.email,
+    phone: formData.phone,
     role: formData.role,
     status: formData.status,
-    phone: '', // Thêm các trường chuẩn hóa
-    address: '',
+    address: formData.address, // Gửi địa chỉ
     avatar: '',
   };
-
-  if (formData.password) {
-    payload.password = formData.password;
-  }
 
   try {
     if (isEditMode.value) {
@@ -326,6 +323,7 @@ async function fetchRoles() {
     roles.value = response.data;
   } catch (error) {
     console.error("Lỗi khi tải danh sách vai trò:", error);
+    // Dữ liệu dự phòng
     roles.value = [
       { value: 'admin', label: 'Quản trị viên (Admin)', badgeClass: 'text-bg-danger', id: 1 },
       { value: 'manager', label: 'Quản lý', badgeClass: 'text-bg-info', id: 2 },
@@ -532,7 +530,6 @@ function nextOtherUsersPage() {
                           {{ searchQuery ? 'Không tìm thấy quản trị viên phù hợp' : 'Không có quản trị viên nào' }}
                         </td>
                       </tr>
-                      <!-- THAY ĐỔI 1: Thêm class binding cho <tr> -->
                       <tr v-for="user in adminUsers" :key="user.id"
                         :class="{ 'inactive-row': user.status !== 'active' }">
                         <td>{{ user.id }}</td>
@@ -555,7 +552,6 @@ function nextOtherUsersPage() {
                           <span :class="['badge', getRoleBadge(user.role)]">{{ getRoleLabel(user.role) }}</span>
                         </td>
                         <td>
-                          <!-- THAY ĐỔI 2: Đổi text-bg-warning sang text-bg-danger cho nổi bật -->
                           <span :class="['badge', user.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
                             {{ user.status === 'active' ? 'Đang hoạt động' : 'Vô hiệu hóa' }}
                           </span>
@@ -620,7 +616,6 @@ function nextOtherUsersPage() {
                           {{ searchQuery ? 'Không tìm thấy người dùng phù hợp' : 'Không có người dùng nào khác' }}
                         </td>
                       </tr>
-                      <!-- THAY ĐỔI 3: Thêm class binding cho <tr> -->
                       <tr v-for="user in paginatedOtherUsers" :key="user.id"
                         :class="{ 'inactive-row': user.status !== 'active' }">
                         <td>{{ user.id }}</td>
@@ -643,7 +638,6 @@ function nextOtherUsersPage() {
                           <span :class="['badge', getRoleBadge(user.role)]">{{ getRoleLabel(user.role) }}</span>
                         </td>
                         <td>
-                          <!-- THAY ĐỔI 4: Đổi text-bg-warning sang text-bg-danger cho nổi bật -->
                           <span :class="['badge', user.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
                             {{ user.status === 'active' ? 'Đang hoạt động' : 'Vô hiệu hóa' }}
                           </span>
@@ -741,7 +735,7 @@ function nextOtherUsersPage() {
                 </div>
               </div>
 
-              <!-- Cột phải: Thông tin & Bảo mật -->
+              <!-- Cột phải: Thông tin -->
               <div class="col-md-8">
                 <div class="mb-3">
                   <label for="username" class="form-label required">Tên đăng nhập</label>
@@ -757,25 +751,22 @@ function nextOtherUsersPage() {
                   <div v-if="isEditMode" class="form-text">Không thể thay đổi email.</div>
                 </div>
 
-                <hr class="my-4">
-                <h6 class="mb-3"><i class="bi bi-shield-lock me-2"></i>Bảo mật</h6>
-
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label for="password" class="form-label" :class="{ 'required': !isEditMode }">Mật khẩu</label>
-                    <input type="password" class="form-control" :class="{ 'is-invalid': errors.password }" id="password"
-                      v-model="formData.password" autocomplete="new-password">
-                    <div class="form-text" v-if="isEditMode">(Để trống nếu không muốn thay đổi)</div>
-                    <div class="invalid-feedback" v-if="errors.password">{{ errors.password }}</div>
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label for="confirmPassword" class="form-label"
-                      :class="{ 'required': !isEditMode || formData.password }">Xác nhận mật khẩu</label>
-                    <input type="password" class="form-control" :class="{ 'is-invalid': errors.confirmPassword }"
-                      id="confirmPassword" v-model="formData.confirmPassword" autocomplete="new-password">
-                    <div class="invalid-feedback" v-if="errors.confirmPassword">{{ errors.confirmPassword }}</div>
-                  </div>
+                <div class="mb-3">
+                  <label for="phone" class="form-label">Số điện thoại</label>
+                  <input type="tel" class="form-control" :class="{ 'is-invalid': errors.phone }" id="phone"
+                    v-model="formData.phone" placeholder="09xxxxxxxx">
+                  <div class="invalid-feedback" v-if="errors.phone">{{ errors.phone }}</div>
+                  <div class="form-text">(Không bắt buộc)</div>
                 </div>
+
+                <div class="mb-3">
+                  <label for="address" class="form-label">Địa chỉ</label>
+                  <input type="text" class="form-control" :class="{ 'is-invalid': errors.address }" id="address"
+                    v-model="formData.address" placeholder="Nhập địa chỉ...">
+                  <div class="invalid-feedback" v-if="errors.address">{{ errors.address }}</div>
+                  <div class="form-text">(Không bắt buộc)</div>
+                </div>
+
               </div>
             </div>
           </form>
@@ -820,6 +811,9 @@ function nextOtherUsersPage() {
             </div>
             <div class="list-group-item px-0">
               <i class="bi bi-telephone me-3 text-success"></i> {{ viewingUser.phone || '(Chưa có SĐT)' }}
+            </div>
+            <div class="list-group-item px-0">
+              <i class="bi bi-geo-alt me-3 text-danger"></i> {{ viewingUser.address || '(Chưa có địa chỉ)' }}
             </div>
             <div class="list-group-item px-0">
               <i class="bi bi-person-badge me-3 text-info"></i>
@@ -960,7 +954,7 @@ function nextOtherUsersPage() {
   overflow-x: auto;
 }
 
-/* (MỚI) Thêm style để làm mờ hàng bị vô hiệu hóa */
+/* Thêm style để làm mờ hàng bị vô hiệu hóa */
 .inactive-row {
   opacity: 0.65;
   background-color: #f8f9fa; /* Màu bg-light của Bootstrap */

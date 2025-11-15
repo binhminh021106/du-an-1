@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import apiService from '../../apiService.js';
-// SỬA ĐỔI: Thêm import Vue Router để sử dụng trong script (nếu cần logic điều hướng phức tạp)
 import { useRouter } from 'vue-router'; 
 
 // Khởi tạo router
@@ -14,11 +13,10 @@ const products = ref([]);
 const users = ref([]);
 const newsList = ref([]);
 const roles = ref([]);
-const activeCategoryId = ref(null); // Giữ lại để quản lý trạng thái active CSS
+const activeCategoryId = ref(null);
 const currentSlide = ref(0);
 let interval = null;
 
-// ... (Các hàm fetchData, computed properties, slider logic giữ nguyên) ...
 
 // --- FETCH DATA ---
 const fetchData = async () => {
@@ -27,7 +25,6 @@ const fetchData = async () => {
             apiService.get(`/categories?_sort=order&_order=asc&status=active`),
             apiService.get(`/slides`),
             apiService.get(`/products`),
-            // SỬA ĐỔI: Thay đổi endpoint từ 'account_admin' thành 'users?role_ne=user'
             apiService.get(`/users?role_ne=user`),
             apiService.get(`/news`),
             apiService.get(`/roles`)
@@ -79,9 +76,6 @@ const goToSlide = (index) => { stopAutoSlide(); currentSlide.value = index; };
 
 
 // --- HELPER FUNCTIONS ---
-
-// SỬA ĐỔI: Chỉ giữ lại việc gán activeCategoryId để CSS vẫn hoạt động nếu cần.
-// Việc điều hướng đã được xử lý bởi <router-link>
 const setActiveCategory = (id) => { activeCategoryId.value = String(id); }; 
 
 const getUserRoleLabel = (roleValue) => {
@@ -166,13 +160,13 @@ onBeforeUnmount(stopAutoSlide);
                 <div class="trust-item"><span>✔️ Bảo hành chính hãng</span></div>
                 <div class="trust-item"><span>🚚 Giao hàng miễn phí</span></div>
                 <div class="trust-item"><span>🔄 Đổi trả 30 ngày</span></div>
-                <div class="trust-item"><span>🏪 Hơn 100+ cửa hàng</span></div>
+                <div class="trust-item"><span>🏪 Hỗ trợ 24/7</span></div>
             </section>
 
             <section class="product-section-container">
 
                 <section class="product-group hot-products">
-                    <h2 class="section-title">❤️ Sản phẩm được yêu thích nhất</h2>
+                    <h2 class="section-title"> Sản phẩm yêu thích</h2>
                     <div class="product-grid">
                         <div class="product-card" v-for="product in topFavoriteProducts" :key="product.id">
                             <img :src="product.image_url || '#'" :alt="product.name">
@@ -536,12 +530,10 @@ a {
     gap: 4px;
 }
 
-/* Action Buttons - Centered as requested */
 .card-actions-small {
     display: flex;
     gap: 10px;
     justify-content: center;
-    /* <-- ĐÃ SỬA LẠI CĂN GIỮA */
     margin-top: 15px;
     
 }
@@ -579,7 +571,6 @@ a {
     background: #c82333;
 }
 
-/* News specific */
 .news-card img {
     height: 160px;
     object-fit: cover;
