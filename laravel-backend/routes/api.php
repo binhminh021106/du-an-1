@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PdfController;
+// Client
 use App\Http\Controllers\Api\Client\ProductController;
 use App\Http\Controllers\Api\Client\CategoryController;
 use App\Http\Controllers\Api\Client\VariantController;
@@ -14,6 +15,11 @@ use App\Http\Controllers\Api\Client\NewController;
 use App\Http\Controllers\Api\Client\ReviewController;
 use App\Http\Controllers\Api\Client\UserController;
 use App\Http\Controllers\Api\Client\UserAddressController;
+use App\Http\Controllers\Api\Client\RoleController;
+use App\Http\Controllers\Api\Client\CartController;
+use App\Http\Controllers\Api\Client\OrderController;
+// admin
+use App\Http\Controllers\Api\admin\AdminProductController;
 
 // client
 Route::get('/generate-pdf', [PdfController::class, 'generatePDF']);
@@ -51,3 +57,22 @@ Route::get('/user/{id}', [UserController::class, 'show']);
 Route::get('/useraddresses', [UserAddressController::class, 'index']);
 Route::get('/useraddress/{id}', [UserAddressController::class, 'show']);
 
+Route::get('/roles', [RoleController::class, 'index']);
+
+Route::get('/carts', [CartController::class, 'index']);
+
+Route::get('/orders', [OrderController::class, 'index']);
+Route::get('/order/{id}', [OrderController::class, 'show']);
+
+// Admin
+
+Route::group([
+    'prefix' => 'admin',
+    'middleware' => 'auth:sanctum'
+], function () {
+
+    Route::get('/products', [AdminProductController::class, 'index']);
+    Route::get('/products/{id}', [AdminProductController::class, 'show']);
+
+    // ... các route admin khác ...
+});
