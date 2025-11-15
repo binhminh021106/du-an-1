@@ -15,9 +15,9 @@ class PdfController extends Controller
         // 1. Lấy dữ liệu (ví dụ từ database hoặc để demo)
         // $order = Order::find(1); // Ví dụ nếu bạn có Model Order
         // $customerName = $order->customer_name;
-        
+
         // Dữ liệu ví dụ để demo
-        $customerName = "Nguyễn Văn A"; 
+        $customerName = "Nguyễn Văn A";
         $html = "<h1>Hóa đơn cho: " . $customerName . "</h1>
                  <p>Đây là chi tiết đơn hàng của bạn:</p>
                  <ul>
@@ -27,7 +27,6 @@ class PdfController extends Controller
                  <p>Tổng cộng: <strong>350.000đ</strong></p>";
 
         // 2. Khởi tạo đối tượng TCPDF
-<<<<<<< HEAD
         // SỬA LỖI: Thay thế các hằng số bằng giá trị chuỗi mặc định của chúng
         // 'P' = Portrait (dọc), 'mm' = millimeter, 'A4' = khổ giấy A4
         $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
@@ -35,13 +34,6 @@ class PdfController extends Controller
         // 3. Cấu hình thông tin tài liệu (Tùy chọn)
         // SỬA LỖI: Thay thế hằng số bằng giá trị chuỗi
         $pdf->SetCreator('TCPDF');
-=======
-        // Các hằng số này (PDF_PAGE_ORIENTATION, PDF_UNIT...) được định nghĩa bởi TCPDF
-        $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
-
-        // 3. Cấu hình thông tin tài liệu (Tùy chọn)
-        $pdf->SetCreator(PDF_CREATOR);
->>>>>>> 115970fc0152a276dcbd914af7a71e670a726619
         $pdf->SetAuthor('Tên Cửa Hàng Của Bạn');
         $pdf->SetTitle('Hóa đơn đơn hàng');
         $pdf->SetSubject('Chi tiết hóa đơn');
