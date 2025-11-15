@@ -22,128 +22,148 @@ const itemsPerPage = 5;
 
 // 🧾 Dữ liệu giả định cho danh sách đơn hàng (10 ĐƠN HÀNG)
 const orders = ref([
-  {
-    id: 'DH1001',
-    date: '2025-11-10',
-    total: 550000,
-    status: 'Đang giao hàng',
-    customer: { name: 'Nguyễn Văn An', phone: '0901 234 567', address: 'Số 123, đường A, Phường B, Quận C, TP. HCM' },
-    payment: { subtotal: 550000, shippingFee: 0, total: 550000, method: 'Chuyển khoản' },
-    items: [
-      { id: 1, name: 'Chuột Logitech G102', price: 350000, qty: 1, image: 'https://via.placeholder.com/100x100/3498DB/FFFFFF?text=Mouse' },
-      { id: 2, name: 'Lót chuột Razer', price: 200000, qty: 1, image: 'https://via.placeholder.com/100x100/EEEEEE/333333?text=Pad' },
-    ],
-    canCancel: true, canRepurchase: true, canReview: false, canReturn: true, isReviewed: false,
-  },
-  {
-    id: 'DH1002',
-    date: '2025-11-05',
-    total: 280000,
-    status: 'Đã giao thành công',
-    customer: { name: 'Trần Thị B', phone: '0902 876 543', address: 'Đường Nguyễn Huệ, Quận 1, TP. HCM' },
-    payment: { subtotal: 280000, shippingFee: 0, total: 280000, method: 'Thanh toán khi nhận hàng (COD)' },
-    items: [
-      { id: 3, name: 'Bàn phím cơ Akko 3087', price: 280000, qty: 1, image: 'https://via.placeholder.com/100x100/2ECC71/FFFFFF?text=Keyboard' },
-    ],
-    canCancel: false, canRepurchase: true, canReview: true, canReturn: true, isReviewed: false,
-  },
-  {
-    id: 'DH1003',
-    date: '2025-10-28',
-    total: 1200000,
-    status: 'Đã hủy',
-    customer: { name: 'Lê Văn C', phone: '0903 123 987', address: 'Quận Bình Thạnh, TP. HCM' },
-    payment: { subtotal: 1200000, shippingFee: 0, total: 1200000, method: 'Thẻ tín dụng' },
-    items: [
-      { id: 4, name: 'Tai nghe Razer Kraken', price: 1200000, qty: 1, image: 'https://via.placeholder.com/100x100/E74C3C/FFFFFF?text=Headset' },
-    ],
-    canCancel: false, canRepurchase: true, canReview: false, canReturn: false, isReviewed: false,
-  },
-  {
-    id: 'DH1004',
-    date: '2025-10-15',
-    total: 350000,
-    status: 'Đã đặt hàng',
-    customer: { name: 'Phạm Thu D', phone: '0904 456 123', address: 'Quận Tân Bình, TP. HCM' },
-    payment: { subtotal: 350000, shippingFee: 0, total: 350000, method: 'Momo' },
-    items: [
-      { id: 5, name: 'Tấm lót bàn RGB', price: 350000, qty: 1, image: 'https://via.placeholder.com/100x100/95A5A6/FFFFFF?text=RGB' },
-    ],
-    canCancel: false, canRepurchase: true, canReview: true, canReturn: true, isReviewed: false,
-  },
-  {
-    id: 'DH1005',
-    date: '2025-11-12', 
-    total: 350000,
-    status: 'Đã giao thành công',
-    customer: { name: 'Phạm Thu D', phone: '0904 456 123', address: 'Quận Tân Bình, TP. HCM' },
-    payment: { subtotal: 350000, shippingFee: 0, total: 350000, method: 'Momo' },
-    items: [
-      { id: 5, name: 'Tấm lót bàn RGB', price: 350000, qty: 1, image: 'https://via.placeholder.com/100x100/95A5A6/FFFFFF?text=RGB' },
-    ],
-    canCancel: false, canRepurchase: true, canReview: true, canReturn: true, isReviewed: false,
-  },
-  {
-    id: 'DH1006',
-    date: '2025-11-11',
-    total: 550000,
-    status: 'Đã hủy',
-    customer: { name: 'Nguyễn Văn An', phone: '0901 234 567', address: 'Số 123, đường A, Phường B, Quận C, TP. HCM' },
-    payment: { subtotal: 550000, shippingFee: 0, total: 550000, method: 'Chuyển khoản' },
-    items: [
-      { id: 1, name: 'Chuột Logitech G102', price: 350000, qty: 1, image: 'https://via.placeholder.com/100x100/3498DB/FFFFFF?text=Mouse' },
-    ],
-    canCancel: false, canRepurchase: true, canReview: false, canReturn: false, isReviewed: false,
-  },
-  {
-    id: 'DH1007',
-    date: '2025-11-01',
-    total: 280000,
-    status: 'Đang giao hàng',
-    customer: { name: 'Trần Thị B', phone: '0902 876 543', address: 'Đường Nguyễn Huệ, Quận 1, TP. HCM' },
-    payment: { subtotal: 280000, shippingFee: 0, total: 280000, method: 'Thanh toán khi nhận hàng (COD)' },
-    items: [
-      { id: 3, name: 'Bàn phím cơ Akko 3087', price: 280000, qty: 1, image: 'https://via.placeholder.com/100x100/2ECC71/FFFFFF?text=Keyboard' },
-    ],
-    canCancel: true, canRepurchase: true, canReview: false, canReturn: true, isReviewed: false,
-  },
-  {
-    id: 'DH1008',
-    date: '2025-11-15', // Mới nhất
-    total: 1550000,
-    status: 'Đã đặt hàng',
-    customer: { name: 'Hoàng Văn E', phone: '0905 555 123', address: 'Quận 10, TP. HCM' },
-    payment: { subtotal: 1550000, shippingFee: 0, total: 1550000, method: 'Thẻ tín dụng' },
-    items: [
-      { id: 1, name: 'Chuột Logitech G102', price: 350000, qty: 1, image: 'https://via.placeholder.com/100x100/3498DB/FFFFFF?text=Mouse' },
-      { id: 4, name: 'Tai nghe Razer Kraken', price: 1200000, qty: 1, image: 'https://via.placeholder.com/100x100/E74C3C/FFFFFF?text=Headset' },
-    ],
-    canCancel: false, canRepurchase: true, canReview: false, canReturn: false, isReviewed: false,
-  },
-  {
-    id: 'DH1009',
-    date: '2025-11-14',
-    total: 200000,
-    status: 'Đã giao thành công',
-    customer: { name: 'Nguyễn Văn An', phone: '0901 234 567', address: 'Số 123, đường A, Phường B, Quận C, TP. HCM' },
-    payment: { subtotal: 200000, shippingFee: 0, total: 200000, method: 'Momo' },
-    items: [
-      { id: 2, name: 'Lót chuột Razer', price: 200000, qty: 1, image: 'https://via.placeholder.com/100x100/EEEEEE/333333?text=Pad' },
-    ],
-    canCancel: false, canRepurchase: true, canReview: true, canReturn: true, isReviewed: false,
-  },
-  {
-    id: 'DH1010',
-    date: '2025-11-13',
-    total: 280000,
-    status: 'Đang giao hàng',
-    customer: { name: 'Lê Văn C', phone: '0903 123 987', address: 'Quận Bình Thạnh, TP. HCM' },
-    payment: { subtotal: 280000, shippingFee: 0, total: 280000, method: 'Thanh toán khi nhận hàng (COD)' },
-    items: [
-      { id: 3, name: 'Bàn phím cơ Akko 3087', price: 280000, qty: 1, image: 'https://via.placeholder.com/100x100/2ECC71/FFFFFF?text=Keyboard' },
-    ],
-    canCancel: true, canRepurchase: true, canReview: false, canReturn: true, isReviewed: false,
-  },
+    {
+        id: 'DH1001',
+        date: '2025-11-10',
+        // Thay thế: Chuột Logitech G102 (350k) + Lót chuột Razer (200k)
+        // Mới: Gaming G2 - Chuột Razer Viper V2 Pro (2.200.000 ₫) + Headphone H5 - Tai nghe không dây Marshall (4.500.000 ₫)
+        total: 6700000, // 2.200.000 + 4.500.000
+        status: 'Đang giao hàng',
+        customer: { name: 'Nguyễn Văn An', phone: '0901 234 567', address: 'Số 123, đường A, Phường B, Quận C, TP. HCM' },
+        payment: { subtotal: 6700000, shippingFee: 0, total: 6700000, method: 'Chuyển khoản' },
+        items: [
+            { id: 1, name: 'Chuột Razer Viper V2 Pro (Gaming G2)', price: 2200000, qty: 1, image: 'https://via.placeholder.com/100x100/CD5C5C/FFFFFF?text=Gaming+G2' },
+            { id: 2, name: 'Tai nghe không dây Marshall (H5)', price: 4500000, qty: 1, image: 'https://via.placeholder.com/100x100/A9A9A9/000000?text=Headphone+H5' },
+        ],
+        canCancel: true, canRepurchase: true, canReview: false, canReturn: true, isReviewed: false,
+    },
+    {
+        id: 'DH1002',
+        date: '2025-11-05',
+        // Thay thế: Bàn phím cơ Akko 3087 (280k)
+        // Mới: Laptop L5 - HP Spectre x360 14 (31.600.000 ₫)
+        total: 31600000,
+        status: 'Đã giao thành công',
+        customer: { name: 'Trần Thị B', phone: '0902 876 543', address: 'Đường Nguyễn Huệ, Quận 1, TP. HCM' },
+        payment: { subtotal: 31600000, shippingFee: 0, total: 31600000, method: 'Thanh toán khi nhận hàng (COD)' },
+        items: [
+            { id: 3, name: 'HP Spectre x360 14 (Laptop L5)', price: 31600000, qty: 1, image: 'https://via.placeholder.com/100x100/F08080/FFFFFF?text=Laptop+L5' },
+        ],
+        canCancel: false, canRepurchase: true, canReview: true, canReturn: true, isReviewed: false,
+    },
+    {
+        id: 'DH1003',
+        date: '2025-10-28',
+        // Thay thế: Tai nghe Razer Kraken (1.200.000 ₫)
+        // Mới: Phone X1 - Samsung Galaxy Ultra S23 (27.990.000 ₫)
+        total: 27990000,
+        status: 'Đã hủy',
+        customer: { name: 'Lê Văn C', phone: '0903 123 987', address: 'Quận Bình Thạnh, TP. HCM' },
+        payment: { subtotal: 27990000, shippingFee: 0, total: 27990000, method: 'Thẻ tín dụng' },
+        items: [
+            { id: 4, name: 'Samsung Galaxy Ultra S23 (Phone X1)', price: 27990000, qty: 1, image: 'https://via.placeholder.com/100x100/B0E0E6/000000?text=Phone+X1' },
+        ],
+        canCancel: false, canRepurchase: true, canReview: false, canReturn: false, isReviewed: false,
+    },
+    {
+        id: 'DH1004',
+        date: '2025-10-15',
+        // Thay thế: Tấm lót bàn RGB (350k)
+        // Mới: Laptop L2 - Dell XPS 13 Plus (38.600.000 ₫)
+        total: 38600000,
+        status: 'Đã đặt hàng',
+        customer: { name: 'Phạm Thu D', phone: '0904 456 123', address: 'Quận Tân Bình, TP. HCM' },
+        payment: { subtotal: 38600000, shippingFee: 0, total: 38600000, method: 'Momo' },
+        items: [
+            { id: 5, name: 'Dell XPS 13 Plus (Laptop L2)', price: 38600000, qty: 1, image: 'https://via.placeholder.com/100x100/BDB76B/000000?text=Laptop+L2' },
+        ],
+        canCancel: false, canRepurchase: true, canReview: true, canReturn: true, isReviewed: false,
+    },
+    {
+        id: 'DH1005',
+        date: '2025-11-12', 
+        // Thay thế: Tấm lót bàn RGB (350k)
+        // Mới: Gaming G1 - Ghế Gaming Secretlab Titan (8.900.000 ₫)
+        total: 8900000,
+        status: 'Đã giao thành công',
+        customer: { name: 'Phạm Thu D', phone: '0904 456 123', address: 'Quận Tân Bình, TP. HCM' },
+        payment: { subtotal: 8900000, shippingFee: 0, total: 8900000, method: 'Momo' },
+        items: [
+            { id: 5, name: 'Ghế Gaming Secretlab Titan (Gaming G1)', price: 8900000, qty: 1, image: 'https://via.placeholder.com/100x100/CD5C5C/FFFFFF?text=Gaming+G1' },
+        ],
+        canCancel: false, canRepurchase: true, canReview: true, canReturn: true, isReviewed: false,
+    },
+    {
+        id: 'DH1006',
+        date: '2025-11-11',
+        // Thay thế: Chuột Logitech G102 (350k)
+        // Mới: Phone X2 - iPhone 17 (26.990.000 ₫)
+        total: 26990000,
+        status: 'Đã hủy',
+        customer: { name: 'Nguyễn Văn An', phone: '0901 234 567', address: 'Số 123, đường A, Phường B, Quận C, TP. HCM' },
+        payment: { subtotal: 26990000, shippingFee: 0, total: 26990000, method: 'Chuyển khoản' },
+        items: [
+            { id: 1, name: 'iPhone 17 (Phone X2)', price: 26990000, qty: 1, image: 'https://via.placeholder.com/100x100/B0E0E6/000000?text=Phone+X2' },
+        ],
+        canCancel: false, canRepurchase: true, canReview: false, canReturn: false, isReviewed: false,
+    },
+    {
+        id: 'DH1007',
+        date: '2025-11-01',
+        // Thay thế: Bàn phím cơ Akko 3087 (280k)
+        // Mới: Gaming G3 - Bàn phím cơ Logitech G Pro X (4.600.000 ₫)
+        total: 4600000,
+        status: 'Đang giao hàng',
+        customer: { name: 'Trần Thị B', phone: '0902 876 543', address: 'Đường Nguyễn Huệ, Quận 1, TP. HCM' },
+        payment: { subtotal: 4600000, shippingFee: 0, total: 4600000, method: 'Thanh toán khi nhận hàng (COD)' },
+        items: [
+            { id: 3, name: 'Bàn phím cơ Logitech G Pro X (Gaming G3)', price: 4600000, qty: 1, image: 'https://via.placeholder.com/100x100/87CEEB/FFFFFF?text=Gaming+G3' },
+        ],
+        canCancel: true, canRepurchase: true, canReview: false, canReturn: true, isReviewed: false,
+    },
+    {
+        id: 'DH1008',
+        date: '2025-11-15', // Mới nhất
+        // Thay thế: Chuột Logitech G102 (350k) + Tai nghe Razer Kraken (1.200.000 ₫)
+        // Mới: Laptop L1 - Macbook Pro M4 14 inch (42.000.000 ₫) + Headphone H1 - Bose QC Ultra (9.600.000 ₫)
+        total: 51600000, // 42.000.000 + 9.600.000
+        status: 'Đã đặt hàng',
+        customer: { name: 'Hoàng Văn E', phone: '0905 555 123', address: 'Quận 10, TP. HCM' },
+        payment: { subtotal: 51600000, shippingFee: 0, total: 51600000, method: 'Thẻ tín dụng' },
+        items: [
+            { id: 1, name: 'Macbook Pro M4 14 inch (Laptop L1)', price: 42000000, qty: 1, image: 'https://via.placeholder.com/100x100/ADD8E6/000000?text=Laptop+L1' },
+            { id: 4, name: 'Tai nghe chống ồn Bose QC Ultra (H1)', price: 9600000, qty: 1, image: 'https://via.placeholder.com/100x100/CD5C5C/FFFFFF?text=Headphone+H1' },
+        ],
+        canCancel: false, canRepurchase: true, canReview: false, canReturn: false, isReviewed: false,
+    },
+    {
+        id: 'DH1009',
+        date: '2025-11-14',
+        // Thay thế: Lót chuột Razer (200k)
+        // Mới: Gaming G4 - Tay cầm chơi game PS5 DualSense (1.800.000 ₫)
+        total: 1800000,
+        status: 'Đã giao thành công',
+        customer: { name: 'Nguyễn Văn An', phone: '0901 234 567', address: 'Số 123, đường A, Phường B, Quận C, TP. HCM' },
+        payment: { subtotal: 1800000, shippingFee: 0, total: 1800000, method: 'Momo' },
+        items: [
+            { id: 2, name: 'Tay cầm chơi game PS5 DualSense (G4)', price: 1800000, qty: 1, image: 'https://via.placeholder.com/100x100/F4A460/000000?text=Gaming+G4' },
+        ],
+        canCancel: false, canRepurchase: true, canReview: true, canReturn: true, isReviewed: false,
+    },
+    {
+        id: 'DH1010',
+        date: '2025-11-13',
+        // Thay thế: Bàn phím cơ Akko 3087 (280k)
+        // Mới: Laptop L4 - Lenovo Legion 5 Pro (24.000.000 ₫)
+        total: 24000000,
+        status: 'Đang giao hàng',
+        customer: { name: 'Lê Văn C', phone: '0903 123 987', address: 'Quận Bình Thạnh, TP. HCM' },
+        payment: { subtotal: 24000000, shippingFee: 0, total: 24000000, method: 'Thanh toán khi nhận hàng (COD)' },
+        items: [
+            { id: 3, name: 'Lenovo Legion 5 Pro (Laptop L4)', price: 24000000, qty: 1, image: 'https://via.placeholder.com/100x100/90EE90/000000?text=Laptop+L4' },
+        ],
+        canCancel: true, canRepurchase: true, canReview: false, canReturn: true, isReviewed: false,
+    },
 ]);
 
 // --- TÍNH NĂNG MỚI: Sắp xếp, Lọc, và Phân trang ---

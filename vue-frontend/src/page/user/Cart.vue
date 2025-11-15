@@ -6,18 +6,18 @@ const cart = ref([
   {
     id: "1",
     image_url: "#",
-    name: "Chuột gaming Logitech G102",
-    category: { id: 1, name: "Chuột máy tính" },
-    price: 350000,
+    name: "Tay cầm chơi game PS5 DualSense",
+    category: { id: 1, name: "Gaming" },
+    price: 1800000,
     stock: 80,
     qty: 2,
   },
   {
     id: "2",
     image_url: "#",
-    name: "Bàn phím cơ Akko 3087 Ocean Star",
-    category: { id: 2, name: "Bàn phím cơ" },
-    price: 1500000,
+    name: "Xiaomi 15 Pro",
+    category: { id: 2, name: "Phone" },
+    price: 14500000,
     stock: 50,
     qty: 1,
   },
@@ -27,7 +27,8 @@ const total = computed(() =>
   cart.value.reduce((sum, item) => sum + item.qty * item.price, 0)
 );
 
-const formatPrice = (v) => v.toLocaleString("vi-VN") + " ₫";
+// 🛠️ Đã sửa: Sử dụng &nbsp; cho khoảng trắng không ngắt dòng
+const formatPrice = (v) => v.toLocaleString("vi-VN") + "\u00A0₫"; // \u00A0 là ký tự Non-breaking space
 
 const removeItem = (index) => {
   cart.value.splice(index, 1);
@@ -39,7 +40,8 @@ watch(
   (newCart) => {
     newCart.forEach((item) => {
       if (item.qty < 1) item.qty = 1;
-      if (item.qty > item.stock) item.qty = item.stock;
+      // Dùng @blur trong template là đủ, watch này có thể gây giật nhẹ khi gõ liên tục
+      // if (item.qty > item.stock) item.qty = item.stock; 
     });
   },
   { deep: true }
@@ -106,6 +108,7 @@ watch(
 </template>
 
 <style scoped>
+/* Không thay đổi phần CSS */
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css');
 
 .cart-page {
