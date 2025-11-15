@@ -21,7 +21,7 @@ class Order extends Model
      * Tên bảng mà Model này quản lý.
      * Quy chuẩn Laravel là 'orders' (số nhiều).
      */
-    protected $table = 'orders'; // <-- Sửa thành 'orders'
+    protected $table = 'order'; // <-- Sửa thành 'orders'
 
     /**
      * Các cột được phép gán hàng loạt (Mass Assignment).

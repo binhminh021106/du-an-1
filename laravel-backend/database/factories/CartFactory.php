@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Models\Cart;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -10,6 +12,13 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 class CartFactory extends Factory
 {
     /**
+     * The name of the factory's corresponding model.
+     *
+     * @var string
+     */
+    protected $model = Cart::class;
+
+    /**
      * Define the model's default state.
      *
      * @return array<string, mixed>
@@ -17,7 +26,9 @@ class CartFactory extends Factory
     public function definition(): array
     {
         return [
-            //
+            // Gán cart này cho một User ngẫu nhiên.
+            // Nếu bạn dùng seeders, hãy đảm bảo bảng 'users' đã có dữ liệu.
+            'user_id' => User::factory(), 
         ];
     }
 }

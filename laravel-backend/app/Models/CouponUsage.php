@@ -12,7 +12,7 @@ use App\Models\Order;
 
 class CouponUsage extends Model
 {
-    /** @use HasFactory<\Database\Factories\CouponUsageFactory> */
+    /** @use HasFactory<\Database\Factories\CouponUsage> */
     use HasFactory;
     use SoftDeletes;
 
