@@ -9,7 +9,7 @@
       "role": "admin",
       "status": "active",
       "phone": "0123456789",
-      "address": "",
+      "address": "daklak",
       "avatar": "",
       "created_at": "2025-11-12T05:16:34.939Z"
     },
@@ -853,9 +853,9 @@
       "image_url": "",
       "slug": "tu-kinh-to",
       "author_id": 3399,
-      "status": "draft",
+      "status": "published",
       "created_at": "2025-11-13T19:50:28.354Z",
-      "updated_at": "2025-11-13T20:04:32.867Z",
+      "updated_at": "2025-11-14T04:07:43.635Z",
       "image": "https://placehold.co/400x200?text=iPhone+16",
       "date": "2025-10-25"
     },
@@ -863,11 +863,15 @@
       "id": "2",
       "title": "ASUS trình làng dòng laptop TUF 2025",
       "excerpt": "Dòng TUF mới có thiết kế nhẹ hơn và GPU RTX 5070 cực mạnh.",
-      "image": "https://placehold.co/400x200?text=ASUS+TUF+2025",
-      "date": "2025-10-20",
+      "content": "<p>aaa</p>\n",
+      "image_url": "",
+      "slug": "tu-kinh-to",
+      "author_id": 3399,
+      "status": "published",
       "created_at": "2025-11-13T19:50:28.354Z",
-      "status": "draft",
-      "updated_at": "2025-11-13T20:03:49.203Z"
+      "updated_at": "2025-11-14T04:14:17.770Z",
+      "image": "https://placehold.co/400x200?text=ASUS+TUF+2025",
+      "date": "2025-10-20"
     },
     {
       "id": "3",
@@ -876,8 +880,8 @@
       "image": "https://placehold.co/400x200?text=Fold+7",
       "date": "2025-09-30",
       "created_at": "2025-11-13T19:50:28.354Z",
-      "status": "draft",
-      "updated_at": "2025-11-13T19:50:35.620Z"
+      "status": "published",
+      "updated_at": "2025-11-14T04:14:26.970Z"
     },
     {
       "id": "4",
