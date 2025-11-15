@@ -1,11 +1,10 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-import axios from 'axios';
+import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
 // --- STATE QUẢN LÝ ---
-const API_URL = import.meta.env.VITE_API_BASE_URL;
 const products = ref([]);
 const categories = ref([]);
 const isLoading = ref(true);
@@ -96,7 +95,7 @@ async function fetchProducts() {
   try {
     // Sắp xếp theo ID mới nhất VÀ expand category để lấy về object
     // Điều này đảm bảo 'product.category.name' luôn tồn tại nếu 'category_id' có
-    const response = await axios.get(`${API_URL}/products?_sort=id&_order=desc&_expand=category`);
+    const response = await apiService.get(`/products?_sort=id&_order=desc&_expand=category`);
     products.value = response.data.map(p => ({
       ...p,
       status: p.status || 'active', // Đảm bảo status luôn tồn tại
@@ -112,7 +111,7 @@ async function fetchProducts() {
 
 async function fetchCategories() {
   try {
-    const response = await axios.get(`${API_URL}/categories?_sort=order&_order=asc`);
+    const response = await apiService.get(`/categories?_sort=order&_order=asc`);
     categories.value = response.data.filter(c => c.status === 'active'); // Chỉ lấy danh mục hoạt động
   } catch (error) {
     console.error("Lỗi khi tải danh mục:", error);
@@ -301,13 +300,13 @@ async function handleSave() {
       payload.append('_method', 'PUT');
       payload.append('images_to_delete', JSON.stringify(formData.images_to_delete));
 
-      await axios.post(`${API_URL}/products/${formData.id}`, payload, {
+      await apiService.post(`/products/${formData.id}`, payload, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       Swal.fire('Thành công', 'Đã cập nhật sản phẩm!', 'success');
     } else {
       payload.append('created_at', new Date().toISOString());
-      await axios.post(`${API_URL}/products`, payload, {
+      await apiService.post(`/products`, payload, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       Swal.fire('Thành công', 'Đã tạo sản phẩm mới!', 'success');
@@ -349,7 +348,7 @@ async function toggleStatus(product) {
   if (result.isConfirmed) {
     product.status = newStatus; // Cập nhật UI trước
     try {
-      await axios.patch(`${API_URL}/products/${product.id}`, { status: newStatus });
+      await apiService.patch(`/products/${product.id}`, { status: newStatus });
       Swal.fire('Thành công', `Đã ${newStatus === 'active' ? 'kích hoạt' : 'vô hiệu hóa'} sản phẩm.`, 'success');
     } catch (error) {
       console.error("Lỗi cập nhật trạng thái:", error);
@@ -373,7 +372,7 @@ async function handleDelete(product) {
 
   if (result.isConfirmed) {
     try {
-      await axios.delete(`${API_URL}/products/${product.id}`);
+      await apiService.delete(`/products/${product.id}`);
       Swal.fire('Đã xóa!', 'Sản phẩm đã được xóa.', 'success');
       if (paginatedProducts.value.length === 1 && currentPage.value > 1) {
         currentPage.value--;

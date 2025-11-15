@@ -204,7 +204,8 @@
       "sold_count": 980,
       "favorite_count": 520,
       "review_count": 350,
-      "average_rating": 4.8
+      "average_rating": 4.8,
+      "status": "active"
     },
     {
       "id": "102",
@@ -848,6 +849,13 @@
       "id": "1",
       "title": "Apple ra mắt iPhone 16 với chip A18 mới",
       "excerpt": "Hiệu năng tăng 20%, tiết kiệm pin hơn 15% so với thế hệ trước.",
+      "content": "<p>aaa</p>\n",
+      "image_url": "",
+      "slug": "tu-kinh-to",
+      "author_id": 3399,
+      "status": "draft",
+      "created_at": "2025-11-13T19:50:28.354Z",
+      "updated_at": "2025-11-13T20:04:32.867Z",
       "image": "https://placehold.co/400x200?text=iPhone+16",
       "date": "2025-10-25"
     },
@@ -856,21 +864,30 @@
       "title": "ASUS trình làng dòng laptop TUF 2025",
       "excerpt": "Dòng TUF mới có thiết kế nhẹ hơn và GPU RTX 5070 cực mạnh.",
       "image": "https://placehold.co/400x200?text=ASUS+TUF+2025",
-      "date": "2025-10-20"
+      "date": "2025-10-20",
+      "created_at": "2025-11-13T19:50:28.354Z",
+      "status": "draft",
+      "updated_at": "2025-11-13T20:03:49.203Z"
     },
     {
       "id": "3",
       "title": "Samsung công bố Galaxy Z Fold7",
       "excerpt": "Siêu phẩm gập với độ bền cao hơn 30%, pin dùng 2 ngày.",
       "image": "https://placehold.co/400x200?text=Fold+7",
-      "date": "2025-09-30"
+      "date": "2025-09-30",
+      "created_at": "2025-11-13T19:50:28.354Z",
+      "status": "draft",
+      "updated_at": "2025-11-13T19:50:35.620Z"
     },
     {
       "id": "4",
       "title": "Samsung Hàng mối ra mắt 2025 ",
       "excerpt": "Hàng mối ra mắt 2025",
       "image": "https://placehold.co/400x200?text=Fold+7",
-      "date": "2025-09-30"
+      "date": "2025-09-30",
+      "created_at": "2025-11-13T19:50:28.354Z",
+      "status": "draft",
+      "updated_at": "2025-11-13T19:50:36.059Z"
     }
   ]
 }

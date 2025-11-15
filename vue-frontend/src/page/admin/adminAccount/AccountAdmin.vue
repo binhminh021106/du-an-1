@@ -1,11 +1,9 @@
 <script setup>
 import { ref, reactive, onMounted, computed, nextTick, watch } from 'vue';
-import axios from 'axios';
+import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-// --- State Chung ---
-const API_URL = import.meta.env.VITE_API_BASE_URL;
 const users = ref([]); // Chỉ chứa admin/nhanvien (không chứa user)
 const isLoading = ref(true);
 const searchQuery = ref('');
@@ -143,7 +141,7 @@ async function fetchUsers() {
   isLoading.value = true;
   try {
     // Gọi /users và lọc ra những ai KHÔNG PHẢI 'user'
-    const response = await axios.get(`${API_URL}/users?role_ne=user`);
+    const response = await apiService.get(`/users?role_ne=user`);
 
     users.value = response.data.map(user => ({
       ...user,
@@ -249,11 +247,11 @@ async function handleSave() {
 
   try {
     if (isEditMode.value) {
-      await axios.patch(`${API_URL}/users/${formData.id}`, payload);
+      await apiService.patch(`/users/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật người dùng!', 'success');
     } else {
       payload.created_at = new Date().toISOString();
-      await axios.post(`${API_URL}/users`, payload);
+      await apiService.post(`/users`, payload);
       Swal.fire('Thành công', 'Đã tạo người dùng mới!', 'success');
     }
     userModalInstance.value.hide();
@@ -284,7 +282,7 @@ async function toggleUserStatus(user) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      await axios.patch(`${API_URL}/users/${user.id}`, { status: newStatus });
+      await apiService.patch(`/users/${user.id}`, { status: newStatus });
       Swal.fire('Thành công!', `Đã ${actionText} người dùng ${user.username}.`, 'success');
       user.status = newStatus; // Cập nhật UI
     } catch (error) {
@@ -311,7 +309,7 @@ async function handleDelete(user) {
 
   if (result.isConfirmed) {
     try {
-      await axios.delete(`${API_URL}/users/${user.id}`);
+      await apiService.delete(`/users/${user.id}`);
       Swal.fire('Đã xóa!', 'Người dùng đã được xóa.', 'success');
       fetchUsers();
     } catch (error) {
@@ -324,7 +322,7 @@ async function handleDelete(user) {
 // --- CRUD Vai trò ---
 async function fetchRoles() {
   try {
-    const response = await axios.get(`${API_URL}/roles`);
+    const response = await apiService.get(`/roles`);
     roles.value = response.data;
   } catch (error) {
     console.error("Lỗi khi tải danh sách vai trò:", error);
@@ -394,10 +392,10 @@ async function handleSaveRole() {
   };
   try {
     if (isRoleEditMode.value) {
-      await axios.put(`${API_URL}/roles/${roleFormData.id}`, payload);
+      await apiService.put(`/roles/${roleFormData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật vai trò!', 'success');
     } else {
-      await axios.post(`${API_URL}/roles`, payload);
+      await apiService.post(`/roles`, payload);
       Swal.fire('Thành công', 'Đã tạo vai trò mới!', 'success');
     }
     roleModalInstance.value.hide();
@@ -425,7 +423,7 @@ async function handleDeleteRole(role) {
   });
   if (result.isConfirmed) {
     try {
-      await axios.delete(`${API_URL}/roles/${role.id}`);
+      await apiService.delete(`/roles/${role.id}`);
       Swal.fire('Đã xóa!', 'Vai trò đã được xóa.', 'success');
       fetchRoles();
     } catch (error) {

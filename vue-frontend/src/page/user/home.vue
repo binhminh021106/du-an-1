@@ -1,3 +1,115 @@
+<script setup>
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import apiService from '../../apiService.js';
+// SỬA ĐỔI: Thêm import Vue Router để sử dụng trong script (nếu cần logic điều hướng phức tạp)
+import { useRouter } from 'vue-router'; 
+
+// Khởi tạo router
+const router = useRouter();
+
+// State
+const categories = ref([]);
+const slides = ref([]);
+const products = ref([]);
+const users = ref([]);
+const newsList = ref([]);
+const roles = ref([]);
+const activeCategoryId = ref(null); // Giữ lại để quản lý trạng thái active CSS
+const currentSlide = ref(0);
+let interval = null;
+
+// ... (Các hàm fetchData, computed properties, slider logic giữ nguyên) ...
+
+// --- FETCH DATA ---
+const fetchData = async () => {
+    try {
+        const [catRes, slideRes, prodRes, userRes, newsRes, rolesRes] = await Promise.all([
+            apiService.get(`/categories?_sort=order&_order=asc&status=active`),
+            apiService.get(`/slides`),
+            apiService.get(`/products`),
+            // SỬA ĐỔI: Thay đổi endpoint từ 'account_admin' thành 'users?role_ne=user'
+            apiService.get(`/users?role_ne=user`),
+            apiService.get(`/news`),
+            apiService.get(`/roles`)
+        ]);
+
+        categories.value = catRes.data;
+        slides.value = slideRes.data;
+        products.value = prodRes.data;
+        users.value = userRes.data;
+        newsList.value = newsRes.data;
+        roles.value = rolesRes.data;
+
+    } catch (err) {
+        console.error("Lỗi tải dữ liệu:", err);
+    }
+};
+
+// --- COMPUTED PROPERTIES ---
+const topFavoriteProducts = computed(() => {
+    return [...products.value]
+        .sort((a, b) => (b.favorite_count || 0) - (a.favorite_count || 0))
+        .slice(0, 8);
+});
+
+const categoriesWithProducts = computed(() => {
+    return categories.value.map(category => {
+        const categoryProducts = products.value.filter(p =>
+            String(p.category?.id) === String(category.id)
+        );
+        return {
+            ...category,
+            products: categoryProducts.slice(0, 8)
+        };
+    }).filter(category => category.products.length > 0);
+});
+
+// --- SLIDER LOGIC ---
+const startAutoSlide = () => {
+    if (!slides.value.length) return;
+    clearInterval(interval);
+    interval = setInterval(() => {
+        currentSlide.value = (currentSlide.value + 1) % slides.value.length;
+    }, 4000);
+};
+const stopAutoSlide = () => clearInterval(interval);
+const nextSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.value + 1) % slides.value.length; };
+const prevSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.value - 1 + slides.value.length) % slides.value.length; };
+const goToSlide = (index) => { stopAutoSlide(); currentSlide.value = index; };
+
+
+// --- HELPER FUNCTIONS ---
+
+// SỬA ĐỔI: Chỉ giữ lại việc gán activeCategoryId để CSS vẫn hoạt động nếu cần.
+// Việc điều hướng đã được xử lý bởi <router-link>
+const setActiveCategory = (id) => { activeCategoryId.value = String(id); }; 
+
+const getUserRoleLabel = (roleValue) => {
+    if (!roles.value.length) return roleValue || 'Khách';
+    const role = roles.value.find(r => r.value === roleValue);
+    return role ? role.label : 'Khách';
+};
+
+const getMinPrice = (variants) => {
+    if (!variants || !variants.length) return 0;
+    return Math.min(...variants.map(v => v.price));
+};
+const formatCurrency = (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+
+// --- ACTIONS ---
+const openQuickView = (product) => { alert(`Xem nhanh: ${product.name}`); };
+const addToCart = (product) => { alert(`Đã thêm vào giỏ: ${product.name}`); };
+
+
+// --- LIFECYCLE HOOKS ---
+onMounted(async () => {
+    await fetchData();
+    startAutoSlide();
+});
+onBeforeUnmount(stopAutoSlide);
+</script>
+
+
 <template>
     <div id="app">
         <main class="container">
@@ -146,118 +258,6 @@
             </section> </main>
     </div>
 </template>
-
-<script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
-import axios from 'axios';
-// SỬA ĐỔI: Thêm import Vue Router để sử dụng trong script (nếu cần logic điều hướng phức tạp)
-import { useRouter } from 'vue-router'; 
-
-const API_URL = 'http://localhost:3000';
-// Khởi tạo router
-const router = useRouter();
-
-// State
-const categories = ref([]);
-const slides = ref([]);
-const products = ref([]);
-const users = ref([]);
-const newsList = ref([]);
-const roles = ref([]);
-const activeCategoryId = ref(null); // Giữ lại để quản lý trạng thái active CSS
-const currentSlide = ref(0);
-let interval = null;
-
-// ... (Các hàm fetchData, computed properties, slider logic giữ nguyên) ...
-
-// --- FETCH DATA ---
-const fetchData = async () => {
-    try {
-        const [catRes, slideRes, prodRes, userRes, newsRes, rolesRes] = await Promise.all([
-            axios.get(`${API_URL}/categories?_sort=order&_order=asc&status=active`),
-            axios.get(`${API_URL}/slides`),
-            axios.get(`${API_URL}/products`),
-            // SỬA ĐỔI: Thay đổi endpoint từ 'account_admin' thành 'users?role_ne=user'
-            axios.get(`${API_URL}/users?role_ne=user`),
-            axios.get(`${API_URL}/news`),
-            axios.get(`${API_URL}/roles`)
-        ]);
-
-        categories.value = catRes.data;
-        slides.value = slideRes.data;
-        products.value = prodRes.data;
-        users.value = userRes.data;
-        newsList.value = newsRes.data;
-        roles.value = rolesRes.data;
-
-    } catch (err) {
-        console.error("Lỗi tải dữ liệu:", err);
-    }
-};
-
-// --- COMPUTED PROPERTIES ---
-const topFavoriteProducts = computed(() => {
-    return [...products.value]
-        .sort((a, b) => (b.favorite_count || 0) - (a.favorite_count || 0))
-        .slice(0, 8);
-});
-
-const categoriesWithProducts = computed(() => {
-    return categories.value.map(category => {
-        const categoryProducts = products.value.filter(p =>
-            String(p.category?.id) === String(category.id)
-        );
-        return {
-            ...category,
-            products: categoryProducts.slice(0, 8)
-        };
-    }).filter(category => category.products.length > 0);
-});
-
-// --- SLIDER LOGIC ---
-const startAutoSlide = () => {
-    if (!slides.value.length) return;
-    clearInterval(interval);
-    interval = setInterval(() => {
-        currentSlide.value = (currentSlide.value + 1) % slides.value.length;
-    }, 4000);
-};
-const stopAutoSlide = () => clearInterval(interval);
-const nextSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.value + 1) % slides.value.length; };
-const prevSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.value - 1 + slides.value.length) % slides.value.length; };
-const goToSlide = (index) => { stopAutoSlide(); currentSlide.value = index; };
-
-
-// --- HELPER FUNCTIONS ---
-
-// SỬA ĐỔI: Chỉ giữ lại việc gán activeCategoryId để CSS vẫn hoạt động nếu cần.
-// Việc điều hướng đã được xử lý bởi <router-link>
-const setActiveCategory = (id) => { activeCategoryId.value = String(id); }; 
-
-const getUserRoleLabel = (roleValue) => {
-    if (!roles.value.length) return roleValue || 'Khách';
-    const role = roles.value.find(r => r.value === roleValue);
-    return role ? role.label : 'Khách';
-};
-
-const getMinPrice = (variants) => {
-    if (!variants || !variants.length) return 0;
-    return Math.min(...variants.map(v => v.price));
-};
-const formatCurrency = (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-
-// --- ACTIONS ---
-const openQuickView = (product) => { alert(`Xem nhanh: ${product.name}`); };
-const addToCart = (product) => { alert(`Đã thêm vào giỏ: ${product.name}`); };
-
-
-// --- LIFECYCLE HOOKS ---
-onMounted(async () => {
-    await fetchData();
-    startAutoSlide();
-});
-onBeforeUnmount(stopAutoSlide);
-</script>
 
 <style scoped>
 :root {

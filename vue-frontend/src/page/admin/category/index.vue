@@ -1,11 +1,10 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-import axios from 'axios';
+import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
 // --- CẤU HÌNH & STATE ---
-const API_URL = import.meta.env.VITE_API_BASE_URL;
 const isLoading = ref(true);
 const isEditMode = ref(false);
 const categories = ref([]);
@@ -158,7 +157,7 @@ function openViewModal(category) {
 async function fetchCategories() {
   isLoading.value = true;
   try {
-    const response = await axios.get(`${API_URL}/categories?_sort=order&_order=asc`);
+    const response = await apiService.get(`/categories?_sort=order&_order=asc`);
     // Gán thêm created_at nếu chưa có
     categories.value = response.data.map(cat => ({
       ...cat,
@@ -225,11 +224,11 @@ async function handleSave() {
 
   try {
     if (isEditMode.value) {
-      await axios.put(`${API_URL}/categories/${formData.id}`, payload);
+      await apiService.put(`/categories/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật danh mục!', 'success');
     } else {
       payload.created_at = new Date().toISOString();
-      await axios.post(`${API_URL}/categories`, payload);
+      await apiService.post(`/categories`, payload);
       Swal.fire('Thành công', 'Đã tạo danh mục mới!', 'success');
     }
     modalInstance.value.hide();
@@ -265,7 +264,7 @@ async function toggleStatus(category) {
   if (result.isConfirmed) {
     category.status = newStatus;
     try {
-      await axios.patch(`${API_URL}/categories/${category.id}`, { status: newStatus });
+      await apiService.patch(`/categories/${category.id}`, { status: newStatus });
       Swal.fire('Thành công', `Đã ${newStatus === 'active' ? 'kích hoạt' : 'vô hiệu hóa'} danh mục.`, 'success');
     } catch (error) {
       console.error("Lỗi cập nhật trạng thái:", error);
@@ -292,7 +291,7 @@ async function handleDelete(category) {
 
   if (result.isConfirmed) {
     try {
-      await axios.delete(`${API_URL}/categories/${category.id}`);
+      await apiService.delete(`/categories/${category.id}`);
       Swal.fire('Đã xóa!', 'Danh mục đã bị xóa.', 'success');
       // Nếu trang hiện tại trống sau khi xóa, lùi về trang trước
       if (paginatedCategories.value.length === 1 && currentPage.value > 1) {
