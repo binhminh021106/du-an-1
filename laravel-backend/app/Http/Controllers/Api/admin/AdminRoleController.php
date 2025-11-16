@@ -4,18 +4,18 @@ namespace App\Http\Controllers\Api\admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Product;
+use App\Models\Role;
 
-class AdminProductController extends Controller
+class AdminRoleController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
     public function index()
     {
-        $producs = Product::all();
+        $roles = Role::all();
 
-        return response()->json($producs);
+        return response()->json($roles);
     }
 
     /**
@@ -31,9 +31,9 @@ class AdminProductController extends Controller
      */
     public function show(string $id)
     {
-        $product = Product::findOrFail($id);
+        $role = Role::findOrFail($id);
 
-        return response()->json($product);
+        return response()->json($role);
     }
 
     /**

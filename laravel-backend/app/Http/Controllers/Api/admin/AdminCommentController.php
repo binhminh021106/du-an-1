@@ -4,18 +4,18 @@ namespace App\Http\Controllers\Api\admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Product;
+use App\Models\Comment;
 
-class AdminProductController extends Controller
+class AdminCommentController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
     public function index()
     {
-        $producs = Product::all();
+        $comments = Comment::all();
 
-        return response()->json($producs);
+        return response()->json($comments);
     }
 
     /**
@@ -31,9 +31,9 @@ class AdminProductController extends Controller
      */
     public function show(string $id)
     {
-        $product = Product::findOrFail($id);
+        $comment = Comment::findOrFail($id);
 
-        return response()->json($product);
+        return response()->json($comment);
     }
 
     /**
