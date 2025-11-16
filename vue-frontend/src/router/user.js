@@ -36,7 +36,7 @@ const users = [
       {
         path: "login",
         name: "login",
-        component: () => import("../page/user/Login.vue"),
+        component: () => import("../page/user/login.vue"),
       },
       {
         path: "/policy",
