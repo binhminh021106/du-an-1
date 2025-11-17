@@ -129,6 +129,15 @@
       "address": "",
       "avatar": "",
       "created_at": "2025-11-12T05:16:34.939Z"
+    },
+    {
+      "id": "5aff",
+      "username": "minhdeony12334",
+      "name": "NGUYEN TRAN BINH MINH",
+      "email": "minhdzwama211@gmail.com",
+      "phone": "0358090730",
+      "password": "Binhminh@123",
+      "role": "user"
     }
   ],
   "users": [

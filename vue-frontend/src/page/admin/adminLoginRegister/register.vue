@@ -7,14 +7,17 @@ import { useRouter } from 'vue-router';
 const router = useRouter();
 
 const formData = reactive({
+    fullName: '',
     username: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: '',
-    role: 'nhanvien'
 });
 
 const errors = reactive({
+    fullName: '',
+    phone: '',
     username: '',
     email: '',
     password: '',
@@ -42,6 +45,11 @@ const validateForm = () => {
     let isValid = true;
     const re = /^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]+$/;
 
+    if (!formData.fullName.trim()) {
+        errors.fullName = 'Vui lòng nhập họ tên.';
+        isValid = false;
+    }
+
     if (!formData.username.trim()) {
         errors.username = 'Vui lòng nhập tên hiển thị.';
         isValid = false;
@@ -55,6 +63,11 @@ const validateForm = () => {
         isValid = false;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
         errors.email = 'Email không đúng định dạng.';
+        isValid = false;
+    }
+
+     if (!formData.phone.trim()) {
+        errors.phone = 'Vui lòng nhập số điện thoại.';
         isValid = false;
     }
 
@@ -88,13 +101,14 @@ const handleRegister = async () => {
     isLoading.value = true;
     const payload = {
         username: formData.username,
+        fullName: formData.fullName,
+        phone: formData.phone,
         email: formData.email,
         password: formData.password,
-        role: formData.role,
     };
 
     try {
-        const res = await apiService.post(`/users`, payload);
+        const res = await apiService.post(`/admin/users`, payload);
         if (res.status === 201 || res.status === 200) {
             Swal.fire({
                 icon: 'success',
@@ -103,7 +117,7 @@ const handleRegister = async () => {
                 confirmButtonText: 'Đăng nhập ngay',
             }).then(() => {
                 router.push({ name: 'admin-login' });
-                Object.assign(formData, { username: '', email: '', password: '', confirmPassword: '' });
+                Object.assign(formData, { fullName: '', phone: '', username: '', email: '', password: '', confirmPassword: '' });
                 agreedToTerms.value = false;
             });
         }
@@ -125,7 +139,7 @@ const handleRegister = async () => {
     } finally {
         isLoading.value = false;
     }
-};
+}
 
 </script>
 
@@ -154,6 +168,18 @@ const handleRegister = async () => {
                             <form @submit.prevent="handleRegister">
 
                                 <div class="mb-3">
+                                    <label for="registerFullname" class="form-label">Họ tên</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
+                                        <input id="registerUsername" type="text" v-model="formData.fullName"
+                                            placeholder="VD: abc123"
+                                            :class="['form-control', errors.fullName ? 'is-invalid' : '']" />
+                                    </div>
+                                    <div v-if="errors.fullName" class="invalid-feedback d-block">{{ errors.fullName }}
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
                                     <label for="registerUsername" class="form-label">Tên hiển thị</label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
@@ -174,6 +200,18 @@ const handleRegister = async () => {
                                             :class="['form-control', errors.email ? 'is-invalid' : '']" />
                                     </div>
                                     <div v-if="errors.email" class="invalid-feedback d-block">{{ errors.email }}</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="registerphone" class="form-label">Số điện thoại</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
+                                        <input id="registerphone" type="text" v-model="formData.phone"
+                                            placeholder="VD: 0123456789"
+                                            :class="['form-control', errors.phone ? 'is-invalid' : '']" />
+                                    </div>
+                                    <div v-if="errors.phone" class="invalid-feedback d-block">{{ errors.phone }}
+                                    </div>
                                 </div>
 
                                 <div class="mb-3">

@@ -2,7 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\PdfController;
+
 // Client
 use App\Http\Controllers\Api\Client\ProductController;
 use App\Http\Controllers\Api\Client\CategoryController;
@@ -18,11 +18,23 @@ use App\Http\Controllers\Api\Client\UserAddressController;
 use App\Http\Controllers\Api\Client\RoleController;
 use App\Http\Controllers\Api\Client\CartController;
 use App\Http\Controllers\Api\Client\OrderController;
+
 // admin
 use App\Http\Controllers\Api\admin\AdminProductController;
+use App\Http\Controllers\Api\admin\AdminCategoryController;
+use App\Http\Controllers\Api\admin\AdminUserController;
+use App\Http\Controllers\Api\admin\AdminVariantController;
+use App\Http\Controllers\Api\admin\AdminCommentController;
+use App\Http\Controllers\Api\admin\AdminCouponController;
+use App\Http\Controllers\Api\admin\AdminImageProductController;
+use App\Http\Controllers\Api\admin\AdminNewController;
+use App\Http\Controllers\Api\admin\AdminOrderController;
+use App\Http\Controllers\Api\admin\AdminReviewController; 
+use App\Http\Controllers\Api\admin\AdminRoleController; 
+use App\Http\Controllers\Api\admin\AdminSlideController; 
+use App\Http\Controllers\Api\admin\AminAccountController; 
 
 // client
-Route::get('/generate-pdf', [PdfController::class, 'generatePDF']);
 
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
@@ -68,11 +80,49 @@ Route::get('/order/{id}', [OrderController::class, 'show']);
 
 Route::group([
     'prefix' => 'admin',
-    'middleware' => 'auth:sanctum'
+    // 'middleware' => 'auth:sanctum'
 ], function () {
 
     Route::get('/products', [AdminProductController::class, 'index']);
-    Route::get('/products/{id}', [AdminProductController::class, 'show']);
+    Route::get('/product/{id}', [AdminProductController::class, 'show']);
 
-    // ... các route admin khác ...
+    Route::get('/categories', [AdminCategoryController::class, 'index']);
+    Route::get('/category/{id}', [AdminCategoryController::class, 'show']);
+
+    Route::get('/users', [AdminUserController::class, 'index']);
+    Route::get('/user/{id}', [AdminUserController::class, 'show']);
+
+    Route::get('/variants', [AdminVariantController::class, 'index']);
+    Route::get('/variant/{id}', [AdminVariantController::class, 'show']);
+
+    Route::get('/comments', [AdminCommentController::class, 'index']);
+    Route::get('/comment/{id}', [AdminCommentController::class, 'show']);
+
+    Route::get('/coupons', [AdminCouponController::class, 'index']);
+    Route::get('/coupon/{id}', [AdminCouponController::class, 'show']);
+
+    Route::get('/imageProducts', [AdminImageProductController::class, 'index']);
+    Route::get('/imageProduct/{id}', [AdminImageProductController::class, 'show']);
+
+    Route::get('/news', [AdminNewController::class, 'index']);
+    Route::get('/new/{id}', [AdminNewController::class, 'show']);
+
+    Route::get('/orders', [AdminOrderController::class, 'index']);
+    Route::get('/order/{id}', [AdminOrderController::class, 'show']);
+
+    Route::get('/reviews', [AdminReviewController::class, 'index']);
+    Route::get('/review/{id}', [AdminReviewController::class, 'show']);
+
+    Route::get('/roles', [AdminRoleController::class, 'index']);
+    Route::get('/role/{id}', [AdminRoleController::class, 'show']);
+
+    Route::get('/slides', [AdminSlideController::class, 'index']);
+    Route::get('/slide/{id}', [AdminSlideController::class, 'show']);
+
+    Route::get('/admins', [AminAccountController::class, 'index']);
+    Route::get('/admin/{id}', [AminAccountController::class, 'show']);
+});
+
+Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
+    return $request->user();
 });
