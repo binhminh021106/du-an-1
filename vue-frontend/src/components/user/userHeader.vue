@@ -1,82 +1,7 @@
-<template>
-  <header class="site-header">
-    <div class="top-bar">
-      <div class="container">
-        <div class="top-bar-links">
-          <ul>
-            <li><router-link :to="{name: 'admin-login'}">Kênh Người Bán</router-link></li>
-            <li><router-link :to="{name: 'wishlist'}">Yêu thích</router-link></li>
-            <li><a href="#">Kết nối</a></li>
-            <li><router-link :to="{name: 'policy'}">Chính sách</router-link></li>
-            <li><router-link :to="{name: 'contact'}">Liên hệ</router-link></li>
-            <li><router-link :to="{name: 'FAQ'}">FAQ</router-link></li>
-            <li><router-link :to="{name: 'blog'}">Blog/Tin tức</router-link></li>
-          </ul>
-        </div>
-        <div class="top-bar-info">
-          <ul>
-            <li><a href="#"><i class="fa-regular fa-bell"></i> Thông báo</a></li>
-            <li><a href="#"><i class="fa-regular fa-circle-question"></i> Hỗ trợ</a></li>
-          </ul>
-        </div>
-      </div>
-    </div>
-
-    <div class="main-header">
-      <div class="container relative-container">
-
-        <router-link :to="{name: 'home'}" class="logo">
-          <img src="../img/LogoThinkHub.png" alt="ThinkHub Logo" @error="$event.target.style.display = 'none'">
-        </router-link>
-
-        <div class="side-menu-container" ref="menuContainer">
-          <button @click="toggleMenu" class="category-button">
-            <i class="fa-solid fa-bars"></i>
-            <span>Danh mục</span>
-          </button>
-
-          <div class="dropdown-menu" :class="{ active: isMenuActive }">
-            <ul class="menu-list" v-if="categories.length">
-              <li v-for="category in categories" :key="category.id">
-                <router-link :to="'/Shop?categoryId=' + category.id">
-                  <span v-html="category.icon" class="icon-placeholder"></span>
-                  {{ category.name }}
-                </router-link>
-              </li>
-            </ul>
-            <div v-else class="p-3 text-center text-muted small">Đang tải danh mục...</div>
-          </div>
-        </div>
-
-        <form class="search-bar" @submit.prevent="handleSearch">
-          <input type="text" placeholder="Tìm kiếm sản phẩm trên ThinkHub..." v-model="searchQuery">
-          <button type="submit" class="search-btn">
-            <i class="fa-solid fa-magnifying-glass"></i>
-          </button>
-        </form>
-
-        <div class="header-actions">
-          <router-link :to="{name: 'cart'}" class="action-item side-menu-container">
-            <i class="fa-solid fa-cart-shopping"></i>
-            <span>Giỏ hàng</span>
-          </router-link>
-          <router-link :to="{name: 'login'}" class="action-item login-btn">
-            <i class="fa-regular fa-user"></i>
-            <span>Đăng nhập</span>
-          </router-link>
-        </div>
-
-      </div>
-    </div>
-  </header>
-</template>
-
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios'; // Import Axios
-
-const API_URL = 'http://localhost:3000'; // Đảm bảo URL này đúng với JSON Server của bạn
+import apiService from '../../apiService'
 
 const router = useRouter();
 const isMenuActive = ref(false);
@@ -88,13 +13,13 @@ const categories = ref([]);
 
 // Fetch data
 const fetchCategories = async () => {
-    try {
-        // Lấy danh mục, chỉ lấy các danh mục "active" và sắp xếp theo "order"
-        const response = await axios.get(`${API_URL}/categories?status=active&_sort=order&_order=asc`);
-        categories.value = response.data;
-    } catch (error) {
-        console.error("Lỗi khi tải danh mục:", error);
-    }
+  try {
+    // Lấy danh mục, chỉ lấy các danh mục "active" và sắp xếp theo "order"
+    const response = await apiService.get(`/categories`);
+    categories.value = response.data;
+  } catch (error) {
+    console.error("Lỗi khi tải danh mục:", error);
+  }
 };
 
 // Bật tắt menu
@@ -128,8 +53,80 @@ onUnmounted(() => {
 });
 </script>
 
-<style scoped>
+<template>
+  <header class="site-header">
+    <div class="top-bar">
+      <div class="container">
+        <div class="top-bar-links">
+          <ul>
+            <li><router-link :to="{ name: 'admin-login' }">Kênh Người Bán</router-link></li>
+            <li><router-link :to="{ name: 'wishlist' }">Yêu thích</router-link></li>
+            <li><a href="#">Kết nối</a></li>
+            <li><router-link :to="{ name: 'policy' }">Chính sách</router-link></li>
+            <li><router-link :to="{ name: 'contact' }">Liên hệ</router-link></li>
+            <li><router-link :to="{ name: 'FAQ' }">FAQ</router-link></li>
+            <li><router-link :to="{ name: 'blog' }">Blog/Tin tức</router-link></li>
+          </ul>
+        </div>
+        <div class="top-bar-info">
+          <ul>
+            <li><a href="#"><i class="fa-regular fa-bell"></i> Thông báo</a></li>
+            <li><a href="#"><i class="fa-regular fa-circle-question"></i> Hỗ trợ</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
 
+    <div class="main-header">
+      <div class="container relative-container">
+
+        <router-link :to="{ name: 'home' }" class="logo">
+          <img src="../img/LogoThinkHub.png" alt="ThinkHub Logo" @error="$event.target.style.display = 'none'">
+        </router-link>
+
+        <div class="side-menu-container" ref="menuContainer">
+          <button @click="toggleMenu" class="category-button">
+            <i class="fa-solid fa-bars"></i>
+            <span>Danh mục</span>
+          </button>
+
+          <div class="dropdown-menu" :class="{ active: isMenuActive }">
+            <ul class="menu-list" v-if="categories.length">
+              <li v-for="category in categories" :key="category.id">
+                <router-link :to="'/Shop?categoryId=' + category.id">
+                  <span v-html="category.icon" class="icon-placeholder"></span>
+                  {{ category.name }}
+                </router-link>
+              </li>
+            </ul>
+            <div v-else class="p-3 text-center text-muted small">Đang tải danh mục...</div>
+          </div>
+        </div>
+
+        <form class="search-bar" @submit.prevent="handleSearch">
+          <input type="text" placeholder="Tìm kiếm sản phẩm trên ThinkHub..." v-model="searchQuery">
+          <button type="submit" class="search-btn">
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </button>
+        </form>
+
+        <div class="header-actions">
+          <router-link :to="{ name: 'cart' }" class="action-item side-menu-container">
+            <i class="fa-solid fa-cart-shopping"></i>
+            <span>Giỏ hàng</span>
+          </router-link>
+          <router-link :to="{ name: 'login' }" class="action-item login-btn">
+            <i class="fa-regular fa-user"></i>
+            <span>Đăng nhập</span>
+          </router-link>
+        </div>
+
+      </div>
+    </div>
+  </header>
+</template>
+
+<style scoped>
 :root {
   --primary-color: #009981;
   --primary-light: #DBF9EB;
@@ -268,15 +265,16 @@ ul {
 
 /* Đảm bảo icon có khoảng cách và màu sắc */
 .icon-placeholder {
-    width: 25px;
-    text-align: center;
-    color: #999;
-    font-size: 16px; /* Kích thước icon */
-    display: inline-block;
+  width: 25px;
+  text-align: center;
+  color: #999;
+  font-size: 16px;
+  /* Kích thước icon */
+  display: inline-block;
 }
 
 .menu-list li a:hover .icon-placeholder {
-    color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 
