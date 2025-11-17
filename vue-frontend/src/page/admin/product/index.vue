@@ -25,7 +25,7 @@ const viewingProduct = ref({
   sold_count: 0,
   favorite_count: 0,
   review_count: 0,
-  average_rating: 0.0 
+  average_rating: 0.0  
 });
 
 // State Tìm kiếm & Phân trang
@@ -34,16 +34,16 @@ const currentPage = ref(1);
 const itemsPerPage = ref(10);
 
 // STATE MỚI ĐỂ SẮP XẾP
-const sortCriteria = ref('id-desc'); // Giá trị mặc định: Mới nhất
+const sortCriteria = ref('product_id-desc');  
 
 // Dữ liệu cho form sản phẩm
 const formData = reactive({
-  id: null,
+  id: null, // Sẽ lưu 'id' của json-server (ví dụ: "587a")
   name: '',
   description: '',
   category_id: null,
   status: 'active',
-  attribute_definitions: reactive([]), 
+  attribute_definitions: reactive([]),  
   variants: reactive([]),
   existing_images: reactive([]),
   new_images: [],
@@ -62,13 +62,6 @@ const errors = reactive({
   variants: '',
   attributes: ''
 });
-
-// --- BƯỚC 2: XÓA BỎ mockDb VÀ apiService GIẢ LẬP ---
-// (Toàn bộ các đối tượng mockDb và apiService giả đã bị xóa)
-
-
-// --- BƯỚC 3: TẠO apiService THẬT VỚI AXIOS ---
-// Trỏ đến server đang chạy của bạn: http://localhost:3000
 const apiService = axios.create({
   baseURL: 'http://localhost:3000',
   headers: {
@@ -76,9 +69,15 @@ const apiService = axios.create({
   }
 });
 
+// --- HELPER FUNCTION: Tạo ID ngắn cho json-server ---
+function generateShortId() {
+  // Tạo chuỗi 4-6 ký tự ngẫu nhiên để mô phỏng ID ngắn của json-server  
+  // và tránh lỗi định tuyến với UUID quá dài.
+  return Math.random().toString(36).substring(2, 8);
+}
+
 
 // --- COMPUTED ---
-// (Không thay đổi)
 const filteredProducts = computed(() => {
   // 1. Lọc (Filtering)
   const query = searchQuery.value.toLowerCase().trim();
@@ -95,30 +94,31 @@ const filteredProducts = computed(() => {
   const [key, order] = sortCriteria.value.split('-');
   
   // Tạo một bản sao để sắp xếp, tránh thay đổi 'products' gốc
-  const sorted = [...filtered]; 
+  const sorted = [...filtered];  
 
   sorted.sort((a, b) => {
     let valA, valB;
 
-    // Lấy giá trị để so sánh
+    // Lấy giá trị để so sánh. Dùng product_id thay vì id.
     switch (key) {
       case 'name':
         valA = a.name.toLowerCase();
         valB = b.name.toLowerCase();
         break;
       case 'price':
-        // Sắp xếp theo giá của biến thể đầu tiên
-        valA = a.variants[0]?.price || 0;
-        valB = b.variants[0]?.price || 0;
+        valA = getMinPrice(a.variants);
+        valB = getMinPrice(b.variants);
         break;
       case 'created_at':
         valA = new Date(a.created_at);
         valB = new Date(b.created_at);
         break;
-      case 'id':
+      case 'product_id':
       default:
-        valA = a.id;
-        valB = b.id;
+        // Đảm bảo so sánh số hoặc chuỗi ID
+        // Vẫn sắp xếp theo product_id (nghiệp vụ)
+        valA = a.product_id;
+        valB = b.product_id;
         break;
     }
 
@@ -147,22 +147,19 @@ const paginatedProducts = computed(() => {
   return filteredProducts.value.slice(start, end);
 });
 
-// --- WATCHERS ---
-// (Không thay đổi)
 watch(searchQuery, () => {
-  currentPage.value = 1; 
+  currentPage.value = 1;  
 });
 
 // THÊM WATCHER CHO SẮP XẾP
 watch(sortCriteria, () => {
-  currentPage.value = 1; // Reset về trang 1 khi đổi sắp xếp
+  currentPage.value = 1;  
 });
 
-// --- VÒNG ĐỜI (LIFECYCLE) ---
-// (Không thay đổi)
-onMounted(() => {
-  fetchProducts();
-  fetchCategories();
+onMounted(async () => {
+  await fetchCategories(); // Đảm bảo có danh mục TRƯỚC KHI tải SP
+  fetchProducts();         // Giờ mới tải sản phẩm
+  
   if (modalRef.value) {
     modalInstance.value = new Modal(modalRef.value, { backdrop: 'static' });
   }
@@ -171,27 +168,80 @@ onMounted(() => {
   }
 });
 
-// --- CÁC HÀM TẢI DỮ LIỆU (ĐÃ CẬP NHẬT) ---
 
 async function fetchProducts() {
   isLoading.value = true;
   try {
-    // BƯỚC 4.1: SỬA HÀM GET SẢN PHẨM
-    // Sử dụng _expand và _embed của json-server để lấy tất cả dữ liệu liên quan
-    // `_expand=category` -> Lấy 1 đối tượng category
-    // `_embed=variants` -> Lấy mảng variants
-    // `_embed=images` -> Lấy mảng images
-    const response = await apiService.get(`/products?_sort=id&_order=desc&_expand=category&_embed=variants&_embed=images`);
+    // BƯỚC 1: Lấy danh sách sản phẩm
+    // json-server cần _sort theo khóa chính, ở đây là "id" (hoặc "product_id" nếu cấu hình lại)
+    const [productsRes, variantsRes, imagesRes] = await Promise.all([
+      apiService.get('/products'),  
+      apiService.get('/variants'),  
+      apiService.get('/images')  
+    ]);
+
+    const rawProducts = productsRes.data;
+    const allCategories = categories.value;
+    const allVariants = variantsRes.data;
+    const allImages = imagesRes.data;
+
+    // BƯỚC 2: Nhúng (embed) thủ công Categories, Variants, Images
+    products.value = rawProducts.map(p => {
+      // 1. Nhúng Category (dùng category_id)
+      const category = allCategories.find(c => c.category_id === p.category_id);
+      
+      // 2. Nhúng Variants (dùng product_id)
+      // Dùng == để so sánh số/chuỗi (ví dụ product_id 1 == "1")
+      const productVariants = allVariants.filter(v => v.product_id == p.product_id); 
+      
+      // 3. Nhúng Images (dùng product_id)
+      const productImages = allImages.filter(img => img.product_id == p.product_id);
+      
+      // Khởi tạo các trường cần thiết nếu API không có
+      const defaultData = {
+        sold_count: 0,
+        favorite_count: 0,
+        review_count: 0,
+        average_rating: 0.0,
+        status: 'active',
+        created_at: new Date().toISOString(),
+      };
+
+      // *** SỬA LOGIC ID ***
+      // p.id LÀ ID THẬT CỦA JSON-SERVER (ví dụ: "587a", 1, "37c3")
+      // p.product_id LÀ ID NGHIỆP VỤ (ví dụ: "e9fbc...", 1, "37c3")
+      
+      return {
+        ...defaultData,
+        ...p, // Giữ lại 'id' thật từ json-server (ví dụ: "587a")
+        
+        // id: p.product_id, // <-- *** XÓA DÒNG NÀY *** (Đây là nguyên nhân lỗi)
+
+        // Đảm bảo product_id (nghiệp vụ) luôn tồn tại
+        product_id: p.product_id || p.id, 
+        
+        category: category || null,
+        variants: productVariants,  
+        images: productImages,
+        thumbnail_url: p.thumbnail_url || (productImages.length > 0 ? productImages[0].image_url : 'https://placehold.co/150x150?text=No+Img')
+      };
+    });
     
-    // axios trả về dữ liệu trong response.data
-    products.value = response.data.map(p => ({
-      ...p,
-      // Đảm bảo các trường luôn là mảng, tránh lỗi
-      images: p.images || [], 
-      variants: p.variants || [],
-      status: p.status || 'active', 
-      created_at: p.created_at || new Date().toISOString() 
-    }));
+    // Sắp xếp lại danh sách sản phẩm sau khi nhúng (vì json-server chỉ sort trên product_id)
+    const [key, order] = sortCriteria.value.split('-');
+    if (key === 'product_id' && order === 'desc') {
+       // Nếu là sắp xếp mặc định (product_id-desc), giữ nguyên thứ tự API trả về (thường là ID tăng dần, nhưng mình muốn mới nhất là lớn nhất)
+       products.value.sort((a, b) => {
+         // Chuyển ID sang chuỗi trước khi so sánh, sau đó ép về số nếu được
+         // Sắp xếp theo product_id (nghiệp vụ)
+         const idA = isNaN(Number(a.product_id)) ? a.product_id : Number(a.product_id);
+         const idB = isNaN(Number(b.product_id)) ? b.product_id : Number(b.product_id);
+         if (idA < idB) return 1;
+         if (idA > idB) return -1;
+         return 0;
+       });
+    }
+
   } catch (error) {
     console.error("Lỗi khi tải sản phẩm:", error);
     Swal.fire('Lỗi', 'Không thể tải danh sách sản phẩm. (Hãy đảm bảo json-server đang chạy)', 'error');
@@ -202,32 +252,65 @@ async function fetchProducts() {
 
 async function fetchCategories() {
   try {
-    // BƯỚC 4.2: SỬA HÀM GET DANH MỤC
-    // Thêm điều kiện lọc status=active mà mock API đã làm
+    // API lấy danh mục, json-server dùng category_id
     const response = await apiService.get(`/categories?status=active&_sort=order&_order=asc`);
-    categories.value = response.data;
+    categories.value = response.data.map(c => ({
+        ...c,
+        id: c.category_id // Gán id = category_id để <select> hoạt động
+    }));
   } catch (error) {
     console.error("Lỗi khi tải danh mục:", error);
   }
 }
 
-// --- CÁC HÀM HELPER ---
-// (Không thay đổi)
 function formatCurrency(value) {
-  if (value === undefined || value === null) return 'N/A';
+  if (value === undefined || value === null || isNaN(value)) return 'N/A';
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 }
 function getFormattedDate(dateString) {
   if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleDateString('vi-VN');
 }
+
+// Helper để lấy giá thấp nhất (dùng cho sắp xếp)
+function getMinPrice(variants) {
+  if (!variants || variants.length === 0) {
+    return 0;
+  }
+  const prices = variants.map(v => parseFloat(v.price)).filter(p => !isNaN(p));
+  if (prices.length === 0) {
+    return 0;
+  }
+  return Math.min(...prices);
+}
+
+// Tính tổng kho
 function calculateTotalStock(variants) {
   if (!variants || variants.length === 0) return 0;
   return variants.reduce((acc, variant) => acc + (parseInt(variant.stock) || 0), 0);
 }
 
-// --- CÁC HÀM QUẢN LÝ THUỘC TÍNH, BIẾN THỂ, ẢNH ---
-// (Toàn bộ các hàm này không thay đổi)
+// Lấy khoảng giá (dùng cho hiển thị)
+function getPriceRange(variants) {
+  if (!variants || variants.length === 0) {
+    return 'N/A';
+  }
+  const prices = variants.map(v => parseFloat(v.price)).filter(p => !isNaN(p));
+  if (prices.length === 0) {
+    return 'N/A';
+  }
+  
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+
+  if (minPrice === maxPrice) {
+    return formatCurrency(minPrice);
+  } else {
+    // Trả về dạng "100.000 ₫ - 300.000 ₫"
+    return `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`;
+  }
+}
+
 function addAttributeDefinition() {
   const name = newAttributeName.value.trim();
   if (!name) {
@@ -241,7 +324,11 @@ function addAttributeDefinition() {
   errors.attributes = '';
   const newAttr = reactive({ id: crypto.randomUUID(), name: name });
   formData.attribute_definitions.push(newAttr);
-  formData.variants.forEach(variant => { variant.attributes[name] = ''; });
+  // Khởi tạo thuộc tính cho variants hiện có
+  formData.variants.forEach(variant => {  
+    if (!variant.attributes) variant.attributes = {};
+    variant.attributes[name] = '';  
+  });
   newAttributeName.value = '';
 }
 function removeAttributeDefinition(attrToRemove) {
@@ -255,7 +342,10 @@ function addVariantRow() {
   const newAttributes = reactive({});
   formData.attribute_definitions.forEach(attrDef => { newAttributes[attrDef.name] = ''; });
   formData.variants.push(reactive({
-    id: crypto.randomUUID(), price: 0, stock: 0, attributes: newAttributes
+    variant_id: crypto.randomUUID(), // Dùng variant_id
+    price: 0,  
+    stock: 0,  
+    attributes: newAttributes
   }));
 }
 function removeVariantRow(index) {
@@ -274,14 +364,14 @@ function removeNewImage(index) {
 }
 function removeExistingImage(index) {
   const removedImage = formData.existing_images.splice(index, 1);
-  if (removedImage[0]?.id) {
-    formData.images_to_delete.push(removedImage[0].id);
-  }
+  // Do json-server không hỗ trợ delete ảnh riêng, ta chỉ xóa khỏi form
+  // if (removedImage[0]?.img_id) { // Dùng img_id theo db.json
+  //   formData.images_to_delete.push(removedImage[0].img_id);
+  // }
 }
 
-// --- CÁC HÀM CRUD MODAL (ĐÃ CẬP NHẬT) ---
+// --- CÁC HÀM CRUD MODAL ---
 
-// (Hàm resetForm không đổi)
 function resetForm() {
   formData.id = null;
   formData.name = '';
@@ -301,32 +391,32 @@ function resetForm() {
   Object.keys(errors).forEach(key => errors[key] = '');
 }
 
-// (Hàm openCreateModal không đổi)
 function openCreateModal() {
   resetForm();
   isEditMode.value = false;
-  addVariantRow(); 
+  addVariantRow();  
   modalInstance.value.show();
 }
 
-// (Hàm openEditModal không đổi - nó sẽ hoạt động đúng
-//  vì fetchProducts giờ đã lấy
-//  đủ 'images' và 'variants')
 function openEditModal(product) {
   resetForm();
   isEditMode.value = true;
 
-  formData.id = product.id;
+  // *** SỬA: Dùng 'id' (ID của json-server) làm ID chính của form ***
+  formData.id = product.id;  
+  
   formData.name = product.name;
   formData.description = product.description;
-  formData.category_id = product.category?.id || product.category_id;
+  formData.category_id = product.category_id; // category_id từ product
   formData.status = product.status || 'active';
 
-  formData.existing_images = reactive(product.images ? product.images.map(img => ({ 
-      id: img.id, 
-      url: img.image_url || img.url 
+  // Lấy ảnh
+  formData.existing_images = reactive(product.images ? product.images.map(img => ({  
+    id: img.img_id, // Lấy img_id
+    url: img.image_url || img.url  
   })) : []);
 
+  // Lấy thuộc tính và biến thể
   const allKeys = new Set();
   const productVariants = product.variants || [];
   if (productVariants.length > 0) {
@@ -340,8 +430,12 @@ function openEditModal(product) {
   formData.variants = reactive(
     productVariants.map(v => {
       const variantAttributes = reactive({});
-      allKeys.forEach(key => { variantAttributes[key] = v.attributes[key] || ''; });
-      return reactive({ ...v, attributes: variantAttributes });
+      allKeys.forEach(key => { variantAttributes[key] = v.attributes?.[key] || ''; });
+      return reactive({  
+        ...v,  
+        variant_id: v.variant_id || crypto.randomUUID(), // Đảm bảo có variant_id
+        attributes: variantAttributes  
+      });
     })
   );
   if(formData.variants.length === 0) { addVariantRow(); }
@@ -349,8 +443,6 @@ function openEditModal(product) {
   modalInstance.value.show();
 }
 
-// (Hàm openViewModal không đổi - 
-// nó sẽ hoạt động đúng vì fetchProducts đã lấy đủ dữ liệu)
 function openViewModal(product) {
   const variantKeys = (product.variants && product.variants.length > 0 && product.variants[0].attributes)
     ? Object.keys(product.variants[0].attributes)
@@ -364,13 +456,11 @@ function openViewModal(product) {
     favorite_count: product.favorite_count || 0,
     review_count: product.review_count || 0,
     average_rating: product.average_rating || 0.0,
-    images: product.images || [] 
+    images: product.images || []  
   };
   viewModalInstance.value.show();
 }
 
-// (Hàm validateForm không đổi - NHƯNG tôi đã comment
-//  phần kiểm tra ảnh để phù hợp với json-server)
 function validateForm() {
   Object.keys(errors).forEach(key => errors[key] = '');
   let isValid = true;
@@ -381,16 +471,7 @@ function validateForm() {
     errors.category_id = 'Vui lòng chọn danh mục.'; isValid = false;
   }
   
-  // BƯỚC 4.4: Bỏ qua kiểm tra ảnh (vì json-server không hỗ trợ upload)
-  /*
-  if (!isEditMode.value && formData.new_images.length === 0) {
-    errors.images = 'Vui lòng chọn ít nhất 1 ảnh sản phẩm.'; isValid = false;
-  }
-  if (isEditMode.value && formData.existing_images.length === 0 && formData.new_images.length === 0) {
-    errors.images = 'Sản phẩm phải có ít nhất 1 ảnh.'; isValid = false;
-  }
-  */
-
+  // Bỏ qua kiểm tra ảnh
   if (formData.variants.length === 0) {
     errors.variants = 'Sản phẩm phải có ít nhất 1 biến thể (SKU).'; isValid = false;
   } else {
@@ -412,7 +493,7 @@ function validateForm() {
   return isValid;
 }
 
-// --- BƯỚC 4.3: SỬA HÀM LƯU DỮ LIỆU ---
+// --- HÀM LƯU DỮ LIỆU ĐÃ SỬA ---
 async function handleSave() {
   if (!validateForm()) {
     return;
@@ -420,44 +501,24 @@ async function handleSave() {
 
   isLoading.value = true;
 
-  // !!! CẢNH BÁO QUAN TRỌNG VỀ JSON-SERVER !!!
-  // 1. json-server KHÔNG hỗ trợ upload file (FormData).
-  // 2. json-server KHÔNG hỗ trợ tự động tạo/cập nhật các bản ghi liên quan
-  //    (như Variants, Images) khi bạn POST/PUT vào /products.
-  //
-  // Do đó, code này được ĐƠN GIẢN HÓA:
-  // - Chúng ta sẽ gửi JSON, bỏ qua việc upload ảnh mới.
-  // - Chúng ta sẽ lưu variants và images TRỰC TIẾP vào đối tượng product.
-  //   Việc này sẽ HOẠT ĐỘNG vì hàm fetchProducts() của chúng ta dùng _embed
-  //   để lấy dữ liệu liên quan (nếu có) hoặc lấy dữ liệu đã nhúng (nếu không có).
+  // 'dbId' LÀ ID CỦA JSON-SERVER (ví dụ: "587a", 1, "37c3")
+  let dbId = formData.id; 
+  const dbIdString = String(dbId);
   
+  // 'businessProductId' LÀ ID NGHIỆP VỤ (ví dụ: "e9fbc...", 1, "37c3")
+  // Khởi tạo là null, sẽ được gán
+  let businessProductId = null; 
+  
+  // Chuẩn bị Product Data (chưa bao gồm ID)
   const productData = {
     name: formData.name,
     description: formData.description,
-    category_id: formData.category_id, // Gửi ID
+    category_id: formData.category_id,  
     status: formData.status,
     updated_at: new Date().toISOString(),
-
-    // Nhúng trực tiếp variants
-    variants: formData.variants.map(v => ({
-      price: v.price,
-      stock: v.stock,
-      attributes: v.attributes
-      // Nếu db.json của bạn yêu cầu product_id, hãy thêm nó ở đây
-      // product_id: formData.id 
-    })),
-
-    // Giữ lại ảnh cũ (json-server không xử lý images_to_delete)
-    images: formData.existing_images.map(img => ({ 
-        id: img.id, 
-        image_url: img.url,
-        product_id: formData.id // Đảm bảo có product_id
-    })),
-    
-    // Gán thumbnail (ảnh đầu tiên hoặc placeholder)
     thumbnail_url: formData.existing_images[0]?.url || 'https://placehold.co/150x150?text=No+Img',
     
-    // Các trường thống kê
+    // Giữ các trường thống kê (Sẽ cập nhật lại khi là Edit)
     sold_count: 0,
     favorite_count: 0,
     review_count: 0,
@@ -466,50 +527,94 @@ async function handleSave() {
 
   try {
     if (isEditMode.value) {
-      // Lấy lại các trường thống kê cũ khi sửa
-      const oldProduct = products.value.find(p => p.id === formData.id);
+      // 1. Lấy lại các trường thống kê cũ và ID
+      // Tìm bằng 'dbId' (ID của json-server)
+      const oldProduct = products.value.find(p => p.id == dbId);
       if(oldProduct) {
         productData.sold_count = oldProduct.sold_count;
         productData.favorite_count = oldProduct.favorite_count;
         productData.review_count = oldProduct.review_count;
         productData.average_rating = oldProduct.average_rating;
+
+        // *** QUAN TRỌNG: Lấy ID nghiệp vụ và ID CSDL ***
+        businessProductId = oldProduct.product_id; 
+        productData.product_id = oldProduct.product_id; // Gửi lại ID nghiệp vụ
+        productData.id = oldProduct.id; // Gửi lại ID CSDL
+      } else {
+         // Fallback (dù không nên xảy ra)
+         businessProductId = dbId;
+         productData.product_id = dbId;
+         productData.id = dbId;
       }
       
-      // Dùng PUT để ghi đè (axios.put)
-      await apiService.put(`/products/${formData.id}`, productData);
-      Swal.fire('Thành công', 'Đã cập nhật sản phẩm!', 'success');
+      // 2. Cập nhật Product chính (Dùng PATCH theo ID CSDL)
+      const apiEndpoint = `/products/${dbIdString}`;  
+      console.log("DEBUG: API Endpoint for PATCH:", apiEndpoint);
+      
+      await apiService.patch(apiEndpoint, productData);  
+
     
     } else {
-      // Thêm trường created_at cho sản phẩm mới
-      productData.created_at = new Date().toISOString();
+      // SỬA: Thay thế UUID dài bằng ID ngắn, đơn giản để json-server dễ xử lý.
+      const newShortId = generateShortId();  
       
-      // Dùng POST để tạo mới (axios.post)
-      await apiService.post(`/products`, productData);
-      Swal.fire('Thành công', 'Đã tạo sản phẩm mới!', 'success');
+      // Gán cả ID CSDL và ID Nghiệp vụ
+      businessProductId = newShortId;
+      productData.product_id = newShortId;
+      productData.id = newShortId; // Gửi 'id' để json-server nhận dạng
+      productData.created_at = new Date().toISOString();
+
+      // 1. Tạo Product mới
+      const createRes = await apiService.post(`/products`, productData);
+      
+      // Cập nhật lại ID từ server (phòng trường hợp server tự tạo ID khác)
+      dbId = createRes.data.id; 
+      businessProductId = createRes.data.product_id;
+    }
+    
+    // --- LƯU VARIANT VÀ IMAGE VÀO COLLECTION RIÊNG ---
+    // *** SỬA: Dùng 'businessProductId' để liên kết ***
+    
+    for (const variant of formData.variants) {
+      const variantPayload = {
+        // Sử dụng ID nghiệp vụ (businessProductId) đã được xác định/cập nhật
+        product_id: businessProductId,  
+        price: variant.price,
+        stock: variant.stock,
+        attributes: variant.attributes
+      };
+      
+      const variantIdString = String(variant.variant_id);
+
+      // Kiểm tra nếu variant_id là số (ID cũ) hoặc không chứa '-' (ID cũ của json-server)
+      // Đây là logic kiểm tra ID cũ vs ID mới (UUID)
+      if (variantIdString && !variantIdString.includes('-') && variantIdString.length < 10) {  
+        // Cập nhật variant cũ
+        await apiService.patch(`/variants/${variantIdString}`, variantPayload);
+      } else {
+        // Tạo variant mới
+        // Gán ID CSDL và ID nghiệp vụ mới cho variant
+        const newVariantId = generateShortId();
+        variantPayload.id = newVariantId;
+        variantPayload.variant_id = newVariantId;
+        await apiService.post(`/variants`, variantPayload);
+      }
     }
 
+
+    Swal.fire('Thành công', `Đã ${isEditMode.value ? 'cập nhật' : 'tạo mới'} sản phẩm!`, 'success');
     modalInstance.value.hide();
     fetchProducts(); // Tải lại dữ liệu
 
   } catch (apiError) {
     console.error("Lỗi khi lưu:", apiError);
-    // (Phần xử lý lỗi không thay đổi)
-    if (apiError.response?.data?.errors) {
-      const serverErrors = apiError.response.data.errors;
-      if (serverErrors.name) errors.name = serverErrors.name[0];
-      if (serverErrors.category_id) errors.category_id = serverErrors.category_id[0];
-      if (serverErrors.new_images) errors.images = serverErrors.new_images[0];
-    } else {
-      Swal.fire('Thất bại', 'Đã có lỗi xảy ra. Vui lòng thử lại.', 'error');
-    }
+    Swal.fire('Thất bại', 'Đã có lỗi xảy ra. Vui lòng thử lại.', 'error');
   } finally {
     isLoading.value = false;
   }
-}
+}  
 
-// --- CÁC HÀM KHÁC (KHÔNG THAY ĐỔI) ---
-// (Các hàm toggleStatus, handleDelete, goToPage không cần
-// thay đổi vì chúng đã dùng đúng phương thức apiService)
+// --- CÁC HÀM KHÁC (ĐÃ SỬA ID) ---
 
 async function toggleStatus(product) {
   const newStatus = product.status === 'active' ? 'disabled' : 'active';
@@ -522,11 +627,11 @@ async function toggleStatus(product) {
   if (result.isConfirmed) {
     product.status = newStatus;
     try {
-      // Dùng PATCH (axios.patch) - Hàm này đã đúng
-      await apiService.patch(`/products/${product.id}`, { status: newStatus });
+      // *** SỬA: Dùng PATCH trên endpoint 'id' (ID của json-server) ***
+      await apiService.patch(`/products/${String(product.id)}`, { status: newStatus });
       Swal.fire('Thành công', `Đã ${newStatus === 'active' ? 'kích hoạt' : 'vô hiệu hóa'} sản phẩm.`, 'success');
     } catch (error) {
-      console.error("Lỗi cập nhật trạng thái:", error);
+      console.error("Lỗi cập nhật trạng thái:", error); // Lỗi 404 sẽ không còn ở đây
       product.status = newStatus === 'active' ? 'disabled' : 'active';
       Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
     }
@@ -540,8 +645,12 @@ async function handleDelete(product) {
   });
   if (result.isConfirmed) {
     try {
-      // Dùng DELETE (axios.delete) - Hàm này đã đúng
-      await apiService.delete(`/products/${product.id}`);
+      // *** SỬA: Dùng DELETE trên endpoint 'id' (ID của json-server) ***
+      await apiService.delete(`/products/${String(product.id)}`);
+      
+      // LƯU Ý: Với json-server, bạn phải tự xóa variants và images liên quan nếu muốn
+      // TẠM BỎ QUA do phức tạp, chỉ xóa sản phẩm chính
+
       Swal.fire('Đã xóa!', 'Sản phẩm đã được xóa.', 'success');
       if (paginatedProducts.value.length === 1 && currentPage.value > 1) {
         currentPage.value--;
@@ -561,7 +670,6 @@ function goToPage(page) {
 </script>
 
 <template>
-  <!-- (Phần Header không đổi) -->
   <div class="app-content-header">
     <div class="container-fluid">
       <div class="row">
@@ -581,10 +689,8 @@ function goToPage(page) {
   <div class="app-content">
     <div class="container-fluid">
       <div class="card mb-4">
-        <!-- (Phần Card Header: Tìm kiếm, Thêm mới không đổi) -->
         <div class="card-header">
-          <div class="row align-items-center gy-2"> <!-- Thêm gy-2 để có khoảng cách trên mobile -->
-            <!-- Cập nhật cột Tìm kiếm -->
+          <div class="row align-items-center gy-2">  
             <div class="col-md-5 col-12">
               <div class="input-group">
                 <span class="input-group-text bg-white border-end-0">
@@ -595,10 +701,10 @@ function goToPage(page) {
               </div>
             </div>
 
-            <!-- THÊM MỚI: CỘT SẮP XẾP -->
+            <!-- THAY product_id-desc làm mặc định -->
             <div class="col-md-4 col-12">
               <select class="form-select" v-model="sortCriteria" aria-label="Sắp xếp sản phẩm">
-                <option value="id-desc">Sắp xếp: Mặc định (Mới nhất)</option>
+                <option value="product_id-desc">Sắp xếp: Mặc định (Mới nhất)</option>
                 <option value="created_at-desc">Ngày thêm: Mới nhất</option>
                 <option value="created_at-asc">Ngày thêm: Cũ nhất</option>
                 <option value="name-asc">Tên: A-Z</option>
@@ -608,7 +714,6 @@ function goToPage(page) {
               </select>
             </div>
             
-            <!-- Cập nhật cột Thêm mới -->
             <div class="col-md-3 col-12 text-md-end">
               <button type="button" class="btn btn-primary" @click="openCreateModal">
                 <i class="bi bi-plus-lg"></i> Thêm mới Sản phẩm
@@ -617,7 +722,6 @@ function goToPage(page) {
           </div>
         </div>
 
-        <!-- Card Body: Bảng sản phẩm (ĐÃ CẬP NHẬT <img>) -->
         <div class="card-body p-0">
           <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -627,7 +731,7 @@ function goToPage(page) {
                   <th style="width: 80px;">Ảnh</th>
                   <th>Tên sản phẩm</th>
                   <th>Danh mục</th>
-                  <th>Giá (cơ bản)</th>
+                  <th>Khoảng giá</th>
                   <th>Tổng kho</th>
                   <th style="width: 120px;">Trạng thái</th>
                   <th style="width: 180px;" class="text-center">Hành động</th>
@@ -647,18 +751,17 @@ function goToPage(page) {
                     {{ searchQuery ? 'Không tìm thấy sản phẩm nào.' : 'Chưa có sản phẩm nào.' }}
                   </td>
                 </tr>
+                <!-- SỬA: Dùng product.id làm key (vì nó là ID duy nhất của json-server) -->
                 <tr v-for="product in paginatedProducts" :key="product.id">
-                  <td>{{ product.id }}</td>
+                  <!-- Hiển thị product_id (nghiệp vụ) -->
+                  <td>{{ product.product_id }}</td>  
                   <td>
-                    <!-- SỬA: Dùng thumbnail_url -->
                     <img :src="product.thumbnail_url || 'https://placehold.co/60x60?text=N/A'"
                       alt="Ảnh SP" class="img-thumbnail" style="width: 60px; height: 60px; object-fit: cover;">
                   </td>
                   <td>{{ product.name }}</td>
                   <td>{{ product.category?.name || 'N/A' }}</td>
-                  <!-- Cập nhật: Lấy giá từ mảng variants (nếu có) -->
-                  <td>{{ formatCurrency(product.variants[0]?.price) }}</td>
-                  <!-- Cập nhật: Tính tổng kho từ mảng variants -->
+                  <td style="min-width: 160px;">{{ getPriceRange(product.variants) }}</td>
                   <td>{{ calculateTotalStock(product.variants) }}</td>
                   <td>
                     <span :class="['badge', product.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
@@ -666,7 +769,6 @@ function goToPage(page) {
                     </span>
                   </td>
                   <td class="text-center">
-                    <!-- (Hành động không đổi) -->
                     <div class="d-flex justify-content-center align-items-center">
                       <div class="form-check form-switch d-inline-block align-middle me-3" title="Kích hoạt/Vô hiệu hóa">
                         <input class="form-check-input" type="checkbox" role="switch"
@@ -694,7 +796,6 @@ function goToPage(page) {
           </div>
         </div>
 
-        <!-- Card Footer: Phân trang (Không đổi) -->
         <div class="card-footer clearfix" v-if="totalPages > 1">
            <div class="d-flex justify-content-between align-items-center">
              <small class="text-muted">
@@ -719,7 +820,7 @@ function goToPage(page) {
     </div>
   </div>
 
-  <!-- Modal Thêm/Sửa (Phần Form không đổi) -->
+  <!-- Modal Thêm/Sửa -->
   <div class="modal fade" id="productModal" ref="modalRef" tabindex="-1" aria-labelledby="productModalLabel"
     aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
@@ -732,7 +833,6 @@ function goToPage(page) {
         </div>
         <div class="modal-body">
           <form @submit.prevent="handleSave">
-            <!-- Thông tin cơ bản -->
             <div class="row">
               <div class="col-md-7">
                 <div class="mb-3">
@@ -752,7 +852,7 @@ function goToPage(page) {
                   <select class="form-select" :class="{ 'is-invalid': errors.category_id }" id="category_id"
                     v-model="formData.category_id">
                     <option :value="null" disabled>-- Chọn danh mục --</option>
-                    <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                    <option v-for="cat in categories" :key="cat.id" :value="cat.category_id">{{ cat.name }}</option>
                   </select>
                   <div class="invalid-feedback" v-if="errors.category_id">{{ errors.category_id }}</div>
                 </div>
@@ -769,7 +869,7 @@ function goToPage(page) {
                   <input type="file" class="form-control" :class="{ 'is-invalid': errors.images }" id="product_images"
                     @change="handleImageUpload" accept="image/*" multiple>
                   <div class="form-text">
-                    <b>Lưu ý:</b> <code>json-server</code> không hỗ trợ upload file. 
+                    <b>Lưu ý:</b> <code>json-server</code> không hỗ trợ upload file.  
                     Ảnh mới sẽ không được lưu. Chỉ ảnh có sẵn mới được giữ lại.
                   </div>
                   <div class="invalid-feedback" v-if="errors.images">{{ errors.images }}</div>
@@ -798,29 +898,29 @@ function goToPage(page) {
             <h5>Định nghĩa Thuộc tính</h5>
             <div class="card bg-light p-3 mb-3">
               <div class="row gx-2">
-                 <div class="col">
-                   <label for="newAttribute" class="form-label">Tên thuộc tính mới</label>
-                   <input type="text" class="form-control" id="newAttribute" 
-                         placeholder="ví dụ: Màu sắc, Kích cỡ, RAM..."
-                         v-model="newAttributeName"
-                         @keydown.enter.prevent="addAttributeDefinition">
-                 </div>
-                 <div class="col-auto d-flex align-items-end">
-                   <button class="btn btn-info" @click.prevent="addAttributeDefinition">
-                     <i class="bi bi-plus"></i> Thêm
-                   </button>
-                 </div>
+                  <div class="col">
+                    <label for="newAttribute" class="form-label">Tên thuộc tính mới</label>
+                    <input type="text" class="form-control" id="newAttribute"  
+                          placeholder="ví dụ: Màu sắc, Kích cỡ, RAM..."
+                          v-model="newAttributeName"
+                          @keydown.enter.prevent="addAttributeDefinition">
+                  </div>
+                  <div class="col-auto d-flex align-items-end">
+                    <button class="btn btn-info" @click.prevent="addAttributeDefinition">
+                      <i class="bi bi-plus"></i> Thêm
+                    </button>
+                  </div>
               </div>
               <div class="invalid-feedback d-block" v-if="errors.attributes">{{ errors.attributes }}</div>
               <div class="mt-2 d-flex flex-wrap gap-2" v-if="formData.attribute_definitions.length > 0">
-                 <span v-for="attr in formData.attribute_definitions" :key="attr.id" 
-                       class="badge text-bg-secondary fs-6">
-                   {{ attr.name }}
-                   <button type="button" class="btn-close btn-close-white ms-1" 
-                           style="font-size: 0.6em;"
-                           @click="removeAttributeDefinition(attr)" 
-                           aria-label="Close"></button>
-                 </span>
+                  <span v-for="attr in formData.attribute_definitions" :key="attr.id"  
+                        class="badge text-bg-secondary fs-6">
+                    {{ attr.name }}
+                    <button type="button" class="btn-close btn-close-white ms-1"  
+                            style="font-size: 0.6em;"
+                            @click="removeAttributeDefinition(attr)"  
+                            aria-label="Close"></button>
+                  </span>
               </div>
             </div>
             <!-- Bảng Biến thể động -->
@@ -847,23 +947,23 @@ function goToPage(page) {
                         <span v-else>Chưa có biến thể nào.</span>
                       </td>
                   </tr>
-                  <tr v-for="(variant, index) in formData.variants" :key="variant.id">
+                  <tr v-for="(variant, index) in formData.variants" :key="variant.variant_id">
                     <td v-for="attrDef in formData.attribute_definitions" :key="attrDef.id">
-                      <input type="text" class="form-control form-control-sm" 
-                             :placeholder="attrDef.name"
-                             v-model="variant.attributes[attrDef.name]">
+                      <input type="text" class="form-control form-control-sm"  
+                            :placeholder="attrDef.name"
+                            v-model="variant.attributes[attrDef.name]">
                     </td>
                     <td>
-                      <input type="number" class="form-control form-control-sm" placeholder="Giá" 
-                             v-model.number="variant.price" min="0">
+                      <input type="number" class="form-control form-control-sm" placeholder="Giá"  
+                            v-model.number="variant.price" min="0">
                     </td>
                     <td>
-                      <input type="number" class="form-control form-control-sm" placeholder="SL" 
-                             v-model.number="variant.stock" min="0">
+                      <input type="number" class="form-control form-control-sm" placeholder="SL"  
+                            v-model.number="variant.stock" min="0">
                     </td>
                     <td class="text-center">
                       <button class="btn btn-danger btn-sm" @click.prevent="removeVariantRow(index)"
-                              :disabled="formData.variants.length <= 1">
+                            :disabled="formData.variants.length <= 1">
                         <i class="bi bi-trash"></i>
                       </button>
                     </td>
@@ -876,7 +976,6 @@ function goToPage(page) {
             </button>
           </form>
         </div>
-        <!-- (Modal Footer không đổi) -->
         <div class="modal-footer bg-light">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
           <button type="button" class="btn btn-primary" @click="handleSave" :disabled="isLoading">
@@ -888,7 +987,7 @@ function goToPage(page) {
     </div>
   </div>
 
-  <!-- Modal Xem Chi Tiết (ĐÃ CẬP NHẬT) -->
+  <!-- Modal Xem Chi Tiết -->
   <div class="modal fade" id="viewModal" ref="viewModalRef" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
@@ -910,7 +1009,7 @@ function goToPage(page) {
                 class="img-thumbnail shadow-sm mb-3" alt="Ảnh sản phẩm"
                 style="width: 100%; height: auto; max-height: 250px; object-fit: cover;">
               <h5 class="mt-3 mb-1">{{ viewingProduct.name }}</h5>
-              <p class="text-muted mb-0">ID: {{ viewingProduct.id }}</p>
+              <p class="text-muted mb-0">ID: {{ viewingProduct.product_id }}</p>
             </div>
             <div class="col-md-7">
               <div class="list-group list-group-flush">
@@ -932,7 +1031,7 @@ function goToPage(page) {
             </div>
           </div>
           
-          <!-- THÊM MỚI: Thống kê sản phẩm -->
+          <!-- Thống kê sản phẩm -->
           <hr class="my-3">
           <h5 class="mb-3">Thống kê</h5>
           <div class="row g-2 text-center">
@@ -964,7 +1063,7 @@ function goToPage(page) {
 
           <hr class="my-4">
 
-          <!-- Bảng biến thể (Không đổi) -->
+          <!-- Bảng biến thể -->
           <h5 class="mb-3">Các biến thể (SKUs)</h5>
           <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
             <table class="table table-sm table-striped table-bordered">
@@ -994,14 +1093,14 @@ function goToPage(page) {
             </table>
           </div>
           
-          <!-- THÊM MỚI: Thư viện ảnh -->
+          <!-- Thư viện ảnh -->
           <hr class="my-4">
           <h5 class="mb-3">Thư viện ảnh</h5>
           <div class="image-preview-container" style="max-height: 300px;">
               <div v-if="!viewingProduct.images || viewingProduct.images.length === 0" class="text-muted p-3">
                   Không có ảnh chi tiết.
               </div>
-              <div v-for="image in viewingProduct.images" :key="image.id" class="image-preview-item" style="width: 120px; height: 120px;">
+              <div v-for="image in viewingProduct.images" :key="image.img_id" class="image-preview-item" style="width: 120px; height: 120px;">
                   <img :src="image.image_url || image.url" class="img-thumbnail" alt="Ảnh chi tiết">
               </div>
           </div>
@@ -1021,7 +1120,7 @@ function goToPage(page) {
 </template>
 
 <style scoped>
-/* (CSS không thay đổi nhiều, giữ nguyên các style cũ) */
+/* (Style không thay đổi) */
 .image-preview-container {
   display: flex;
   flex-wrap: wrap;
@@ -1057,7 +1156,7 @@ function goToPage(page) {
   border-radius: 50%;
   background-color: red;
   color: white;
-  border: none; 
+  border: none;  
   font-weight: bold;
   font-size: 12px;
   line-height: 1;
@@ -1080,6 +1179,6 @@ function goToPage(page) {
 }
 
 .table-responsive {
-    overflow-x: auto; 
+    overflow-x: auto;  
 }
 </style>
