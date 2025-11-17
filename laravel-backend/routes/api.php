@@ -2,7 +2,6 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\PdfController;
 
 // Client
 use App\Http\Controllers\Api\Client\ProductController;
@@ -33,9 +32,9 @@ use App\Http\Controllers\Api\admin\AdminOrderController;
 use App\Http\Controllers\Api\admin\AdminReviewController; 
 use App\Http\Controllers\Api\admin\AdminRoleController; 
 use App\Http\Controllers\Api\admin\AdminSlideController; 
+use App\Http\Controllers\Api\admin\AminAccountController; 
 
 // client
-Route::get('/generate-pdf', [PdfController::class, 'generatePDF']);
 
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
@@ -81,7 +80,7 @@ Route::get('/order/{id}', [OrderController::class, 'show']);
 
 Route::group([
     'prefix' => 'admin',
-    'middleware' => 'auth:sanctum'
+    // 'middleware' => 'auth:sanctum'
 ], function () {
 
     Route::get('/products', [AdminProductController::class, 'index']);
@@ -119,4 +118,11 @@ Route::group([
 
     Route::get('/slides', [AdminSlideController::class, 'index']);
     Route::get('/slide/{id}', [AdminSlideController::class, 'show']);
+
+    Route::get('/admins', [AminAccountController::class, 'index']);
+    Route::get('/admin/{id}', [AminAccountController::class, 'show']);
+});
+
+Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
+    return $request->user();
 });
