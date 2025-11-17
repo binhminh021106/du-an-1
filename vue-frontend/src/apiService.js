@@ -6,7 +6,6 @@ const apiService = axios.create({
   baseURL: baseURL,
   headers: {
     "Content-Type": "application/json",
-    // (Sau này có login, bạn sẽ nhét Token vào đây)
   },
 });
 

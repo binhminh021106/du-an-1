@@ -95,7 +95,7 @@ const fetchAllProducts = async () => {
 const loadProductById = async (id) => {
   try {
     loading.value = true;
-    const productRes = await apiService.get(`/products/${id}`);
+    const productRes = await apiService.get(`/product/${id}`);
 
     // đảm bảo variants tồn tại
     if (!productRes.data.variants || !productRes.data.variants.length) {
@@ -103,7 +103,7 @@ const loadProductById = async (id) => {
     }
 
     productRes.data.variants.forEach((v, i) => {
-      v.name = v.name || `Phiên bản ${i + 1}`;
+      // v.name = v.name || `Phiên bản ${i + 1}`;
       // đảm bảo có stock numeric
       v.stock = Number.isFinite(+v.stock) ? +v.stock : 0;
       v.price = Number.isFinite(+v.price) ? +v.price : 0;
@@ -146,7 +146,7 @@ const selectImage = (imageUrl) => {
 };
 
 const navigateToProduct = (productId) => {
-  router.push(`/products/${productId}`);
+  router.push(`/product/${productId}`);
   tradeInResultsVisible.value = false;
   tradeInSearchTerm.value = '';
 };
