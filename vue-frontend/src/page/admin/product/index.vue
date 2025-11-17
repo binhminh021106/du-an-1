@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-// Giả sử apiService được import từ đường dẫn đúng
-// import apiService from '../../../apiService.js';
+// BƯỚC 1: Import axios để gọi API thật
+import axios from 'axios';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
@@ -21,8 +21,7 @@ const viewModalRef = ref(null);
 const viewingProduct = ref({
   variants: [],
   attributeNames: [],
-  images: [], // Thêm images để tránh lỗi khi modal render
-  // SỬA LỖI: Thêm các trường thống kê để tránh lỗi 'toFixed'
+  images: [],
   sold_count: 0,
   favorite_count: 0,
   review_count: 0,
@@ -33,6 +32,9 @@ const viewingProduct = ref({
 const searchQuery = ref('');
 const currentPage = ref(1);
 const itemsPerPage = ref(10);
+
+// STATE MỚI ĐỂ SẮP XẾP
+const sortCriteria = ref('id-desc'); // Giá trị mặc định: Mới nhất
 
 // Dữ liệu cho form sản phẩm
 const formData = reactive({
@@ -61,254 +63,78 @@ const errors = reactive({
   attributes: ''
 });
 
-// --- DỮ LIỆU MOCK (GIẢ LẬP DB.JSON) VỚI 10 SẢN PHẨM ---
-// Dữ liệu này tuân theo schema SQL bạn cung cấp
-const mockDb = {
-  categories: [
-    {
-      "name": "Phone", "description": "Điện thoại di động nổi bật", "icon": "<i class=\"fa-solid fa-mobile\"></i>",
-      "order": 1, "status": "active", "id": "3"
-    },
-    {
-      "name": "Laptop", "description": "Máy tính xách tay bán chạy", "icon": "<i class=\"bi bi-laptop\"></i>",
-      "order": 4, "id": "4", "status": "active"
-    },
-    {
-      "name": "Gaming", "description": "Phụ kiện và thiết bị chơi game", "icon": "<i class=\"fa-solid fa-gamepad\"></i>",
-      "order": 2, "id": "7", "status": "active"
-    },
-    {
-      "name": "Tai nghe", "description": "Tai nghe", "icon": "<i class=\"fa-solid fa-headphones\"></i>",
-      "order": 3, "id": "e117", "status": "active"
-    }
-  ],
-  products: [
-    {
-      "id": 1, "name": "Điện thoại S-Galaxy 24 Ultra", "category_id": "3",
-      "thumbnail_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+1",
-      "sold_count": 150, "favorite_count": 45, "review_count": 25, "average_rating": 4.8,
-      "created_at": "2024-10-01T10:00:00Z", "updated_at": "2024-10-01T10:00:00Z", "deleted_at": null,
-      "description": "Điện thoại flagship hàng đầu với camera 200MP và bút S-Pen.",
-      "status": "active",
-      "images": [{"id": 101, "product_id": 1, "image_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+1"}],
-      "variants": [
-        {"id": 1, "price": 32990000, "stock": 10, "attributes": { "Màu sắc": "Titan Xám", "Dung lượng": "256GB" }},
-        {"id": 2, "price": 35990000, "stock": 5, "attributes": { "Màu sắc": "Titan Đen", "Dung lượng": "512GB" }}
-      ]
-    },
-    {
-      "id": 2, "name": "Laptop ProBook 15 G10", "category_id": "4",
-      "thumbnail_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+1",
-      "sold_count": 30, "favorite_count": 55, "review_count": 10, "average_rating": 4.7,
-      "created_at": "2024-10-02T11:00:00Z", "updated_at": "2024-10-02T11:00:00Z", "deleted_at": null,
-      "description": "Laptop văn phòng bền bỉ, chip Intel Core i5 thế hệ 13.",
-      "status": "active",
-      "images": [{"id": 102, "product_id": 2, "image_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+1"}],
-      "variants": [
-        {"id": 3, "price": 18500000, "stock": 8, "attributes": { "RAM": "16GB", "Ổ cứng": "512GB SSD" }},
-        {"id": 4, "price": 21000000, "stock": 3, "attributes": { "RAM": "32GB", "Ổ cứng": "512GB SSD" }}
-      ]
-    },
-    {
-      "id": 3, "name": "Tai nghe AirBuds Pro 3", "category_id": "e117",
-      "thumbnail_url": "https://placehold.co/150x150/7F9F7F/EBF6EB?text=TaiNghe+1",
-      "sold_count": 500, "favorite_count": 150, "review_count": 80, "average_rating": 4.9,
-      "created_at": "2024-10-03T12:00:00Z", "updated_at": "2024-10-03T12:00:00Z", "deleted_at": null,
-      "description": "Tai nghe chống ồn chủ động, âm thanh không gian.",
-      "status": "active",
-      "images": [{"id": 103, "product_id": 3, "image_url": "https://placehold.co/150x150/7F9F7F/EBF6EB?text=TaiNghe+1"}],
-      "variants": [
-        {"id": 5, "price": 5990000, "stock": 30, "attributes": { "Màu sắc": "Trắng" }}
-      ]
-    },
-    {
-      "id": 4, "name": "Bàn phím cơ Gaming G915", "category_id": "7",
-      "thumbnail_url": "https://placehold.co/150x150/9F9F7F/F6F6EB?text=Keyboard",
-      "sold_count": 80, "favorite_count": 25, "review_count": 12, "average_rating": 4.6,
-      "created_at": "2024-10-04T13:00:00Z", "updated_at": "2024-10-04T13:00:00Z", "deleted_at": null,
-      "description": "Bàn phím cơ không dây, switch low-profile, LED RGB.",
-      "status": "active",
-      "images": [{"id": 104, "product_id": 4, "image_url": "https://placehold.co/150x150/9F9F7F/F6F6EB?text=Keyboard"}],
-      "variants": [
-        {"id": 7, "price": 4500000, "stock": 15, "attributes": { "Switch": "Tactile" }},
-        {"id": 8, "price": 4500000, "stock": 10, "attributes": { "Switch": "Clicky" }}
-      ]
-    },
-    {
-      "id": 5, "name": "Điện thoại O-Reno 11", "category_id": "3",
-      "thumbnail_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+2",
-      "sold_count": 210, "favorite_count": 90, "review_count": 45, "average_rating": 4.7,
-      "created_at": "2024-10-05T14:00:00Z", "updated_at": "2024-10-05T14:00:00Z", "deleted_at": null,
-      "description": "Chuyên gia chân dung, thiết kế thời trang, sạc nhanh 80W.",
-      "status": "active",
-      "images": [{"id": 105, "product_id": 5, "image_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+2"}],
-      "variants": [
-        {"id": 9, "price": 10990000, "stock": 20, "attributes": { "Màu sắc": "Xanh", "Dung lượng": "256GB" }}
-      ]
-    },
-    {
-      "id": 6, "name": "Laptop Gaming Legion 5", "category_id": "4",
-      "thumbnail_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+2",
-      "sold_count": 65, "favorite_count": 15, "review_count": 10, "average_rating": 4.5,
-      "created_at": "2024-10-06T15:00:00Z", "updated_at": "2024-10-06T15:00:00Z", "deleted_at": null,
-      "description": "Laptop gaming tản nhiệt mát, RTX 4060, màn hình 165Hz.",
-      "status": "active",
-      "images": [{"id": 106, "product_id": 6, "image_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+2"}],
-      "variants": [
-        {"id": 10, "price": 28990000, "stock": 8, "attributes": { "CPU": "Ryzen 7", "RAM": "16GB" }}
-      ]
-    },
-    {
-      "id": 7, "name": "Điện thoại i-Phone 15 Pro", "category_id": "3",
-      "thumbnail_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+3",
-      "sold_count": 300, "favorite_count": 150, "review_count": 90, "average_rating": 4.9,
-      "created_at": "2024-10-07T16:00:00Z", "updated_at": "2024-10-07T16:00:00Z", "deleted_at": null,
-      "description": "Khung viền Titan, chip A17 Pro, cổng sạc USB-C.",
-      "status": "active",
-      "images": [{"id": 107, "product_id": 7, "image_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+3"}],
-      "variants": [
-        {"id": 11, "price": 27990000, "stock": 10, "attributes": { "Màu sắc": "Titan Tự nhiên", "Dung lượng": "128GB" }},
-        {"id": 12, "price": 30990000, "stock": 10, "attributes": { "Màu sắc": "Titan Xanh", "Dung lượng": "256GB" }}
-      ]
-    },
-    {
-      "id": 8, "name": "Chuột Gaming G502 Hero", "category_id": "7",
-      "thumbnail_url": "https://placehold.co/150x150/9F9F7F/F6F6EB?text=Mouse",
-      "sold_count": 300, "favorite_count": 60, "review_count": 50, "average_rating": 4.6,
-      "created_at": "2024-10-08T17:00:00Z", "updated_at": "2024-10-08T17:00:00Z", "deleted_at": null,
-      "description": "Chuột gaming có dây, mắt đọc Hero 25K, tùy chỉnh tạ.",
-      "status": "active",
-      "images": [{"id": 108, "product_id": 8, "image_url": "https://placehold.co/150x150/9F9F7F/F6F6EB?text=Mouse"}],
-      "variants": [
-        {"id": 13, "price": 1290000, "stock": 50, "attributes": { "Màu sắc": "Đen" }}
-      ]
-    },
-    {
-      "id": 9, "name": "Tai nghe S-Buds 3 Pro", "category_id": "e117",
-      "thumbnail_url": "https://placehold.co/150x150/7F9F7F/EBF6EB?text=TaiNghe+2",
-      "sold_count": 100, "favorite_count": 35, "review_count": 20, "average_rating": 4.5,
-      "created_at": "2024-10-09T18:00:00Z", "updated_at": "2024-10-09T18:00:00Z", "deleted_at": null,
-      "description": "Tai nghe TWS, chống ồn thông minh, âm thanh 360.",
-      "status": "active",
-      "images": [{"id": 109, "product_id": 9, "image_url": "https://placehold.co/150x150/7F9F7F/EBF6EB?text=TaiNghe+2"}],
-      "variants": [
-        {"id": 15, "price": 4490000, "stock": 25, "attributes": { "Màu sắc": "Đen" }},
-        {"id": 16, "price": 4490000, "stock": 15, "attributes": { "Màu sắc": "Bạc" }}
-      ]
-    },
-    {
-      "id": 10, "name": "Laptop UltraBook 13", "category_id": "4",
-      "thumbnail_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+3",
-      "sold_count": 45, "favorite_count": 12, "review_count": 8, "average_rating": 4.3,
-      "created_at": "2024-10-10T19:00:00Z", "updated_at": "2024-10-10T19:00:00Z", "deleted_at": null,
-      "description": "Laptop mỏng nhẹ, màn hình OLED, vỏ nhôm nguyên khối.",
-      "status": "active",
-      "images": [{"id": 110, "product_id": 10, "image_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+3"}],
-      "variants": [
-        {"id": 17, "price": 22990000, "stock": 10, "attributes": { "CPU": "Core i7", "RAM": "16GB", "Ổ cứng": "512GB SSD" }}
-      ]
-    }
-  ]
-};
+// --- BƯỚC 2: XÓA BỎ mockDb VÀ apiService GIẢ LẬP ---
+// (Toàn bộ các đối tượng mockDb và apiService giả đã bị xóa)
 
-// (Giả lập apiService)
-const FAKE_API_DELAY = 500;
-const apiService = {
-  get: (url) => {
-    console.log(`[FAKE API] GET: ${url}`);
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        if (url.startsWith('/products')) {
-          // Giả lập _sort, _order, _expand
-          // 1. Lấy danh sách sản phẩm (tạo bản copy sâu để tránh thay đổi dữ liệu gốc)
-          let productData = JSON.parse(JSON.stringify(mockDb.products));
-          
-          // 2. Sắp xếp
-          productData.sort((a, b) => b.id - a.id); // Giả lập _sort=id&_order=desc
-          
-          // 3. Giả lập _expand=category
-          const expandedData = productData.map(p => {
-            const category = mockDb.categories.find(c => c.id === p.category_id);
-            return {
-              ...p,
-              category: category || null // Gắn object category vào
-            };
-          });
-          
-          resolve({ data: expandedData });
-        }
-        if (url.startsWith('/categories')) {
-          // Lọc ra các category 'active' khi get
-          const activeCategories = mockDb.categories.filter(c => c.status === 'active');
-          resolve({ data: JSON.parse(JSON.stringify(activeCategories)) });
-        }
-      }, FAKE_API_DELAY);
-    });
-  },
-  post: (url, payload) => {
-     console.log(`[FAKE API] POST: ${url}`, payload);
-     if (payload instanceof FormData) {
-        for (let [key, value] of payload.entries()) {
-            console.log(`  ${key}:`, value);
-        }
-     }
-     // Thêm vào mock DB
-     const newId = Math.max(...mockDb.products.map(p => p.id)) + 1;
-     // Tạm thời chỉ giả lập thêm, không xử lý ảnh
-     const newProduct = {
-        id: newId,
-        name: payload.get('name'),
-        description: payload.get('description'),
-        category_id: payload.get('category_id'), // ID giờ là string
-        status: payload.get('status'),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        thumbnail_url: 'https://placehold.co/150x150/CCCCCC/999999?text=New',
-        images: [{id: 200 + newId, product_id: newId, image_url: 'https://placehold.co/150x150/CCCCCC/999999?text=New'}],
-        variants: JSON.parse(payload.get('variants')),
-        sold_count: 0, favorite_count: 0, review_count: 0, average_rating: 0.0,
-     };
-     mockDb.products.push(newProduct);
-     console.log('[FAKE API] Added new product:', newProduct);
-     
-     return new Promise(resolve => setTimeout(resolve, FAKE_API_DELAY));
-  },
-  patch: (url, payload) => {
-     console.log(`[FAKE API] PATCH: ${url}`, payload);
-     // Cập nhật trạng thái
-     const id = parseInt(url.split('/').pop());
-     const product = mockDb.products.find(p => p.id === id);
-     if(product && payload.status) {
-        product.status = payload.status;
-        console.log(`[FAKE API] Updated status for ${id} to ${payload.status}`);
-     }
-     return new Promise(resolve => setTimeout(resolve, FAKE_API_DELAY));
-  },
-  delete: (url) => {
-     console.log(`[FAKE API] DELETE: ${url}`);
-     // Xóa khỏi mock DB
-     const id = parseInt(url.split('/').pop());
-     const index = mockDb.products.findIndex(p => p.id === id);
-     if(index > -1) {
-        mockDb.products.splice(index, 1);
-        console.log(`[FAKE API] Deleted product ${id}`);
-     }
-     return new Promise(resolve => setTimeout(resolve, FAKE_API_DELAY));
+
+// --- BƯỚC 3: TẠO apiService THẬT VỚI AXIOS ---
+// Trỏ đến server đang chạy của bạn: http://localhost:3000
+const apiService = axios.create({
+  baseURL: 'http://localhost:3000',
+  headers: {
+    'Content-Type': 'application/json',
   }
-};
+});
 
 
 // --- COMPUTED ---
-
+// (Không thay đổi)
 const filteredProducts = computed(() => {
+  // 1. Lọc (Filtering)
   const query = searchQuery.value.toLowerCase().trim();
-  if (!query) {
-    return products.value; 
+  let filtered = products.value;
+  
+  if (query) {
+    filtered = products.value.filter(product =>
+      product.name.toLowerCase().includes(query) ||
+      (product.category?.name && product.category.name.toLowerCase().includes(query))
+    );
   }
-  return products.value.filter(product =>
-    product.name.toLowerCase().includes(query) ||
-    (product.category?.name && product.category.name.toLowerCase().includes(query))
-  );
+
+  // 2. Sắp xếp (Sorting)
+  const [key, order] = sortCriteria.value.split('-');
+  
+  // Tạo một bản sao để sắp xếp, tránh thay đổi 'products' gốc
+  const sorted = [...filtered]; 
+
+  sorted.sort((a, b) => {
+    let valA, valB;
+
+    // Lấy giá trị để so sánh
+    switch (key) {
+      case 'name':
+        valA = a.name.toLowerCase();
+        valB = b.name.toLowerCase();
+        break;
+      case 'price':
+        // Sắp xếp theo giá của biến thể đầu tiên
+        valA = a.variants[0]?.price || 0;
+        valB = b.variants[0]?.price || 0;
+        break;
+      case 'created_at':
+        valA = new Date(a.created_at);
+        valB = new Date(b.created_at);
+        break;
+      case 'id':
+      default:
+        valA = a.id;
+        valB = b.id;
+        break;
+    }
+
+    // Logic so sánh
+    let comparison = 0;
+    if (valA > valB) {
+      comparison = 1;
+    } else if (valA < valB) {
+      comparison = -1;
+    }
+    
+    // Đảo ngược nếu là 'desc'
+    return order === 'asc' ? comparison : -comparison;
+  });
+
+  return sorted;
 });
 
 const totalPages = computed(() => {
@@ -322,11 +148,18 @@ const paginatedProducts = computed(() => {
 });
 
 // --- WATCHERS ---
+// (Không thay đổi)
 watch(searchQuery, () => {
   currentPage.value = 1; 
 });
 
+// THÊM WATCHER CHO SẮP XẾP
+watch(sortCriteria, () => {
+  currentPage.value = 1; // Reset về trang 1 khi đổi sắp xếp
+});
+
 // --- VÒNG ĐỜI (LIFECYCLE) ---
+// (Không thay đổi)
 onMounted(() => {
   fetchProducts();
   fetchCategories();
@@ -338,24 +171,30 @@ onMounted(() => {
   }
 });
 
-// --- CÁC HÀM TẢI DỮ LIỆU ---
+// --- CÁC HÀM TẢI DỮ LIỆU (ĐÃ CẬP NHẬT) ---
 
 async function fetchProducts() {
   isLoading.value = true;
   try {
-    // API mock giờ sẽ trả về dữ liệu có _expand=category
-    const response = await apiService.get(`/products?_sort=id&_order=desc&_expand=category`);
+    // BƯỚC 4.1: SỬA HÀM GET SẢN PHẨM
+    // Sử dụng _expand và _embed của json-server để lấy tất cả dữ liệu liên quan
+    // `_expand=category` -> Lấy 1 đối tượng category
+    // `_embed=variants` -> Lấy mảng variants
+    // `_embed=images` -> Lấy mảng images
+    const response = await apiService.get(`/products?_sort=id&_order=desc&_expand=category&_embed=variants&_embed=images`);
+    
+    // axios trả về dữ liệu trong response.data
     products.value = response.data.map(p => ({
       ...p,
-      // Đổi 'images' từ SQL (image_product) thành 'images' mà code đang dùng
-      // Mock API đã làm việc này, nhưng nếu API thật trả về 'image_product' thì bạn cần map ở đây
-      images: p.images || (p.image_product || []), 
+      // Đảm bảo các trường luôn là mảng, tránh lỗi
+      images: p.images || [], 
+      variants: p.variants || [],
       status: p.status || 'active', 
       created_at: p.created_at || new Date().toISOString() 
     }));
   } catch (error) {
     console.error("Lỗi khi tải sản phẩm:", error);
-    Swal.fire('Lỗi', 'Không thể tải danh sách sản phẩm.', 'error');
+    Swal.fire('Lỗi', 'Không thể tải danh sách sản phẩm. (Hãy đảm bảo json-server đang chạy)', 'error');
   } finally {
     isLoading.value = false;
   }
@@ -363,8 +202,9 @@ async function fetchProducts() {
 
 async function fetchCategories() {
   try {
-    // Mock API đã tự động lọc các category 'active'
-    const response = await apiService.get(`/categories?_sort=order&_order=asc`);
+    // BƯỚC 4.2: SỬA HÀM GET DANH MỤC
+    // Thêm điều kiện lọc status=active mà mock API đã làm
+    const response = await apiService.get(`/categories?status=active&_sort=order&_order=asc`);
     categories.value = response.data;
   } catch (error) {
     console.error("Lỗi khi tải danh mục:", error);
@@ -372,24 +212,22 @@ async function fetchCategories() {
 }
 
 // --- CÁC HÀM HELPER ---
-
+// (Không thay đổi)
 function formatCurrency(value) {
   if (value === undefined || value === null) return 'N/A';
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 }
-
 function getFormattedDate(dateString) {
   if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleDateString('vi-VN');
 }
-
 function calculateTotalStock(variants) {
   if (!variants || variants.length === 0) return 0;
   return variants.reduce((acc, variant) => acc + (parseInt(variant.stock) || 0), 0);
 }
 
-// (Các hàm quản lý thuộc tính, biến thể, ảnh không thay đổi)
-// --- CÁC HÀM QUẢN LÝ THUỘC TÍNH & BIẾN THỂ ---
+// --- CÁC HÀM QUẢN LÝ THUỘC TÍNH, BIẾN THỂ, ẢNH ---
+// (Toàn bộ các hàm này không thay đổi)
 function addAttributeDefinition() {
   const name = newAttributeName.value.trim();
   if (!name) {
@@ -397,8 +235,8 @@ function addAttributeDefinition() {
     return;
   }
   if (formData.attribute_definitions.find(attr => attr.name.toLowerCase() === name.toLowerCase())) {
-     errors.attributes = 'Thuộc tính này đã tồn tại.';
-     return;
+    errors.attributes = 'Thuộc tính này đã tồn tại.';
+    return;
   }
   errors.attributes = '';
   const newAttr = reactive({ id: crypto.randomUUID(), name: name });
@@ -423,7 +261,6 @@ function addVariantRow() {
 function removeVariantRow(index) {
   formData.variants.splice(index, 1);
 }
-// --- CÁC HÀM QUẢN LÝ ẢNH ---
 function handleImageUpload(event) {
   errors.images = '';
   formData.new_images = Array.from(event.target.files);
@@ -444,6 +281,7 @@ function removeExistingImage(index) {
 
 // --- CÁC HÀM CRUD MODAL (ĐÃ CẬP NHẬT) ---
 
+// (Hàm resetForm không đổi)
 function resetForm() {
   formData.id = null;
   formData.name = '';
@@ -463,6 +301,7 @@ function resetForm() {
   Object.keys(errors).forEach(key => errors[key] = '');
 }
 
+// (Hàm openCreateModal không đổi)
 function openCreateModal() {
   resetForm();
   isEditMode.value = false;
@@ -470,6 +309,9 @@ function openCreateModal() {
   modalInstance.value.show();
 }
 
+// (Hàm openEditModal không đổi - nó sẽ hoạt động đúng
+//  vì fetchProducts giờ đã lấy
+//  đủ 'images' và 'variants')
 function openEditModal(product) {
   resetForm();
   isEditMode.value = true;
@@ -480,14 +322,11 @@ function openEditModal(product) {
   formData.category_id = product.category?.id || product.category_id;
   formData.status = product.status || 'active';
 
-  // Chuyển đổi 'images' (từ mock/api) thành 'existing_images'
-  // Mock đang trả về {id, image_url}, chúng ta đổi tên thành {id, url}
   formData.existing_images = reactive(product.images ? product.images.map(img => ({ 
       id: img.id, 
-      url: img.image_url || img.url // Chấp nhận cả 2 key
+      url: img.image_url || img.url 
   })) : []);
 
-  // --- LOGIC MỚI: TÁI TẠO STATE TỪ DỮ LIỆU PRODUCT ---
   const allKeys = new Set();
   const productVariants = product.variants || [];
   if (productVariants.length > 0) {
@@ -506,12 +345,12 @@ function openEditModal(product) {
     })
   );
   if(formData.variants.length === 0) { addVariantRow(); }
-  // --- KẾT THÚC LOGIC MỚI ---
 
   modalInstance.value.show();
 }
 
-// Mở Modal Xem (ĐÃ CẬP NHẬT để hiển thị stats)
+// (Hàm openViewModal không đổi - 
+// nó sẽ hoạt động đúng vì fetchProducts đã lấy đủ dữ liệu)
 function openViewModal(product) {
   const variantKeys = (product.variants && product.variants.length > 0 && product.variants[0].attributes)
     ? Object.keys(product.variants[0].attributes)
@@ -521,18 +360,17 @@ function openViewModal(product) {
     ...product,
     categoryName: product.category?.name || 'N/A',
     attributeNames: variantKeys,
-    // Thêm các trường read-only
     sold_count: product.sold_count || 0,
     favorite_count: product.favorite_count || 0,
     review_count: product.review_count || 0,
     average_rating: product.average_rating || 0.0,
-    // Đảm bảo images là mảng
     images: product.images || [] 
   };
   viewModalInstance.value.show();
 }
 
-
+// (Hàm validateForm không đổi - NHƯNG tôi đã comment
+//  phần kiểm tra ảnh để phù hợp với json-server)
 function validateForm() {
   Object.keys(errors).forEach(key => errors[key] = '');
   let isValid = true;
@@ -542,12 +380,17 @@ function validateForm() {
   if (!formData.category_id) {
     errors.category_id = 'Vui lòng chọn danh mục.'; isValid = false;
   }
+  
+  // BƯỚC 4.4: Bỏ qua kiểm tra ảnh (vì json-server không hỗ trợ upload)
+  /*
   if (!isEditMode.value && formData.new_images.length === 0) {
     errors.images = 'Vui lòng chọn ít nhất 1 ảnh sản phẩm.'; isValid = false;
   }
   if (isEditMode.value && formData.existing_images.length === 0 && formData.new_images.length === 0) {
     errors.images = 'Sản phẩm phải có ít nhất 1 ảnh.'; isValid = false;
   }
+  */
+
   if (formData.variants.length === 0) {
     errors.variants = 'Sản phẩm phải có ít nhất 1 biến thể (SKU).'; isValid = false;
   } else {
@@ -558,8 +401,8 @@ function validateForm() {
       if(formData.attribute_definitions.length > 0) {
           for(const attrDef of formData.attribute_definitions) {
               if(!variant.attributes[attrDef.name] || !variant.attributes[attrDef.name].trim()) {
-                   errors.variants = `Vui lòng điền giá trị cho thuộc tính "${attrDef.name}" của tất cả biến thể.`;
-                   isValid = false; break;
+                  errors.variants = `Vui lòng điền giá trị cho thuộc tính "${attrDef.name}" của tất cả biến thể.`;
+                  isValid = false; break;
               }
           }
       }
@@ -569,54 +412,88 @@ function validateForm() {
   return isValid;
 }
 
+// --- BƯỚC 4.3: SỬA HÀM LƯU DỮ LIỆU ---
 async function handleSave() {
   if (!validateForm()) {
     return;
   }
 
   isLoading.value = true;
-  const payload = new FormData();
 
-  payload.append('name', formData.name);
-  payload.append('description', formData.description);
-  payload.append('category_id', formData.category_id);
-  payload.append('status', formData.status);
+  // !!! CẢNH BÁO QUAN TRỌNG VỀ JSON-SERVER !!!
+  // 1. json-server KHÔNG hỗ trợ upload file (FormData).
+  // 2. json-server KHÔNG hỗ trợ tự động tạo/cập nhật các bản ghi liên quan
+  //    (như Variants, Images) khi bạn POST/PUT vào /products.
+  //
+  // Do đó, code này được ĐƠN GIẢN HÓA:
+  // - Chúng ta sẽ gửi JSON, bỏ qua việc upload ảnh mới.
+  // - Chúng ta sẽ lưu variants và images TRỰC TIẾP vào đối tượng product.
+  //   Việc này sẽ HOẠT ĐỘNG vì hàm fetchProducts() của chúng ta dùng _embed
+  //   để lấy dữ liệu liên quan (nếu có) hoặc lấy dữ liệu đã nhúng (nếu không có).
   
-  // Ghi chú: thumbnail_url sẽ được backend tự động cập nhật
-  // khi xử lý new_images[] và images_to_delete.
-  // Các trường sold_count, review_count... không được gửi đi.
-  
-  payload.append('variants', JSON.stringify(formData.variants.map(v => ({
+  const productData = {
+    name: formData.name,
+    description: formData.description,
+    category_id: formData.category_id, // Gửi ID
+    status: formData.status,
+    updated_at: new Date().toISOString(),
+
+    // Nhúng trực tiếp variants
+    variants: formData.variants.map(v => ({
       price: v.price,
       stock: v.stock,
       attributes: v.attributes
-  }))));
-  
-  formData.new_images.forEach((file) => {
-    payload.append('new_images[]', file);
-  });
-  
+      // Nếu db.json của bạn yêu cầu product_id, hãy thêm nó ở đây
+      // product_id: formData.id 
+    })),
+
+    // Giữ lại ảnh cũ (json-server không xử lý images_to_delete)
+    images: formData.existing_images.map(img => ({ 
+        id: img.id, 
+        image_url: img.url,
+        product_id: formData.id // Đảm bảo có product_id
+    })),
+    
+    // Gán thumbnail (ảnh đầu tiên hoặc placeholder)
+    thumbnail_url: formData.existing_images[0]?.url || 'https://placehold.co/150x150?text=No+Img',
+    
+    // Các trường thống kê
+    sold_count: 0,
+    favorite_count: 0,
+    review_count: 0,
+    average_rating: 0.0,
+  };
+
   try {
     if (isEditMode.value) {
-      payload.append('_method', 'PUT');
-      payload.append('images_to_delete', JSON.stringify(formData.images_to_delete));
-      // Dùng post cho mock (vì mock ko có PUT cho FormData)
-      await apiService.post(`/products/${formData.id}`, payload, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      // Lấy lại các trường thống kê cũ khi sửa
+      const oldProduct = products.value.find(p => p.id === formData.id);
+      if(oldProduct) {
+        productData.sold_count = oldProduct.sold_count;
+        productData.favorite_count = oldProduct.favorite_count;
+        productData.review_count = oldProduct.review_count;
+        productData.average_rating = oldProduct.average_rating;
+      }
+      
+      // Dùng PUT để ghi đè (axios.put)
+      await apiService.put(`/products/${formData.id}`, productData);
       Swal.fire('Thành công', 'Đã cập nhật sản phẩm!', 'success');
+    
     } else {
-      payload.append('created_at', new Date().toISOString());
-      await apiService.post(`/products`, payload, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      // Thêm trường created_at cho sản phẩm mới
+      productData.created_at = new Date().toISOString();
+      
+      // Dùng POST để tạo mới (axios.post)
+      await apiService.post(`/products`, productData);
       Swal.fire('Thành công', 'Đã tạo sản phẩm mới!', 'success');
     }
 
     modalInstance.value.hide();
-    fetchProducts();
+    fetchProducts(); // Tải lại dữ liệu
+
   } catch (apiError) {
     console.error("Lỗi khi lưu:", apiError);
+    // (Phần xử lý lỗi không thay đổi)
     if (apiError.response?.data?.errors) {
       const serverErrors = apiError.response.data.errors;
       if (serverErrors.name) errors.name = serverErrors.name[0];
@@ -630,8 +507,10 @@ async function handleSave() {
   }
 }
 
-// (Các hàm toggleStatus, handleDelete, goToPage không đổi)
-// --- CÁC HÀM KHÁC ---
+// --- CÁC HÀM KHÁC (KHÔNG THAY ĐỔI) ---
+// (Các hàm toggleStatus, handleDelete, goToPage không cần
+// thay đổi vì chúng đã dùng đúng phương thức apiService)
+
 async function toggleStatus(product) {
   const newStatus = product.status === 'active' ? 'disabled' : 'active';
   const confirmText = `Bạn có chắc chắn muốn ${newStatus === 'active' ? 'KÍCH HOẠT' : 'VÔ HIỆU HÓA'} sản phẩm "${product.name}"?`;
@@ -643,6 +522,7 @@ async function toggleStatus(product) {
   if (result.isConfirmed) {
     product.status = newStatus;
     try {
+      // Dùng PATCH (axios.patch) - Hàm này đã đúng
       await apiService.patch(`/products/${product.id}`, { status: newStatus });
       Swal.fire('Thành công', `Đã ${newStatus === 'active' ? 'kích hoạt' : 'vô hiệu hóa'} sản phẩm.`, 'success');
     } catch (error) {
@@ -660,6 +540,7 @@ async function handleDelete(product) {
   });
   if (result.isConfirmed) {
     try {
+      // Dùng DELETE (axios.delete) - Hàm này đã đúng
       await apiService.delete(`/products/${product.id}`);
       Swal.fire('Đã xóa!', 'Sản phẩm đã được xóa.', 'success');
       if (paginatedProducts.value.length === 1 && currentPage.value > 1) {
@@ -702,8 +583,9 @@ function goToPage(page) {
       <div class="card mb-4">
         <!-- (Phần Card Header: Tìm kiếm, Thêm mới không đổi) -->
         <div class="card-header">
-          <div class="row align-items-center">
-            <div class="col-md-6 col-12 mb-2 mb-md-0">
+          <div class="row align-items-center gy-2"> <!-- Thêm gy-2 để có khoảng cách trên mobile -->
+            <!-- Cập nhật cột Tìm kiếm -->
+            <div class="col-md-5 col-12">
               <div class="input-group">
                 <span class="input-group-text bg-white border-end-0">
                   <i class="bi bi-search text-muted"></i>
@@ -712,7 +594,22 @@ function goToPage(page) {
                   placeholder="Tìm kiếm theo tên sản phẩm, danh mục..." v-model="searchQuery">
               </div>
             </div>
-            <div class="col-md-6 col-12 text-md-end">
+
+            <!-- THÊM MỚI: CỘT SẮP XẾP -->
+            <div class="col-md-4 col-12">
+              <select class="form-select" v-model="sortCriteria" aria-label="Sắp xếp sản phẩm">
+                <option value="id-desc">Sắp xếp: Mặc định (Mới nhất)</option>
+                <option value="created_at-desc">Ngày thêm: Mới nhất</option>
+                <option value="created_at-asc">Ngày thêm: Cũ nhất</option>
+                <option value="name-asc">Tên: A-Z</option>
+                <option value="name-desc">Tên: Z-A</option>
+                <option value="price-asc">Giá: Thấp đến Cao</option>
+                <option value="price-desc">Giá: Cao đến Thấp</option>
+              </select>
+            </div>
+            
+            <!-- Cập nhật cột Thêm mới -->
+            <div class="col-md-3 col-12 text-md-end">
               <button type="button" class="btn btn-primary" @click="openCreateModal">
                 <i class="bi bi-plus-lg"></i> Thêm mới Sản phẩm
               </button>
@@ -759,7 +656,9 @@ function goToPage(page) {
                   </td>
                   <td>{{ product.name }}</td>
                   <td>{{ product.category?.name || 'N/A' }}</td>
+                  <!-- Cập nhật: Lấy giá từ mảng variants (nếu có) -->
                   <td>{{ formatCurrency(product.variants[0]?.price) }}</td>
+                  <!-- Cập nhật: Tính tổng kho từ mảng variants -->
                   <td>{{ calculateTotalStock(product.variants) }}</td>
                   <td>
                     <span :class="['badge', product.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
@@ -798,23 +697,23 @@ function goToPage(page) {
         <!-- Card Footer: Phân trang (Không đổi) -->
         <div class="card-footer clearfix" v-if="totalPages > 1">
            <div class="d-flex justify-content-between align-items-center">
-            <small class="text-muted">
-              Hiển thị {{ (currentPage - 1) * itemsPerPage + 1 }} đến
-              {{ Math.min(currentPage * itemsPerPage, filteredProducts.length) }}
-              trong tổng số {{ filteredProducts.length }} sản phẩm
-            </small>
-            <ul class="pagination pagination-sm m-0">
-              <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                <button class="page-link" @click="goToPage(currentPage - 1)">&laquo;</button>
-              </li>
-              <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
-                <button class="page-link" @click="goToPage(page)">{{ page }}</button>
-              </li>
-              <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                <button class="page-link" @click="goToPage(currentPage + 1)">&raquo;</button>
-              </li>
-            </ul>
-          </div>
+             <small class="text-muted">
+               Hiển thị {{ (currentPage - 1) * itemsPerPage + 1 }} đến
+               {{ Math.min(currentPage * itemsPerPage, filteredProducts.length) }}
+               trong tổng số {{ filteredProducts.length }} sản phẩm
+             </small>
+             <ul class="pagination pagination-sm m-0">
+               <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                 <button class="page-link" @click="goToPage(currentPage - 1)">&laquo;</button>
+               </li>
+               <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
+                 <button class="page-link" @click="goToPage(page)">{{ page }}</button>
+               </li>
+               <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                 <button class="page-link" @click="goToPage(currentPage + 1)">&raquo;</button>
+               </li>
+             </ul>
+           </div>
         </div>
       </div>
     </div>
@@ -866,10 +765,13 @@ function goToPage(page) {
                 </div>
                 <!-- Quản lý ảnh -->
                 <div class="mb-3">
-                  <label for="product_images" class="form-label required">Ảnh sản phẩm (Bao gồm cả thumbnail)</label>
+                  <label for="product_images" class="form-label">Ảnh sản phẩm (Bao gồm cả thumbnail)</label>
                   <input type="file" class="form-control" :class="{ 'is-invalid': errors.images }" id="product_images"
                     @change="handleImageUpload" accept="image/*" multiple>
-                  <div class="form-text">Backend sẽ tự động đặt ảnh đầu tiên làm Thumbnail.</div>
+                  <div class="form-text">
+                    <b>Lưu ý:</b> <code>json-server</code> không hỗ trợ upload file. 
+                    Ảnh mới sẽ không được lưu. Chỉ ảnh có sẵn mới được giữ lại.
+                  </div>
                   <div class="invalid-feedback" v-if="errors.images">{{ errors.images }}</div>
                   <div class="image-preview-container mt-2">
                     <div v-for="(image, index) in formData.existing_images" :key="`exist-${image.id}`"
@@ -897,28 +799,28 @@ function goToPage(page) {
             <div class="card bg-light p-3 mb-3">
               <div class="row gx-2">
                  <div class="col">
-                    <label for="newAttribute" class="form-label">Tên thuộc tính mới</label>
-                    <input type="text" class="form-control" id="newAttribute" 
-                           placeholder="ví dụ: Màu sắc, Kích cỡ, RAM..."
-                           v-model="newAttributeName"
-                           @keydown.enter.prevent="addAttributeDefinition">
+                   <label for="newAttribute" class="form-label">Tên thuộc tính mới</label>
+                   <input type="text" class="form-control" id="newAttribute" 
+                         placeholder="ví dụ: Màu sắc, Kích cỡ, RAM..."
+                         v-model="newAttributeName"
+                         @keydown.enter.prevent="addAttributeDefinition">
                  </div>
                  <div class="col-auto d-flex align-items-end">
-                    <button class="btn btn-info" @click.prevent="addAttributeDefinition">
-                      <i class="bi bi-plus"></i> Thêm
-                    </button>
+                   <button class="btn btn-info" @click.prevent="addAttributeDefinition">
+                     <i class="bi bi-plus"></i> Thêm
+                   </button>
                  </div>
               </div>
               <div class="invalid-feedback d-block" v-if="errors.attributes">{{ errors.attributes }}</div>
               <div class="mt-2 d-flex flex-wrap gap-2" v-if="formData.attribute_definitions.length > 0">
-                  <span v-for="attr in formData.attribute_definitions" :key="attr.id" 
-                        class="badge text-bg-secondary fs-6">
-                    {{ attr.name }}
-                    <button type="button" class="btn-close btn-close-white ms-1" 
-                            style="font-size: 0.6em;"
-                            @click="removeAttributeDefinition(attr)" 
-                            aria-label="Close"></button>
-                  </span>
+                 <span v-for="attr in formData.attribute_definitions" :key="attr.id" 
+                       class="badge text-bg-secondary fs-6">
+                   {{ attr.name }}
+                   <button type="button" class="btn-close btn-close-white ms-1" 
+                           style="font-size: 0.6em;"
+                           @click="removeAttributeDefinition(attr)" 
+                           aria-label="Close"></button>
+                 </span>
               </div>
             </div>
             <!-- Bảng Biến thể động -->
