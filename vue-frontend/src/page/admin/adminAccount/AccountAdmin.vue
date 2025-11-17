@@ -4,7 +4,7 @@ import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-const users = ref([]); // Chỉ chứa admin/nhanvien (không chứa user)
+const users = ref([]); // Chỉ chứa admin/nhanvien (từ /admin)
 const isLoading = ref(true);
 const searchQuery = ref('');
 
@@ -26,8 +26,8 @@ const formData = reactive({
   id: null,
   username: '',
   email: '',
-  phone: '', // Thêm SĐT
-  address: '', // Thêm Địa chỉ
+  phone: '',
+  address: '',
   role: 'nhanvien',
   status: 'active'
 });
@@ -35,8 +35,8 @@ const formData = reactive({
 const errors = reactive({
   username: '',
   email: '',
-  phone: '', // Thêm SĐT
-  address: '', // Thêm Địa chỉ
+  phone: '',
+  address: '',
 });
 
 const roleFormData = reactive({
@@ -67,6 +67,7 @@ const filteredUsers = computed(() => {
   return users.value.filter(user =>
     user.username.toLowerCase().includes(query) ||
     user.email.toLowerCase().includes(query) ||
+    (user.phone && user.phone.toLowerCase().includes(query)) || // Cải tiến: Tìm theo SĐT
     getRoleLabel(user.role).toLowerCase().includes(query)
   );
 });
@@ -136,12 +137,12 @@ onMounted(() => {
   }
 });
 
-// --- CRUD User ---
+// --- CRUD User (Đã cập nhật để dùng /admin) ---
 async function fetchUsers() {
   isLoading.value = true;
   try {
-    // Gọi /users và lọc ra những ai KHÔNG PHẢI 'user'
-    const response = await apiService.get(`/users?role_ne=user`);
+    // THAY ĐỔI: Gọi /admin thay vì /users
+    const response = await apiService.get(`/admin`);
 
     users.value = response.data.map(user => ({
       ...user,
@@ -151,8 +152,8 @@ async function fetchUsers() {
     }));
     otherUsersCurrentPage.value = 1;
   } catch (error) {
-    console.error("Lỗi khi tải danh sách người dùng:", error);
-    Swal.fire('Lỗi', 'Không thể tải danh sách người dùng.', 'error');
+    console.error("Lỗi khi tải danh sách người dùng (admin):", error);
+    Swal.fire('Lỗi', 'Không thể tải danh sách tài khoản nội bộ.', 'error');
   } finally {
     isLoading.value = false;
   }
@@ -163,8 +164,8 @@ function resetForm() {
   formData.username = '';
   formData.email = '';
   formData.phone = '';
-  formData.address = ''; // Reset địa chỉ
-  formData.role = 'nhanvien'; // Mặc định khi tạo là nhân viên
+  formData.address = '';
+  formData.role = 'nhanvien';
   formData.status = 'active';
   Object.keys(errors).forEach(key => errors[key] = '');
 }
@@ -182,7 +183,7 @@ function openEditModal(user) {
   formData.username = user.username;
   formData.email = user.email;
   formData.phone = user.phone || '';
-  formData.address = user.address || ''; // Thêm địa chỉ
+  formData.address = user.address || '';
   formData.role = user.role;
   formData.status = user.status;
   userModalInstance.value.show();
@@ -210,13 +211,11 @@ function validateForm() {
     isValid = false;
   }
 
-  // Validate SĐT: Cho phép trống, nhưng nếu nhập phải đúng 10 số, bắt đầu bằng 0
   if (formData.phone.trim() && !/^0\d{9}$/.test(formData.phone.trim())) {
     errors.phone = 'SĐT không hợp lệ (phải đủ 10 số, bắt đầu bằng 0).';
     isValid = false;
   }
   
-  // Validate Địa chỉ: Cho phép trống, nhưng nếu nhập thì không quá 255 ký tự
   if (formData.address.trim() && formData.address.trim().length > 255) {
     errors.address = 'Địa chỉ không được vượt quá 255 ký tự.';
     isValid = false;
@@ -238,17 +237,19 @@ async function handleSave() {
     phone: formData.phone,
     role: formData.role,
     status: formData.status,
-    address: formData.address, // Gửi địa chỉ
+    address: formData.address,
     avatar: '',
   };
 
   try {
     if (isEditMode.value) {
-      await apiService.patch(`/users/${formData.id}`, payload);
+      // THAY ĐỔI: Dùng /admin
+      await apiService.patch(`/admin/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật người dùng!', 'success');
     } else {
       payload.created_at = new Date().toISOString();
-      await apiService.post(`/users`, payload);
+      // THAY ĐỔI: Dùng /admin
+      await apiService.post(`/admin`, payload);
       Swal.fire('Thành công', 'Đã tạo người dùng mới!', 'success');
     }
     userModalInstance.value.hide();
@@ -279,7 +280,8 @@ async function toggleUserStatus(user) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      await apiService.patch(`/users/${user.id}`, { status: newStatus });
+      // THAY ĐỔI: Dùng /admin
+      await apiService.patch(`/admin/${user.id}`, { status: newStatus });
       Swal.fire('Thành công!', `Đã ${actionText} người dùng ${user.username}.`, 'success');
       user.status = newStatus; // Cập nhật UI
     } catch (error) {
@@ -306,7 +308,8 @@ async function handleDelete(user) {
 
   if (result.isConfirmed) {
     try {
-      await apiService.delete(`/users/${user.id}`);
+      // THAY ĐỔI: Dùng /admin
+      await apiService.delete(`/admin/${user.id}`);
       Swal.fire('Đã xóa!', 'Người dùng đã được xóa.', 'success');
       fetchUsers();
     } catch (error) {
@@ -316,7 +319,7 @@ async function handleDelete(user) {
   }
 }
 
-// --- CRUD Vai trò ---
+// --- CRUD Vai trò (Giữ nguyên, vẫn đọc từ /roles) ---
 async function fetchRoles() {
   try {
     const response = await apiService.get(`/roles`);
@@ -478,7 +481,7 @@ function nextOtherUsersPage() {
                   <i class="bi bi-search text-muted"></i>
                 </span>
                 <input type="text" class="form-control border-start-0 ps-0"
-                  placeholder="Tìm kiếm theo tên đăng nhập, email, vai trò..." v-model="searchQuery">
+                  placeholder="Tìm theo tên, email, SĐT, vai trò..." v-model="searchQuery">
               </div>
             </div>
 

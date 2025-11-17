@@ -1,9 +1,9 @@
 {
-  "users": [
+  "admin": [
     {
       "id": "3399",
-      "username": "binhminh21106",
-      "name": "binhminh21106",
+      "username": "Bình Minh",
+      "name": "Bình Minh",
       "email": "minhdzwama211@gmail.com",
       "password": "Binhminh@123",
       "role": "admin",
@@ -84,7 +84,7 @@
       "name": "Nguyễn Trần Bình Minh",
       "email": "minhntbpk04039@gmail.com",
       "password": "Binhminh@123",
-      "role": "user",
+      "role": "",
       "status": "active",
       "phone": "0358090730",
       "address": "",
@@ -97,7 +97,7 @@
       "name": "Nguyễn Trần Bình Minh",
       "email": "minhntbpk04039@gmail.com",
       "password": "Binhminh@123",
-      "role": "user",
+      "role": "",
       "status": "active",
       "phone": "0358090730",
       "address": "123 Đường ABC, Quận 1, TP. HCM",
@@ -110,7 +110,7 @@
       "name": "Nguyễn Trần Bình Minh",
       "email": "minhntbpk04039@gmail.com",
       "password": "Binhminh@123",
-      "role": "user",
+      "role": "",
       "status": "active",
       "phone": "0358090730",
       "address": "",
@@ -123,21 +123,50 @@
       "name": "hieuht",
       "email": "hieuhtpk04060@gmail.com",
       "password": "123123123",
-      "role": "user",
+      "role": "",
       "status": "active",
       "phone": "0377975276",
       "address": "",
       "avatar": "",
       "created_at": "2025-11-12T05:16:34.939Z"
+    }
+  ],
+  "users": [
+    {
+      "id": "user001",
+      "username": "khachhangA",
+      "name": "Nguyễn Văn A",
+      "email": "khachhangA@gmail.com",
+      "password": "password123",
+      "status": "active",
+      "phone": "0905123456",
+      "address": "123 Đường ABC, Quận 1, TP. HCM",
+      "avatar": "https://placehold.co/100x100/EBF4FF/1D62F0?text=A",
+      "created_at": "2025-10-20T08:30:00.000Z"
     },
     {
-      "id": "5aff",
-      "username": "minhdeony12334",
-      "name": "NGUYEN TRAN BINH MINH",
-      "email": "minhdzwama211@gmail.com",
-      "phone": "0358090730",
-      "password": "Binhminh@123",
-      "role": "user"
+      "id": "user002",
+      "username": "khachhangB",
+      "name": "Trần Thị B",
+      "email": "khachhangB@yahoo.com",
+      "password": "password456",
+      "status": "active",
+      "phone": "0912654321",
+      "address": "456 Đường XYZ, Quận Ba Đình, Hà Nội",
+      "avatar": "",
+      "created_at": "2025-11-01T14:22:10.000Z"
+    },
+    {
+      "id": "user003",
+      "username": "khachhangC_inactive",
+      "name": "Lê Văn C",
+      "email": "khachhangC@gmail.com",
+      "password": "password789",
+      "status": "inactive",
+      "phone": "0358010101",
+      "address": "",
+      "avatar": "",
+      "created_at": "2025-11-15T10:10:05.000Z"
     }
   ],
   "roles": [
@@ -208,28 +237,7 @@
       "updated_at": "2024-10-01T10:00:00Z",
       "deleted_at": null,
       "description": "Điện thoại flagship hàng đầu với camera 200MP và bút S-Pen.",
-      "status": "active",
-      "images": [
-        {
-          "id": 101,
-          "product_id": 1,
-          "image_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+1"
-        }
-      ],
-      "variants": [
-        {
-          "id": 1,
-          "price": 32990000,
-          "stock": 10,
-          "attributes": { "Màu sắc": "Titan Xám", "Dung lượng": "256GB" }
-        },
-        {
-          "id": 2,
-          "price": 35990000,
-          "stock": 5,
-          "attributes": { "Màu sắc": "Titan Đen", "Dung lượng": "512GB" }
-        }
-      ]
+      "status": "active"
     },
     {
       "id": 2,
@@ -244,28 +252,7 @@
       "updated_at": "2024-10-02T11:00:00Z",
       "deleted_at": null,
       "description": "Laptop văn phòng bền bỉ, chip Intel Core i5 thế hệ 13.",
-      "status": "active",
-      "images": [
-        {
-          "id": 102,
-          "product_id": 2,
-          "image_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+1"
-        }
-      ],
-      "variants": [
-        {
-          "id": 3,
-          "price": 18500000,
-          "stock": 8,
-          "attributes": { "RAM": "16GB", "Ổ cứng": "512GB SSD" }
-        },
-        {
-          "id": 4,
-          "price": 21000000,
-          "stock": 3,
-          "attributes": { "RAM": "32GB", "Ổ cứng": "512GB SSD" }
-        }
-      ]
+      "status": "active"
     },
     {
       "id": 3,
@@ -280,22 +267,7 @@
       "updated_at": "2024-10-03T12:00:00Z",
       "deleted_at": null,
       "description": "Tai nghe chống ồn chủ động, âm thanh không gian.",
-      "status": "active",
-      "images": [
-        {
-          "id": 103,
-          "product_id": 3,
-          "image_url": "https://placehold.co/150x150/7F9F7F/EBF6EB?text=TaiNghe+1"
-        }
-      ],
-      "variants": [
-        {
-          "id": 5,
-          "price": 5990000,
-          "stock": 30,
-          "attributes": { "Màu sắc": "Trắng" }
-        }
-      ]
+      "status": "active"
     },
     {
       "id": 4,
@@ -310,28 +282,7 @@
       "updated_at": "2024-10-04T13:00:00Z",
       "deleted_at": null,
       "description": "Bàn phím cơ không dây, switch low-profile, LED RGB.",
-      "status": "active",
-      "images": [
-        {
-          "id": 104,
-          "product_id": 4,
-          "image_url": "https://placehold.co/150x150/9F9F7F/F6F6EB?text=Keyboard"
-        }
-      ],
-      "variants": [
-        {
-          "id": 7,
-          "price": 4500000,
-          "stock": 15,
-          "attributes": { "Switch": "Tactile" }
-        },
-        {
-          "id": 8,
-          "price": 4500000,
-          "stock": 10,
-          "attributes": { "Switch": "Clicky" }
-        }
-      ]
+      "status": "active"
     },
     {
       "id": 5,
@@ -346,22 +297,7 @@
       "updated_at": "2024-10-05T14:00:00Z",
       "deleted_at": null,
       "description": "Chuyên gia chân dung, thiết kế thời trang, sạc nhanh 80W.",
-      "status": "active",
-      "images": [
-        {
-          "id": 105,
-          "product_id": 5,
-          "image_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+2"
-        }
-      ],
-      "variants": [
-        {
-          "id": 9,
-          "price": 10990000,
-          "stock": 20,
-          "attributes": { "Màu sắc": "Xanh", "Dung lượng": "256GB" }
-        }
-      ]
+      "status": "active"
     },
     {
       "id": 6,
@@ -376,22 +312,7 @@
       "updated_at": "2024-10-06T15:00:00Z",
       "deleted_at": null,
       "description": "Laptop gaming tản nhiệt mát, RTX 4060, màn hình 165Hz.",
-      "status": "active",
-      "images": [
-        {
-          "id": 106,
-          "product_id": 6,
-          "image_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+2"
-        }
-      ],
-      "variants": [
-        {
-          "id": 10,
-          "price": 28990000,
-          "stock": 8,
-          "attributes": { "CPU": "Ryzen 7", "RAM": "16GB" }
-        }
-      ]
+      "status": "active"
     },
     {
       "id": 7,
@@ -406,28 +327,7 @@
       "updated_at": "2024-10-07T16:00:00Z",
       "deleted_at": null,
       "description": "Khung viền Titan, chip A17 Pro, cổng sạc USB-C.",
-      "status": "active",
-      "images": [
-        {
-          "id": 107,
-          "product_id": 7,
-          "image_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+3"
-        }
-      ],
-      "variants": [
-        {
-          "id": 11,
-          "price": 27990000,
-          "stock": 10,
-          "attributes": { "Màu sắc": "Titan Tự nhiên", "Dung lượng": "128GB" }
-        },
-        {
-          "id": 12,
-          "price": 30990000,
-          "stock": 10,
-          "attributes": { "Màu sắc": "Titan Xanh", "Dung lượng": "256GB" }
-        }
-      ]
+      "status": "active"
     },
     {
       "id": 8,
@@ -442,22 +342,7 @@
       "updated_at": "2024-10-08T17:00:00Z",
       "deleted_at": null,
       "description": "Chuột gaming có dây, mắt đọc Hero 25K, tùy chỉnh tạ.",
-      "status": "active",
-      "images": [
-        {
-          "id": 108,
-          "product_id": 8,
-          "image_url": "https://placehold.co/150x150/9F9F7F/F6F6EB?text=Mouse"
-        }
-      ],
-      "variants": [
-        {
-          "id": 13,
-          "price": 1290000,
-          "stock": 50,
-          "attributes": { "Màu sắc": "Đen" }
-        }
-      ]
+      "status": "active"
     },
     {
       "id": 9,
@@ -472,28 +357,7 @@
       "updated_at": "2024-10-09T18:00:00Z",
       "deleted_at": null,
       "description": "Tai nghe TWS, chống ồn thông minh, âm thanh 360.",
-      "status": "active",
-      "images": [
-        {
-          "id": 109,
-          "product_id": 9,
-          "image_url": "https://placehold.co/150x150/7F9F7F/EBF6EB?text=TaiNghe+2"
-        }
-      ],
-      "variants": [
-        {
-          "id": 15,
-          "price": 4490000,
-          "stock": 25,
-          "attributes": { "Màu sắc": "Đen" }
-        },
-        {
-          "id": 16,
-          "price": 4490000,
-          "stock": 15,
-          "attributes": { "Màu sắc": "Bạc" }
-        }
-      ]
+      "status": "active"
     },
     {
       "id": 10,
@@ -508,22 +372,239 @@
       "updated_at": "2024-10-10T19:00:00Z",
       "deleted_at": null,
       "description": "Laptop mỏng nhẹ, màn hình OLED, vỏ nhôm nguyên khối.",
+      "status": "active"
+    },
+    {
+      "id": "2eab",
+      "name": "TEST",
+      "description": "TEST",
+      "category_id": "3",
       "status": "active",
-      "images": [
-        {
-          "id": 110,
-          "product_id": 10,
-          "image_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+3"
-        }
-      ],
+      "updated_at": "2025-11-17T14:57:26.533Z",
       "variants": [
         {
-          "id": 17,
-          "price": 22990000,
-          "stock": 10,
-          "attributes": { "CPU": "Core i7", "RAM": "16GB", "Ổ cứng": "512GB SSD" }
+          "price": 1222222,
+          "stock": 111,
+          "attributes": {
+            "TEST": "11",
+            "TEST1": "12"
+          }
+        },
+        {
+          "price": 1222222,
+          "stock": 1222222,
+          "attributes": {
+            "TEST": "12",
+            "TEST1": "12"
+          }
         }
-      ]
+      ],
+      "images": [],
+      "thumbnail_url": "https://placehold.co/150x150?text=No+Img",
+      "sold_count": 0,
+      "favorite_count": 0,
+      "review_count": 0,
+      "average_rating": 0,
+      "created_at": "2025-11-17T14:57:26.533Z"
+    }
+  ],
+  "images": [
+    {
+      "id": 101,
+      "product_id": 1,
+      "image_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+1"
+    },
+    {
+      "id": 102,
+      "product_id": 2,
+      "image_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+1"
+    },
+    {
+      "id": 103,
+      "product_id": 3,
+      "image_url": "https://placehold.co/150x150/7F9F7F/EBF6EB?text=TaiNghe+1"
+    },
+    {
+      "id": 104,
+      "product_id": 4,
+      "image_url": "https://placehold.co/150x150/9F9F7F/F6F6EB?text=Keyboard"
+    },
+    {
+      "id": 105,
+      "product_id": 5,
+      "image_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+2"
+    },
+    {
+      "id": 106,
+      "product_id": 6,
+      "image_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+2"
+    },
+    {
+      "id": 107,
+      "product_id": 7,
+      "image_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+3"
+    },
+    {
+      "id": 108,
+      "product_id": 8,
+      "image_url": "https://placehold.co/150x150/9F9F7F/F6F6EB?text=Mouse"
+    },
+    {
+      "id": 109,
+      "product_id": 9,
+      "image_url": "https://placehold.co/150x150/7F9F7F/EBF6EB?text=TaiNghe+2"
+    },
+    {
+      "id": 110,
+      "product_id": 10,
+      "image_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+3"
+    }
+  ],
+  "variants": [
+    {
+      "id": 1,
+      "product_id": 1,
+      "price": 32990000,
+      "stock": 10,
+      "attributes": {
+        "Màu sắc": "Titan Xám",
+        "Dung lượng": "256GB"
+      }
+    },
+    {
+      "id": 2,
+      "product_id": 1,
+      "price": 35990000,
+      "stock": 5,
+      "attributes": {
+        "Màu sắc": "Titan Đen",
+        "Dung lượng": "512GB"
+      }
+    },
+    {
+      "id": 3,
+      "product_id": 2,
+      "price": 18500000,
+      "stock": 8,
+      "attributes": {
+        "RAM": "16GB",
+        "Ổ cứng": "512GB SSD"
+      }
+    },
+    {
+      "id": 4,
+      "product_id": 2,
+      "price": 21000000,
+      "stock": 3,
+      "attributes": {
+        "RAM": "32GB",
+        "Ổ cứng": "512GB SSD"
+      }
+    },
+    {
+      "id": 5,
+      "product_id": 3,
+      "price": 5990000,
+      "stock": 30,
+      "attributes": {
+        "Màu sắc": "Trắng"
+      }
+    },
+    {
+      "id": 7,
+      "product_id": 4,
+      "price": 4500000,
+      "stock": 15,
+      "attributes": {
+        "Switch": "Tactile"
+      }
+    },
+    {
+      "id": 8,
+      "product_id": 4,
+      "price": 4500000,
+      "stock": 10,
+      "attributes": {
+        "Switch": "Clicky"
+      }
+    },
+    {
+      "id": 9,
+      "product_id": 5,
+      "price": 10990000,
+      "stock": 20,
+      "attributes": {
+        "Màu sắc": "Xanh",
+        "Dung lượng": "256GB"
+      }
+    },
+    {
+      "id": 10,
+      "product_id": 6,
+      "price": 28990000,
+      "stock": 8,
+      "attributes": {
+        "CPU": "Ryzen 7",
+        "RAM": "16GB"
+      }
+    },
+    {
+      "id": 11,
+      "product_id": 7,
+      "price": 27990000,
+      "stock": 10,
+      "attributes": {
+        "Màu sắc": "Titan Tự nhiên",
+        "Dung lượng": "128GB"
+      }
+    },
+    {
+      "id": 12,
+      "product_id": 7,
+      "price": 30990000,
+      "stock": 10,
+      "attributes": {
+        "Màu sắc": "Titan Xanh",
+        "Dung lượng": "256GB"
+      }
+    },
+    {
+      "id": 13,
+      "product_id": 8,
+      "price": 1290000,
+      "stock": 50,
+      "attributes": {
+        "Màu sắc": "Đen"
+      }
+    },
+    {
+      "id": 15,
+      "product_id": 9,
+      "price": 4490000,
+      "stock": 25,
+      "attributes": {
+        "Màu sắc": "Đen"
+      }
+    },
+    {
+      "id": 16,
+      "product_id": 9,
+      "price": 4490000,
+      "stock": 15,
+      "attributes": {
+        "Màu sắc": "Bạc"
+      }
+    },
+    {
+      "id": 17,
+      "product_id": 10,
+      "price": 22990000,
+      "stock": 10,
+      "attributes": {
+        "CPU": "Core i7",
+        "RAM": "16GB",
+        "Ổ cứng": "512GB SSD"
+      }
     }
   ],
   "orders": [

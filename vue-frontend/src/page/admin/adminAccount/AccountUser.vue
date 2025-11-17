@@ -83,14 +83,14 @@ onMounted(() => {
 async function fetchCustomers() {
   isLoading.value = true;
   try {
-    // THAY ĐỔI 1: Gọi /users?role=user để CHỈ lấy khách hàng
-    const response = await apiService.get(`/users?role=user`);
+    // THAY ĐỔI 1: Gọi /users (bảng users không có 'role' nên không cần lọc)
+    const response = await apiService.get(`/users`);
 
-    // Sắp xếp theo ID mới nhất
+    // Sắp xếp theo ID mới nhất (hoặc created_at nếu bạn muốn)
     customers.value = response.data.map(customer => ({
       ...customer,
       status: customer.status || 'active'
-    })).sort((a, b) => (b.id > a.id) ? 1 : -1); // Sắp xếp mới nhất lên đầu
+    })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); // Sắp xếp mới nhất lên đầu
 
   } catch (error) {
     console.error("Lỗi tải danh sách khách hàng:", error);
@@ -152,8 +152,6 @@ function validateForm() {
     errors.phone = 'Số điện thoại không hợp lệ (10-11 số).';
     isValid = false;
   }
-  
-  // Đã xóa logic validate mật khẩu
 
   return isValid;
 }
@@ -195,7 +193,6 @@ async function handleSave() {
       email: formData.email,
       phone: formData.phone,
       address: formData.address,
-      avatar: formData.avatar,
       avatar: formData.avatar, // Default to existing URL
       status: formData.status,
     };
@@ -205,20 +202,17 @@ async function handleSave() {
     }
 
     if (isEditMode.value) {
-      // Đã xóa logic mật khẩu
-      // THAY ĐỔI 2: PATCH đến /users/:id
+      // THAY ĐỔI 2: PATCH đến /users/:id (logic này đã đúng)
       await apiService.patch(`/users/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật thông tin khách hàng!', 'success');
     } else {
-      // Đã xóa logic mật khẩu
       
-      // THAY ĐỔI 3: Thêm các trường chuẩn hóa cho bảng /users
-      payload.role = 'user'; // Gán vai trò là user
-      // Tạo username giả lập từ email
+      // THAY ĐỔI 3: Thêm các trường chuẩn hóa cho bảng /users (đã BỎ 'role')
+      // Tạo username giả lập từ email để khớp cấu trúc db.json
       payload.username = formData.email.split('@')[0] + `_${Math.random().toString(36).substr(2, 4)}`;
       payload.created_at = new Date().toISOString();
       
-      // THAY ĐỔI 4: POST đến /users
+      // THAY ĐỔI 4: POST đến /users (logic này đã đúng)
       await apiService.post(`/users`, payload);
       Swal.fire('Thành công', 'Đã thêm khách hàng mới!', 'success');
     }
@@ -252,7 +246,7 @@ async function toggleCustomerStatus(customer) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      // THAY ĐỔI 5: PATCH đến /users/:id
+      // THAY ĐỔI 5: PATCH đến /users/:id (logic này đã đúng)
       await apiService.patch(`/users/${customer.id}`, { status: newStatus });
       Swal.fire(
         'Thành công!',
@@ -285,7 +279,7 @@ async function handleDelete(customer) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      // THAY ĐỔI 6: DELETE đến /users/:id
+      // THAY ĐỔI 6: DELETE đến /users/:id (logic này đã đúng)
       await apiService.delete(`/users/${customer.id}`);
       Swal.fire('Đã xóa!', 'Khách hàng đã được xóa thành công.', 'success');
       
@@ -514,8 +508,6 @@ function goToPage(page) {
                 </div>
               </div>
             </div>
-
-            <!-- Phần Bảo mật đã được xóa -->
 
           </form>
         </div>
