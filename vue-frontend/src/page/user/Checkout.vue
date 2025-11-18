@@ -1,11 +1,25 @@
 <script setup>
 import { ref, reactive, onMounted, watch, computed } from "vue";
 
-// 🛒 Giỏ hàng demo
 const cartItems = ref([
-  { name: "Tay cầm chơi game PS5 DualSense", price: 1800000, quantity: 2 },
-  { name: "Xiaomi 15 Pro", price: 14500000, quantity: 1 },
+  { id: 1, name: "Tay cầm chơi game PS5 DualSense", price: 1800000, quantity: 2, image: "https://placehold.co/80x80/EBF6EB/7F9F7F?text=PS5" },
+  { id: 2, name: "Xiaomi 15 Pro", price: 14500000, quantity: 1, image: "https://placehold.co/80x80/EBF0F6/7F8B9F?text=Xiaomi" },
 ]);
+
+const increaseQuantity = (item) => {
+  item.quantity++;
+};
+
+const decreaseQuantity = (item) => {
+  if (item.quantity > 1) {
+    item.quantity--;
+  }
+};
+
+const removeItem = (itemId) => {
+  cartItems.value = cartItems.value.filter(item => item.id !== itemId);
+};
+
 
 // 💰 Tổng tiền hàng
 const subtotal = computed(() =>
@@ -14,9 +28,10 @@ const subtotal = computed(() =>
 
 // 🚚 Phí ship theo tỉnh
 const shippingFees = {
-  "Hà Nội": 15000,
-  "TP Hồ Chí Minh": 20000,
-  "Đà Nẵng": 25000,
+  "Thành phố Hà Nội": 50000,
+  "Thành phố Hồ Chí Minh": 30000,
+  "Thành phố Đà Nẵng": 40000,
+  "Tỉnh Đắk Lắk": 0,
 };
 
 // 💳 Phương thức thanh toán
@@ -155,7 +170,7 @@ const validateForm = () => {
     errors.address = "Vui lòng chọn đầy đủ Tỉnh/Quận/Phường.";
     valid = false;
   }
-  
+
   // Kiểm tra phương thức thanh toán
   if (!form.paymentMethod) {
     errors.paymentMethod = "Vui lòng chọn phương thức thanh toán.";
@@ -165,7 +180,7 @@ const validateForm = () => {
   return valid;
 };
 
-// 💳 Xác nhận thanh toán & Hiển thị Modal
+// � Xác nhận thanh toán & Hiển thị Modal
 const confirmCheckout = () => {
   if (!validateForm()) return;
 
@@ -194,7 +209,7 @@ const confirmCheckout = () => {
 
 // Đóng Modal
 const closeModal = () => {
-    showModal.value = false;
+  showModal.value = false;
 }
 </script>
 
@@ -283,12 +298,23 @@ const closeModal = () => {
       <div class="checkout-summary">
         <h3>Đơn hàng của bạn</h3>
         <ul>
-          <li v-for="item in cartItems" :key="item.name">
-            <div class="item-name">
-              {{ item.name }} <span>(x{{ item.quantity }})</span>
+          <li v-for="item in cartItems" :key="item.id" class="cart-item-summary">
+            <img :src="item.image" alt="item.name" class="item-image-summary" />
+            <div class="item-details-summary">
+              <div class="item-name">{{ item.name }}</div>
+              <div class="item-quantity-controls">
+                <button @click="decreaseQuantity(item)" :disabled="item.quantity <= 1">-</button>
+                <span>{{ item.quantity }}</span>
+                <button @click="increaseQuantity(item)">+</button>
+              </div>
             </div>
-            <div class="item-price">
-              {{ (item.price * item.quantity).toLocaleString() }} đ
+            <div class="item-info-right">
+              <div class="item-price">
+                {{ (item.price * item.quantity).toLocaleString() }} đ
+              </div>
+              <button @click="removeItem(item.id)" class="remove-item-btn" title="Xóa sản phẩm">
+                &times;
+              </button>
             </div>
           </li>
         </ul>
@@ -298,9 +324,16 @@ const closeModal = () => {
           <strong>Tạm tính:</strong>
           <span>{{ subtotal.toLocaleString() }} đ</span>
         </div>
-        <div class="summary-line">
+        <div v-if="selectedProvince" class="shipping-fee">
           <strong>Phí vận chuyển:</strong>
-          <span>{{ shippingCost.toLocaleString() }} đ</span>
+
+          <span v-if="shippingCost === 0" class="free-ship-msg">
+            <i class="fa-solid fa-gift"></i> Miễn phí ship đơn hàng này nè bro!
+          </span>
+
+          <span v-else>
+            {{ shippingCost.toLocaleString() }} đ
+          </span>
         </div>
         <div class="summary-line total">
           <strong>Tổng cộng:</strong>
@@ -324,7 +357,8 @@ const closeModal = () => {
           </div>
           <div class="modal-summary">
             <h5 class="font-bold mt-4 mb-2">Thông tin thanh toán:</h5>
-            <div v-for="sum in modalContent.summary" :key="sum.label" :class="['summary-line-modal', { 'total-modal': sum.isTotal }]">
+            <div v-for="sum in modalContent.summary" :key="sum.label"
+              :class="['summary-line-modal', { 'total-modal': sum.isTotal }]">
               <strong>{{ sum.label }}:</strong>
               <span>{{ sum.value }}</span>
             </div>
@@ -364,14 +398,16 @@ const closeModal = () => {
   flex-wrap: wrap;
 }
 
-.checkout-form, .checkout-summary {
+.checkout-form,
+.checkout-summary {
   padding: 25px 30px;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .checkout-form {
-  flex: 1 1 550px; /* Base for larger screens */
+  flex: 1 1 550px;
+  /* Base for larger screens */
   background: #fff;
 }
 
@@ -381,7 +417,8 @@ const closeModal = () => {
   border: 1px solid #e0e0e0;
 }
 
-.checkout-form h3, .checkout-summary h3 {
+.checkout-form h3,
+.checkout-summary h3 {
   color: #333;
   border-bottom: 2px solid #009981;
   padding-bottom: 10px;
@@ -426,8 +463,8 @@ const closeModal = () => {
 }
 
 .address-select select {
-    flex-grow: 1;
-    min-width: 150px;
+  flex-grow: 1;
+  min-width: 150px;
 }
 
 .error {
@@ -438,49 +475,56 @@ const closeModal = () => {
 
 /* PAYMENT METHODS SECTION */
 .checkout-form-section {
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 1px dashed #ccc;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px dashed #ccc;
 }
+
 .payment-methods-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
+
 .payment-option {
-    display: flex;
-    align-items: center;
-    border: 2px solid #eee;
-    padding: 12px 15px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    background-color: #fefefe;
+  display: flex;
+  align-items: center;
+  border: 2px solid #eee;
+  padding: 12px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: #fefefe;
 }
+
 .payment-option:hover {
-    border-color: #009981;
+  border-color: #009981;
 }
+
 .payment-option input[type="radio"] {
-    margin-right: 15px;
-    accent-color: #009981;
-    width: 16px;
-    height: 16px;
+  margin-right: 15px;
+  accent-color: #009981;
+  width: 16px;
+  height: 16px;
 }
-.payment-option input[type="radio"]:checked + .option-content {
-    color: #009981;
-    font-weight: bold;
+
+.payment-option input[type="radio"]:checked+.option-content {
+  color: #009981;
+  font-weight: bold;
 }
+
 .option-content {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 15px;
-    color: #333;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  color: #333;
 }
+
 .option-content i {
-    color: #009981;
-    width: 20px;
-    text-align: center;
+  color: #009981;
+  width: 20px;
+  text-align: center;
 }
 
 /* SUMMARY & FOOTER */
@@ -511,6 +555,7 @@ const closeModal = () => {
   background-color: #006e61;
   transform: translateY(-1px);
 }
+
 .checkout-btn:active {
   transform: translateY(1px);
 }
@@ -518,23 +563,78 @@ const closeModal = () => {
 
 /* ORDER SUMMARY */
 .checkout-summary ul {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 20px 0;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px 0;
 }
-.checkout-summary ul li {
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px dotted #e0e0e0;
-    font-size: 14px;
-    color: #555;
+
+/* Cập nhật style cho item trong giỏ hàng */
+.cart-item-summary {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
 }
-.item-name span {
-    font-size: 12px;
-    color: #999;
-    margin-left: 5px;
+
+.item-image-summary {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid #eee;
 }
+
+.item-details-summary {
+  flex-grow: 1;
+}
+
+.item-name {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.item-quantity-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.item-quantity-controls button {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #ddd;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.item-quantity-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.item-info-right {
+  text-align: right;
+}
+
+.item-price {
+  font-size: 14px;
+  font-weight: bold;
+  color: #333;
+}
+
+.remove-item-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 20px;
+  cursor: pointer;
+  margin-top: 5px;
+}
+
 .summary-line {
   display: flex;
   justify-content: space-between;
@@ -554,137 +654,168 @@ const closeModal = () => {
 
 /* CUSTOM SUCCESS MODAL STYLES */
 .custom-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
 }
 
 .custom-modal-content {
-    background: #fff;
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    width: 90%;
-    max-width: 500px;
-    position: relative;
-    animation: fadeIn 0.3s ease-out;
+  background: #fff;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 500px;
+  position: relative;
+  animation: fadeIn 0.3s ease-out;
 }
 
 .modal-close-btn {
-    position: absolute;
-    top: 10px;
-    right: 15px;
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    color: #aaa;
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #aaa;
 }
 
 .modal-header h4 {
-    color: #009981;
-    font-size: 24px;
-    margin-bottom: 20px;
-    text-align: center;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 10px;
+  color: #009981;
+  font-size: 24px;
+  margin-bottom: 20px;
+  text-align: center;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
 }
 
 .modal-body {
-    margin-bottom: 20px;
+  margin-bottom: 20px;
 }
 
 .modal-details p {
-    margin: 6px 0;
-    font-size: 15px;
-    color: #333;
+  margin: 6px 0;
+  font-size: 15px;
+  color: #333;
 }
+
 .modal-details strong {
-    display: inline-block;
-    min-width: 120px;
+  display: inline-block;
+  min-width: 120px;
 }
 
 .summary-line-modal {
-    display: flex;
-    justify-content: space-between;
-    padding: 5px 0;
-    font-size: 15px;
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  font-size: 15px;
 }
 
 .total-modal {
-    font-size: 18px;
-    font-weight: bold;
-    color: #009981;
-    border-top: 1px dashed #ccc;
-    padding-top: 10px;
-    margin-top: 10px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #009981;
+  border-top: 1px dashed #ccc;
+  padding-top: 10px;
+  margin-top: 10px;
 }
 
 .modal-footer {
-    text-align: center;
+  text-align: center;
 }
 
 .modal-ok-btn {
-    background-color: #009981;
-    color: #fff;
-    font-weight: bold;
-    padding: 10px 30px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background-color 0.3s;
+  background-color: #009981;
+  color: #fff;
+  font-weight: bold;
+  padding: 10px 30px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s;
 }
+
 .modal-ok-btn:hover {
-    background-color: #006e61;
+  background-color: #006e61;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.9); }
-    to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* RESPONSIVENESS */
 @media (max-width: 1024px) {
-    .checkout-content {
-        flex-direction: column;
-    }
-    .checkout-form, .checkout-summary {
-        flex-basis: 100%;
-    }
+  .checkout-content {
+    flex-direction: column;
+  }
+
+  .checkout-form,
+  .checkout-summary {
+    flex-basis: 100%;
+  }
 }
 
 @media (max-width: 600px) {
-    .checkout-page {
-        padding: 20px 15px;
-    }
-    .checkout-form, .checkout-summary {
-        padding: 20px;
-    }
-    .address-select {
-        flex-direction: column;
-        gap: 15px;
-    }
-    .address-select select {
-        width: 100%;
-        min-width: unset;
-    }
-    .payment-option {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 10px;
-    }
-    .payment-option input[type="radio"] {
-        align-self: flex-end;
-    }
-    .option-content {
-        margin-top: 5px;
-    }
+  .checkout-page {
+    padding: 20px 15px;
+  }
+
+  .checkout-form,
+  .checkout-summary {
+    padding: 20px;
+  }
+
+  .address-select {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .address-select select {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .payment-option {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px;
+  }
+
+  .payment-option input[type="radio"] {
+    align-self: flex-end;
+  }
+
+  .option-content {
+    margin-top: 5px;
+  }
+}
+
+.free-ship-msg {
+  color: #e74c3c; /* Màu đỏ nhạt - có thể điều chỉnh mã màu nếu muốn */
+  font-weight: bold;
+  font-style: italic;
+  animation: pulse 1.5s infinite; /* Hiệu ứng nhịp đập nhẹ để gây chú ý */
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
 }
 </style>
