@@ -4,22 +4,18 @@ import apiService from '../../apiService.js';
 import Swal from 'sweetalert2';
 import { useRouter } from 'vue-router';
 
-const API_URL = import.meta.env.VITE_API_BASE_URL;
 const router = useRouter();
 
 const formData = reactive({
-    username: '',
     fullName: '',
     email: '',
     password: '',
     phone: '',
     confirmPassword: '',
-    role: 'user'
 });
 
 const error = reactive({
     fullName: '',
-    username: '',
     email: '',
     phone: '',
     password: '',
@@ -44,19 +40,14 @@ const togglePasswordVisibility = (field) => {
 const validateForm = () => {
     Object.keys(error).forEach(key => error[key] = '');
     let isValid = true;
-    const phoneRegex = /^(0[3|5|7|8|9])+([0-9]{8})$/;
-    const re = /^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]+$/;
-
-    if (!formData.username.trim()) {
-        error.username = 'Vui lòng nhập tên hiển thị.';
-        isValid = false;
-    } else if (!re.test(formData.username)) {
-        error.username = 'Tên hiển thị chỉ được dùng chữ và số.';
-        isValid = false;
-    }
+    const phoneRegex = /^(0[35789][0-9]{8})$/;
+    const strongPasswordRegex = /^(?=[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
 
     if (!formData.fullName.trim()) {
         error.fullName = 'Vui lòng nhập họ và tên.';
+        isValid = false;
+    } else if (formData.fullName.length < 5) {
+        error.fullName = 'Họ tên phải tối thiểu 5 kí tự';
         isValid = false;
     }
 
@@ -79,8 +70,8 @@ const validateForm = () => {
     if (!formData.password) {
         error.password = 'Vui lòng nhập mật khẩu.';
         isValid = false;
-    } else if (formData.password.length < 8) {
-        error.password = 'Mật khẩu phải có ít nhất 8 ký tự.';
+    } else if (!strongPasswordRegex.test(formData.password)) {
+        error.password = 'Mật khẩu phải bắt đầu bằng chữ hoa, có ít nhất 1 số và 1 ký tự đặc biệt.';
         isValid = false;
     }
 
@@ -105,12 +96,10 @@ const handleRegister = async () => {
 
     isLoading.value = true;
     const payload = {
-        username: formData.username,
         name: formData.fullName,
         email: formData.email,
         phone: formData.phone,
         password: formData.password,
-        role: formData.role
     };
 
     try {
@@ -125,7 +114,7 @@ const handleRegister = async () => {
                 confirmButtonColor: '#009981',
             }).then(() => {
                 router.push({ name: 'login' });
-                Object.assign(formData, { username: '', fullName: '', email: '', password: '', phone: '', confirmPassword: '' });
+                Object.assign(formData, { fullName: '', email: '', password: '', phone: '', confirmPassword: '' });
                 agreedToTerms.value = false;
             });
         }
@@ -177,14 +166,6 @@ const handleRegister = async () => {
                 <h2>Đăng ký</h2>
 
                 <form action="#" method="POST" class="login-form" @submit.prevent="handleRegister">
-                    <div class="form-group">
-                        <label for="username">Tên hiển thị</label>
-                        <input type="text" id="username" v-model="formData.username" name="fullname"
-                            placeholder="Nhập tên hiển thị của bạn"
-                            :class="['form-control', error.username ? 'is-invalid' : '']">
-                        <div v-if="error.username" class="invalid-feedback d-block">{{ error.username }}</div>
-                    </div>
-
                     <div class="form-group">
                         <label for="fullname">Họ và tên</label>
                         <input type="text" id="fullname" v-model="formData.fullName" name="fullname"
@@ -249,7 +230,7 @@ const handleRegister = async () => {
                     </div>
                     <div v-if="error.terms" class="invalid-feedback d-block">{{ error.terms }}</div>
 
-                    <button type="submit" class="btn-login" :disabled="isLoading">
+                    <button type="submit" class="btn-login" :disabled="isLoading || !agreedToTerms">
                         <span v-if="isLoading" class="spinner-border spinner-border-sm me-2" role="status"
                             aria-hidden="true"></span>
                         <span>{{ isLoading ? 'Đang đăng ký...' : 'Đăng ký' }}</span>
@@ -565,6 +546,13 @@ const handleRegister = async () => {
 
 .register-link a:hover {
     text-decoration: underline;
+}
+
+.login-form input[type="checkbox"] {
+    accent-color: #009981;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
 }
 
 @media (max-width: 768px) {
