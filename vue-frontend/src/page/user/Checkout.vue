@@ -23,7 +23,7 @@ const shippingFees = {
 const paymentMethods = [
   { code: "COD", name: "Thanh toán khi nhận hàng (COD)", icon: "fa-box-open" },
   { code: "BANK", name: "Chuyển khoản ngân hàng", icon: "fa-building-columns" },
-  { code: "CARD", name: "Thẻ Tín dụng/Ghi nợ", icon: "fa-credit-card" },
+  { code: "CARD", name: "VN Pay", icon: "fa-credit-card" },
 ];
 
 // 📦 Thông tin form
@@ -65,6 +65,19 @@ const modalContent = ref({});
 
 // 🧭 Lấy danh sách địa chỉ VN
 onMounted(async () => {
+  // Tự động điền thông tin người dùng nếu đã đăng nhập
+  const userDataString = localStorage.getItem('userData');
+  if (userDataString) {
+    try {
+      const userData = JSON.parse(userDataString);
+      form.name = userData.name || "";
+      form.email = userData.email || "";
+      form.phone = userData.phone || "";
+    } catch (e) {
+      console.error("Lỗi khi đọc dữ liệu người dùng:", e);
+    }
+  }
+
   try {
     const res = await fetch("https://provinces.open-api.vn/api/?depth=3");
     provinces.value = await res.json();
