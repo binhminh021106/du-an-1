@@ -11,14 +11,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-<<<<<<< Updated upstream
-    use HasFactory, Notifiable, SoftDeletes;
-=======
     use HasFactory, Notifiable;
     use SoftDeletes;
 
     protected $table = 'users';
->>>>>>> Stashed changes
 
     /**
      * The attributes that are mass assignable.
@@ -27,20 +23,13 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'fullName',
-<<<<<<< Updated upstream
-        'username',
-=======
->>>>>>> Stashed changes
         'email',
         'phone',
         'password',
         'avatar_url',
         'status',
-<<<<<<< Updated upstream
-=======
         'email_verified_at',
         'remember_token'
->>>>>>> Stashed changes
     ];
 
     /**
