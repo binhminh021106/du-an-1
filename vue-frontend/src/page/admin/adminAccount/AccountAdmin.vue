@@ -4,7 +4,7 @@ import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-const users = ref([]); // Chỉ chứa admin/nhanvien (từ /admin)
+const users = ref([]); // Chỉ chứa admin/nhanvien (từ /admins)
 const isLoading = ref(true);
 const searchQuery = ref('');
 
@@ -29,7 +29,9 @@ const formData = reactive({
   phone: '',
   address: '',
   role: 'nhanvien',
-  status: 'active'
+  status: 'active',
+  password: '', // Thêm mật khẩu
+  password_confirmation: '' // Thêm xác nhận mật khẩu
 });
 
 const errors = reactive({
@@ -37,6 +39,8 @@ const errors = reactive({
   email: '',
   phone: '',
   address: '',
+  password: '', // Thêm lỗi mật khẩu
+  password_confirmation: '' // Thêm lỗi xác nhận
 });
 
 const roleFormData = reactive({
@@ -137,12 +141,12 @@ onMounted(() => {
   }
 });
 
-// --- CRUD User (Đã cập nhật để dùng /admin) ---
+// --- CRUD User (Đã cập nhật để dùng /admins) ---
 async function fetchUsers() {
   isLoading.value = true;
   try {
-    // THAY ĐỔI: Gọi /admin thay vì /users
-    const response = await apiService.get(`/admin`);
+    // THAY ĐỔI: Gọi /admins (plural) thay vì /admin
+    const response = await apiService.get(`/admins`);
 
     users.value = response.data.map(user => ({
       ...user,
@@ -167,6 +171,8 @@ function resetForm() {
   formData.address = '';
   formData.role = 'nhanvien';
   formData.status = 'active';
+  formData.password = ''; // Reset mật khẩu
+  formData.password_confirmation = ''; // Reset xác nhận
   Object.keys(errors).forEach(key => errors[key] = '');
 }
 
@@ -186,6 +192,7 @@ function openEditModal(user) {
   formData.address = user.address || '';
   formData.role = user.role;
   formData.status = user.status;
+  // Không gán mật khẩu khi sửa
   userModalInstance.value.show();
 }
 
@@ -221,6 +228,26 @@ function validateForm() {
     isValid = false;
   }
 
+  // --- THÊM VALIDATE MẬT KHẨU (CHỈ KHI TẠO MỚI) ---
+  if (!isEditMode.value) {
+    if (!formData.password) {
+      errors.password = 'Vui lòng nhập mật khẩu.';
+      isValid = false;
+    } else if (formData.password.length < 6) {
+      errors.password = 'Mật khẩu phải có ít nhất 6 ký tự.';
+      isValid = false;
+    }
+
+    if (!formData.password_confirmation) {
+      errors.password_confirmation = 'Vui lòng nhập lại mật khẩu để xác nhận.';
+      isValid = false;
+    } else if (formData.password && formData.password_confirmation !== formData.password) {
+      errors.password_confirmation = 'Mật khẩu xác nhận không khớp.';
+      isValid = false;
+    }
+  }
+  // --- KẾT THÚC VALIDATE MẬT KHẨU ---
+
   return isValid;
 }
 
@@ -241,22 +268,47 @@ async function handleSave() {
     avatar: '',
   };
 
+  // --- THÊM MẬT KHẨU VÀO PAYLOAD (CHỈ KHI TẠO MỚI) ---
+  if (!isEditMode.value) {
+    payload.password = formData.password;
+    // API của bạn có thể chỉ cần 'password', không cần 'password_confirmation'
+    // Tùy thuộc vào backend, bạn có thể cần gửi cả hai
+    // payload.password_confirmation = formData.password_confirmation; 
+  }
+
   try {
     if (isEditMode.value) {
-      // THAY ĐỔI: Dùng /admin
-      await apiService.patch(`/admin/${formData.id}`, payload);
+      // THAY ĐỔI: Dùng /admins (plural)
+      await apiService.patch(`/admins/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật người dùng!', 'success');
     } else {
       payload.created_at = new Date().toISOString();
-      // THAY ĐỔI: Dùng /admin
-      await apiService.post(`/admin`, payload);
+      // THAY ĐỔI: Dùng /admins (plural)
+      await apiService.post(`/admins`, payload);
       Swal.fire('Thành công', 'Đã tạo người dùng mới!', 'success');
     }
     userModalInstance.value.hide();
     fetchUsers();
   } catch (apiError) {
     console.error("Lỗi khi lưu:", apiError);
-    Swal.fire('Thất bại', 'Đã có lỗi xảy ra. Vui lòng thử lại.', 'error');
+    // Xử lý lỗi từ server (ví dụ: email đã tồn tại)
+    if (apiError.response && apiError.response.data && apiError.response.data.message) {
+        // Giả sử server trả về lỗi trong 'message'
+        // Hoặc nếu lỗi validation chi tiết:
+        if (apiError.response.data.errors) {
+            const serverErrors = apiError.response.data.errors;
+            if (serverErrors.email) {
+                errors.email = serverErrors.email[0]; // Hiển thị lỗi email
+            }
+            if (serverErrors.username) {
+                errors.username = serverErrors.username[0]; // Hiển thị lỗi username
+            }
+            // ... các trường khác
+        }
+        Swal.fire('Thất bại', apiError.response.data.message || 'Đã có lỗi xảy ra. Vui lòng thử lại.', 'error');
+    } else {
+        Swal.fire('Thất bại', 'Đã có lỗi xảy ra. Vui lòng thử lại.', 'error');
+    }
   } finally {
     isLoading.value = false;
   }
@@ -280,8 +332,8 @@ async function toggleUserStatus(user) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      // THAY ĐỔI: Dùng /admin
-      await apiService.patch(`/admin/${user.id}`, { status: newStatus });
+      // THAY ĐỔI: Dùng /admins (plural)
+      await apiService.patch(`/admins/${user.id}`, { status: newStatus });
       Swal.fire('Thành công!', `Đã ${actionText} người dùng ${user.username}.`, 'success');
       user.status = newStatus; // Cập nhật UI
     } catch (error) {
@@ -308,8 +360,8 @@ async function handleDelete(user) {
 
   if (result.isConfirmed) {
     try {
-      // THAY ĐỔI: Dùng /admin
-      await apiService.delete(`/admin/${user.id}`);
+      // THAY ĐỔI: Dùng /admins (plural)
+      await apiService.delete(`/admins/${user.id}`);
       Swal.fire('Đã xóa!', 'Người dùng đã được xóa.', 'success');
       fetchUsers();
     } catch (error) {
@@ -754,6 +806,26 @@ function nextOtherUsersPage() {
                   <div v-if="isEditMode" class="form-text">Không thể thay đổi email.</div>
                 </div>
 
+                <!-- THÊM TRƯỜNG MẬT KHẨU (CHỈ KHI TẠO MỚI) -->
+                <template v-if="!isEditMode">
+                  <div class="mb-3">
+                    <label for="password" class="form-label required">Mật khẩu</label>
+                    <input type="password" class="form-control" :class="{ 'is-invalid': errors.password }"
+                      id="password" v-model="formData.password" autocomplete="new-password">
+                    <div class="invalid-feedback" v-if="errors.password">{{ errors.password }}</div>
+                    <div class="form-text">(Ít nhất 6 ký tự)</div>
+                  </div>
+                  <div class="mb-3">
+                    <label for="password_confirmation" class="form-label required">Xác nhận Mật khẩu</label>
+                    <input type="password" class="form-control"
+                      :class="{ 'is-invalid': errors.password_confirmation }" id="password_confirmation"
+                      v-model="formData.password_confirmation" autocomplete="new-password">
+                    <div class="invalid-feedback" v-if="errors.password_confirmation">{{
+                      errors.password_confirmation }}</div>
+                  </div>
+                </template>
+                <!-- KẾT THÚC TRƯỜNG MẬT KHẨU -->
+
                 <div class="mb-3">
                   <label for="phone" class="form-label">Số điện thoại</label>
                   <input type="tel" class="form-control" :class="{ 'is-invalid': errors.phone }" id="phone"
@@ -940,7 +1012,7 @@ function nextOtherUsersPage() {
   justify-content: center;
 }
 .table td .form-check-input {
-   margin-right: 0.5rem; /* Tách nút switch ra khỏi btn-group */
+    margin-right: 0.5rem; /* Tách nút switch ra khỏi btn-group */
 }
 
 /* Thêm CSS cho label bắt buộc */

@@ -1,5 +1,18 @@
 {
-  "admins": [],
+  "admins": [
+    {
+      "id": "f71c",
+      "username": "Thanh Hiếu",
+      "name": "Thanh Hiếu",
+      "email": "hieuhtpk04060@gmail.com",
+      "phone": "0377975276",
+      "role": "admin",
+      "status": "active",
+      "address": "daklak",
+      "avatar": "",
+      "created_at": "2025-11-18T07:25:28.399Z"
+    }
+  ],
   "users": [
     {
       "id": "4833",
@@ -9,11 +22,19 @@
       "password": "Binhminh@123"
     },
     {
+<<<<<<< Updated upstream
       "id": "a0eb",
       "name": "Tấn Tuấn",
       "email": "tuanbtpk04033@gmail.com",
       "phone": "0936363636",
       "password": "Tuan@123"
+=======
+      "id": "748b",
+      "name": "hieuht",
+      "email": "hieuhtpk04060@gmail.com",
+      "phone": "0377975276",
+      "password": "Hieu@123"
+>>>>>>> Stashed changes
     }
   ],
   "roles": [
