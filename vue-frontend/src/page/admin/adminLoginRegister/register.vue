@@ -48,13 +48,8 @@ const validateForm = () => {
     if (!formData.fullName.trim()) {
         errors.fullName = 'Vui lòng nhập họ tên.';
         isValid = false;
-    }
-
-    if (!formData.username.trim()) {
-        errors.username = 'Vui lòng nhập tên hiển thị.';
-        isValid = false;
-    } else if (!re.test(formData.username)) {
-        errors.username = 'Tên hiển thị chỉ được dùng chữ và số.';
+    } else if (formData.fullName.length < 5) {
+        errors.fullName = 'Họ tên phải tối thiểu 5 kí tự';
         isValid = false;
     }
 
@@ -66,7 +61,7 @@ const validateForm = () => {
         isValid = false;
     }
 
-     if (!formData.phone.trim()) {
+    if (!formData.phone.trim()) {
         errors.phone = 'Vui lòng nhập số điện thoại.';
         isValid = false;
     }
@@ -100,7 +95,6 @@ const handleRegister = async () => {
 
     isLoading.value = true;
     const payload = {
-        username: formData.username,
         fullName: formData.fullName,
         phone: formData.phone,
         email: formData.email,
@@ -176,18 +170,6 @@ const handleRegister = async () => {
                                             :class="['form-control', errors.fullName ? 'is-invalid' : '']" />
                                     </div>
                                     <div v-if="errors.fullName" class="invalid-feedback d-block">{{ errors.fullName }}
-                                    </div>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label for="registerUsername" class="form-label">Tên hiển thị</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
-                                        <input id="registerUsername" type="text" v-model="formData.username"
-                                            placeholder="VD: abc123"
-                                            :class="['form-control', errors.username ? 'is-invalid' : '']" />
-                                    </div>
-                                    <div v-if="errors.username" class="invalid-feedback d-block">{{ errors.username }}
                                     </div>
                                 </div>
 

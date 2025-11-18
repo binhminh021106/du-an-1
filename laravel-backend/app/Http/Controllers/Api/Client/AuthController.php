@@ -2,19 +2,53 @@
 
 namespace App\Http\Controllers\Api\Client;
 
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Validator;
+use App\Models\Role;
 use App\Models\User;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 
 
 class AuthController extends Controller
 {
-    public function login(Request $request)
+    public function register(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'login_id' => 'required|string',
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|string|email|max:255|unique:users',
+            'phone'    => 'required|string|max:15|unique:users',
+            'password' => 'required|string|min:8',
+        ], [
+            'email.unique' => 'Email này đã được sử dụng.',
+            'phone.unique' => 'Số điện thoại này đã được sử dụng.',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $user = User::create([
+            'fullName' => $request->name,
+            'email'    => $request->email,
+            'phone'    => $request->phone,
+            'password' => Hash::make($request->password),
+            'status'   => 'active',
+            'avatar_url' => null,
+        ]);
+
+        return response()->json([
+            'message' => 'Đăng ký thành công!',
+            'user'    => $user
+        ], 201);
+    }
+
+    public function login(Request $request)
+    {
+        // 1. Validate dữ liệu gửi lên
+        $validator = Validator::make($request->all(), [
+            'login_id' => 'required|string', 
             'password' => 'required|string',
         ]);
 
@@ -24,6 +58,7 @@ class AuthController extends Controller
 
         $loginInput = $request->login_id;
 
+        // 2. Tự động nhận diện là Email hay SĐT
         $fieldType = filter_var($loginInput, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
 
         $credentials = [
@@ -31,26 +66,26 @@ class AuthController extends Controller
             'password' => $request->password,
         ];
 
+        // 3. Xác thực (Laravel tự so sánh hash password ở đây)
         if (!Auth::attempt($credentials)) {
-            return response()->json(['message' => 'Sai thông tin đăng nhập'], 401);
-        }
-
-        $user = Auth::user();
-        $roles = $user->roles->pluck('name');
-
-        if ($roles->doesntContain('user')) {
-            Auth::logout();
             return response()->json([
-                'message' => 'Tài khoản này không phải là tài khoản khách hàng.'
-            ], 403);
+                'message' => 'Tài khoản hoặc mật khẩu không chính xác.'
+            ], 401);
         }
 
-        $user->load('roles');
+        // 4. Đăng nhập thành công -> Tạo Token
+        $user = Auth::user();
+
+        if ($user->status !== 'active') {
+            return response()->json(['message' => 'Tài khoản của bạn đã bị khóa.'], 403);
+        }
+
         $token = $user->createToken('client-token')->plainTextToken;
 
         return response()->json([
-            'user' => $user,
-            'token' => $token,
-        ]);
+            'message' => 'Đăng nhập thành công',
+            'user'    => $user,
+            'token'   => $token,
+        ], 200);
     }
 }

@@ -58,7 +58,8 @@ const handleLogin = async () => {
                 title: 'Đăng nhập thành công!',
                 text: `Chào mừng ${matchedUser.name || matchedUser.email}!`,
                 timer: 1500,
-                showConfirmButton: false
+                showConfirmButton: 'Tới Trang Chủ',
+                confirmButtonColor: '#009981',
             });
 
             router.push({ name: 'home' });

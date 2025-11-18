@@ -3,7 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// Client
+// Client Controllers
 use App\Http\Controllers\Api\Client\ProductController;
 use App\Http\Controllers\Api\Client\CategoryController;
 use App\Http\Controllers\Api\Client\VariantController;
@@ -18,8 +18,9 @@ use App\Http\Controllers\Api\Client\UserAddressController;
 use App\Http\Controllers\Api\Client\RoleController;
 use App\Http\Controllers\Api\Client\CartController;
 use App\Http\Controllers\Api\Client\OrderController;
+use App\Http\Controllers\Api\Client\AuthController; 
 
-// admin
+// Admin Controllers
 use App\Http\Controllers\Api\admin\AdminProductController;
 use App\Http\Controllers\Api\admin\AdminCategoryController;
 use App\Http\Controllers\Api\admin\AdminUserController;
@@ -34,8 +35,23 @@ use App\Http\Controllers\Api\admin\AdminRoleController;
 use App\Http\Controllers\Api\admin\AdminSlideController; 
 use App\Http\Controllers\Api\admin\AminAccountController; 
 
-// client
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+|
+| Here is where you can register API routes for your application. These
+| routes are loaded by the RouteServiceProvider and all of them will
+| be assigned to the "api" middleware group. Make something great!
+|
+*/
 
+
+// Auth
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']); 
+
+// Public Data
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/product/{id}', [ProductController::class, 'show']);
 
@@ -63,7 +79,7 @@ Route::get('/new/{id}', [NewController::class, 'show']);
 Route::get('/reviews', [ReviewController::class, 'index']);
 Route::get('/review/{id}', [ReviewController::class, 'show']);
 
-Route::get('/users', [UserController::class, 'index']);
+Route::get('/users', [UserController::class, 'index']); 
 Route::get('/user/{id}', [UserController::class, 'show']);
 
 Route::get('/useraddresses', [UserAddressController::class, 'index']);
@@ -71,16 +87,15 @@ Route::get('/useraddress/{id}', [UserAddressController::class, 'show']);
 
 Route::get('/roles', [RoleController::class, 'index']);
 
-Route::get('/carts', [CartController::class, 'index']);
+Route::get('/carts', [CartController::class, 'index']); 
 
 Route::get('/orders', [OrderController::class, 'index']);
 Route::get('/order/{id}', [OrderController::class, 'show']);
 
-// Admin
-
+// --- ADMIN ROUTES ---
 Route::group([
     'prefix' => 'admin',
-    // 'middleware' => 'auth:sanctum'
+    // 'middleware' => ['auth:sanctum', 'admin']
 ], function () {
 
     Route::get('/products', [AdminProductController::class, 'index']);
@@ -123,6 +138,7 @@ Route::group([
     Route::get('/admin/{id}', [AminAccountController::class, 'show']);
 });
 
+// Route lấy thông tin user hiện tại (cần token)
 Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
     return $request->user();
 });
