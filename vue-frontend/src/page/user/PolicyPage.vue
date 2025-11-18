@@ -111,26 +111,20 @@
       </section>
     </main>
 
-    <footer class="footer-v2">
-      <div class="footer-inner-v2">
-        <p>© 2025 YourTechShop — Bán lẻ & Phân phối thiết bị công nghệ chính hãng.</p>
-      </div>
-    </footer>
   </section>
 </template>
 <style scoped>
 :root {
-  /* Updated color palette for a more premium look */
-  --primary-v2: #00796B; /* Muted, deep teal */
-  --accent-v2: #004D40; /* Darker, sophisticated accent */
-  --text-color-v2: #263238; /* Dark gray for high contrast reading */
+  --primary-v2: #00796B;
+  --accent-v2: #004D40;
+  --text-color-v2: #263238;
   --heading-color-v2: var(--accent-v2);
-  --bg-light-v2: #F5F7F8; /* Very light, off-white background */
+  --bg-light-v2: #F5F7F8;
   --card-bg-v2: #FFFFFF;
 }
 
 .policy-page-v2 {
-  font-family: 'Poppins', 'Inter', system-ui, -apple-system, sans-serif; /* Poppins/Inter for a modern feel */
+  font-family: 'Poppins', 'Inter', system-ui, -apple-system, sans-serif;
   color: var(--text-color-v2);
   background-color: var(--bg-light-v2);
   min-height: 100vh;
@@ -138,7 +132,6 @@
   flex-direction: column;
 }
 
-/* --- Hero Section --- */
 .hero-v2 {
   background: linear-gradient(135deg, rgba(0, 121, 107, 0.08), rgba(0, 77, 64, 0.04));
   border-bottom: 3px solid var(--primary-v2);
@@ -171,18 +164,16 @@
   line-height: 1.5;
 }
 
-/* --- Main Content Layout --- */
 .container-v2 {
   max-width: 1200px;
   margin: 40px auto;
   padding: 0 24px;
   display: grid;
-  grid-template-columns: 280px 1fr; /* Wider TOC */
+  grid-template-columns: 280px 1fr;
   gap: 40px;
   flex-grow: 1;
 }
 
-/* --- Table of Contents (TOC) --- */
 .toc-v2 {
   background: var(--card-bg-v2);
   border: 1px solid #ECEFF1;
@@ -190,7 +181,7 @@
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
   height: fit-content;
-  position: sticky; /* Keep TOC visible while scrolling */
+  position: sticky;
   top: 20px;
 }
 .toc-title {
@@ -219,10 +210,9 @@
 }
 .toc-v2 a:hover {
   color: var(--primary-v2);
-  padding-left: 4px; /* Subtle hover effect */
+  padding-left: 4px;
 }
 
-/* --- Policies Content --- */
 .policies-v2 {
   display: flex;
   flex-direction: column;
@@ -257,7 +247,7 @@
 }
 
 .highlight-box-v2 {
-  background-color: #E0F2F1; /* Light primary color background */
+  background-color: #E0F2F1;
   border-left: 4px solid var(--primary-v2);
   padding: 16px;
   margin-top: 20px;
@@ -272,9 +262,8 @@
   color: #004D40;
 }
 
-/* Contact Specific Styling */
 .contact-card-v2 {
-  border-left-color: #FF9800; /* Use an accent color for contact */
+  border-left-color: #FF9800;
 }
 .contact-details-v2 {
   display: grid;
@@ -295,7 +284,6 @@
   margin: 0;
 }
 
-/* --- Footer --- */
 .footer-v2 {
   padding: 20px 16px;
   border-top: 1px solid #ECEFF1;
@@ -309,7 +297,6 @@
   font-size: 0.9rem;
 }
 
-/* --- Responsive Adjustments --- */
 @media (max-width: 1024px) {
   .container-v2 {
     grid-template-columns: 1fr;
@@ -317,7 +304,7 @@
     margin: 30px auto;
   }
   .toc-v2 {
-    order: -1; /* Move TOC above policies on smaller screens */
+    order: -1;
     position: relative;
     top: auto;
     margin-bottom: 20px;
