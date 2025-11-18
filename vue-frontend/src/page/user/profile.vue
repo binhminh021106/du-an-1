@@ -1,21 +1,33 @@
 <script setup>
-import { reactive, ref } from "vue";
+import { reactive, ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
 
 const fileInput = ref(null);
+const router = useRouter();
 
-// test git checkout
 
-const user = ref({
+const user = ref(null);
+
+const editUser = reactive({
   avatar: "https://via.placeholder.com/150",
-  name: "Nguyễn Văn A",
-  email: "nguyenvana@example.com",
-  age: 22,
-  gender: "Nam",
-  phone: "0123456789",
-  address: "Quận 1, TP.HCM",
+  name: "",
+  email: "",
+  age: null,
+  gender: "",
+  phone: "",
+  address: "",
 });
 
-const editUser = reactive({ ...user.value });
+onMounted(() => {
+  const userData = JSON.parse(localStorage.getItem("userData"));
+  if (userData) {
+    user.value = userData;
+    Object.assign(editUser, user.value);
+  } else {
+    router.push({ name: "home" });
+  }
+});
+
 const errors = reactive({ name: "", age: "", phone: "", address: "" });
 
 // Mở hộp thoại chọn ảnh
@@ -93,7 +105,7 @@ const cancelEdit = () => {
 </script>
 
 <template>
-  <div class="profile-page">
+  <div class="profile-page" v-if="user">
     <div class="profile-content container">
       <div class="profile-card">
         <div class="avatar" @click="triggerImageUpload">
@@ -125,7 +137,6 @@ const cancelEdit = () => {
             <div class="form-group">
               <label>Giới tính</label>
               <select v-model="editUser.gender">
-                <option value="">-- Chọn giới tính --</option>
                 <option value="Nam">Nam</option>
                 <option value="Nữ">Nữ</option>
                 <option value="Khác">Khác</option>
