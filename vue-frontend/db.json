@@ -7,6 +7,13 @@
       "email": "minhdzwama211@gmail.com",
       "phone": "0358090730",
       "password": "Binhminh@123"
+    },
+    {
+      "id": "a0eb",
+      "name": "Tấn Tuấn",
+      "email": "tuanbtpk04033@gmail.com",
+      "phone": "0936363636",
+      "password": "Tuan@123"
     }
   ],
   "roles": [
