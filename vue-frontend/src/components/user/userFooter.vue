@@ -3,11 +3,12 @@
     <div class="footer-main">
       <div class="container">
         <div class="footer-row">
-          
+
           <div class="footer-col">
             <h3 class="footer-title">Về ThinkHub</h3>
             <p class="footer-desc">
-              ThinkHub là hệ thống bán lẻ các sản phẩm công nghệ uy tín, chất lượng hàng đầu Việt Nam. Chúng tôi cam kết mang đến trải nghiệm mua sắm tốt nhất cho khách hàng.
+              ThinkHub là hệ thống bán lẻ các sản phẩm công nghệ uy tín, chất lượng hàng đầu Việt Nam. Chúng tôi cam kết
+              mang đến trải nghiệm mua sắm tốt nhất cho khách hàng.
             </p>
             <ul class="footer-contact">
               <li><i class="fa-solid fa-location-dot"></i> 123 Đường ABC, Quận XYZ, TP.HCM</li>
@@ -19,21 +20,23 @@
           <div class="footer-col">
             <h3 class="footer-title">Hỗ trợ khách hàng</h3>
             <ul class="footer-links">
-              <li><router-link to="/page/huong-dan-mua-hang">Hướng dẫn mua hàng</router-link></li>
-              <li><router-link to="/page/chinh-sach-bao-hanh">Chính sách bảo hành</router-link></li>
-              <li><router-link to="/page/chinh-sach-doi-tra">Chính sách đổi trả</router-link></li>
-              <li><router-link to="/page/phuong-thuc-thanh-toan">Phương thức thanh toán</router-link></li>
-              <li><router-link to="/page/cau-hoi-thuong-gap">Câu hỏi thường gặp (FAQ)</router-link></li>
+              <li><router-link :to="{ name: 'policy', hash: '#guide-v2' }">Hỗ trợ mua hàng</router-link></li>
+              <div class="footer-col">
+                <li><router-link :to="{ name: 'policy', hash: '#warranty-v2' }">Chính sách bảo hành</router-link></li>
+                <li><router-link :to="{ name: 'policy', hash: '#returns-v2' }">Chính sách đổi trả</router-link></li>
+                <li><router-link :to="{ name: 'policy', hash: '#guide-v2' }">Phương thức thanh toán</router-link></li>
+                <li><router-link :to="{ name: 'FAQ' }">Câu hỏi thường gặp (FAQ)</router-link></li>
+              </div>
             </ul>
           </div>
 
           <div class="footer-col">
             <h3 class="footer-title">Chính sách</h3>
             <ul class="footer-links">
-              <li><router-link to="/page/chinh-sach-bao-mat">Chính sách bảo mật</router-link></li>
-              <li><router-link to="/page/dieu-khoan-su-dung">Điều khoản sử dụng</router-link></li>
-              <li><router-link to="/page/chinh-sach-van-chuyen">Chính sách vận chuyển</router-link></li>
-              <li><router-link to="/page/chinh-sach-kiem-hang">Chính sách kiểm hàng</router-link></li>
+              <li><router-link :to="{ name: 'policy', hash: '#privacy-v2' }">Chính sách bảo mật</router-link></li>
+              <li><router-link :to="{ name: 'policy', hash: '#terms-v2' }">Điều khoản sử dụng</router-link></li>
+              <li><router-link :to="{ name: 'policy', hash: '#shipping-v2' }">Chính sách vận chuyển</router-link></li>
+              <li><router-link :to="{ name: 'policy', hash: '#returns-v2' }">Chính sách kiểm hàng</router-link></li>
             </ul>
           </div>
 
@@ -45,7 +48,7 @@
               <a href="#" class="social-item tiktok"><i class="fa-brands fa-tiktok"></i></a>
               <a href="#" class="social-item zalo">Zalo</a>
             </div>
-            
+
             <h3 class="footer-title" style="margin-top: 20px;">Đăng ký nhận tin</h3>
             <form class="newsletter-form" @submit.prevent="handleSubscribe">
               <input type="email" placeholder="Nhập email của bạn..." required>
@@ -61,9 +64,9 @@
       <div class="container">
         <p>© 2024 Công ty Cổ phần ThinkHub. Tất cả các quyền được bảo lưu.</p>
         <div class="payment-icons">
-            <i class="fa-brands fa-cc-visa"></i>
-            <i class="fa-brands fa-cc-mastercard"></i>
-            <i class="fa-brands fa-cc-paypal"></i>
+          <i class="fa-brands fa-cc-visa"></i>
+          <i class="fa-brands fa-cc-mastercard"></i>
+          <i class="fa-brands fa-cc-paypal"></i>
         </div>
       </div>
     </div>
@@ -79,11 +82,16 @@ const handleSubscribe = () => {
 
 <style>
 :root {
-  --footer-bg: #f8f9fa;         /* Nền footer chính (xám rất nhạt) */
-  --footer-title-color: #333;   /* Màu tiêu đề cột */
-  --footer-text-color: #555;    /* Màu chữ nội dung */
-  --primary-color: #009981;     /* Màu chính thương hiệu */
-  --primary-dark: #00483D;      /* Màu nhấn đậm */
+  --footer-bg: #f8f9fa;
+  /* Nền footer chính (xám rất nhạt) */
+  --footer-title-color: #333;
+  /* Màu tiêu đề cột */
+  --footer-text-color: #555;
+  /* Màu chữ nội dung */
+  --primary-color: #009981;
+  /* Màu chính thương hiệu */
+  --primary-dark: #00483D;
+  /* Màu nhấn đậm */
 }
 </style>
 
@@ -96,7 +104,8 @@ const handleSubscribe = () => {
   color: var(--footer-text-color);
   font-family: Arial, sans-serif;
   font-size: 14px;
-  border-top: 4px solid var(--primary-color); /* Đường viền màu thương hiệu tạo điểm nhấn */
+  border-top: 4px solid var(--primary-color);
+  /* Đường viền màu thương hiệu tạo điểm nhấn */
 }
 
 .container {
@@ -118,7 +127,8 @@ const handleSubscribe = () => {
 }
 
 .footer-col {
-  flex: 1 1 200px; /* Co giãn linh hoạt, tối thiểu 200px mỗi cột */
+  flex: 1 1 200px;
+  /* Co giãn linh hoạt, tối thiểu 200px mỗi cột */
   min-width: 200px;
 }
 
@@ -153,6 +163,7 @@ const handleSubscribe = () => {
   gap: 10px;
   line-height: 1.5;
 }
+
 .footer-contact i {
   color: var(--primary-color);
   margin-top: 3px;
@@ -164,18 +175,22 @@ const handleSubscribe = () => {
   padding: 0;
   margin: 0;
 }
+
 .footer-links li {
   margin-bottom: 10px;
 }
+
 .footer-links a {
   text-decoration: none;
   color: var(--footer-text-color);
   transition: all 0.2s;
   display: inline-block;
 }
+
 .footer-links a:hover {
   color: var(--primary-color);
-  transform: translateX(5px); /* Hiệu ứng di chuyển nhẹ khi hover */
+  transform: translateX(5px);
+  /* Hiệu ứng di chuyển nhẹ khi hover */
 }
 
 /* Mạng xã hội */
@@ -183,6 +198,7 @@ const handleSubscribe = () => {
   display: flex;
   gap: 10px;
 }
+
 .social-item {
   width: 36px;
   height: 36px;
@@ -191,16 +207,19 @@ const handleSubscribe = () => {
   justify-content: center;
   background-color: #fff;
   border: 1px solid #eee;
-  border-radius: 50%; /* Hình tròn */
+  border-radius: 50%;
+  /* Hình tròn */
   color: #555;
   text-decoration: none;
   transition: all 0.3s;
 }
+
 .social-item:hover {
   background-color: var(--primary-color);
   color: white;
   border-color: var(--primary-color);
 }
+
 /* Màu riêng cho từng mạng xã hội nếu thích */
 /* .social-item.facebook:hover { background-color: #3b5998; border-color: #3b5998; }
 .social-item.youtube:hover { background-color: #ff0000; border-color: #ff0000; } */
@@ -210,6 +229,7 @@ const handleSubscribe = () => {
   display: flex;
   margin-top: 15px;
 }
+
 .newsletter-form input {
   flex: 1;
   padding: 10px;
@@ -219,9 +239,11 @@ const handleSubscribe = () => {
   outline: none;
   font-size: 14px;
 }
+
 .newsletter-form input:focus {
-    border-color: var(--primary-color);
+  border-color: var(--primary-color);
 }
+
 .newsletter-form button {
   padding: 0 15px;
   background-color: var(--primary-color);
@@ -231,30 +253,35 @@ const handleSubscribe = () => {
   cursor: pointer;
   transition: background-color 0.2s;
 }
+
 .newsletter-form button:hover {
   background-color: var(--primary-dark);
 }
 
 /* --- Phần đáy Footer --- */
 .footer-bottom {
-  background-color: #eee; /* Nền tối hơn một chút để phân biệt */
+  background-color: #eee;
+  /* Nền tối hơn một chút để phân biệt */
   padding: 15px 0;
   font-size: 13px;
   color: #666;
 }
+
 .footer-bottom .container {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+
 .footer-bottom p {
-    margin: 0;
+  margin: 0;
 }
+
 .payment-icons {
-    display: flex;
-    gap: 10px;
-    font-size: 24px;
-    color: #888;
+  display: flex;
+  gap: 10px;
+  font-size: 24px;
+  color: #888;
 }
 
 /* Responsive cho mobile */
@@ -263,13 +290,15 @@ const handleSubscribe = () => {
     flex-direction: column;
     gap: 30px;
   }
+
   .footer-col {
-      width: 100%;
+    width: 100%;
   }
+
   .footer-bottom .container {
-      flex-direction: column;
-      gap: 10px;
-      text-align: center;
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
   }
 }
 </style>
