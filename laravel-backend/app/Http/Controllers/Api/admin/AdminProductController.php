@@ -31,9 +31,9 @@ class AdminProductController extends Controller
      */
     public function show(string $id)
     {
-        $user_address = Product::findOrFail($id);
+        $product = Product::findOrFail($id);
 
-        return response()->json($user_address);
+        return response()->json($product);
     }
 
     /**

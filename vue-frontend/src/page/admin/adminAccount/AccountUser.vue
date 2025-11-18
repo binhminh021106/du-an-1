@@ -25,11 +25,9 @@ const formData = reactive({
   name: '',
   email: '',
   phone: '',
-  password: '',
-  password_confirmation: '',
   address: '',
-  avatar: '', 
-  status: 'active', 
+  avatar: '',
+  status: 'active',
 });
 
 const avatarFile = ref(null);
@@ -39,8 +37,6 @@ const errors = reactive({
   name: '',
   email: '',
   phone: '',
-  password: '',
-  password_confirmation: '',
 });
 
 // --- COMPUTED ---
@@ -87,15 +83,15 @@ onMounted(() => {
 async function fetchCustomers() {
   isLoading.value = true;
   try {
-    // THAY ĐỔI 1: Gọi /users?role=user để CHỈ lấy khách hàng
-    const response = await apiService.get(`/users?role=user`);
-    
-    // Sắp xếp theo ID mới nhất
+    // THAY ĐỔI 1: Gọi /users (bảng users không có 'role' nên không cần lọc)
+    const response = await apiService.get(`/users`);
+
+    // Sắp xếp theo ID mới nhất (hoặc created_at nếu bạn muốn)
     customers.value = response.data.map(customer => ({
       ...customer,
-      status: customer.status || 'active' 
-    })).sort((a, b) => (b.id > a.id) ? 1 : -1); // Sắp xếp mới nhất lên đầu
-    
+      status: customer.status || 'active'
+    })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); // Sắp xếp mới nhất lên đầu
+
   } catch (error) {
     console.error("Lỗi tải danh sách khách hàng:", error);
     Swal.fire('Lỗi', 'Không thể tải danh sách khách hàng.', 'error');
@@ -109,8 +105,6 @@ function resetForm() {
   formData.name = '';
   formData.email = '';
   formData.phone = '';
-  formData.password = '';
-  formData.password_confirmation = '';
   formData.address = '';
   formData.avatar = '';
   formData.status = 'active';
@@ -159,31 +153,6 @@ function validateForm() {
     isValid = false;
   }
 
-  if (!isEditMode.value) { // Khi tạo mới
-    if (!formData.password) {
-      errors.password = 'Vui lòng nhập mật khẩu.';
-      isValid = false;
-    } else if (formData.password.length < 6) {
-      errors.password = 'Mật khẩu phải có ít nhất 6 ký tự.';
-      isValid = false;
-    }
-    if (formData.password !== formData.password_confirmation) {
-      errors.password_confirmation = 'Mật khẩu xác nhận không khớp.';
-      isValid = false;
-    }
-  } else { // Khi chỉnh sửa
-    if (formData.password) { // Nếu có nhập mật khẩu mới
-      if (formData.password.length < 6) {
-        errors.password = 'Mật khẩu phải có ít nhất 6 ký tự.';
-        isValid = false;
-      }
-      if (formData.password !== formData.password_confirmation) {
-        errors.password_confirmation = 'Mật khẩu xác nhận không khớp.';
-        isValid = false;
-      }
-    }
-  }
-
   return isValid;
 }
 
@@ -224,33 +193,26 @@ async function handleSave() {
       email: formData.email,
       phone: formData.phone,
       address: formData.address,
-      avatar: formData.avatar,
       avatar: formData.avatar, // Default to existing URL
       status: formData.status,
     };
 
     if (avatarPreview.value && avatarFile.value) {
-       payload.avatar = avatarPreview.value;
+      payload.avatar = avatarPreview.value;
     }
 
     if (isEditMode.value) {
-      if (formData.password) {
-        payload.password = formData.password;
-        // Bỏ qua password_confirmation vì db.json không cần
-      }
-      // THAY ĐỔI 2: PATCH đến /users/:id
+      // THAY ĐỔI 2: PATCH đến /users/:id (logic này đã đúng)
       await apiService.patch(`/users/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật thông tin khách hàng!', 'success');
     } else {
-      payload.password = formData.password;
       
-      // THAY ĐỔI 3: Thêm các trường chuẩn hóa cho bảng /users
-      payload.role = 'user'; // Gán vai trò là user
-      // Tạo username giả lập từ email
+      // THAY ĐỔI 3: Thêm các trường chuẩn hóa cho bảng /users (đã BỎ 'role')
+      // Tạo username giả lập từ email để khớp cấu trúc db.json
       payload.username = formData.email.split('@')[0] + `_${Math.random().toString(36).substr(2, 4)}`;
       payload.created_at = new Date().toISOString();
       
-      // THAY ĐỔI 4: POST đến /users
+      // THAY ĐỔI 4: POST đến /users (logic này đã đúng)
       await apiService.post(`/users`, payload);
       Swal.fire('Thành công', 'Đã thêm khách hàng mới!', 'success');
     }
@@ -284,8 +246,8 @@ async function toggleCustomerStatus(customer) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      // THAY ĐỔI 5: PATCH đến /users/:id
-      awapiService.patch(`/users/${customer.id}`, { status: newStatus });
+      // THAY ĐỔI 5: PATCH đến /users/:id (logic này đã đúng)
+      await apiService.patch(`/users/${customer.id}`, { status: newStatus });
       Swal.fire(
         'Thành công!',
         `Đã ${actionText} tài khoản khách hàng.`,
@@ -317,8 +279,8 @@ async function handleDelete(customer) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      // THAY ĐỔI 6: DELETE đến /users/:id
-      awapiService.delete(`/users/${customer.id}`);
+      // THAY ĐỔI 6: DELETE đến /users/:id (logic này đã đúng)
+      await apiService.delete(`/users/${customer.id}`);
       Swal.fire('Đã xóa!', 'Khách hàng đã được xóa thành công.', 'success');
       
       if (paginatedCustomers.value.length === 1 && currentPage.value > 1) {
@@ -547,25 +509,6 @@ function goToPage(page) {
               </div>
             </div>
 
-            <hr class="my-4">
-            <h6 class="mb-3"><i class="bi bi-shield-lock me-2"></i>Bảo mật</h6>
-
-            <div class="row">
-              <div class="col-md-6 mb-3">
-                <label for="password" class="form-label" :class="{ 'required': !isEditMode }">Mật khẩu</label>
-                <input type="password" class="form-control" :class="{ 'is-invalid': errors.password }" id="password"
-                  v-model="formData.password" autocomplete="new-password">
-                <div class="form-text" v-if="isEditMode">Chỉ nhập nếu muốn đổi mật khẩu mới.</div>
-                <div class="invalid-feedback">{{ errors.password }}</div>
-              </div>
-              <div class="col-md-6 mb-3">
-                <label for="password_confirmation" class="form-label"
-                  :class="{ 'required': !isEditMode || formData.password }">Xác nhận mật khẩu</label>
-                <input type="password" class="form-control" :class="{ 'is-invalid': errors.password_confirmation }"
-                  id="password_confirmation" v-model="formData.password_confirmation" autocomplete="new-password">
-                <div class="invalid-feedback">{{ errors.password_confirmation }}</div>
-              </div>
-            </div>
           </form>
         </div>
         <div class="modal-footer bg-light">

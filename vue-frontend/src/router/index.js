@@ -23,5 +23,23 @@ const router = createRouter({
   },
 })
 
+router.beforeEach((to, from, next) => {
+  const userToken = localStorage.getItem('user_token') || localStorage.getItem('userData');
+  const adminToken = localStorage.getItem('admin_token');
+
+  const guestRoutesForUser = ['login', 'register'];
+  const guestRoutesForAdmin = ['admin-login', 'admin-register'];
+
+  if (userToken && guestRoutesForUser.includes(to.name)) {
+    return next({ name: 'home' });
+  }
+
+  if (adminToken && guestRoutesForAdmin.includes(to.name)) {
+    return next({ name: 'admin-dashboard' });
+  }
+
+  next();
+});
+
 
 export default router

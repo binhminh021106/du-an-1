@@ -1,8 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import apiService from '../../apiService.js';
-// SỬA ĐỔI: Thêm import Vue Router để sử dụng trong script (nếu cần logic điều hướng phức tạp)
-import { useRouter } from 'vue-router'; 
+import { useRouter } from 'vue-router';
 
 // Khởi tạo router
 const router = useRouter();
@@ -13,24 +12,20 @@ const slides = ref([]);
 const products = ref([]);
 const users = ref([]);
 const newsList = ref([]);
-const roles = ref([]);
-const activeCategoryId = ref(null); // Giữ lại để quản lý trạng thái active CSS
+const activeCategoryId = ref(null);
 const currentSlide = ref(0);
 let interval = null;
-
-// ... (Các hàm fetchData, computed properties, slider logic giữ nguyên) ...
 
 // --- FETCH DATA ---
 const fetchData = async () => {
     try {
-        const [catRes, slideRes, prodRes, userRes, newsRes, rolesRes] = await Promise.all([
-            apiService.get(`/categories?_sort=order&_order=asc&status=active`),
+        const [catRes, slideRes, prodRes, userRes, newsRes] = await Promise.all([
+            apiService.get(`/categories`),
             apiService.get(`/slides`),
             apiService.get(`/products`),
-            // SỬA ĐỔI: Thay đổi endpoint từ 'account_admin' thành 'users?role_ne=user'
-            apiService.get(`/users?role_ne=user`),
+            apiService.get(`/users`),
             apiService.get(`/news`),
-            apiService.get(`/roles`)
+            apiService.get(`/variants`)
         ]);
 
         categories.value = catRes.data;
@@ -38,7 +33,6 @@ const fetchData = async () => {
         products.value = prodRes.data;
         users.value = userRes.data;
         newsList.value = newsRes.data;
-        roles.value = rolesRes.data;
 
     } catch (err) {
         console.error("Lỗi tải dữ liệu:", err);
@@ -79,16 +73,7 @@ const goToSlide = (index) => { stopAutoSlide(); currentSlide.value = index; };
 
 
 // --- HELPER FUNCTIONS ---
-
-// SỬA ĐỔI: Chỉ giữ lại việc gán activeCategoryId để CSS vẫn hoạt động nếu cần.
-// Việc điều hướng đã được xử lý bởi <router-link>
-const setActiveCategory = (id) => { activeCategoryId.value = String(id); }; 
-
-const getUserRoleLabel = (roleValue) => {
-    if (!roles.value.length) return roleValue || 'Khách';
-    const role = roles.value.find(r => r.value === roleValue);
-    return role ? role.label : 'Khách';
-};
+const setActiveCategory = (id) => { activeCategoryId.value = String(id); };
 
 const getMinPrice = (variants) => {
     if (!variants || !variants.length) return 0;
@@ -117,24 +102,21 @@ onBeforeUnmount(stopAutoSlide);
             <section class="top-section-layout">
                 <nav class="categories-sidebar">
                     <h3 class="sidebar-title">Danh mục</h3>
-                    <router-link 
-                        v-for="category in categories" 
-                        :key="category.id" 
-                        :to="{ path: '/Shop', query: { categoryId: category.id } }"
-                        class="category-item-sodo" 
+                    <router-link v-for="category in categories" :key="category.id"
+                        :to="{ path: '/Shop', query: { categoryId: category.id } }" class="category-item-sodo"
                         :class="{ active: String(category.id) === String(activeCategoryId) }"
-                        @click="setActiveCategory(category.id)"
-                    >
+                        @click="setActiveCategory(category.id)">
                         <span v-html="category.icon" class="icon"></span>
                         <span>{{ category.name }}</span>
                     </router-link>
-                    </nav>
+                </nav>
 
                 <section class="slider" @mouseenter="stopAutoSlide" @mouseleave="startAutoSlide">
                     <div class="slider-wrapper" :style="{ transform: 'translateX(-' + currentSlide * 100 + '%)' }">
                         <div class="slide" v-for="slide in slides" :key="slide.id"
                             :style="{ backgroundImage: 'url(' + slide.imageUrl + ')' }">
-                            <a :href="slide.link || '#'" style="display: block; width: 100%; height: 100%;" aria-label="Xem chi tiết"></a>
+                            <a :href="slide.link || '#'" style="display: block; width: 100%; height: 100%;"
+                                aria-label="Xem chi tiết"></a>
                         </div>
                     </div>
 
@@ -147,12 +129,12 @@ onBeforeUnmount(stopAutoSlide);
                     </div>
                 </section>
 
-                <aside class="utility-sidebar">
+                <!-- <aside class="utility-sidebar">
                     <div class="user-info-card" v-if="users.length">
                         <p class="user-name">{{ users[0].username }}</p>
                         <p class="user-tier">⭐ {{ getUserRoleLabel(users[0].role) }}</p>
                     </div>
-                </aside>
+                </aside> -->
             </section>
 
             <section class="brand-banner" style="margin-top: 15px;">
@@ -161,18 +143,18 @@ onBeforeUnmount(stopAutoSlide);
                         style="width: 100%; height: 200px; background: #eee; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #aaa; font-style: italic;">
                 </router-link>
             </section>
-            
+
             <section class="trust-block">
                 <div class="trust-item"><span>✔️ Bảo hành chính hãng</span></div>
                 <div class="trust-item"><span>🚚 Giao hàng miễn phí</span></div>
                 <div class="trust-item"><span>🔄 Đổi trả 30 ngày</span></div>
-                <div class="trust-item"><span>🏪 Hơn 100+ cửa hàng</span></div>
+                <div class="trust-item"><span>🏪 Hỗ trợ 24/7</span></div>
             </section>
 
             <section class="product-section-container">
 
                 <section class="product-group hot-products">
-                    <h2 class="section-title">❤️ Sản phẩm được yêu thích nhất</h2>
+                    <h2 class="section-title"> Sản phẩm yêu thích</h2>
                     <div class="product-grid">
                         <div class="product-card" v-for="product in topFavoriteProducts" :key="product.id">
                             <img :src="product.image_url || '#'" :alt="product.name">
@@ -191,9 +173,10 @@ onBeforeUnmount(stopAutoSlide);
                                 <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
                             </div>
                             <div class="card-actions-small">
-                             <button class="btn-view" @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
-  <i class="fas fa-eye"></i> Xem
-</button>
+                                <button class="btn-view"
+                                    @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
+                                    <i class="fas fa-eye"></i> Xem
+                                </button>
 
                                 <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i>
                                     Thêm</button>
@@ -227,12 +210,10 @@ onBeforeUnmount(stopAutoSlide);
                                     <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
                                 </div>
                                 <div class="card-actions-small">
-                                   <button
-  class="btn-view"
-  @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })"
->
-  <i class="fas fa-eye"></i> Xem
-</button>
+                                    <button class="btn-view"
+                                        @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
+                                        <i class="fas fa-eye"></i> Xem
+                                    </button>
                                     <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i>
                                         Thêm</button>
                                 </div>
@@ -255,7 +236,8 @@ onBeforeUnmount(stopAutoSlide);
                     </div>
                 </section>
 
-            </section> </main>
+            </section>
+        </main>
     </div>
 </template>
 
@@ -536,14 +518,12 @@ a {
     gap: 4px;
 }
 
-/* Action Buttons - Centered as requested */
 .card-actions-small {
     display: flex;
     gap: 10px;
     justify-content: center;
-    /* <-- ĐÃ SỬA LẠI CĂN GIỮA */
     margin-top: 15px;
-    
+
 }
 
 .card-actions-small button {
@@ -579,7 +559,6 @@ a {
     background: #c82333;
 }
 
-/* News specific */
 .news-card img {
     height: 160px;
     object-fit: cover;

@@ -1,134 +1,40 @@
 {
-  "users": [
+  "admins": [
     {
-      "id": "3399",
-      "username": "binhminh21106",
-      "name": "binhminh21106",
-      "email": "minhdzwama211@gmail.com",
-      "password": "Binhminh@123",
+      "id": "f71c",
+      "username": "Thanh Hiếu",
+      "name": "Thanh Hiếu",
+      "email": "hieuhtpk04060@gmail.com",
+      "phone": "0377975276",
       "role": "admin",
       "status": "active",
-      "phone": "0123456789",
-      "address": "",
+      "address": "daklak",
       "avatar": "",
-      "created_at": "2025-11-12T05:16:34.939Z"
-    },
+      "created_at": "2025-11-18T07:25:28.399Z"
+    }
+  ],
+  "users": [
     {
-      "id": "d3cd",
-      "username": "binhminh0211",
-      "name": "binhminh0211",
+      "id": "4833",
+      "name": "NGUYEN TRAN BINH MINH",
       "email": "minhdzwama211@gmail.com",
-      "password": "Binhminh@123",
-      "role": "nhanvien",
-      "status": "active",
-      "phone": "",
-      "address": "",
-      "avatar": "",
-      "created_at": "2025-11-12T05:16:34.939Z"
-    },
-    {
-      "id": "c4d1",
-      "username": "binhminh0211",
-      "name": "binhminh0211",
-      "email": "binhminh211@gmail.com",
-      "password": "Binhminh@123",
-      "role": "nhanvien",
-      "status": "active",
-      "phone": "",
-      "address": "",
-      "avatar": "",
-      "created_at": "2025-11-12T05:16:34.939Z"
-    },
-    {
-      "id": "c289",
-      "username": "tantuanhi47k1",
-      "name": "tantuanhi47k1",
-      "email": "ttuann47@gmail.com",
-      "password": "123456789",
-      "role": "nhanvien",
-      "status": "active",
-      "phone": "",
-      "address": "",
-      "avatar": "",
-      "created_at": "2025-11-12T05:16:34.939Z"
-    },
-    {
-      "id": "71e5",
-      "username": "hieuht123",
-      "name": "hieuht123",
-      "email": "hieuhtpk04060@gmail.com",
-      "password": "123123123",
-      "role": "nhanvien",
-      "status": "active",
-      "phone": "",
-      "address": "",
-      "avatar": "",
-      "created_at": "2025-11-12T05:16:34.939Z"
-    },
-    {
-      "id": "1a8b",
-      "username": "hieuht02",
-      "name": "hieuht02",
-      "email": "hieuhtpk04060@gmail.com",
-      "password": "123123123",
-      "role": "nhanvien",
-      "status": "active",
-      "phone": "",
-      "address": "",
-      "avatar": "",
-      "created_at": "2025-11-12T05:16:34.939Z"
-    },
-    {
-      "id": "dbf0",
-      "username": "nguyntrnbnhminh_dbf0",
-      "name": "Nguyễn Trần Bình Minh",
-      "email": "minhntbpk04039@gmail.com",
-      "password": "Binhminh@123",
-      "role": "user",
-      "status": "active",
       "phone": "0358090730",
-      "address": "",
-      "avatar": "",
-      "created_at": "2025-11-12T05:16:34.939Z"
+      "password": "Binhminh@123"
     },
     {
-      "id": "7de4",
-      "username": "nguyntrnbnhminh_7de4",
-      "name": "Nguyễn Trần Bình Minh",
-      "email": "minhntbpk04039@gmail.com",
-      "password": "Binhminh@123",
-      "role": "user",
-      "status": "active",
-      "phone": "0358090730",
-      "address": "123 Đường ABC, Quận 1, TP. HCM",
-      "avatar": "https://placehold.co/100x100",
-      "created_at": "2025-11-12T05:16:34.939Z"
-    },
-    {
-      "id": "ea65",
-      "username": "nguyntrnbnhminh_ea65",
-      "name": "Nguyễn Trần Bình Minh",
-      "email": "minhntbpk04039@gmail.com",
-      "password": "Binhminh@123",
-      "role": "user",
-      "status": "active",
-      "phone": "0358090730",
-      "address": "",
-      "avatar": "",
-      "created_at": "2025-11-12T05:16:34.939Z"
-    },
-    {
-      "id": "8323",
-      "username": "hieuht_8323",
+<<<<<<< Updated upstream
+      "id": "a0eb",
+      "name": "Tấn Tuấn",
+      "email": "tuanbtpk04033@gmail.com",
+      "phone": "0936363636",
+      "password": "Tuan@123"
+=======
+      "id": "748b",
       "name": "hieuht",
       "email": "hieuhtpk04060@gmail.com",
-      "password": "123123123",
-      "role": "user",
-      "status": "active",
       "phone": "0377975276",
-      "address": "",
-      "avatar": "",
-      "created_at": "2025-11-12T05:16:34.939Z"
+      "password": "Hieu@123"
+>>>>>>> Stashed changes
     }
   ],
   "roles": [
@@ -158,628 +64,600 @@
       "icon": "<i class=\"fa-solid fa-mobile\"></i>",
       "order": 1,
       "status": "active",
-      "id": "3"
+      "category_id": "3",
+      "id": "2ae9"
     },
     {
       "name": "Laptop",
       "description": "Máy tính xách tay bán chạy",
       "icon": "<i class=\"bi bi-laptop\"></i>",
       "order": 4,
-      "id": "4",
-      "status": "active"
+      "category_id": "4",
+      "status": "active",
+      "id": "7761"
     },
     {
       "name": "Gaming",
       "description": "Phụ kiện và thiết bị chơi game",
       "icon": "<i class=\"fa-solid fa-gamepad\"></i>",
       "order": 2,
-      "id": "7",
-      "status": "active"
+      "category_id": "7",
+      "status": "active",
+      "id": "2ba8"
     },
     {
       "name": "Tai nghe",
       "description": "Tai nghe",
       "icon": "<i class=\"fa-solid fa-headphones\"></i>",
       "order": 3,
-      "id": "e117",
-      "status": "active"
+      "category_id": "e117",
+      "status": "active",
+      "id": "8141"
     }
   ],
   "products": [
     {
-      "id": "101",
-      "image_url": "https://placehold.co/300x300/e6e6fa/000?text=Phone+X1",
-      "name": "Samsung Galaxy Ultra S25",
-      "category": {
-        "id": "3",
-        "name": "Phone"
-      },
-      "variants": [
-        {
-          "price": 27990000,
-          "original_price": 31990000,
-          "stock": 45
-        }
-      ],
-      "sold_count": 980,
-      "favorite_count": 520,
-      "review_count": 350,
-      "average_rating": 4.8,
-      "status": "active"
-    },
-    {
-      "id": "102",
-      "image_url": "https://placehold.co/300x300/e0ffff/000?text=Phone+X2",
-      "name": "iPhone 17",
-      "category": {
-        "id": "3",
-        "name": "Phone"
-      },
-      "variants": [
-        {
-          "price": 35990000,
-          "original_price": 35990000,
-          "stock": 60
-        }
-      ],
-      "sold_count": 1500,
-      "favorite_count": 900,
-      "review_count": 580,
-      "average_rating": 4.9
-    },
-    {
-      "id": "103",
-      "image_url": "https://placehold.co/300x300/fff0f5/000?text=Phone+X3",
-      "name": "Xiaomi 15 Pro",
-      "category": {
-        "id": "3",
-        "name": "Phone"
-      },
-      "variants": [
-        {
-          "price": 14500000,
-          "original_price": 16990000,
-          "stock": 120
-        }
-      ],
-      "sold_count": 750,
-      "favorite_count": 300,
-      "review_count": 180,
-      "average_rating": 4.6
-    },
-    {
-      "id": "104",
-      "image_url": "https://placehold.co/300x300/fafad2/000?text=Phone+X4",
-      "name": "OPPO Find X8",
-      "category": {
-        "id": "3",
-        "name": "Phone"
-      },
-      "variants": [
-        {
-          "price": 21000000,
-          "original_price": 21000000,
-          "stock": 35
-        }
-      ],
-      "sold_count": 480,
-      "favorite_count": 210,
-      "review_count": 100,
-      "average_rating": 4.4
-    },
-    {
-      "id": "105",
-      "image_url": "https://placehold.co/300x300/f5f5dc/000?text=Phone+X5",
-      "name": "Vivo X100 Pro",
-      "category": {
-        "id": "3",
-        "name": "Phone"
-      },
-      "variants": [
-        {
-          "price": 19990000,
-          "original_price": 22000000,
-          "stock": 55
-        }
-      ],
-      "sold_count": 620,
-      "favorite_count": 380,
-      "review_count": 150,
-      "average_rating": 4.7
-    },
-    {
-      "id": "201",
-      "image_url": "https://placehold.co/300x300/add8e6/000?text=Laptop+L1",
-      "name": "MacBook Pro M4 14 inch",
-      "category": {
-        "id": "4",
-        "name": "Laptop"
-      },
-      "variants": [
-        {
-          "price": 42000000,
-          "original_price": 45000000,
-          "stock": 15
-        }
-      ],
-      "sold_count": 250,
-      "favorite_count": 180,
-      "review_count": 80,
-      "average_rating": 4.9
-    },
-    {
-      "id": "202",
-      "image_url": "https://placehold.co/300x300/bdb76b/000?text=Laptop+L2",
-      "name": "Dell XPS 13 Plus",
-      "category": {
-        "id": "4",
-        "name": "Laptop"
-      },
-      "variants": [
-        {
-          "price": 38500000,
-          "original_price": 38500000,
-          "stock": 22
-        }
-      ],
-      "sold_count": 190,
-      "favorite_count": 120,
-      "review_count": 55,
-      "average_rating": 4.7
-    },
-    {
-      "id": "203",
-      "image_url": "https://placehold.co/300x300/dda0dd/000?text=Laptop+L3",
-      "name": "ASUS ROG Zephyrus G16",
-      "category": {
-        "id": "4",
-        "name": "Laptop"
-      },
-      "variants": [
-        {
-          "price": 29990000,
-          "original_price": 32990000,
-          "stock": 30
-        }
-      ],
-      "sold_count": 310,
-      "favorite_count": 250,
-      "review_count": 110,
-      "average_rating": 4.8
-    },
-    {
-      "id": "204",
-      "image_url": "https://placehold.co/300x300/98fb98/000?text=Laptop+L4",
-      "name": "Lenovo Legion 5 Pro",
-      "category": {
-        "id": "4",
-        "name": "Laptop"
-      },
-      "variants": [
-        {
-          "price": 24000000,
-          "original_price": 25500000,
-          "stock": 40
-        }
-      ],
-      "sold_count": 350,
-      "favorite_count": 280,
-      "review_count": 150,
-      "average_rating": 4.6
-    },
-    {
-      "id": "205",
-      "image_url": "https://placehold.co/300x300/f08080/000?text=Laptop+L5",
-      "name": "HP Spectre x360 14",
-      "category": {
-        "id": "4",
-        "name": "Laptop"
-      },
-      "variants": [
-        {
-          "price": 31500000,
-          "original_price": 31500000,
-          "stock": 18
-        }
-      ],
+      "product_id": 1,
+      "name": "Điện thoại S-Galaxy 24 Ultra",
+      "category_id": "3",
+      "thumbnail_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+1",
       "sold_count": 150,
-      "favorite_count": 100,
-      "review_count": 35,
-      "average_rating": 4.5
+      "favorite_count": 45,
+      "review_count": 25,
+      "average_rating": 4.8,
+      "created_at": "2024-10-01T10:00:00Z",
+      "updated_at": "2024-10-01T10:00:00Z",
+      "deleted_at": null,
+      "description": "Điện thoại flagship hàng đầu với camera 200MP và bút S-Pen.",
+      "status": "active",
+      "id": "8456"
     },
     {
-      "id": "301",
-      "image_url": "https://placehold.co/300x300/afeeee/000?text=Audio+A1",
-      "name": "Tai nghe Sony WH-1000XM6",
-      "category": {
-        "id": "6",
-        "name": "Audio"
-      },
-      "variants": [
-        {
-          "price": 7990000,
-          "original_price": 8500000,
-          "stock": 70
-        }
-      ],
-      "sold_count": 680,
-      "favorite_count": 500,
-      "review_count": 230,
-      "average_rating": 4.8
+      "product_id": 2,
+      "name": "Laptop ProBook 15 G10",
+      "category_id": "4",
+      "thumbnail_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+1",
+      "sold_count": 30,
+      "favorite_count": 55,
+      "review_count": 10,
+      "average_rating": 4.7,
+      "created_at": "2024-10-02T11:00:00Z",
+      "updated_at": "2024-10-02T11:00:00Z",
+      "deleted_at": null,
+      "description": "Laptop văn phòng bền bỉ, chip Intel Core i5 thế hệ 13.",
+      "status": "active",
+      "id": "dcce"
     },
     {
-      "id": "302",
-      "image_url": "https://placehold.co/300x300/f0e68c/000?text=Audio+A2",
-      "name": "Loa Bluetooth JBL Charge 6",
-      "category": {
-        "id": "6",
-        "name": "Audio"
-      },
-      "variants": [
-        {
-          "price": 4200000,
-          "original_price": 4200000,
-          "stock": 90
-        }
-      ],
-      "sold_count": 950,
-      "favorite_count": 700,
-      "review_count": 310,
-      "average_rating": 4.7
+      "product_id": 3,
+      "name": "Tai nghe AirBuds Pro 3",
+      "category_id": "e117",
+      "thumbnail_url": "https://placehold.co/150x150/7F9F7F/EBF6EB?text=TaiNghe+1",
+      "sold_count": 500,
+      "favorite_count": 150,
+      "review_count": 80,
+      "average_rating": 4.9,
+      "created_at": "2024-10-03T12:00:00Z",
+      "updated_at": "2024-10-03T12:00:00Z",
+      "deleted_at": null,
+      "description": "Tai nghe chống ồn chủ động, âm thanh không gian.",
+      "status": "active",
+      "id": "655b"
     },
     {
-      "id": "303",
-      "image_url": "https://placehold.co/300x300/f0f8ff/000?text=Audio+A3",
-      "name": "AirPods Pro (Thế hệ 3)",
-      "category": {
-        "id": "6",
-        "name": "Audio"
-      },
-      "variants": [
-        {
-          "price": 6500000,
-          "original_price": 6990000,
-          "stock": 110
-        }
-      ],
-      "sold_count": 1200,
-      "favorite_count": 850,
-      "review_count": 400,
-      "average_rating": 4.9
+      "product_id": 4,
+      "name": "Bàn phím cơ Gaming G915",
+      "category_id": "7",
+      "thumbnail_url": "https://placehold.co/150x150/9F9F7F/F6F6EB?text=Keyboard",
+      "sold_count": 80,
+      "favorite_count": 25,
+      "review_count": 12,
+      "average_rating": 4.6,
+      "created_at": "2024-10-04T13:00:00Z",
+      "updated_at": "2024-10-04T13:00:00Z",
+      "deleted_at": null,
+      "description": "Bàn phím cơ không dây, switch low-profile, LED RGB.",
+      "status": "active",
+      "id": "1151"
     },
     {
-      "id": "304",
-      "image_url": "https://placehold.co/300x300/e6e6fa/000?text=Audio+A4",
-      "name": "Tai nghe chụp tai Sennheiser HD 599",
-      "category": {
-        "id": "6",
-        "name": "Audio"
-      },
-      "variants": [
-        {
-          "price": 5300000,
-          "original_price": 5300000,
-          "stock": 40
-        }
-      ],
+      "product_id": 5,
+      "name": "Điện thoại O-Reno 11",
+      "category_id": "3",
+      "thumbnail_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+2",
+      "sold_count": 210,
+      "favorite_count": 90,
+      "review_count": 45,
+      "average_rating": 4.7,
+      "created_at": "2024-10-05T14:00:00Z",
+      "updated_at": "2024-10-05T14:00:00Z",
+      "deleted_at": null,
+      "description": "Chuyên gia chân dung, thiết kế thời trang, sạc nhanh 80W.",
+      "status": "active",
+      "id": "aa7f"
+    },
+    {
+      "product_id": 6,
+      "name": "Laptop Gaming Legion 5",
+      "category_id": "4",
+      "thumbnail_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+2",
+      "sold_count": 65,
+      "favorite_count": 15,
+      "review_count": 10,
+      "average_rating": 4.5,
+      "created_at": "2024-10-06T15:00:00Z",
+      "updated_at": "2024-10-06T15:00:00Z",
+      "deleted_at": null,
+      "description": "Laptop gaming tản nhiệt mát, RTX 4060, màn hình 165Hz.",
+      "status": "active",
+      "id": "c229"
+    },
+    {
+      "product_id": 7,
+      "name": "Điện thoại i-Phone 15 Pro",
+      "category_id": "3",
+      "thumbnail_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+3",
       "sold_count": 300,
       "favorite_count": 150,
-      "review_count": 70,
-      "average_rating": 4.5
+      "review_count": 90,
+      "average_rating": 4.9,
+      "created_at": "2024-10-07T16:00:00Z",
+      "updated_at": "2024-10-07T16:00:00Z",
+      "deleted_at": null,
+      "description": "Khung viền Titan, chip A17 Pro, cổng sạc USB-C.",
+      "status": "active",
+      "id": "5199"
     },
     {
-      "id": "305",
-      "image_url": "https://placehold.co/300x300/90ee90/000?text=Audio+A5",
-      "name": "Micro Thu Âm Rode NT-USB+",
-      "category": {
-        "id": "6",
-        "name": "Audio"
-      },
-      "variants": [
-        {
-          "price": 5990000,
-          "original_price": 6500000,
-          "stock": 25
-        }
-      ],
-      "sold_count": 180,
-      "favorite_count": 100,
-      "review_count": 45,
-      "average_rating": 4.6
+      "product_id": 8,
+      "name": "Chuột Gaming G502 Hero",
+      "category_id": "7",
+      "thumbnail_url": "https://placehold.co/150x150/9F9F7F/F6F6EB?text=Mouse",
+      "sold_count": 300,
+      "favorite_count": 60,
+      "review_count": 50,
+      "average_rating": 4.6,
+      "created_at": "2024-10-08T17:00:00Z",
+      "updated_at": "2024-10-08T17:00:00Z",
+      "deleted_at": null,
+      "description": "Chuột gaming có dây, mắt đọc Hero 25K, tùy chỉnh tạ.",
+      "status": "active",
+      "id": "d571"
     },
     {
-      "id": "401",
-      "image_url": "https://placehold.co/300x300/f08080/000?text=Gaming+G1",
-      "name": "Ghế Gaming Secretlab Titan",
-      "category": {
-        "id": "7",
-        "name": "Gaming"
-      },
-      "variants": [
-        {
-          "price": 8900000,
-          "original_price": 9500000,
-          "stock": 20
-        }
-      ],
-      "sold_count": 400,
-      "favorite_count": 350,
-      "review_count": 120,
-      "average_rating": 4.9
+      "product_id": 9,
+      "name": "Tai nghe S-Buds 3 Pro",
+      "category_id": "e117",
+      "thumbnail_url": "https://placehold.co/150x150/7F9F7F/EBF6EB?text=TaiNghe+2",
+      "sold_count": 100,
+      "favorite_count": 35,
+      "review_count": 20,
+      "average_rating": 4.5,
+      "created_at": "2024-10-09T18:00:00Z",
+      "updated_at": "2024-10-09T18:00:00Z",
+      "deleted_at": null,
+      "description": "Tai nghe TWS, chống ồn thông minh, âm thanh 360.",
+      "status": "active",
+      "id": "b174"
     },
     {
-      "id": "402",
-      "image_url": "https://placehold.co/300x300/ffb6c1/000?text=Gaming+G2",
-      "name": "Chuột Razer Viper V3 Pro",
-      "category": {
-        "id": "7",
-        "name": "Gaming"
-      },
-      "variants": [
-        {
-          "price": 3200000,
-          "original_price": 3200000,
-          "stock": 60
-        }
-      ],
-      "sold_count": 1100,
-      "favorite_count": 750,
-      "review_count": 350,
-      "average_rating": 4.8
+      "product_id": 10,
+      "name": "Laptop UltraBook 13",
+      "category_id": "4",
+      "thumbnail_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+3",
+      "sold_count": 45,
+      "favorite_count": 12,
+      "review_count": 8,
+      "average_rating": 4.3,
+      "created_at": "2024-10-10T19:00:00Z",
+      "updated_at": "2024-10-10T19:00:00Z",
+      "deleted_at": null,
+      "description": "Laptop mỏng nhẹ, màn hình OLED, vỏ nhôm nguyên khối.",
+      "status": "active",
+      "id": "79f6"
     },
     {
-      "id": "403",
-      "image_url": "https://placehold.co/300x300/b0e0e6/000?text=Gaming+G3",
-      "name": "Bàn phím cơ Logitech G Pro X TKL",
-      "category": {
-        "id": "7",
-        "name": "Gaming"
-      },
-      "variants": [
-        {
-          "price": 4500000,
-          "original_price": 4800000,
-          "stock": 45
-        }
-      ],
-      "sold_count": 780,
-      "favorite_count": 550,
-      "review_count": 210,
-      "average_rating": 4.7
+      "product_id": "37c3",
+      "name": "TEST",
+      "description": "test",
+      "category_id": "7",
+      "status": "active",
+      "updated_at": "2025-11-17T16:35:18.805Z",
+      "thumbnail_url": "https://placehold.co/150x150?text=No+Img",
+      "sold_count": 0,
+      "favorite_count": 0,
+      "review_count": 0,
+      "average_rating": 0,
+      "created_at": "2025-11-17T16:35:18.805Z",
+      "id": "9db2"
+    }
+  ],
+  "images": [
+    {
+      "img_id": 101,
+      "product_id": 1,
+      "image_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+1",
+      "id": "5bbf"
     },
     {
-      "id": "404",
-      "image_url": "https://placehold.co/300x300/faebd7/000?text=Gaming+G4",
-      "name": "Tay cầm chơi game PS5 DualSense",
-      "category": {
-        "id": "7",
-        "name": "Gaming"
-      },
-      "variants": [
-        {
-          "price": 1800000,
-          "original_price": 1800000,
-          "stock": 85
-        }
-      ],
-      "sold_count": 1300,
-      "favorite_count": 920,
-      "review_count": 450,
-      "average_rating": 4.9
+      "img_id": 102,
+      "product_id": 2,
+      "image_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+1",
+      "id": "0ee7"
     },
     {
-      "id": "405",
-      "image_url": "https://placehold.co/300x300/778899/000?text=Gaming+G5",
-      "name": "Màn hình Gaming Samsung Odyssey G9",
-      "category": {
-        "id": "7",
-        "name": "Gaming"
-      },
-      "variants": [
-        {
-          "price": 28500000,
-          "original_price": 30000000,
-          "stock": 10
-        }
-      ],
-      "sold_count": 150,
-      "favorite_count": 80,
-      "review_count": 30,
-      "average_rating": 4.5
+      "img_id": 103,
+      "product_id": 3,
+      "image_url": "https://placehold.co/150x150/7F9F7F/EBF6EB?text=TaiNghe+1",
+      "id": "42be"
     },
     {
-      "id": "501",
-      "image_url": "https://placehold.co/300x300/ff69b4/000?text=Headphone+H1",
-      "name": "Tai nghe chống ồn Bose QC Ultra",
-      "category": {
-        "id": "e117",
-        "name": "Tai nghe"
-      },
-      "variants": [
-        {
-          "price": 9500000,
-          "original_price": 10000000,
-          "stock": 50
-        }
-      ],
-      "sold_count": 520,
-      "favorite_count": 380,
-      "review_count": 150,
-      "average_rating": 4.8
+      "img_id": 104,
+      "product_id": 4,
+      "image_url": "https://placehold.co/150x150/9F9F7F/F6F6EB?text=Keyboard",
+      "id": "e4f4"
     },
     {
-      "id": "502",
-      "image_url": "https://placehold.co/300x300/a0522d/000?text=Headphone+H2",
-      "name": "Tai nghe không dây Skullcandy Indy ANC",
-      "category": {
-        "id": "e117",
-        "name": "Tai nghe"
-      },
-      "variants": [
-        {
-          "price": 1800000,
-          "original_price": 2100000,
-          "stock": 150
-        }
-      ],
-      "sold_count": 1100,
-      "favorite_count": 800,
-      "review_count": 350,
-      "average_rating": 4.5
+      "img_id": 105,
+      "product_id": 5,
+      "image_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+2",
+      "id": "0e2d"
     },
     {
-      "id": "503",
-      "image_url": "https://placehold.co/300x300/40e0d0/000?text=Headphone+H3",
-      "name": "Tai nghe Gaming HyperX Cloud II",
-      "category": {
-        "id": "e117",
-        "name": "Tai nghe"
-      },
-      "variants": [
-        {
-          "price": 2990000,
-          "original_price": 2990000,
-          "stock": 100
-        }
-      ],
-      "sold_count": 900,
-      "favorite_count": 550,
-      "review_count": 200,
-      "average_rating": 4.6
+      "img_id": 106,
+      "product_id": 6,
+      "image_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+2",
+      "id": "27d6"
     },
     {
-      "id": "504",
-      "image_url": "https://placehold.co/300x300/9370db/000?text=Headphone+H4",
-      "name": "Tai nghe nhét tai AKG N40",
-      "category": {
-        "id": "e117",
-        "name": "Tai nghe"
-      },
-      "variants": [
-        {
-          "price": 3800000,
-          "original_price": 4000000,
-          "stock": 70
-        }
-      ],
-      "sold_count": 350,
-      "favorite_count": 150,
-      "review_count": 60,
-      "average_rating": 4.7
+      "img_id": 107,
+      "product_id": 7,
+      "image_url": "https://placehold.co/150x150/7F8B9F/EBF0F6?text=Phone+3",
+      "id": "3d0a"
     },
     {
-      "id": "505",
-      "image_url": "https://placehold.co/300x300/f0fff0/000?text=Headphone+H5",
-      "name": "Tai nghe không dây Marshall Major IV",
-      "category": {
-        "id": "e117",
-        "name": "Tai nghe"
+      "img_id": 108,
+      "product_id": 8,
+      "image_url": "https://placehold.co/150x150/9F9F7F/F6F6EB?text=Mouse",
+      "id": "285e"
+    },
+    {
+      "img_id": 109,
+      "product_id": 9,
+      "image_url": "https://placehold.co/150x150/7F9F7F/EBF6EB?text=TaiNghe+2",
+      "id": "218e"
+    },
+    {
+      "img_id": 110,
+      "product_id": 10,
+      "image_url": "https://placehold.co/150x150/9F7F7F/F6EBEB?text=Laptop+3",
+      "id": "0cf7"
+    }
+  ],
+  "variants": [
+    {
+      "variant_id": 1,
+      "product_id": 1,
+      "price": 32990000,
+      "stock": 10,
+      "attributes": {
+        "Màu sắc": "Titan Xám",
+        "Dung lượng": "256GB"
       },
-      "variants": [
-        {
-          "price": 4500000,
-          "original_price": 4500000,
-          "stock": 80
-        }
-      ],
-      "sold_count": 650,
-      "favorite_count": 420,
-      "review_count": 180,
-      "average_rating": 4.8
+      "id": "becb"
+    },
+    {
+      "variant_id": 2,
+      "product_id": 1,
+      "price": 35990000,
+      "stock": 5,
+      "attributes": {
+        "Màu sắc": "Titan Đen",
+        "Dung lượng": "512GB"
+      },
+      "id": "6c46"
+    },
+    {
+      "variant_id": 3,
+      "product_id": 2,
+      "price": 18500000,
+      "stock": 8,
+      "attributes": {
+        "RAM": "16GB",
+        "Ổ cứng": "512GB SSD"
+      },
+      "id": "481b"
+    },
+    {
+      "variant_id": 4,
+      "product_id": 2,
+      "price": 21000000,
+      "stock": 3,
+      "attributes": {
+        "RAM": "32GB",
+        "Ổ cứng": "512GB SSD"
+      },
+      "id": "bd6c"
+    },
+    {
+      "variant_id": 5,
+      "product_id": 3,
+      "price": 5990000,
+      "stock": 30,
+      "attributes": {
+        "Màu sắc": "Trắng"
+      },
+      "id": "62cd"
+    },
+    {
+      "variant_id": 7,
+      "product_id": 4,
+      "price": 4500000,
+      "stock": 15,
+      "attributes": {
+        "Switch": "Tactile"
+      },
+      "id": "3215"
+    },
+    {
+      "variant_id": 8,
+      "product_id": 4,
+      "price": 4500000,
+      "stock": 10,
+      "attributes": {
+        "Switch": "Clicky"
+      },
+      "id": "3674"
+    },
+    {
+      "variant_id": 9,
+      "product_id": 5,
+      "price": 10990000,
+      "stock": 20,
+      "attributes": {
+        "Màu sắc": "Xanh",
+        "Dung lượng": "256GB"
+      },
+      "id": "3ef5"
+    },
+    {
+      "variant_id": 10,
+      "product_id": 6,
+      "price": 28990000,
+      "stock": 8,
+      "attributes": {
+        "CPU": "Ryzen 7",
+        "RAM": "16GB"
+      },
+      "id": "9a8a"
+    },
+    {
+      "variant_id": 11,
+      "product_id": 7,
+      "price": 27990000,
+      "stock": 10,
+      "attributes": {
+        "Màu sắc": "Titan Tự nhiên",
+        "Dung lượng": "128GB"
+      },
+      "id": "e91a"
+    },
+    {
+      "variant_id": 12,
+      "product_id": 7,
+      "price": 30990000,
+      "stock": 10,
+      "attributes": {
+        "Màu sắc": "Titan Xanh",
+        "Dung lượng": "256GB"
+      },
+      "id": "e836"
+    },
+    {
+      "variant_id": 13,
+      "product_id": 8,
+      "price": 1290000,
+      "stock": 50,
+      "attributes": {
+        "Màu sắc": "Đen"
+      },
+      "id": "a002"
+    },
+    {
+      "variant_id": 15,
+      "product_id": 9,
+      "price": 4490000,
+      "stock": 25,
+      "attributes": {
+        "Màu sắc": "Đen"
+      },
+      "id": "79f5"
+    },
+    {
+      "variant_id": 16,
+      "product_id": 9,
+      "price": 4490000,
+      "stock": 15,
+      "attributes": {
+        "Màu sắc": "Bạc"
+      },
+      "id": "bb9c"
+    },
+    {
+      "variant_id": 17,
+      "product_id": 10,
+      "price": 22990000,
+      "stock": 10,
+      "attributes": {
+        "CPU": "Core i7",
+        "RAM": "16GB",
+        "Ổ cứng": "512GB SSD"
+      },
+      "id": "794d"
+    },
+    {
+      "variant_id": "80d3",
+      "product_id": "37c3",
+      "price": 100000,
+      "stock": 11,
+      "attributes": {
+        "màu": "Vàng"
+      },
+      "id": "498f"
+    },
+    {
+      "variant_id": "03a1",
+      "product_id": "37c3",
+      "price": 120000,
+      "stock": 11,
+      "attributes": {
+        "màu": "Vàng"
+      },
+      "id": "521d"
+    },
+    {
+      "id": "0109",
+      "product_id": "e9fbc43c-16c0-4fb6-8d01-e79a549327a2",
+      "price": 11111,
+      "stock": 11,
+      "attributes": {
+        "Loại": "222"
+      }
+    },
+    {
+      "id": "fe06",
+      "product_id": "e9fbc43c-16c0-4fb6-8d01-e79a549327a2",
+      "price": 2222222,
+      "stock": 22,
+      "attributes": {
+        "Loại": "1111"
+      }
+    },
+    {
+      "id": "os2hw5",
+      "product_id": "e9fbc43c-16c0-4fb6-8d01-e79a549327a2",
+      "price": 111112,
+      "stock": 112,
+      "attributes": {
+        "Loại": "2221",
+        "kích cỡ": "22"
+      },
+      "variant_id": "os2hw5"
+    },
+    {
+      "id": "glr57s",
+      "product_id": "e9fbc43c-16c0-4fb6-8d01-e79a549327a2",
+      "price": 22222221,
+      "stock": 221,
+      "attributes": {
+        "Loại": "11112",
+        "kích cỡ": "2"
+      },
+      "variant_id": "glr57s"
     }
   ],
   "orders": [
     {
-      "id": "ORDER-002",
+      "orderId": "ORDER-002",
       "customerName": "Trần Thị B",
       "customerPhone": "0909876543",
       "customerAddress": "456 Nguyễn Huệ, Quận 1, TP.HCM",
       "totalAmount": 2500000,
       "status": "returned",
       "createdAt": "2025-11-10T10:30:00Z",
-      "return_status": ""
+      "return_status": "",
+      "id": "24a2"
     },
     {
-      "id": "ORDER-003",
+      "orderId": "ORDER-003",
       "customerName": "Lê Văn C",
       "customerPhone": "0912345678",
       "customerAddress": "789 Điện Biên Phủ, Quận 3, TP.HCM",
       "totalAmount": 850000,
       "status": "returned",
       "createdAt": "2025-11-10T14:15:00Z",
-      "return_status": ""
+      "return_status": "",
+      "id": "7ebc"
     },
     {
-      "id": "ORDER-004",
+      "orderId": "ORDER-004",
       "customerName": "Phạm Thị D",
       "customerPhone": "0987123456",
       "customerAddress": "321 Hai Bà Trưng, Quận 3, TP.HCM",
       "totalAmount": 3200000,
       "status": "returned",
       "createdAt": "2025-11-10T16:45:00Z",
-      "return_status": ""
+      "return_status": "",
+      "id": "c0c2"
     },
     {
-      "id": "ORDER-005",
+      "orderId": "ORDER-005",
       "customerName": "Hoàng Văn E",
       "customerPhone": "0933456789",
       "customerAddress": "654 Cách Mạng Tháng 8, Quận 10, TP.HCM",
       "totalAmount": 1200000,
       "status": "returning",
       "createdAt": "2025-11-11T08:00:00Z",
-      "return_status": ""
+      "return_status": "",
+      "id": "7202"
     }
   ],
   "order_items": [
     {
-      "id": "ITEM-002",
+      "item_id": "ITEM-002",
       "orderId": "ORDER-002",
       "productId": 102,
       "quantity": 1,
-      "price": 2500000
+      "price": 2500000,
+      "id": "e4d7"
     },
     {
-      "id": "ITEM-003",
+      "item_id": "ITEM-003",
       "orderId": "ORDER-003",
       "productId": 103,
       "quantity": 1,
-      "price": 850000
+      "price": 850000,
+      "id": "67e4"
     },
     {
-      "id": "ITEM-004",
+      "item_id": "ITEM-004",
       "orderId": "ORDER-004",
       "productId": 101,
       "quantity": 2,
-      "price": 750000
+      "price": 750000,
+      "id": "094c"
     },
     {
-      "id": "ITEM-005",
+      "item_id": "ITEM-005",
       "orderId": "ORDER-004",
       "productId": 104,
       "quantity": 1,
-      "price": 1700000
+      "price": 1700000,
+      "id": "405a"
     },
     {
-      "id": "ITEM-006",
+      "item_id": "ITEM-006",
       "orderId": "ORDER-005",
       "productId": 105,
       "quantity": 3,
-      "price": 400000
+      "price": 400000,
+      "id": "bf71"
     }
   ],
   "comments": [
     {
-      "id": "1",
+      "comment_id": "1",
       "content": "Sản phẩm này rất tốt, tôi rất thích!",
       "status": "approved",
       "createdAt": "2023-10-27T10:00:00Z",
       "productId": 1,
-      "userId": 1
+      "userId": 1,
+      "id": "d3b9"
     }
   ],
   "coupons": [
     {
-      "id": "1",
+      "couponId": "1",
       "name": "Giảm giá 30/4",
       "code": "30THANG4",
       "type": "percent",
@@ -787,107 +665,122 @@
       "expiresAt": "2025-04-30T23:59:59",
       "usageLimit": 100,
       "usageCount": 10,
-      "limitPerUser": 1
+      "limitPerUser": 1,
+      "id": "2701"
     }
   ],
   "coupon_usage": [
     {
-      "id": "1",
+      "usage_id_coupon": "1",
       "couponId": "1",
       "userId": "5",
-      "orderId": "101"
+      "orderId": "101",
+      "id": "1e22"
     },
     {
-      "id": "2",
+      "usage_id_coupon": "2",
       "couponId": "1",
       "userId": "7",
-      "orderId": "102"
+      "orderId": "102",
+      "id": "34b8"
     }
   ],
   "reviews": [
     {
-      "id": "1",
+      "review_id": "1",
       "rating": 5,
       "content": "Sản phẩm 5 sao, chất lượng tuyệt vời!",
       "status": "approved",
       "createdAt": "2023-11-01T10:00:00Z",
       "productId": 1,
-      "userId": 1
+      "userId": 1,
+      "id": "7753"
     },
     {
-      "id": "1",
+      "review_id": "1",
       "rating": 5,
       "content": "Sản phẩm 5 sao, chất lượng tuyệt vời!",
       "status": "approved",
       "createdAt": "2023-11-01T10:00:00Z",
       "productId": "101",
-      "userId": "1"
+      "userId": "1",
+      "id": "a214"
     }
   ],
   "slides": [
     {
-      "id": "1",
+      "slide_id": "1",
       "title": "Sale Hè Rực Rỡ",
       "description": "Giảm giá lên đến 50% toàn bộ sản phẩm",
       "imageUrl": "https://placehold.co/1200x400/ff6347/ffffff?text=Summer+Sale",
       "linkUrl": "/sale/summer",
       "status": "published",
-      "order": 1
+      "order": 1,
+      "id": "5208"
     },
     {
-      "id": "2",
+      "slide_id": "2",
       "title": "Bộ Sưu Tập Mới",
       "description": "Khám phá thời trang thu đông 2025",
       "imageUrl": "https://placehold.co/1200x400/4682b4/ffffff?text=New+Collection",
       "linkUrl": "/collections/new",
       "status": "draft",
-      "order": 2
+      "order": 2,
+      "id": "0517"
     }
   ],
   "news": [
     {
-      "id": "1",
+      "news_id": "1",
       "title": "Apple ra mắt iPhone 16 với chip A18 mới",
       "excerpt": "Hiệu năng tăng 20%, tiết kiệm pin hơn 15% so với thế hệ trước.",
       "content": "<p>aaa</p>\n",
       "image_url": "",
       "slug": "tu-kinh-to",
       "author_id": 3399,
-      "status": "draft",
+      "status": "published",
       "created_at": "2025-11-13T19:50:28.354Z",
-      "updated_at": "2025-11-13T20:04:32.867Z",
+      "updated_at": "2025-11-14T04:07:43.635Z",
       "image": "https://placehold.co/400x200?text=iPhone+16",
-      "date": "2025-10-25"
+      "date": "2025-10-25",
+      "id": "5367"
     },
     {
-      "id": "2",
+      "news_id": "2",
       "title": "ASUS trình làng dòng laptop TUF 2025",
       "excerpt": "Dòng TUF mới có thiết kế nhẹ hơn và GPU RTX 5070 cực mạnh.",
+      "content": "<p>aaa</p>\n",
+      "image_url": "",
+      "slug": "tu-kinh-to",
+      "author_id": 3399,
+      "status": "published",
+      "created_at": "2025-11-13T19:50:28.354Z",
+      "updated_at": "2025-11-14T04:14:17.770Z",
       "image": "https://placehold.co/400x200?text=ASUS+TUF+2025",
       "date": "2025-10-20",
-      "created_at": "2025-11-13T19:50:28.354Z",
-      "status": "draft",
-      "updated_at": "2025-11-13T20:03:49.203Z"
+      "id": "a7b1"
     },
     {
-      "id": "3",
+      "news_id": "3",
       "title": "Samsung công bố Galaxy Z Fold7",
       "excerpt": "Siêu phẩm gập với độ bền cao hơn 30%, pin dùng 2 ngày.",
       "image": "https://placehold.co/400x200?text=Fold+7",
       "date": "2025-09-30",
       "created_at": "2025-11-13T19:50:28.354Z",
-      "status": "draft",
-      "updated_at": "2025-11-13T19:50:35.620Z"
+      "status": "published",
+      "updated_at": "2025-11-14T04:14:26.970Z",
+      "id": "6c56"
     },
     {
-      "id": "4",
+      "news_id": "4",
       "title": "Samsung Hàng mối ra mắt 2025 ",
       "excerpt": "Hàng mối ra mắt 2025",
       "image": "https://placehold.co/400x200?text=Fold+7",
       "date": "2025-09-30",
       "created_at": "2025-11-13T19:50:28.354Z",
       "status": "draft",
-      "updated_at": "2025-11-13T19:50:36.059Z"
+      "updated_at": "2025-11-13T19:50:36.059Z",
+      "id": "cdc5"
     }
   ]
 }

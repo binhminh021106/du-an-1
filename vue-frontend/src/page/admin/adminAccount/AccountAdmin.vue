@@ -4,11 +4,11 @@ import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-const users = ref([]); // Chỉ chứa admin/nhanvien (không chứa user)
+const users = ref([]); // Chỉ chứa admin/nhanvien (từ /admins)
 const isLoading = ref(true);
 const searchQuery = ref('');
 
-// --- State Modals ---
+// --- Modals ---
 const userModalInstance = ref(null);
 const userModalRef = ref(null);
 const isEditMode = ref(false);
@@ -21,22 +21,26 @@ const roleModalInstance = ref(null);
 const roleModalRef = ref(null);
 const isRoleEditMode = ref(false);
 
-// --- State Forms ---
+// --- Forms ---
 const formData = reactive({
   id: null,
   username: '',
   email: '',
-  password: '',
-  confirmPassword: '',
+  phone: '',
+  address: '',
   role: 'nhanvien',
-  status: 'active'
+  status: 'active',
+  password: '', // Thêm mật khẩu
+  password_confirmation: '' // Thêm xác nhận mật khẩu
 });
 
 const errors = reactive({
   username: '',
   email: '',
-  password: '',
-  confirmPassword: '',
+  phone: '',
+  address: '',
+  password: '', // Thêm lỗi mật khẩu
+  password_confirmation: '' // Thêm lỗi xác nhận
 });
 
 const roleFormData = reactive({
@@ -51,54 +55,55 @@ const roleErrors = reactive({
   label: '',
 });
 
-// --- State Vai trò & Phân trang ---
+// --- Roles & Pagination ---
 const roles = ref([]); // Chứa TẤT CẢ vai trò (để lấy nhãn)
 const otherUsersCurrentPage = ref(1);
 const otherUsersItemsPerPage = ref(5);
 
 // --- Computed ---
 
-// Lọc người dùng dựa trên tìm kiếm
+// Lọc users theo tìm kiếm
 const filteredUsers = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
   if (!query) {
-    return users.value; // users đã được lọc ở fetchUsers
+    return users.value;
   }
   return users.value.filter(user =>
     user.username.toLowerCase().includes(query) ||
     user.email.toLowerCase().includes(query) ||
+    (user.phone && user.phone.toLowerCase().includes(query)) || // Cải tiến: Tìm theo SĐT
     getRoleLabel(user.role).toLowerCase().includes(query)
   );
 });
 
-// Lọc admin từ danh sách đã lọc
+// Lọc admins
 const adminUsers = computed(() => {
   return filteredUsers.value.filter(user => user.role === 'admin');
 });
 
-// Lọc user khác (nhanvien, ketoan...)
+// Lọc other users (nhanvien, ketoan...)
 const otherUsers = computed(() => {
   return filteredUsers.value.filter(user => user.role !== 'admin');
 });
 
-// Lọc các vai trò có thể chọn (không bao gồm 'user')
+// Lọc vai trò (trừ 'user')
 const availableRoles = computed(() => {
   return roles.value.filter(r => r.value !== 'user');
 });
 
-// Tính tổng số trang cho user khác
+// Tổng trang (other users)
 const otherUsersTotalPages = computed(() => {
   return Math.ceil(otherUsers.value.length / otherUsersItemsPerPage.value);
 });
 
-// Lấy danh sách user khác đã phân trang
+// Phân trang (other users)
 const paginatedOtherUsers = computed(() => {
   const start = (otherUsersCurrentPage.value - 1) * otherUsersItemsPerPage.value;
   const end = start + otherUsersItemsPerPage.value;
   return otherUsers.value.slice(start, end);
 });
 
-// Reset về trang 1 khi tìm kiếm
+// Reset trang khi tìm kiếm
 watch(searchQuery, () => {
   otherUsersCurrentPage.value = 1;
 });
@@ -136,12 +141,12 @@ onMounted(() => {
   }
 });
 
-// --- CRUD User ---
+// --- CRUD User (Đã cập nhật để dùng /admins) ---
 async function fetchUsers() {
   isLoading.value = true;
   try {
-    // Gọi /users và lọc ra những ai KHÔNG PHẢI 'user'
-    const response = await apiService.get(`/users?role_ne=user`);
+    // THAY ĐỔI: Gọi /admins (plural) thay vì /admin
+    const response = await apiService.get(`/admins`);
 
     users.value = response.data.map(user => ({
       ...user,
@@ -151,8 +156,8 @@ async function fetchUsers() {
     }));
     otherUsersCurrentPage.value = 1;
   } catch (error) {
-    console.error("Lỗi khi tải danh sách người dùng:", error);
-    Swal.fire('Lỗi', 'Không thể tải danh sách người dùng.', 'error');
+    console.error("Lỗi khi tải danh sách người dùng (admin):", error);
+    Swal.fire('Lỗi', 'Không thể tải danh sách tài khoản nội bộ.', 'error');
   } finally {
     isLoading.value = false;
   }
@@ -162,10 +167,12 @@ function resetForm() {
   formData.id = null;
   formData.username = '';
   formData.email = '';
-  formData.password = '';
-  formData.confirmPassword = '';
-  formData.role = 'nhanvien'; // Mặc định khi tạo là nhân viên
+  formData.phone = '';
+  formData.address = '';
+  formData.role = 'nhanvien';
   formData.status = 'active';
+  formData.password = ''; // Reset mật khẩu
+  formData.password_confirmation = ''; // Reset xác nhận
   Object.keys(errors).forEach(key => errors[key] = '');
 }
 
@@ -181,8 +188,11 @@ function openEditModal(user) {
   formData.id = user.id;
   formData.username = user.username;
   formData.email = user.email;
+  formData.phone = user.phone || '';
+  formData.address = user.address || '';
   formData.role = user.role;
   formData.status = user.status;
+  // Không gán mật khẩu khi sửa
   userModalInstance.value.show();
 }
 
@@ -208,19 +218,36 @@ function validateForm() {
     isValid = false;
   }
 
-  if (!isEditMode.value || formData.password) {
+  if (formData.phone.trim() && !/^0\d{9}$/.test(formData.phone.trim())) {
+    errors.phone = 'SĐT không hợp lệ (phải đủ 10 số, bắt đầu bằng 0).';
+    isValid = false;
+  }
+  
+  if (formData.address.trim() && formData.address.trim().length > 255) {
+    errors.address = 'Địa chỉ không được vượt quá 255 ký tự.';
+    isValid = false;
+  }
+
+  // --- THÊM VALIDATE MẬT KHẨU (CHỈ KHI TẠO MỚI) ---
+  if (!isEditMode.value) {
     if (!formData.password) {
       errors.password = 'Vui lòng nhập mật khẩu.';
       isValid = false;
-    } else if (formData.password.length < 8) {
-      errors.password = 'Mật khẩu phải có ít nhất 8 ký tự.';
+    } else if (formData.password.length < 6) {
+      errors.password = 'Mật khẩu phải có ít nhất 6 ký tự.';
       isValid = false;
     }
-    if (formData.password !== formData.confirmPassword) {
-      errors.confirmPassword = 'Mật khẩu xác nhận không khớp!';
+
+    if (!formData.password_confirmation) {
+      errors.password_confirmation = 'Vui lòng nhập lại mật khẩu để xác nhận.';
+      isValid = false;
+    } else if (formData.password && formData.password_confirmation !== formData.password) {
+      errors.password_confirmation = 'Mật khẩu xác nhận không khớp.';
       isValid = false;
     }
   }
+  // --- KẾT THÚC VALIDATE MẬT KHẨU ---
+
   return isValid;
 }
 
@@ -234,31 +261,54 @@ async function handleSave() {
     username: formData.username,
     name: formData.username, // Đồng bộ name = username
     email: formData.email,
+    phone: formData.phone,
     role: formData.role,
     status: formData.status,
-    phone: '', // Thêm các trường chuẩn hóa
-    address: '',
+    address: formData.address,
     avatar: '',
   };
 
-  if (formData.password) {
+  // --- THÊM MẬT KHẨU VÀO PAYLOAD (CHỈ KHI TẠO MỚI) ---
+  if (!isEditMode.value) {
     payload.password = formData.password;
+    // API của bạn có thể chỉ cần 'password', không cần 'password_confirmation'
+    // Tùy thuộc vào backend, bạn có thể cần gửi cả hai
+    // payload.password_confirmation = formData.password_confirmation; 
   }
 
   try {
     if (isEditMode.value) {
-      await apiService.patch(`/users/${formData.id}`, payload);
+      // THAY ĐỔI: Dùng /admins (plural)
+      await apiService.patch(`/admins/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật người dùng!', 'success');
     } else {
       payload.created_at = new Date().toISOString();
-      await apiService.post(`/users`, payload);
+      // THAY ĐỔI: Dùng /admins (plural)
+      await apiService.post(`/admins`, payload);
       Swal.fire('Thành công', 'Đã tạo người dùng mới!', 'success');
     }
     userModalInstance.value.hide();
     fetchUsers();
   } catch (apiError) {
     console.error("Lỗi khi lưu:", apiError);
-    Swal.fire('Thất bại', 'Đã có lỗi xảy ra. Vui lòng thử lại.', 'error');
+    // Xử lý lỗi từ server (ví dụ: email đã tồn tại)
+    if (apiError.response && apiError.response.data && apiError.response.data.message) {
+        // Giả sử server trả về lỗi trong 'message'
+        // Hoặc nếu lỗi validation chi tiết:
+        if (apiError.response.data.errors) {
+            const serverErrors = apiError.response.data.errors;
+            if (serverErrors.email) {
+                errors.email = serverErrors.email[0]; // Hiển thị lỗi email
+            }
+            if (serverErrors.username) {
+                errors.username = serverErrors.username[0]; // Hiển thị lỗi username
+            }
+            // ... các trường khác
+        }
+        Swal.fire('Thất bại', apiError.response.data.message || 'Đã có lỗi xảy ra. Vui lòng thử lại.', 'error');
+    } else {
+        Swal.fire('Thất bại', 'Đã có lỗi xảy ra. Vui lòng thử lại.', 'error');
+    }
   } finally {
     isLoading.value = false;
   }
@@ -282,7 +332,8 @@ async function toggleUserStatus(user) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      await apiService.patch(`/users/${user.id}`, { status: newStatus });
+      // THAY ĐỔI: Dùng /admins (plural)
+      await apiService.patch(`/admins/${user.id}`, { status: newStatus });
       Swal.fire('Thành công!', `Đã ${actionText} người dùng ${user.username}.`, 'success');
       user.status = newStatus; // Cập nhật UI
     } catch (error) {
@@ -309,7 +360,8 @@ async function handleDelete(user) {
 
   if (result.isConfirmed) {
     try {
-      await apiService.delete(`/users/${user.id}`);
+      // THAY ĐỔI: Dùng /admins (plural)
+      await apiService.delete(`/admins/${user.id}`);
       Swal.fire('Đã xóa!', 'Người dùng đã được xóa.', 'success');
       fetchUsers();
     } catch (error) {
@@ -319,13 +371,14 @@ async function handleDelete(user) {
   }
 }
 
-// --- CRUD Vai trò ---
+// --- CRUD Vai trò (Giữ nguyên, vẫn đọc từ /roles) ---
 async function fetchRoles() {
   try {
     const response = await apiService.get(`/roles`);
     roles.value = response.data;
   } catch (error) {
     console.error("Lỗi khi tải danh sách vai trò:", error);
+    // Dữ liệu dự phòng
     roles.value = [
       { value: 'admin', label: 'Quản trị viên (Admin)', badgeClass: 'text-bg-danger', id: 1 },
       { value: 'manager', label: 'Quản lý', badgeClass: 'text-bg-info', id: 2 },
@@ -480,7 +533,7 @@ function nextOtherUsersPage() {
                   <i class="bi bi-search text-muted"></i>
                 </span>
                 <input type="text" class="form-control border-start-0 ps-0"
-                  placeholder="Tìm kiếm theo tên đăng nhập, email, vai trò..." v-model="searchQuery">
+                  placeholder="Tìm theo tên, email, SĐT, vai trò..." v-model="searchQuery">
               </div>
             </div>
 
@@ -532,7 +585,6 @@ function nextOtherUsersPage() {
                           {{ searchQuery ? 'Không tìm thấy quản trị viên phù hợp' : 'Không có quản trị viên nào' }}
                         </td>
                       </tr>
-                      <!-- THAY ĐỔI 1: Thêm class binding cho <tr> -->
                       <tr v-for="user in adminUsers" :key="user.id"
                         :class="{ 'inactive-row': user.status !== 'active' }">
                         <td>{{ user.id }}</td>
@@ -555,7 +607,6 @@ function nextOtherUsersPage() {
                           <span :class="['badge', getRoleBadge(user.role)]">{{ getRoleLabel(user.role) }}</span>
                         </td>
                         <td>
-                          <!-- THAY ĐỔI 2: Đổi text-bg-warning sang text-bg-danger cho nổi bật -->
                           <span :class="['badge', user.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
                             {{ user.status === 'active' ? 'Đang hoạt động' : 'Vô hiệu hóa' }}
                           </span>
@@ -620,7 +671,6 @@ function nextOtherUsersPage() {
                           {{ searchQuery ? 'Không tìm thấy người dùng phù hợp' : 'Không có người dùng nào khác' }}
                         </td>
                       </tr>
-                      <!-- THAY ĐỔI 3: Thêm class binding cho <tr> -->
                       <tr v-for="user in paginatedOtherUsers" :key="user.id"
                         :class="{ 'inactive-row': user.status !== 'active' }">
                         <td>{{ user.id }}</td>
@@ -643,7 +693,6 @@ function nextOtherUsersPage() {
                           <span :class="['badge', getRoleBadge(user.role)]">{{ getRoleLabel(user.role) }}</span>
                         </td>
                         <td>
-                          <!-- THAY ĐỔI 4: Đổi text-bg-warning sang text-bg-danger cho nổi bật -->
                           <span :class="['badge', user.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
                             {{ user.status === 'active' ? 'Đang hoạt động' : 'Vô hiệu hóa' }}
                           </span>
@@ -741,7 +790,7 @@ function nextOtherUsersPage() {
                 </div>
               </div>
 
-              <!-- Cột phải: Thông tin & Bảo mật -->
+              <!-- Cột phải: Thông tin -->
               <div class="col-md-8">
                 <div class="mb-3">
                   <label for="username" class="form-label required">Tên đăng nhập</label>
@@ -757,25 +806,42 @@ function nextOtherUsersPage() {
                   <div v-if="isEditMode" class="form-text">Không thể thay đổi email.</div>
                 </div>
 
-                <hr class="my-4">
-                <h6 class="mb-3"><i class="bi bi-shield-lock me-2"></i>Bảo mật</h6>
-
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label for="password" class="form-label" :class="{ 'required': !isEditMode }">Mật khẩu</label>
-                    <input type="password" class="form-control" :class="{ 'is-invalid': errors.password }" id="password"
-                      v-model="formData.password" autocomplete="new-password">
-                    <div class="form-text" v-if="isEditMode">(Để trống nếu không muốn thay đổi)</div>
+                <!-- THÊM TRƯỜNG MẬT KHẨU (CHỈ KHI TẠO MỚI) -->
+                <template v-if="!isEditMode">
+                  <div class="mb-3">
+                    <label for="password" class="form-label required">Mật khẩu</label>
+                    <input type="password" class="form-control" :class="{ 'is-invalid': errors.password }"
+                      id="password" v-model="formData.password" autocomplete="new-password">
                     <div class="invalid-feedback" v-if="errors.password">{{ errors.password }}</div>
+                    <div class="form-text">(Ít nhất 6 ký tự)</div>
                   </div>
-                  <div class="col-md-6 mb-3">
-                    <label for="confirmPassword" class="form-label"
-                      :class="{ 'required': !isEditMode || formData.password }">Xác nhận mật khẩu</label>
-                    <input type="password" class="form-control" :class="{ 'is-invalid': errors.confirmPassword }"
-                      id="confirmPassword" v-model="formData.confirmPassword" autocomplete="new-password">
-                    <div class="invalid-feedback" v-if="errors.confirmPassword">{{ errors.confirmPassword }}</div>
+                  <div class="mb-3">
+                    <label for="password_confirmation" class="form-label required">Xác nhận Mật khẩu</label>
+                    <input type="password" class="form-control"
+                      :class="{ 'is-invalid': errors.password_confirmation }" id="password_confirmation"
+                      v-model="formData.password_confirmation" autocomplete="new-password">
+                    <div class="invalid-feedback" v-if="errors.password_confirmation">{{
+                      errors.password_confirmation }}</div>
                   </div>
+                </template>
+                <!-- KẾT THÚC TRƯỜNG MẬT KHẨU -->
+
+                <div class="mb-3">
+                  <label for="phone" class="form-label">Số điện thoại</label>
+                  <input type="tel" class="form-control" :class="{ 'is-invalid': errors.phone }" id="phone"
+                    v-model="formData.phone" placeholder="09xxxxxxxx">
+                  <div class="invalid-feedback" v-if="errors.phone">{{ errors.phone }}</div>
+                  <div class="form-text">(Không bắt buộc)</div>
                 </div>
+
+                <div class="mb-3">
+                  <label for="address" class="form-label">Địa chỉ</label>
+                  <input type="text" class="form-control" :class="{ 'is-invalid': errors.address }" id="address"
+                    v-model="formData.address" placeholder="Nhập địa chỉ...">
+                  <div class="invalid-feedback" v-if="errors.address">{{ errors.address }}</div>
+                  <div class="form-text">(Không bắt buộc)</div>
+                </div>
+
               </div>
             </div>
           </form>
@@ -820,6 +886,9 @@ function nextOtherUsersPage() {
             </div>
             <div class="list-group-item px-0">
               <i class="bi bi-telephone me-3 text-success"></i> {{ viewingUser.phone || '(Chưa có SĐT)' }}
+            </div>
+            <div class="list-group-item px-0">
+              <i class="bi bi-geo-alt me-3 text-danger"></i> {{ viewingUser.address || '(Chưa có địa chỉ)' }}
             </div>
             <div class="list-group-item px-0">
               <i class="bi bi-person-badge me-3 text-info"></i>
@@ -943,7 +1012,7 @@ function nextOtherUsersPage() {
   justify-content: center;
 }
 .table td .form-check-input {
-   margin-right: 0.5rem; /* Tách nút switch ra khỏi btn-group */
+    margin-right: 0.5rem; /* Tách nút switch ra khỏi btn-group */
 }
 
 /* Thêm CSS cho label bắt buộc */
@@ -960,7 +1029,7 @@ function nextOtherUsersPage() {
   overflow-x: auto;
 }
 
-/* (MỚI) Thêm style để làm mờ hàng bị vô hiệu hóa */
+/* Thêm style để làm mờ hàng bị vô hiệu hóa */
 .inactive-row {
   opacity: 0.65;
   background-color: #f8f9fa; /* Màu bg-light của Bootstrap */

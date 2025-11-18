@@ -13,7 +13,7 @@ class ProductController extends Controller
      */
     public function index()
     {
-        $products = Product::all();
+        $products = Product::latest()->get();
         return response()->json($products);
     }
 
@@ -30,7 +30,11 @@ class ProductController extends Controller
      */
     public function show(string $id)
     {
-        $product = Product::findOrFail($id);
+        $product = Product::with('variants')->find($id);
+
+        if (!$product) {
+            return response()->json(['message' => 'Không tìm thấy sản phẩm'], 404);
+        }
 
         return response()->json($product);
     }

@@ -1,4 +1,100 @@
 <script setup>
+import { ref, reactive } from 'vue';
+import { useRouter } from 'vue-router';
+import Swal from 'sweetalert2';
+import apiService from '../../apiService';
+
+const router = useRouter();
+
+const formData = reactive({
+    loginId: '',
+    password: ''
+});
+
+const error = reactive({
+    loginId: '',
+    password: ''
+});
+
+const isLoading = ref(false);
+const passwordFieldType = ref('password');
+
+const handleLogin = async () => {
+    let isValid = true;
+
+    if (!formData.loginId) {
+        error.loginId = 'Vui lòng nhập email hoặc số điện thoại'
+        isValid = false;
+    }
+
+    if (!formData.password) {
+        error.password = 'Vui lòng nhập mật khẩu';
+        isValid = false;
+    }
+
+    if (!isValid) {
+        return;
+    }
+
+    isLoading.value = true;
+    try {
+        const res = await apiService.get('/users');
+        const users = res.data || [];
+
+        const matchedUser = users.find(u =>
+            (u.email === formData.loginId || u.phone === formData.loginId) &&
+            u.password === formData.password
+        );
+
+        if (matchedUser) {
+            localStorage.setItem('userData', JSON.stringify(matchedUser));
+
+            window.dispatchEvent(new CustomEvent('login-success', {
+                detail: { user: matchedUser }
+            }));
+
+            await Swal.fire({
+                icon: 'success',
+                title: 'Đăng nhập thành công!',
+                text: `Chào mừng ${matchedUser.name || matchedUser.email}!`,
+                timer: 1500,
+                showConfirmButton: false
+            });
+
+            router.push({ name: 'home' });
+
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Đăng nhập thất bại',
+                text: 'Sai Email (hoặc SĐT) hoặc Mật khẩu. Vui lòng thử lại.',
+            });
+        }
+    } catch (error) {
+        let errorMessage = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
+
+        if (error.response?.status === 401) {
+            errorMessage = 'Sai Email (hoặc SĐT) hoặc Mật khẩu. Vui lòng thử lại.';
+        }
+
+        if (error.response?.status === 403) {
+            errorMessage = error.response.data.message || 'Bạn không có quyền truy cập.';
+        }
+
+        Swal.fire({
+            icon: 'error',
+            title: 'Đăng nhập thất bại',
+            text: errorMessage,
+        });
+    } finally {
+        isLoading.value = false;
+    }
+
+}
+
+const togglePasswordVisibility = () => {
+    passwordFieldType.value = passwordFieldType.value === 'password' ? 'text' : 'password';
+};
 
 </script>
 
@@ -27,22 +123,29 @@
             <div class="login-section">
                 <h2>Đăng nhập</h2>
 
-                <form action="#" method="POST" class="login-form" @submit.prevent>
+                <form class="login-form" @submit.prevent="handleLogin">
                     <div class="form-group">
                         <label for="phone">Email hoặc số điện thoại</label>
-                        <input type="text" id="phone" name="phone" placeholder="Nhập Email hoặc số điện thoại" required>
+                        <input type="text" id="phone" v-model="formData.loginId"
+                            placeholder="Nhập Email hoặc số điện thoại"
+                            :class="['form-control', error.loginId ? 'is-invalid' : '']">
+                        <div v-if="error.loginId" class="invalid-feedback d-block">{{ error.loginId }}</div>
                     </div>
 
                     <div class="form-group">
                         <label for="password">Mật khẩu</label>
                         <div class="password-wrapper">
-                            <input type="password" id="password" name="password" placeholder="Nhập mật khẩu của bạn"
-                                required>
-                            <span class="toggle-password"><i class="fa-solid fa-eye"></i></span>
+                            <input v-model="formData.password" id="password" name="password"
+                                placeholder="Nhập mật khẩu của bạn" :type="passwordFieldType">
+                            <span @click="togglePasswordVisibility" class="toggle-password"><i
+                                    :class="passwordFieldType === 'password' ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'"></i></span>
                         </div>
+                        <div v-if="error.password" class="invalid-feedback d-block">{{ error.password }}</div>
                     </div>
 
-                    <button type="submit" class="btn-login">Đăng nhập</button>
+                    <button type="submit" class="btn-login" :disabled="isLoading">
+                        {{ isLoading ? 'Đang xử lý...' : 'Đăng nhập' }}
+                    </button>
                 </form>
 
                 <a href="#" class="forgot-password">Quên mật khẩu?</a>
@@ -56,14 +159,13 @@
                         Google
                     </button>
                     <button class="social-btn">
-                        <img src="../../assets/facebook-svgrepo-com.svg"
-                            width="500px">
+                        <img src="../../assets/facebook-svgrepo-com.svg" width="500px">
                         Facebook
                     </button>
                 </div>
 
                 <p class="register-link">
-                    Bạn chưa có tài khoản? <router-link :to="{name: 'register'}">Đăng kí ngay</router-link>
+                    Bạn chưa có tài khoản? <router-link :to="{ name: 'register' }">Đăng kí ngay</router-link>
                 </p>
             </div>
         </div>
