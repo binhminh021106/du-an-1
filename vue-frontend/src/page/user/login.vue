@@ -38,27 +38,38 @@ const handleLogin = async () => {
 
     isLoading.value = true;
     try {
-        const res = await apiService.post('/login', {
-            login_id: formData.loginId,
-            password: formData.password
-        });
+        const res = await apiService.get('/users');
+        const users = res.data || [];
 
-        const { token, user } = res.data;
+        const matchedUser = users.find(u =>
+            (u.email === formData.loginId || u.phone === formData.loginId) &&
+            u.password === formData.password
+        );
 
-        localStorage.setItem('authToken', token);
-        localStorage.setItem('userData', JSON.stringify(user));
+        if (matchedUser) {
+            localStorage.setItem('userData', JSON.stringify(matchedUser));
 
-        apiService.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            window.dispatchEvent(new CustomEvent('login-success', {
+                detail: { user: matchedUser }
+            }));
 
-        await Swal.fire({
-            icon: 'success',
-            title: 'Đăng nhập thành công!',
-            text: `Chào mừng ${user.name || user.email}!`,
-            timer: 1500,
-            showConfirmButton: false
-        });
+            await Swal.fire({
+                icon: 'success',
+                title: 'Đăng nhập thành công!',
+                text: `Chào mừng ${matchedUser.name || matchedUser.email}!`,
+                timer: 1500,
+                showConfirmButton: false
+            });
 
-        router.push({ name: 'home' });
+            router.push({ name: 'home' });
+
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Đăng nhập thất bại',
+                text: 'Sai Email (hoặc SĐT) hoặc Mật khẩu. Vui lòng thử lại.',
+            });
+        }
     } catch (error) {
         let errorMessage = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
 
@@ -124,13 +135,12 @@ const togglePasswordVisibility = () => {
                     <div class="form-group">
                         <label for="password">Mật khẩu</label>
                         <div class="password-wrapper">
-                            <input v-model="formData.password" type="password" id="password" name="password"
-                                placeholder="Nhập mật khẩu của bạn" :type="passwordFieldType"
-                                :class="['form-control', error.password ? 'is-invalid' : '']">
+                            <input v-model="formData.password" id="password" name="password"
+                                placeholder="Nhập mật khẩu của bạn" :type="passwordFieldType">
                             <span @click="togglePasswordVisibility" class="toggle-password"><i
-                                    class="fa-solid fa-eye"></i></span>
-                            <div v-if="error.password" class="invalid-feedback d-block">{{ error.password }}</div>
+                                    :class="passwordFieldType === 'password' ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'"></i></span>
                         </div>
+                        <div v-if="error.password" class="invalid-feedback d-block">{{ error.password }}</div>
                     </div>
 
                     <button type="submit" class="btn-login" :disabled="isLoading">
