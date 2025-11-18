@@ -2,10 +2,11 @@
 import { ref, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import Swal from 'sweetalert2';
-import apiService from '../../apiService';
+import apiService from '../../apiService'; // Đảm bảo đường dẫn đúng
 
 const router = useRouter();
 
+// Khai báo biến cho form
 const formData = reactive({
     loginId: '',
     password: ''
@@ -19,84 +20,100 @@ const error = reactive({
 const isLoading = ref(false);
 const passwordFieldType = ref('password');
 
+// Hàm xử lý đăng nhập chuẩn Backend
 const handleLogin = async () => {
+    // 1. Reset lỗi cũ
+    error.loginId = '';
+    error.password = '';
     let isValid = true;
 
+    // Validate sơ bộ ở client
     if (!formData.loginId) {
-        error.loginId = 'Vui lòng nhập email hoặc số điện thoại'
+        error.loginId = 'Vui lòng nhập email hoặc số điện thoại';
         isValid = false;
     }
-
     if (!formData.password) {
         error.password = 'Vui lòng nhập mật khẩu';
         isValid = false;
     }
-
-    if (!isValid) {
-        return;
-    }
+    if (!isValid) return;
 
     isLoading.value = true;
+
+    const payload = {
+        login_id: formData.loginId,
+        password: formData.password
+    };
+
     try {
-        const res = await apiService.get('/users');
-        const users = res.data || [];
+        // 3. Gửi POST lên Server
+        const res = await apiService.post('/login', payload);
 
-        const matchedUser = users.find(u =>
-            (u.email === formData.loginId || u.phone === formData.loginId) &&
-            u.password === formData.password
-        );
+        // 4. Nếu Server bảo OK (status 200)
+        if (res.status === 200) {
+            const { user, token } = res.data;
 
-        if (matchedUser) {
-            localStorage.setItem('userData', JSON.stringify(matchedUser));
+            // Lưu lại chìa khóa (token) và thông tin user
+            localStorage.setItem('authToken', token);
+            localStorage.setItem('userData', JSON.stringify(user));
 
+            // Thông báo cho toàn bộ web biết là đã đăng nhập
             window.dispatchEvent(new CustomEvent('login-success', {
-                detail: { user: matchedUser }
+                detail: { user: user }
             }));
 
+            // Hiện thông báo thành công
             await Swal.fire({
                 icon: 'success',
                 title: 'Đăng nhập thành công!',
-                text: `Chào mừng ${matchedUser.name || matchedUser.email}!`,
+                text: `Chào mừng quay trở lại, ${user.fullName || user.email}!`,
                 timer: 1500,
-                showConfirmButton: 'Tới Trang Chủ',
+                showConfirmButton: 'Đi đến trang chủ',
                 confirmButtonColor: '#009981',
             });
 
+            // Chuyển về trang chủ
             router.push({ name: 'home' });
+        }
 
-        } else {
+    } catch (apiError) {
+        // 5. Xử lý nếu Server báo lỗi (401, 422...)
+        console.log(apiError); // In lỗi ra console để dễ soi
+
+        const response = apiError.response;
+        let msg = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
+
+        if (response) {
+            if (response.status === 422) {
+                // Lỗi thiếu dữ liệu (Validate)
+                if (response.data.errors?.login_id) error.loginId = response.data.errors.login_id[0];
+                if (response.data.errors?.password) error.password = response.data.errors.password[0];
+                msg = 'Vui lòng kiểm tra lại thông tin nhập vào.';
+            } else if (response.status === 401) {
+                // Lỗi sai mật khẩu
+                msg = 'Sai Email (SĐT) hoặc Mật khẩu.';
+            } else if (response.data?.message) {
+                // Các lỗi khác do Backend trả về
+                msg = response.data.message;
+            }
+        }
+
+        if (msg !== 'Vui lòng kiểm tra lại thông tin nhập vào.') {
             Swal.fire({
                 icon: 'error',
                 title: 'Đăng nhập thất bại',
-                text: 'Sai Email (hoặc SĐT) hoặc Mật khẩu. Vui lòng thử lại.',
+                text: msg,
+                confirmButtonColor: '#009981',
             });
         }
-    } catch (error) {
-        let errorMessage = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
-
-        if (error.response?.status === 401) {
-            errorMessage = 'Sai Email (hoặc SĐT) hoặc Mật khẩu. Vui lòng thử lại.';
-        }
-
-        if (error.response?.status === 403) {
-            errorMessage = error.response.data.message || 'Bạn không có quyền truy cập.';
-        }
-
-        Swal.fire({
-            icon: 'error',
-            title: 'Đăng nhập thất bại',
-            text: errorMessage,
-        });
     } finally {
         isLoading.value = false;
     }
-
-}
+};
 
 const togglePasswordVisibility = () => {
     passwordFieldType.value = passwordFieldType.value === 'password' ? 'text' : 'password';
 };
-
 </script>
 
 <template>
