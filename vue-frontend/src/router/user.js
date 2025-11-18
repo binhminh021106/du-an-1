@@ -1,5 +1,4 @@
-const users = [
-  {
+const userLayoutRoutes = {
     path: "/",
     component: () => import("../layout/layoutUser.vue"),
     children: [
@@ -27,16 +26,6 @@ const users = [
         path: "profile",
         name: "profile",
         component: () => import("../page/user/Profile.vue"),
-      },
-      {
-        path: "register",
-        name: "register",
-        component: () => import("../page/user/Register.vue"),
-      },
-      {
-        path: "login",
-        name: "login",
-        component: () => import("../page/user/login.vue"),
       },
       {
         path: "/policy",
@@ -89,7 +78,22 @@ const users = [
        component: () => import("../page/user/OrderList.vue"),
       },
     ],
+};
+
+const userAuthRoutes = [
+  {
+    path: "/register",
+    name: "register",
+    component: () => import("../page/user/Register.vue"),
+  },
+  {
+    path: "/login",
+    name: "login",
+    component: () => import("../page/user/login.vue"),
   },
 ];
+
+
+const users = [userLayoutRoutes, ...userAuthRoutes];
 
 export default users;
