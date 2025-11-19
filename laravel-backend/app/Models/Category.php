@@ -18,8 +18,12 @@ class Category extends Model
      *
      * Đây là tính năng bảo mật Mass Assignment của Laravel.
      */
+
+    protected $table = 'categories';
+
     protected $fillable = [
         'name',
+        'icon',
         'description',
         'order_number',
         'status',

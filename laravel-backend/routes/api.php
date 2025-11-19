@@ -107,6 +107,7 @@ Route::group([
 
     Route::get('/categories', [AdminCategoryController::class, 'index']);
     Route::get('/category/{id}', [AdminCategoryController::class, 'show']);
+    Route::apiResource('categories', AdminCategoryController::class);
 
     Route::get('/users', [AdminUserController::class, 'index']);
     Route::get('/user/{id}', [AdminUserController::class, 'show']);
