@@ -1,7 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-// BƯỚC 1: Import axios để gọi API thật
-import axios from 'axios';
+import apiService from '../../../apiService';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
@@ -61,12 +60,6 @@ const errors = reactive({
   images: '',
   variants: '',
   attributes: ''
-});
-const apiService = axios.create({
-  baseURL: 'http://localhost:3000',
-  headers: {
-    'Content-Type': 'application/json',
-  }
 });
 
 // --- HELPER FUNCTION: Tạo ID ngắn cho json-server ---
@@ -157,8 +150,8 @@ watch(sortCriteria, () => {
 });
 
 onMounted(async () => {
-  await fetchCategories(); // Đảm bảo có danh mục TRƯỚC KHI tải SP
-  fetchProducts();         // Giờ mới tải sản phẩm
+  await fetchCategories();
+  fetchProducts();         
   
   if (modalRef.value) {
     modalInstance.value = new Modal(modalRef.value, { backdrop: 'static' });
@@ -172,8 +165,6 @@ onMounted(async () => {
 async function fetchProducts() {
   isLoading.value = true;
   try {
-    // BƯỚC 1: Lấy danh sách sản phẩm
-    // json-server cần _sort theo khóa chính, ở đây là "id" (hoặc "product_id" nếu cấu hình lại)
     const [productsRes, variantsRes, imagesRes] = await Promise.all([
       apiService.get('/products'),  
       apiService.get('/variants'),  

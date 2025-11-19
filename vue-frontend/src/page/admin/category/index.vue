@@ -45,7 +45,7 @@ onMounted(() => {
 const filteredCategories = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
   if (!query) {
-    return categories.value; // Trả về danh sách đã sắp xếp nếu không tìm kiếm
+    return categories.value;
   }
   return categories.value.filter(category =>
     category.name.toLowerCase().includes(query) ||
@@ -157,7 +157,7 @@ function openViewModal(category) {
 async function fetchCategories() {
   isLoading.value = true;
   try {
-    const response = await apiService.get(`/categories?_sort=order&_order=asc`);
+    const response = await apiService.get(`admin/categories`);
     // Gán thêm created_at nếu chưa có
     categories.value = response.data.map(cat => ({
       ...cat,
@@ -224,11 +224,11 @@ async function handleSave() {
 
   try {
     if (isEditMode.value) {
-      await apiService.put(`/categories/${formData.id}`, payload);
+      await apiService.put(`admin/categories/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật danh mục!', 'success');
     } else {
       payload.created_at = new Date().toISOString();
-      await apiService.post(`/categories`, payload);
+      await apiService.post(`admin/categories`, payload);
       Swal.fire('Thành công', 'Đã tạo danh mục mới!', 'success');
     }
     modalInstance.value.hide();
@@ -264,7 +264,7 @@ async function toggleStatus(category) {
   if (result.isConfirmed) {
     category.status = newStatus;
     try {
-      await apiService.patch(`/categories/${category.id}`, { status: newStatus });
+      await apiService.patch(`admin/categories/${category.id}`, { status: newStatus });
       Swal.fire('Thành công', `Đã ${newStatus === 'active' ? 'kích hoạt' : 'vô hiệu hóa'} danh mục.`, 'success');
     } catch (error) {
       console.error("Lỗi cập nhật trạng thái:", error);
@@ -291,7 +291,7 @@ async function handleDelete(category) {
 
   if (result.isConfirmed) {
     try {
-      await apiService.delete(`/categories/${category.id}`);
+      await apiService.delete(`admin/categories/${category.id}`);
       Swal.fire('Đã xóa!', 'Danh mục đã bị xóa.', 'success');
       // Nếu trang hiện tại trống sau khi xóa, lùi về trang trước
       if (paginatedCategories.value.length === 1 && currentPage.value > 1) {

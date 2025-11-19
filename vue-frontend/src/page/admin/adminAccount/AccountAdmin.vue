@@ -122,8 +122,8 @@ function getFormattedDate(dateString) {
 
 // --- Hooks ---
 onMounted(() => {
-  fetchUsers(); // Tải user (admin, nhanvien...)
-  fetchRoles(); // Tải tất cả role để hiển thị badge
+  fetchUsers(); 
+  fetchRoles();
 
   if (userModalRef.value) {
     userModalInstance.value = new Modal(userModalRef.value, { backdrop: 'static' });
