@@ -2,6 +2,7 @@ const adminLayoutRoutes = [
   {
     path: "/admin",
     component: () => import("../layout/layoutAdmin.vue"),
+    meta: { requiresAuthAdmin: true }, 
     children: [
       {
         path: "",
@@ -27,11 +28,6 @@ const adminLayoutRoutes = [
         path: "categories",
         name: "admin-categories",
         component: () => import("../page/admin/category/Index.vue"),
-      },
-      {
-        path: "products",
-        name: "admin-products",
-        component: () => import("../page/admin/product/index.vue"),
       },
       {
         path: "orders",
@@ -71,12 +67,12 @@ const adminAuthRoutes = [
   {
     path: "/admin/register",
     name: "admin-register",
-    component: () => import("../page/admin/adminLoginRegister/Register.vue"),
+    component: () => import("../page/admin/adminLoginRegister/register.vue"),
   },
   {
     path: "/admin/login",
     name: "admin-login",
-    component: () => import("../page/admin/adminLoginRegister/Login.vue"),
+    component: () => import("../page/admin/adminLoginRegister/login.vue"),
   },
 ];
 
