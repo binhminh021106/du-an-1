@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\Client\OrderController;
 use App\Http\Controllers\Api\Client\AuthController; 
 
 // Admin Controllers
+use App\Http\Controllers\Api\admin\AdminAuthController;
 use App\Http\Controllers\Api\admin\AdminProductController;
 use App\Http\Controllers\Api\admin\AdminCategoryController;
 use App\Http\Controllers\Api\admin\AdminUserController;
@@ -50,6 +51,9 @@ use App\Http\Controllers\Api\admin\AminAccountController;
 // Auth
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']); 
+
+Route::post('/admin/register', [AdminAuthController::class, 'register']);
+Route::post('/admin/login', [AdminAuthController::class, 'login']); 
 
 // Public Data
 Route::get('/products', [ProductController::class, 'index']);
@@ -95,7 +99,7 @@ Route::get('/order/{id}', [OrderController::class, 'show']);
 // --- ADMIN ROUTES ---
 Route::group([
     'prefix' => 'admin',
-    // 'middleware' => ['auth:sanctum', 'admin']
+    'middleware' => ['auth:sanctum', 'admin']
 ], function () {
 
     Route::get('/products', [AdminProductController::class, 'index']);

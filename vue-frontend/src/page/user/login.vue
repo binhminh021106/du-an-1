@@ -46,10 +46,8 @@ const handleLogin = async () => {
     };
 
     try {
-        // 3. Gửi POST lên Server
         const res = await apiService.post('/login', payload);
 
-        // 4. Nếu Server bảo OK (status 200)
         if (res.status === 200) {
             const { user, token } = res.data;
 
@@ -78,22 +76,19 @@ const handleLogin = async () => {
 
     } catch (apiError) {
         // 5. Xử lý nếu Server báo lỗi (401, 422...)
-        console.log(apiError); // In lỗi ra console để dễ soi
+        console.log(apiError); 
 
         const response = apiError.response;
         let msg = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
 
         if (response) {
             if (response.status === 422) {
-                // Lỗi thiếu dữ liệu (Validate)
                 if (response.data.errors?.login_id) error.loginId = response.data.errors.login_id[0];
                 if (response.data.errors?.password) error.password = response.data.errors.password[0];
                 msg = 'Vui lòng kiểm tra lại thông tin nhập vào.';
             } else if (response.status === 401) {
-                // Lỗi sai mật khẩu
                 msg = 'Sai Email (SĐT) hoặc Mật khẩu.';
             } else if (response.data?.message) {
-                // Các lỗi khác do Backend trả về
                 msg = response.data.message;
             }
         }
