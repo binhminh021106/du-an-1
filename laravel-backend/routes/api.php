@@ -18,7 +18,7 @@ use App\Http\Controllers\Api\Client\UserAddressController;
 use App\Http\Controllers\Api\Client\RoleController;
 use App\Http\Controllers\Api\Client\CartController;
 use App\Http\Controllers\Api\Client\OrderController;
-use App\Http\Controllers\Api\Client\AuthController; 
+use App\Http\Controllers\Api\Client\AuthController;
 
 // Admin Controllers
 use App\Http\Controllers\Api\admin\AdminAuthController;
@@ -31,10 +31,10 @@ use App\Http\Controllers\Api\admin\AdminCouponController;
 use App\Http\Controllers\Api\admin\AdminImageProductController;
 use App\Http\Controllers\Api\admin\AdminNewController;
 use App\Http\Controllers\Api\admin\AdminOrderController;
-use App\Http\Controllers\Api\admin\AdminReviewController; 
-use App\Http\Controllers\Api\admin\AdminRoleController; 
-use App\Http\Controllers\Api\admin\AdminSlideController; 
-use App\Http\Controllers\Api\admin\AminAccountController; 
+use App\Http\Controllers\Api\admin\AdminReviewController;
+use App\Http\Controllers\Api\admin\AdminRoleController;
+use App\Http\Controllers\Api\admin\AdminSlideController;
+use App\Http\Controllers\Api\admin\AminAccountController;
 
 /*
 |--------------------------------------------------------------------------
@@ -50,10 +50,10 @@ use App\Http\Controllers\Api\admin\AminAccountController;
 
 // Auth
 Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']); 
+Route::post('/login', [AuthController::class, 'login']);
 
 Route::post('/admin/register', [AdminAuthController::class, 'register']);
-Route::post('/admin/login', [AdminAuthController::class, 'login']); 
+Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
 // Public Data
 Route::get('/products', [ProductController::class, 'index']);
@@ -83,7 +83,7 @@ Route::get('/new/{id}', [NewController::class, 'show']);
 Route::get('/reviews', [ReviewController::class, 'index']);
 Route::get('/review/{id}', [ReviewController::class, 'show']);
 
-Route::get('/users', [UserController::class, 'index']); 
+Route::get('/users', [UserController::class, 'index']);
 Route::get('/user/{id}', [UserController::class, 'show']);
 
 Route::get('/useraddresses', [UserAddressController::class, 'index']);
@@ -91,7 +91,7 @@ Route::get('/useraddress/{id}', [UserAddressController::class, 'show']);
 
 Route::get('/roles', [RoleController::class, 'index']);
 
-Route::get('/carts', [CartController::class, 'index']); 
+Route::get('/carts', [CartController::class, 'index']);
 
 Route::get('/orders', [OrderController::class, 'index']);
 Route::get('/order/{id}', [OrderController::class, 'show']);
@@ -110,6 +110,10 @@ Route::group([
 
     Route::get('/users', [AdminUserController::class, 'index']);
     Route::get('/user/{id}', [AdminUserController::class, 'show']);
+    // Thêm xoá sửa
+    Route::post('/users', [AdminUserController::class, 'store']);
+    Route::patch('/users/{id}', [AdminUserController::class, 'update']);
+    Route::delete('/users/{id}', [AdminUserController::class, 'destroy']);
 
     Route::get('/variants', [AdminVariantController::class, 'index']);
     Route::get('/variant/{id}', [AdminVariantController::class, 'show']);

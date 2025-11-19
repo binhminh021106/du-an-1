@@ -83,14 +83,13 @@ onMounted(() => {
 async function fetchCustomers() {
   isLoading.value = true;
   try {
-    // THAY ĐỔI 1: Gọi /users (bảng users không có 'role' nên không cần lọc)
-    const response = await apiService.get(`/users`);
+    const response = await apiService.get(`admin/users`);
 
     // Sắp xếp theo ID mới nhất (hoặc created_at nếu bạn muốn)
     customers.value = response.data.map(customer => ({
       ...customer,
       status: customer.status || 'active'
-    })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); // Sắp xếp mới nhất lên đầu
+    }))
 
   } catch (error) {
     console.error("Lỗi tải danh sách khách hàng:", error);
@@ -116,7 +115,7 @@ function resetForm() {
 function onFileChange(e) {
   const file = e.target.files[0];
   if (file) {
-    if (file.size > 2 * 1024 * 1024) { // 2MB limit
+    if (file.size > 2 * 1024 * 1024) {
       Swal.fire('Lỗi', 'Kích thước ảnh quá lớn (tối đa 2MB).', 'error');
       e.target.value = ''; // Clear input
       return;
@@ -188,40 +187,40 @@ async function handleSave() {
 
   isLoading.value = true;
   try {
-    const payload = {
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      address: formData.address,
-      avatar: formData.avatar, // Default to existing URL
-      status: formData.status,
-    };
+    const formDataPayload = new FormData();
 
-    if (avatarPreview.value && avatarFile.value) {
-      payload.avatar = avatarPreview.value;
+    // Append dữ liệu như cũ
+    formDataPayload.append('name', formData.name);
+    formDataPayload.append('email', formData.email);
+    if (formData.phone) formDataPayload.append('phone', formData.phone);
+    if (formData.address) formDataPayload.append('address', formData.address);
+    if (formData.status) formDataPayload.append('status', formData.status);
+
+    if (avatarFile.value) {
+      formDataPayload.append('avatar', avatarFile.value);
     }
 
     if (isEditMode.value) {
-      // THAY ĐỔI 2: PATCH đến /users/:id (logic này đã đúng)
-      await apiService.patch(`/users/${formData.id}`, payload);
+      formDataPayload.append('_method', 'PATCH');
+      
+      await apiService.post(`admin/users/${formData.id}`, formDataPayload);
+      
       Swal.fire('Thành công', 'Đã cập nhật thông tin khách hàng!', 'success');
     } else {
+      await apiService.post(`admin/users`, formDataPayload);
       
-      // THAY ĐỔI 3: Thêm các trường chuẩn hóa cho bảng /users (đã BỎ 'role')
-      // Tạo username giả lập từ email để khớp cấu trúc db.json
-      payload.username = formData.email.split('@')[0] + `_${Math.random().toString(36).substr(2, 4)}`;
-      payload.created_at = new Date().toISOString();
-      
-      // THAY ĐỔI 4: POST đến /users (logic này đã đúng)
-      await apiService.post(`/users`, payload);
       Swal.fire('Thành công', 'Đã thêm khách hàng mới!', 'success');
     }
 
     customerModalInstance.value.hide();
     fetchCustomers();
+
   } catch (error) {
     console.error("Lỗi khi lưu khách hàng:", error);
-    Swal.fire('Lỗi', 'Đã có lỗi xảy ra khi lưu thông tin.', 'error');
+    const errors = error.response?.data?.errors;
+    const firstError = errors ? Object.values(errors)[0][0] : (error.response?.data?.message || 'Đã có lỗi xảy ra.');
+    
+    Swal.fire('Lỗi', firstError, 'error');
   } finally {
     isLoading.value = false;
   }
@@ -246,14 +245,13 @@ async function toggleCustomerStatus(customer) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      // THAY ĐỔI 5: PATCH đến /users/:id (logic này đã đúng)
-      await apiService.patch(`/users/${customer.id}`, { status: newStatus });
+      await apiService.patch(`admin/users/${customer.id}`, { status: newStatus });
       Swal.fire(
         'Thành công!',
         `Đã ${actionText} tài khoản khách hàng.`,
         'success'
       );
-      customer.status = newStatus; // Cập nhật UI ngay
+      customer.status = newStatus; 
     } catch (error) {
       console.error(`Lỗi khi ${actionText} khách hàng:`, error);
       Swal.fire('Lỗi', `Không thể ${actionText} tài khoản này.`, 'error');
@@ -279,10 +277,9 @@ async function handleDelete(customer) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      // THAY ĐỔI 6: DELETE đến /users/:id (logic này đã đúng)
-      await apiService.delete(`/users/${customer.id}`);
+      await apiService.delete(`admin/users/${customer.id}`);
       Swal.fire('Đã xóa!', 'Khách hàng đã được xóa thành công.', 'success');
-      
+
       if (paginatedCustomers.value.length === 1 && currentPage.value > 1) {
         currentPage.value--;
       }
@@ -344,8 +341,8 @@ function goToPage(page) {
         </div>
 
         <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
               <thead class="table-light">
                 <tr>
                   <th class="ps-3">Khách hàng</th>
@@ -369,14 +366,13 @@ function goToPage(page) {
                   </td>
                 </tr>
                 <!-- THAY ĐỔI 7: Thêm class binding và đổi badge -->
-                <tr v-for="customer in paginatedCustomers" :key="customer.id" 
-                    :class="{ 'inactive-row': customer.status !== 'active' }">
+                <tr v-for="customer in paginatedCustomers" :key="customer.id"
+                  :class="{ 'inactive-row': customer.status !== 'active' }">
                   <td class="ps-3">
                     <div class="d-flex align-items-center">
                       <img
-                        :src="customer.avatar || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${customer.name.charAt(0).toUpperCase()}`"
-                        class="rounded-circle me-3" alt="Avatar"
-                        style="width: 40px; height: 40px; object-fit: cover;">
+                        :src="customer.avatar || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${(customer.name ? customer.name.charAt(0) : 'U').toUpperCase()}`"
+                        class="rounded-circle me-3" alt="Avatar" style="width: 40px; height: 40px; object-fit: cover;">
                       <div>
                         <div class="fw-bold">{{ customer.name }}</div>
                         <div class="small text-muted">ID: {{ customer.id }}</div>
@@ -385,7 +381,8 @@ function goToPage(page) {
                   </td>
                   <td>
                     <div v-if="customer.email"><i class="bi bi-envelope me-1 text-muted"></i> {{ customer.email }}</div>
-                    <div v-if="customer.phone"><i class="bi bi-telephone me-1 text-muted"></i> {{ customer.phone }}</div>
+                    <div v-if="customer.phone"><i class="bi bi-telephone me-1 text-muted"></i> {{ customer.phone }}
+                    </div>
                   </td>
                   <td>
                     <span :class="['badge', customer.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
@@ -397,8 +394,8 @@ function goToPage(page) {
                       <!-- Toggle Switch -->
                       <div class="form-check form-switch me-3" title="Khóa/Mở khóa tài khoản">
                         <input class="form-check-input" type="checkbox" role="switch"
-                          style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                          :checked="customer.status === 'active'" @click.prevent="toggleCustomerStatus(customer)">
+                          style="width: 2.5em; height: 1.25em; cursor: pointer;" :checked="customer.status === 'active'"
+                          @click.prevent="toggleCustomerStatus(customer)">
                       </div>
 
                       <div class="btn-group btn-group-sm">
@@ -576,23 +573,28 @@ function goToPage(page) {
   content: " *";
   color: red;
 }
+
 /* Smooth transition for table rows */
 .table-hover tbody tr {
   transition: background-color 0.2s;
 }
+
 .form-check-input {
-  width: 2.5em; 
+  width: 2.5em;
   height: 1.25em;
 }
 
 /* (MỚI) Thêm style để làm mờ hàng bị vô hiệu hóa */
 .inactive-row {
   opacity: 0.65;
-  background-color: #f8f9fa; /* Màu bg-light của Bootstrap */
+  background-color: #f8f9fa;
+  /* Màu bg-light của Bootstrap */
   transition: opacity 0.2s ease-in-out, background-color 0.2s ease-in-out;
 }
+
 .inactive-row:hover {
-  opacity: 1; /* Hiển thị rõ khi hover */
+  opacity: 1;
+  /* Hiển thị rõ khi hover */
   background-color: #f1f3f5;
 }
 </style>
