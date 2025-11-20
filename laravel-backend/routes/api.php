@@ -35,19 +35,20 @@ use App\Http\Controllers\Api\admin\AdminOrderController;
 use App\Http\Controllers\Api\admin\AdminReviewController;
 use App\Http\Controllers\Api\admin\AdminRoleController;
 use App\Http\Controllers\Api\admin\AdminSlideController;
-use App\Http\Controllers\Api\admin\AminAccountController;
+use App\Http\Controllers\Api\admin\AminAccountController; // Giữ nguyên tên class như bạn khai báo (Amin...)
 use App\Http\Controllers\Api\admin\AdminBrandSlideController;
 
 /* API Routes */
 
-// Auth
+// --- AUTHENTICATION ---
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::post('/admin/register', [AdminAuthController::class, 'register']);
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
-// Public Data
+// --- PUBLIC DATA (CLIENT) ---
+// Giữ nguyên phần Client vì thường Client chỉ cần GET hoặc logic đặc thù
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/product/{id}', [ProductController::class, 'show']);
 
@@ -97,49 +98,22 @@ Route::group([
     'middleware' => ['auth:sanctum', 'admin']
 ], function () {
 
-    Route::get('/products', [AdminProductController::class, 'index']);
-    Route::get('/product/{id}', [AdminProductController::class, 'show']);
-
-    // Category dùng apiResource cho gọn
-    Route::apiResource('categories', AdminCategoryController::class);
-
-    Route::get('/users', [AdminUserController::class, 'index']);
-    Route::get('/user/{id}', [AdminUserController::class, 'show']);
-    // User routes thủ công
-    Route::post('/users', [AdminUserController::class, 'store']);
-    Route::patch('/users/{id}', [AdminUserController::class, 'update']);
-    Route::delete('/users/{id}', [AdminUserController::class, 'destroy']);
-
-    Route::get('/variants', [AdminVariantController::class, 'index']);
-    Route::get('/variant/{id}', [AdminVariantController::class, 'show']);
-
-    Route::get('/comments', [AdminCommentController::class, 'index']);
-    Route::get('/comment/{id}', [AdminCommentController::class, 'show']);
-
-    Route::get('/coupons', [AdminCouponController::class, 'index']);
-    Route::get('/coupon/{id}', [AdminCouponController::class, 'show']);
-
-    Route::get('/imageProducts', [AdminImageProductController::class, 'index']);
-    Route::get('/imageProduct/{id}', [AdminImageProductController::class, 'show']);
-
-    Route::get('/news', [AdminNewController::class, 'index']);
-    Route::get('/new/{id}', [AdminNewController::class, 'show']);
-
-    Route::get('/orders', [AdminOrderController::class, 'index']);
-    Route::get('/order/{id}', [AdminOrderController::class, 'show']);
-
-    Route::get('/reviews', [AdminReviewController::class, 'index']);
-    Route::get('/review/{id}', [AdminReviewController::class, 'show']);
-
-    // --- FIX LỖI 405 ---
-    // Dùng apiResource để tự tạo đủ route: GET, POST, PUT, DELETE cho roles
-    Route::apiResource('roles', AdminRoleController::class);
-
-    Route::apiResource('slides', AdminSlideController::class);
-
-    // Route cho Admins Account
-    Route::apiResource('admins', AminAccountController::class);
+    // Sử dụng apiResource để tự động tạo đủ 5 route: index, store, show, update, destroy
+    // Cấu trúc URL chuẩn sẽ là số nhiều: /admin/products, /admin/products/{id}
     
+    Route::apiResource('products', AdminProductController::class);
+    Route::apiResource('categories', AdminCategoryController::class);
+    Route::apiResource('users', AdminUserController::class); // Thay thế cho 5 dòng thủ công cũ
+    Route::apiResource('variants', AdminVariantController::class);
+    Route::apiResource('comments', AdminCommentController::class);
+    Route::apiResource('coupons', AdminCouponController::class);
+    Route::apiResource('imageProducts', AdminImageProductController::class); // URL: /admin/imageProducts
+    Route::apiResource('news', AdminNewController::class); // Lưu ý: Laravel có thể hiểu lầm số nhiều của news, nên test kỹ
+    Route::apiResource('orders', AdminOrderController::class);
+    Route::apiResource('reviews', AdminReviewController::class);
+    Route::apiResource('roles', AdminRoleController::class);
+    Route::apiResource('slides', AdminSlideController::class);
+    Route::apiResource('admins', AminAccountController::class);
     Route::apiResource('brands', AdminBrandSlideController::class);
 });
 

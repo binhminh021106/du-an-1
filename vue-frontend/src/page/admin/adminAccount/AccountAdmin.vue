@@ -1,12 +1,13 @@
 <script setup>
 import { ref, reactive, onMounted, computed, nextTick, watch } from 'vue';
-import apiService from '../../../apiService.js'; 
+import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-const users = ref([]); 
+const users = ref([]);
 const isLoading = ref(true);
 const searchQuery = ref('');
+const currentAdminId = ref(null); // Lưu ID người đăng nhập để check quyền
 
 // --- Modals ---
 const userModalInstance = ref(null);
@@ -21,6 +22,11 @@ const roleModalInstance = ref(null);
 const roleModalRef = ref(null);
 const isRoleEditMode = ref(false);
 
+// --- Upload Ảnh ---
+const fileInputRef = ref(null);
+const previewImage = ref(null);
+const avatarFile = ref(null);
+
 // --- Forms ---
 const formData = reactive({
   id: null,
@@ -28,10 +34,10 @@ const formData = reactive({
   email: '',
   phone: '',
   address: '',
-  role_id: '', 
+  role_id: '',
   status: 'active',
-  password: '', 
-  password_confirmation: '' 
+  password: '',
+  password_confirmation: ''
 });
 
 const errors = reactive({
@@ -39,8 +45,8 @@ const errors = reactive({
   email: '',
   phone: '',
   address: '',
-  password: '', 
-  password_confirmation: '' 
+  password: '',
+  password_confirmation: ''
 });
 
 // Role Form
@@ -57,40 +63,51 @@ const roleErrors = reactive({
 });
 
 // --- Roles & Pagination ---
-const roles = ref([]); 
+const roles = ref([]);
 const otherUsersCurrentPage = ref(1);
 const otherUsersItemsPerPage = ref(5);
 
 // --- Computed ---
 const getRoleObj = (roleId) => {
-    if (!roleId) return {};
-    return roles.value.find(r => r.id == roleId) || {};
+  if (!roleId) return {};
+  return roles.value.find(r => r.id == roleId) || {};
 };
 
+// 1. CẬP NHẬT: Sắp xếp danh sách, đưa user hiện tại lên đầu
 const filteredUsers = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
-  if (!query) {
-    return users.value;
+  let result = users.value;
+
+  // Lọc theo từ khóa
+  if (query) {
+    result = users.value.filter(user =>
+      (user.fullname && user.fullname.toLowerCase().includes(query)) ||
+      (user.email && user.email.toLowerCase().includes(query)) ||
+      (user.phone && user.phone.toLowerCase().includes(query)) ||
+      getRoleLabel(user.role_id).toLowerCase().includes(query)
+    );
   }
-  return users.value.filter(user =>
-    (user.fullname && user.fullname.toLowerCase().includes(query)) ||
-    (user.email && user.email.toLowerCase().includes(query)) ||
-    (user.phone && user.phone.toLowerCase().includes(query)) ||
-    getRoleLabel(user.role_id).toLowerCase().includes(query)
-  );
+
+  // Sắp xếp: Đưa người dùng hiện tại lên đầu danh sách
+  // Sử dụng [...result] để tạo bản sao trước khi sort
+  return [...result].sort((a, b) => {
+      if (a.id === currentAdminId.value) return -1; // a lên trước
+      if (b.id === currentAdminId.value) return 1;  // b lên trước
+      return 0; // Giữ nguyên thứ tự (theo created_at từ API)
+  });
 });
 
 const adminUsers = computed(() => {
   return filteredUsers.value.filter(user => {
-      const roleObj = getRoleObj(user.role_id);
-      return roleObj.value === 'admin';
+    const roleObj = getRoleObj(user.role_id);
+    return roleObj.value === 'admin';
   });
 });
 
 const otherUsers = computed(() => {
   return filteredUsers.value.filter(user => {
-      const roleObj = getRoleObj(user.role_id);
-      return roleObj.value !== 'admin';
+    const roleObj = getRoleObj(user.role_id);
+    return roleObj.value !== 'admin';
   });
 });
 
@@ -126,8 +143,9 @@ function getFormattedDate(dateString) {
 
 // --- Hooks ---
 onMounted(() => {
+  fetchCurrentUser(); 
   fetchRoles().then(() => {
-      fetchUsers();
+    fetchUsers();
   });
 
   if (userModalRef.value) {
@@ -141,6 +159,18 @@ onMounted(() => {
   }
 });
 
+// Lấy ID admin đang đăng nhập
+async function fetchCurrentUser() {
+  try {
+    const response = await apiService.get('/user');
+    if (response.data && response.data.id) {
+      currentAdminId.value = response.data.id;
+    }
+  } catch (e) {
+    console.error("Không thể lấy thông tin user hiện tại", e);
+  }
+}
+
 // --- CRUD User ---
 async function fetchUsers() {
   isLoading.value = true;
@@ -148,15 +178,14 @@ async function fetchUsers() {
     const response = await apiService.get(`admin/admins`);
     users.value = response.data.map(user => ({
       ...user,
-      fullname: user.fullname || 'No Name', 
-      role_id: user.role_id, 
+      fullname: user.fullname || 'No Name',
+      role_id: user.role_id,
       created_at: user.created_at || new Date().toISOString(),
       status: user.status || 'active'
     }));
     otherUsersCurrentPage.value = 1;
   } catch (error) {
     console.error("Lỗi khi tải danh sách người dùng:", error);
-    // Không hiển thị popup lỗi ở đây để tránh spam khi load trang
   } finally {
     isLoading.value = false;
   }
@@ -170,9 +199,28 @@ function resetForm() {
   formData.address = '';
   formData.role_id = roles.value.length > 0 ? roles.value[0].id : '';
   formData.status = 'active';
-  formData.password = ''; 
-  formData.password_confirmation = ''; 
+  formData.password = '';
+  formData.password_confirmation = '';
+  
+  // Reset ảnh
+  previewImage.value = null;
+  avatarFile.value = null;
+  if (fileInputRef.value) fileInputRef.value.value = '';
+
   Object.keys(errors).forEach(key => errors[key] = '');
+}
+
+// Xử lý chọn file ảnh
+function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (file) {
+    if (!file.type.match('image.*')) {
+      Swal.fire('Lỗi', 'Vui lòng chọn file hình ảnh (jpg, png, gif).', 'warning');
+      return;
+    }
+    avatarFile.value = file;
+    previewImage.value = URL.createObjectURL(file);
+  }
 }
 
 function openCreateModal() {
@@ -189,8 +237,11 @@ function openEditModal(user) {
   formData.email = user.email;
   formData.phone = user.phone || '';
   formData.address = user.address || '';
-  formData.role_id = user.role_id; 
+  formData.role_id = user.role_id;
   formData.status = user.status;
+  
+  previewImage.value = user.avatar_url; 
+  
   userModalInstance.value.show();
 }
 
@@ -217,15 +268,15 @@ function validateForm() {
   }
 
   if (!formData.role_id) {
-      Swal.fire('Lỗi', 'Vui lòng chọn vai trò.', 'warning');
-      isValid = false;
+    Swal.fire('Lỗi', 'Vui lòng chọn vai trò.', 'warning');
+    isValid = false;
   }
 
   if (formData.phone && formData.phone.trim() && !/^0\d{9}$/.test(formData.phone.trim())) {
     errors.phone = 'SĐT không hợp lệ (phải đủ 10 số, bắt đầu bằng 0).';
     isValid = false;
   }
-  
+
   if (formData.address && formData.address.trim().length > 255) {
     errors.address = 'Địa chỉ không được vượt quá 255 ký tự.';
     isValid = false;
@@ -258,66 +309,70 @@ async function handleSave() {
   }
   isLoading.value = true;
 
-  const payload = {
-    fullname: formData.fullname, 
-    email: formData.email,
-    phone: formData.phone,
-    role_id: parseInt(formData.role_id), 
-    status: formData.status,
-    address: formData.address,
-    avatar_url: '', 
-  };
+  const submitData = new FormData();
+  submitData.append('fullname', formData.fullname);
+  submitData.append('email', formData.email);
+  submitData.append('phone', formData.phone || '');
+  submitData.append('role_id', formData.role_id);
+  submitData.append('status', formData.status);
+  submitData.append('address', formData.address || '');
+  
+  if (avatarFile.value) {
+    submitData.append('avatar', avatarFile.value);
+  }
 
   if (!isEditMode.value) {
-    payload.password = formData.password;
-    payload.password_confirmation = formData.password_confirmation; 
+    submitData.append('password', formData.password);
+    submitData.append('password_confirmation', formData.password_confirmation);
   }
 
   try {
     if (isEditMode.value) {
-      await apiService.patch(`admin/admins/${formData.id}`, payload);
+      submitData.append('_method', 'PATCH');
+      await apiService.post(`admin/admins/${formData.id}`, submitData, {
+         headers: { 'Content-Type': 'multipart/form-data' }
+      });
       Swal.fire('Thành công', 'Đã cập nhật thông tin!', 'success');
     } else {
-      await apiService.post(`admin/admins`, payload);
+      await apiService.post(`admin/admins`, submitData, {
+         headers: { 'Content-Type': 'multipart/form-data' }
+      });
       Swal.fire('Thành công', 'Đã tạo tài khoản mới!', 'success');
     }
     userModalInstance.value.hide();
     fetchUsers();
   } catch (apiError) {
     console.error("Lỗi khi lưu:", apiError);
-    
-    // --- XỬ LÝ LỖI CHI TIẾT ---
-    if (apiError.response) {
-        const status = apiError.response.status;
-        const data = apiError.response.data;
 
-        // Lỗi Validation (422)
-        if (status === 422 && data.errors) {
-            if (data.errors.email) errors.email = data.errors.email[0];
-            if (data.errors.fullname) errors.fullname = data.errors.fullname[0];
-            if (data.errors.phone) errors.phone = data.errors.phone[0];
-            if (data.errors.password) errors.password = data.errors.password[0];
-            
-            Swal.fire('Dữ liệu không hợp lệ', 'Vui lòng kiểm tra lại các trường báo đỏ.', 'warning');
-        } 
-        // Lỗi Server (500)
-        else if (status === 500) {
-            // Hiển thị thông báo lỗi thực tế từ Backend để debug (VD: SQLSTATE...)
-            // Nếu backend trả về HTML (Whoops page), ta thông báo chung
-            const errorMessage = data.message || 'Lỗi Server nội bộ.';
-            Swal.fire({
-                icon: 'error',
-                title: 'Lỗi Server (500)',
-                text: errorMessage,
-                footer: '<small>Kiểm tra lại cấu trúc Database hoặc Controller</small>'
-            });
-        }
-        // Các lỗi khác
-        else {
-            Swal.fire('Thất bại', data.message || 'Đã có lỗi xảy ra.', 'error');
-        }
+    if (apiError.response) {
+      const status = apiError.response.status;
+      const data = apiError.response.data;
+
+      if (status === 422 && data.errors) {
+        if (data.errors.email) errors.email = data.errors.email[0];
+        if (data.errors.fullname) errors.fullname = data.errors.fullname[0];
+        if (data.errors.phone) errors.phone = data.errors.phone[0];
+        if (data.errors.password) errors.password = data.errors.password[0];
+
+        Swal.fire('Dữ liệu không hợp lệ', 'Vui lòng kiểm tra lại các trường báo đỏ.', 'warning');
+      }
+      else if (status === 500) {
+        const errorMessage = data.message || 'Lỗi Server nội bộ.';
+        Swal.fire({
+          icon: 'error',
+          title: 'Lỗi Server (500)',
+          text: errorMessage,
+          footer: '<small>Kiểm tra lại cấu trúc Database hoặc Controller</small>'
+        });
+      }
+      else if (status === 403) {
+        Swal.fire('Cảnh báo', data.message || 'Bạn không có quyền thực hiện.', 'warning');
+      }
+      else {
+        Swal.fire('Thất bại', data.message || 'Đã có lỗi xảy ra.', 'error');
+      }
     } else {
-        Swal.fire('Lỗi kết nối', 'Không thể kết nối đến server.', 'error');
+      Swal.fire('Lỗi kết nối', 'Không thể kết nối đến server.', 'error');
     }
   } finally {
     isLoading.value = false;
@@ -325,6 +380,11 @@ async function handleSave() {
 }
 
 async function toggleUserStatus(user) {
+  if (user.id === currentAdminId.value) {
+     Swal.fire('Cảnh báo', 'Bạn không thể tự vô hiệu hóa chính mình.', 'warning');
+     return;
+  }
+
   const newStatus = user.status === 'active' ? 'inactive' : 'active';
   const actionText = newStatus === 'inactive' ? 'vô hiệu hóa' : 'kích hoạt';
 
@@ -344,7 +404,7 @@ async function toggleUserStatus(user) {
     try {
       await apiService.patch(`admin/admins/${user.id}`, { status: newStatus });
       Swal.fire('Thành công!', `Đã ${actionText} người dùng.`, 'success');
-      user.status = newStatus; 
+      user.status = newStatus;
     } catch (error) {
       console.error(`Lỗi khi ${actionText} người dùng:`, error);
       Swal.fire('Lỗi', `Không thể ${actionText} người dùng này.`, 'error');
@@ -356,6 +416,11 @@ async function toggleUserStatus(user) {
 }
 
 async function handleDelete(user) {
+  if (user.id === currentAdminId.value) {
+      Swal.fire('Cảnh báo', 'Bạn không thể tự xóa tài khoản chính mình.', 'warning');
+      return;
+  }
+
   const result = await Swal.fire({
     title: 'Bạn có chắc chắn?',
     text: `Bạn sẽ xóa vĩnh viễn tài khoản "${user.fullname}"!`,
@@ -559,7 +624,7 @@ async function handleDeleteRole(role) {
                     <thead>
                       <tr>
                         <th>ID</th>
-                        <th>Họ và tên</th> <!-- Đổi từ Username sang Fullname -->
+                        <th>Họ và tên</th>
                         <th>Liên hệ</th>
                         <th>Vai trò</th>
                         <th>Trạng thái</th>
@@ -574,7 +639,10 @@ async function handleDeleteRole(role) {
                         </td>
                       </tr>
                       <tr v-for="user in adminUsers" :key="user.id"
-                        :class="{ 'inactive-row': user.status !== 'active' }">
+                        :class="{ 
+                          'inactive-row': user.status !== 'active',
+                          'current-user-row': user.id === currentAdminId 
+                        }">
                         <td>{{ user.id }}</td>
                         <td>
                           <div class="d-flex align-items-center">
@@ -583,7 +651,10 @@ async function handleDeleteRole(role) {
                               class="rounded-circle me-3" alt="Avatar"
                               style="width: 40px; height: 40px; object-fit: cover;">
                             <div>
-                              <div class="fw-bold">{{ user.fullname }}</div>
+                              <div class="fw-bold">
+                                {{ user.fullname }}
+                                <span v-if="user.id === currentAdminId" class="badge bg-primary ms-1">Bạn</span>
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -602,11 +673,14 @@ async function handleDeleteRole(role) {
                         <td>{{ getFormattedDate(user.created_at) }}</td>
                         <td class="text-center">
                           <div class="d-flex justify-content-center align-items-center">
+                            <!-- SWITCH STATUS: Disable nếu là user hiện tại -->
                             <div class="form-check form-switch d-inline-block align-middle me-3"
                               title="Kích hoạt/Vô hiệu hóa">
                               <input class="form-check-input" type="checkbox" role="switch"
                                 style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                                :checked="user.status === 'active'" @click.prevent="toggleUserStatus(user)">
+                                :checked="user.status === 'active'"
+                                :disabled="user.id === currentAdminId"
+                                @click.prevent="toggleUserStatus(user)">
                             </div>
 
                             <div class="btn-group btn-group-sm">
@@ -614,10 +688,10 @@ async function handleDeleteRole(role) {
                                 @click="openViewModal(user)">
                                 <i class="bi bi-eye"></i>
                               </button>
-                              <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(user)">
+                              <button  class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(user)">
                                 <i class="bi bi-pencil"></i>
                               </button>
-                              <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(user)">
+                              <button v-if="user.id !== currentAdminId" class="btn btn-outline-danger" title="Xóa" @click="handleDelete(user)">
                                 <i class="bi bi-trash"></i>
                               </button>
                             </div>
@@ -660,7 +734,10 @@ async function handleDeleteRole(role) {
                         </td>
                       </tr>
                       <tr v-for="user in paginatedOtherUsers" :key="user.id"
-                        :class="{ 'inactive-row': user.status !== 'active' }">
+                        :class="{ 
+                          'inactive-row': user.status !== 'active',
+                          'current-user-row': user.id === currentAdminId 
+                        }">
                         <td>{{ user.id }}</td>
                         <td>
                           <div class="d-flex align-items-center">
@@ -669,7 +746,10 @@ async function handleDeleteRole(role) {
                               class="rounded-circle me-3" alt="Avatar"
                               style="width: 40px; height: 40px; object-fit: cover;">
                             <div>
-                              <div class="fw-bold">{{ user.fullname }}</div>
+                              <div class="fw-bold">
+                                {{ user.fullname }}
+                                <span v-if="user.id === currentAdminId" class="badge bg-primary ms-1">Bạn</span>
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -692,7 +772,9 @@ async function handleDeleteRole(role) {
                               title="Kích hoạt/Vô hiệu hóa">
                               <input class="form-check-input" type="checkbox" role="switch"
                                 style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                                :checked="user.status === 'active'" @click.prevent="toggleUserStatus(user)">
+                                :checked="user.status === 'active'"
+                                :disabled="user.id === currentAdminId"
+                                @click.prevent="toggleUserStatus(user)">
                             </div>
 
                             <div class="btn-group btn-group-sm">
@@ -700,10 +782,10 @@ async function handleDeleteRole(role) {
                                 @click="openViewModal(user)">
                                 <i class="bi bi-eye"></i>
                               </button>
-                              <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(user)">
+                              <button v-if="user.id !== currentAdminId" class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(user)">
                                 <i class="bi bi-pencil"></i>
                               </button>
-                              <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(user)">
+                              <button v-if="user.id !== currentAdminId" class="btn btn-outline-danger" title="Xóa" @click="handleDelete(user)">
                                 <i class="bi bi-trash"></i>
                               </button>
                             </div>
@@ -753,36 +835,52 @@ async function handleDeleteRole(role) {
         <div class="modal-body">
           <form @submit.prevent="handleSave" id="userForm">
             <div class="row">
-              <!-- Cột trái: Avatar (placeholder), Vai trò, Trạng thái -->
+              <!-- Cột trái: Avatar, Vai trò, Trạng thái -->
               <div class="col-md-4 text-center mb-3">
+                <!-- AVATAR UPLOAD -->
                 <div class="mb-3">
                   <img
-                    :src="`https://placehold.co/150x150/EBF4FF/1D62F0?text=${formData.fullname ? formData.fullname.charAt(0).toUpperCase() : '?'}`"
-                    class="img-thumbnail rounded-circle" alt="Avatar Placeholder"
-                    style="width: 150px; height: 150px; object-fit: cover;">
+                    :src="previewImage || `https://placehold.co/150x150/EBF4FF/1D62F0?text=${formData.fullname ? formData.fullname.charAt(0).toUpperCase() : '?'}`"
+                    class="img-thumbnail rounded-circle mb-2" alt="Avatar Preview"
+                    style="width: 150px; height: 150px; object-fit: cover; cursor: pointer;"
+                    @click="$refs.fileInputRef.click()"
+                  >
+                  <div>
+                    <input type="file" class="d-none" ref="fileInputRef" accept="image/*" @change="handleFileUpload">
+                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" @click="$refs.fileInputRef.click()">
+                      <i class="bi bi-upload"></i> Chọn ảnh
+                    </button>
+                  </div>
                 </div>
+
                 <div class="mb-3">
                   <label for="role" class="form-label fw-bold required">Vai trò</label>
-                  <!-- Bind value là role.id -->
-                  <select class="form-select" id="role" v-model="formData.role_id">
+                  <select class="form-select" id="role" v-model="formData.role_id"
+                    :disabled="isEditMode && formData.id === currentAdminId">
                     <option value="" disabled>-- Chọn vai trò --</option>
                     <option v-for="role in roles" :key="role.id" :value="role.id">
                       {{ role.label }}
                     </option>
                   </select>
+                  <div v-if="isEditMode && formData.id === currentAdminId" class="form-text text-warning">
+                      <i class="bi bi-exclamation-triangle"></i> Không thể tự đổi quyền.
+                  </div>
                 </div>
                 <div class="mb-3" v-if="isEditMode">
                   <label for="status" class="form-label fw-bold">Trạng thái tài khoản</label>
-                  <select class="form-select" id="status" v-model="formData.status">
+                  <select class="form-select" id="status" v-model="formData.status"
+                    :disabled="isEditMode && formData.id === currentAdminId">
                     <option value="active">Đang hoạt động</option>
                     <option value="inactive">Vô hiệu hóa</option>
                   </select>
+                  <div v-if="isEditMode && formData.id === currentAdminId" class="form-text text-warning">
+                      <i class="bi bi-exclamation-triangle"></i> Không thể tự vô hiệu hóa.
+                  </div>
                 </div>
               </div>
 
               <!-- Cột phải: Thông tin -->
               <div class="col-md-8">
-                <!-- Đã xóa trường Username -->
                 
                 <div class="mb-3">
                   <label for="fullname" class="form-label required">Họ và tên</label>
@@ -1031,5 +1129,15 @@ async function handleDeleteRole(role) {
 .inactive-row:hover {
   opacity: 1; /* Hiển thị rõ khi hover */
   background-color: #f1f3f5;
+}
+
+/* Style riêng cho dòng của user hiện tại */
+.current-user-row {
+  background-color: #e8f4ff !important; /* Màu xanh nhạt */
+  border-left: 4px solid #0d6efd; /* Viền trái màu xanh */
+}
+/* Đảm bảo màu nền không bị override bởi table-hover */
+.table-hover .current-user-row:hover {
+    background-color: #d6ebff !important;
 }
 </style>
