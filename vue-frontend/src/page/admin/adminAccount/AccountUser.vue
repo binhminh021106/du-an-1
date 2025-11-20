@@ -140,8 +140,8 @@ function resetForm() {
 function onFileChange(e) {
   const file = e.target.files[0];
   if (file) {
-    if (file.size > 2 * 1024 * 1024) {
-      Swal.fire('Lỗi', 'Kích thước ảnh quá lớn (tối đa 2MB).', 'error');
+    if (file.size > 5 * 1024 * 1024) {
+      Swal.fire('Lỗi', 'Kích thước ảnh quá lớn (tối đa 5MB).', 'error');
       e.target.value = ''; // Clear input
       return;
     }
