@@ -113,10 +113,11 @@ onBeforeUnmount(stopAutoSlide);
 
                 <section class="slider" @mouseenter="stopAutoSlide" @mouseleave="startAutoSlide">
                     <div class="slider-wrapper" :style="{ transform: 'translateX(-' + currentSlide * 100 + '%)' }">
-                        <div class="slide" v-for="slide in slides" :key="slide.id"
-                            :style="{ backgroundImage: 'url(' + slide.imageUrl + ')' }">
-                            <a :href="slide.link || '#'" style="display: block; width: 100%; height: 100%;"
-                                aria-label="Xem chi tiết"></a>
+                        <div class="slide" v-for="slide in slides" :key="slide.id">
+                            <img :src="slide.imageUrl || slide.image_url" alt="Slide"
+                                style="width: 100%; height: 100%; object-fit: cover;">
+
+                            <a :href="slide.linkUrl || '#'" class="slide-link"></a>
                         </div>
                     </div>
 

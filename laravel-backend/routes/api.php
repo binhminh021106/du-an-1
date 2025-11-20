@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Client\RoleController;
 use App\Http\Controllers\Api\Client\CartController;
 use App\Http\Controllers\Api\Client\OrderController;
 use App\Http\Controllers\Api\Client\AuthController;
+use App\Http\Controllers\Api\Client\BrandSlideController;
 
 // Admin Controllers
 use App\Http\Controllers\Api\admin\AdminAuthController;
@@ -35,6 +36,7 @@ use App\Http\Controllers\Api\admin\AdminReviewController;
 use App\Http\Controllers\Api\admin\AdminRoleController;
 use App\Http\Controllers\Api\admin\AdminSlideController;
 use App\Http\Controllers\Api\admin\AminAccountController;
+use App\Http\Controllers\Api\admin\AdminBrandSlideController;
 
 /*
 |--------------------------------------------------------------------------
@@ -96,6 +98,9 @@ Route::get('/carts', [CartController::class, 'index']);
 Route::get('/orders', [OrderController::class, 'index']);
 Route::get('/order/{id}', [OrderController::class, 'show']);
 
+Route::get('/brands', [BrandSlideController::class, 'index']);
+Route::get('/brand/{id}', [BrandSlideController::class, 'show']);
+
 // --- ADMIN ROUTES ---
 Route::group([
     'prefix' => 'admin',
@@ -142,9 +147,15 @@ Route::group([
 
     Route::get('/slides', [AdminSlideController::class, 'index']);
     Route::get('/slide/{id}', [AdminSlideController::class, 'show']);
+    Route::apiResource('slides', AdminSlideController::class);
 
     Route::get('/admins', [AminAccountController::class, 'index']);
     Route::get('/admin/{id}', [AminAccountController::class, 'show']);
+
+    Route::get('/brands', [AdminBrandSlideController::class, 'index']);
+    Route::get('/brand/{id}', [AdminBrandSlideController::class, 'show']);
+    Route::apiResource('brands', AdminBrandSlideController::class);
+    
 });
 
 // Route lấy thông tin user hiện tại (cần token)
