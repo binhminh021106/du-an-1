@@ -20,36 +20,38 @@ class AdminUserController extends Controller
 
     public function store(Request $request)
     {
-        // Validate
+        // Validate dữ liệu đầu vào
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
+            'password' => 'required|string|min:6|confirmed',
             'avatar' => 'nullable|image|max:2048',
         ]);
 
         DB::beginTransaction();
         try {
             $user = new User();
-            $user->fullName = $request->name;
+            $user->fullName = $request->name; // Map 'name' từ form sang 'fullName' trong DB
             $user->email = $request->email;
             $user->phone = $request->phone;
+            // $user->address = $request->address; // XÓA DÒNG NÀY: Bảng users không có cột address
             $user->status = $request->status ?? 'active';
-            $user->password = Hash::make('123456');
+            $user->password = Hash::make($request->password);
 
             // --- LƯU ẢNH ---
             if ($request->hasFile('avatar')) {
                 $path = $request->file('avatar')->store('avatars', 'public');
                 $user->avatar_url = asset('storage/' . $path);
             }
-            // ---------------
-
+            
             $user->save();
 
             DB::commit();
             return response()->json($user, 201);
+
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Lỗi tạo tài khoản: ' . $e->getMessage()], 500);
         }
     }
 
@@ -57,23 +59,32 @@ class AdminUserController extends Controller
     {
         $user = User::findOrFail($id);
 
+        // Validate cập nhật
         $request->validate([
-            'email' => 'required|email|unique:users,email,' . $id,
+            'email' => 'sometimes|required|email|unique:users,email,' . $id,
+            'name' => 'sometimes|required|string|max:255',
+            'phone' => 'nullable|string',
         ]);
 
         DB::beginTransaction();
         try {
+            // Kiểm tra và cập nhật các trường
             if ($request->has('name')) $user->fullName = $request->name;
             if ($request->has('email')) $user->email = $request->email;
             if ($request->has('phone')) $user->phone = $request->phone;
             if ($request->has('status')) $user->status = $request->status;
+            
+            // XÓA DÒNG CẬP NHẬT ADDRESS VÌ CỘT KHÔNG TỒN TẠI
+            // if ($request->has('address')) $user->address = $request->address;
 
             // --- CẬP NHẬT ẢNH ---
             if ($request->hasFile('avatar')) {
-                // Xóa ảnh cũ
-                if ($user->avatar_url) {
+                // Xóa ảnh cũ nếu có và không phải là link ngoài
+                if ($user->avatar_url && strpos($user->avatar_url, asset('storage/')) !== false) {
                     $oldPath = str_replace(asset('storage/'), '', $user->avatar_url);
-                    Storage::disk('public')->delete($oldPath);
+                    if (Storage::disk('public')->exists($oldPath)) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
                 }
                 // Lưu ảnh mới
                 $path = $request->file('avatar')->store('avatars', 'public');
@@ -85,14 +96,25 @@ class AdminUserController extends Controller
             return response()->json($user);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Lỗi cập nhật: ' . $e->getMessage()], 500);
         }
     }
 
     public function destroy(string $id)
     {
-        $user = User::findOrFail($id);
-        $user->delete();
-        return response()->json(['message' => 'Đã xóa thành công']);
+        try {
+            $user = User::findOrFail($id);
+            // Xóa ảnh nếu cần
+            if ($user->avatar_url && strpos($user->avatar_url, asset('storage/')) !== false) {
+                 $oldPath = str_replace(asset('storage/'), '', $user->avatar_url);
+                 if (Storage::disk('public')->exists($oldPath)) {
+                    Storage::disk('public')->delete($oldPath);
+                 }
+            }
+            $user->delete();
+            return response()->json(['message' => 'Xóa thành công']);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi khi xóa: ' . $e->getMessage()], 500);
+        }
     }
 }
