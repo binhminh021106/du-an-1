@@ -103,7 +103,7 @@ const handleRegister = async () => {
     };
 
     try {
-        const res = await apiService.post(`/users`, payload);
+        const res = await apiService.post(`/register`, payload);
 
         if (res.status === 201 || res.status === 200) {
             Swal.fire({

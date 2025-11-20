@@ -8,7 +8,6 @@ const router = useRouter();
 
 const formData = reactive({
     fullName: '',
-    username: '',
     email: '',
     phone: '',
     password: '',
@@ -18,7 +17,6 @@ const formData = reactive({
 const errors = reactive({
     fullName: '',
     phone: '',
-    username: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -43,18 +41,14 @@ const togglePasswordVisibility = (field) => {
 const validateForm = () => {
     Object.keys(errors).forEach(key => errors[key] = '');
     let isValid = true;
-    const re = /^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]+$/;
+    const phoneRegex = /^(0[35789][0-9]{8})$/;
+    const strongPasswordRegex = /^(?=[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
 
     if (!formData.fullName.trim()) {
         errors.fullName = 'Vui lòng nhập họ tên.';
         isValid = false;
-    }
-
-    if (!formData.username.trim()) {
-        errors.username = 'Vui lòng nhập tên hiển thị.';
-        isValid = false;
-    } else if (!re.test(formData.username)) {
-        errors.username = 'Tên hiển thị chỉ được dùng chữ và số.';
+    } else if (formData.fullName.length < 5) {
+        errors.fullName = 'Họ tên phải tối thiểu 5 kí tự';
         isValid = false;
     }
 
@@ -66,16 +60,19 @@ const validateForm = () => {
         isValid = false;
     }
 
-     if (!formData.phone.trim()) {
+    if (!formData.phone.trim()) {
         errors.phone = 'Vui lòng nhập số điện thoại.';
+        isValid = false;
+    } else if (!phoneRegex.test(formData.phone)) {
+        errors.phone = 'Số điện thoại không đúng định dạng.';
         isValid = false;
     }
 
     if (!formData.password) {
         errors.password = 'Vui lòng nhập mật khẩu.';
         isValid = false;
-    } else if (formData.password.length < 8) {
-        errors.password = 'Mật khẩu phải có ít nhất 8 ký tự.';
+    } else if (!strongPasswordRegex.test(formData.password)) {
+        errors.password = 'Mật khẩu phải bắt đầu bằng chữ hoa, có ít nhất 1 số và 1 ký tự đặc biệt.';
         isValid = false;
     }
 
@@ -100,7 +97,6 @@ const handleRegister = async () => {
 
     isLoading.value = true;
     const payload = {
-        username: formData.username,
         fullName: formData.fullName,
         phone: formData.phone,
         email: formData.email,
@@ -108,16 +104,17 @@ const handleRegister = async () => {
     };
 
     try {
-        const res = await apiService.post(`/admin/users`, payload);
+        const res = await apiService.post(`admin/register`, payload);
         if (res.status === 201 || res.status === 200) {
             Swal.fire({
                 icon: 'success',
                 title: 'Đăng ký thành công',
-                text: `Tài khoản ${payload.username} đã được tạo!`,
+                text: `Tài khoản đã được tạo!`,
                 confirmButtonText: 'Đăng nhập ngay',
+                confirmButtonColor: '#009981'
             }).then(() => {
                 router.push({ name: 'admin-login' });
-                Object.assign(formData, { fullName: '', phone: '', username: '', email: '', password: '', confirmPassword: '' });
+                Object.assign(formData, { fullName: '', phone: '', email: '', password: '', confirmPassword: '' });
                 agreedToTerms.value = false;
             });
         }
@@ -127,7 +124,7 @@ const handleRegister = async () => {
         if (apiError.response?.data?.errors) {
             const serverErrors = apiError.response.data.errors;
             if (serverErrors.email) errors.email = serverErrors.email[0];
-            if (serverErrors.username) errors.username = serverErrors.username[0];
+            if (serverErrors.phone) errors.phone = serverErrors.phone[0];
         } else {
 
             Swal.fire({
@@ -172,22 +169,10 @@ const handleRegister = async () => {
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
                                         <input id="registerUsername" type="text" v-model="formData.fullName"
-                                            placeholder="VD: abc123"
+                                            placeholder="Nhập họ và tên"
                                             :class="['form-control', errors.fullName ? 'is-invalid' : '']" />
                                     </div>
                                     <div v-if="errors.fullName" class="invalid-feedback d-block">{{ errors.fullName }}
-                                    </div>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label for="registerUsername" class="form-label">Tên hiển thị</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
-                                        <input id="registerUsername" type="text" v-model="formData.username"
-                                            placeholder="VD: abc123"
-                                            :class="['form-control', errors.username ? 'is-invalid' : '']" />
-                                    </div>
-                                    <div v-if="errors.username" class="invalid-feedback d-block">{{ errors.username }}
                                     </div>
                                 </div>
 
@@ -196,7 +181,7 @@ const handleRegister = async () => {
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-envelope-fill"></i></span>
                                         <input id="registerEmail" type="email" v-model="formData.email"
-                                            placeholder="abc123@gmail.com"
+                                            placeholder="Nhập email"
                                             :class="['form-control', errors.email ? 'is-invalid' : '']" />
                                     </div>
                                     <div v-if="errors.email" class="invalid-feedback d-block">{{ errors.email }}</div>
@@ -205,9 +190,9 @@ const handleRegister = async () => {
                                 <div class="mb-3">
                                     <label for="registerphone" class="form-label">Số điện thoại</label>
                                     <div class="input-group">
-                                        <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
+                                        <span class="input-group-text"><i class="fa-solid fa-phone" style="color: black;"></i></span>
                                         <input id="registerphone" type="text" v-model="formData.phone"
-                                            placeholder="VD: 0123456789"
+                                            placeholder="Nhập số điện thoại"
                                             :class="['form-control', errors.phone ? 'is-invalid' : '']" />
                                     </div>
                                     <div v-if="errors.phone" class="invalid-feedback d-block">{{ errors.phone }}
@@ -219,7 +204,7 @@ const handleRegister = async () => {
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
                                         <input id="registerPassword" :type="passwordFieldType"
-                                            v-model="formData.password" placeholder="Tối thiểu 8 ký tự"
+                                            v-model="formData.password" placeholder="Nhập mật khẩu"
                                             :class="['form-control', errors.password ? 'is-invalid' : '']" />
                                         <button type="button" @click="togglePasswordVisibility('password')"
                                             class="btn btn-outline-secondary">

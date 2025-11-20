@@ -1,4 +1,5 @@
 import { reactive, readonly } from "vue";
+import apiService from "./apiService";
 
 const state = reactive({
   isAuthenticated: false,

@@ -202,7 +202,7 @@ const orderStatusChart = computed(() => {
         </div>
       </div>
     </div>
-    
+
     <div class="app-content">
       <div class="container-fluid">
         <!-- HÀNG 1: INFO BOXES (DỮ LIỆU THẬT) -->
@@ -256,7 +256,7 @@ const orderStatusChart = computed(() => {
             </div>
           </div>
         </div>
-        
+
         <!-- HÀNG 2: BIỂU ĐỒ CHÍNH (Full-width) -->
         <div class="row">
           <div class="col-md-12">
@@ -270,12 +270,7 @@ const orderStatusChart = computed(() => {
                     <p class="text-center">
                       <strong>Doanh Số (Dữ liệu mẫu): 1 Thg 1 - 30 Thg 7, 2025</strong>
                     </p>
-                    <VueApexCharts
-                      type="area"
-                      height="180"
-                      :options="salesChartOptions"
-                      :series="salesChartSeries"
-                    />
+                    <VueApexCharts type="area" height="180" :options="salesChartOptions" :series="salesChartSeries" />
                   </div>
                   <div class="col-md-4">
                     <p class="text-center">
@@ -372,13 +367,14 @@ const orderStatusChart = computed(() => {
                       <tr v-if="isLoading">
                         <td colspan="4" class="text-center">Đang tải...</td>
                       </tr>
-                       <tr v-else-if="latestOrders.length === 0">
+                      <tr v-else-if="latestOrders.length === 0">
                         <td colspan="4" class="text-center">Chưa có đơn hàng nào.</td>
                       </tr>
                       <tr v-for="order in latestOrders" :key="order.id">
                         <td><router-link :to="{ name: 'admin-orders' }">#{{ order.id }}</router-link></td>
                         <td>{{ order.customerName }}</td>
-                        <td><span :class="getStatusBadge(order.status).class" class="badge">{{ getStatusBadge(order.status).text }}</span></td>
+                        <td><span :class="getStatusBadge(order.status).class" class="badge">{{
+                            getStatusBadge(order.status).text }}</span></td>
                         <td>{{ formatCurrency(order.totalAmount) }}</td>
                       </tr>
                     </tbody>
@@ -412,7 +408,7 @@ const orderStatusChart = computed(() => {
                       <tr v-if="isLoading">
                         <td colspan="4" class="text-center">Đang tải...</td>
                       </tr>
-                       <tr v-else-if="latestReviews.length === 0">
+                      <tr v-else-if="latestReviews.length === 0">
                         <td colspan="4" class="text-center">Chưa có đánh giá nào.</td>
                       </tr>
                       <tr v-for="review in latestReviews" :key="review.id">
@@ -435,9 +431,9 @@ const orderStatusChart = computed(() => {
                 </router-link>
               </div>
             </div>
-            
+
           </div>
-          
+
           <!-- Cột bên phải (4) -->
           <div class="col-md-4">
             <!-- Biểu đồ tình trạng đơn hàng -->
@@ -446,36 +442,34 @@ const orderStatusChart = computed(() => {
                 <h3 class="card-title">Tình Trạng Đơn Hàng</h3>
               </div>
               <div class="card-body">
-                <VueApexCharts
-                  type="donut"
-                  :options="orderStatusChart.options"
-                  :series="orderStatusChart.series"
-                />
+                <VueApexCharts type="donut" :options="orderStatusChart.options" :series="orderStatusChart.series" />
               </div>
             </div>
 
             <!-- Thành viên mới -->
             <div class="card">
-                <div class="card-header">
-                  <h3 class="card-title">Thành Viên Mới Nhất</h3>
-                </div>
-                <div class="card-body p-0">
-                  <ul class="list-group list-group-flush">
-                    <li v-if="isLoading" class="list-group-item text-center">Đang tải...</li>
-                    <li v-else-if="latestCustomers.length === 0" class="list-group-item text-center">Chưa có khách hàng nào.</li>
-                    <li v-for="customer in latestCustomers" :key="customer.id" class="list-group-item d-flex align-items-center">
-                       <img :src="customer.avatar || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${customer.name.charAt(0).toUpperCase()}`"
-                           class="rounded-circle me-3" alt="Avatar"
-                           style="width: 40px; height: 40px; object-fit: cover;">
-                      <span>{{ customer.name }}</span>
-                    </li>
-                  </ul>
-                </div>
-                <div class="card-footer text-center">
-                  <router-link :to="{ name: 'admin-userAccount' }" class="text-decoration-none">
-                    Xem tất cả khách hàng
-                  </router-link>
-                </div>
+              <div class="card-header">
+                <h3 class="card-title">Thành Viên Mới Nhất</h3>
+              </div>
+              <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                  <li v-if="isLoading" class="list-group-item text-center">Đang tải...</li>
+                  <li v-else-if="latestCustomers.length === 0" class="list-group-item text-center">Chưa có khách hàng
+                    nào.</li>
+                  <li v-for="customer in latestCustomers" :key="customer.id"
+                    class="list-group-item d-flex align-items-center">
+                    <img
+                      :src="customer.avatar || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${(customer.name?.charAt(0) || 'U').toUpperCase()}`"
+                      class="rounded-circle me-3" alt="Avatar" style="width: 40px; height: 40px; object-fit: cover;">
+                    <span>{{ customer.name }}</span>
+                  </li>
+                </ul>
+              </div>
+              <div class="card-footer text-center">
+                <router-link :to="{ name: 'admin-userAccount' }" class="text-decoration-none">
+                  Xem tất cả khách hàng
+                </router-link>
+              </div>
             </div>
           </div>
         </div>
@@ -488,6 +482,7 @@ const orderStatusChart = computed(() => {
 .list-group-item {
   padding: 0.75rem 1rem;
 }
+
 .table .text-warning {
   color: #ffc107 !important;
   font-size: 1.1rem;

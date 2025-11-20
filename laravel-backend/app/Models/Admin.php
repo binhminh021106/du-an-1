@@ -3,19 +3,20 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable; 
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Admin extends Model
+class Admin extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\AdminFactory> */
-    use HasFactory, SoftDeletes;
+    use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     protected $table = 'admins';
 
     protected $fillable = [
-        'fullName',
-        'username',
+        'fullname',
         'email',
         'phone',
         'password',

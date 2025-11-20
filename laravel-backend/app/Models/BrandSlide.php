@@ -7,20 +7,19 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 
-class Slide extends Model
+class BrandSlide extends Model
 {
     /** @use HasFactory<\Database\Factories\SlidesFactory> */
     use HasFactory;
     use SoftDeletes;
 
-    protected $table = 'slides';
+    protected $table = 'brand_slides';
 
     protected $fillable = [
-        'title', // Tiêu đề
-        'image_url', // Banner
-        'description',
-        'link_url', // Địa chỉ 
-        'order_number', // Thứ tự
+        'name',
+        'image_url', 
+        'link_url', 
+        'order_number',
         'status', 
     ];
 }
