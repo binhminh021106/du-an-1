@@ -38,17 +38,7 @@ use App\Http\Controllers\Api\admin\AdminSlideController;
 use App\Http\Controllers\Api\admin\AminAccountController;
 use App\Http\Controllers\Api\admin\AdminBrandSlideController;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "api" middleware group. Make something great!
-|
-*/
-
+/* API Routes */
 
 // Auth
 Route::post('/register', [AuthController::class, 'register']);
@@ -110,13 +100,12 @@ Route::group([
     Route::get('/products', [AdminProductController::class, 'index']);
     Route::get('/product/{id}', [AdminProductController::class, 'show']);
 
-    Route::get('/categories', [AdminCategoryController::class, 'index']);
-    Route::get('/category/{id}', [AdminCategoryController::class, 'show']);
+    // Category dùng apiResource cho gọn
     Route::apiResource('categories', AdminCategoryController::class);
 
     Route::get('/users', [AdminUserController::class, 'index']);
     Route::get('/user/{id}', [AdminUserController::class, 'show']);
-    // Thêm xoá sửa
+    // User routes thủ công
     Route::post('/users', [AdminUserController::class, 'store']);
     Route::patch('/users/{id}', [AdminUserController::class, 'update']);
     Route::delete('/users/{id}', [AdminUserController::class, 'destroy']);
@@ -142,23 +131,19 @@ Route::group([
     Route::get('/reviews', [AdminReviewController::class, 'index']);
     Route::get('/review/{id}', [AdminReviewController::class, 'show']);
 
-    Route::get('/roles', [AdminRoleController::class, 'index']);
-    Route::get('/role/{id}', [AdminRoleController::class, 'show']);
+    // --- FIX LỖI 405 ---
+    // Dùng apiResource để tự tạo đủ route: GET, POST, PUT, DELETE cho roles
+    Route::apiResource('roles', AdminRoleController::class);
 
-    Route::get('/slides', [AdminSlideController::class, 'index']);
-    Route::get('/slide/{id}', [AdminSlideController::class, 'show']);
     Route::apiResource('slides', AdminSlideController::class);
 
-    Route::get('/admins', [AminAccountController::class, 'index']);
-    Route::get('/admin/{id}', [AminAccountController::class, 'show']);
-
-    Route::get('/brands', [AdminBrandSlideController::class, 'index']);
-    Route::get('/brand/{id}', [AdminBrandSlideController::class, 'show']);
-    Route::apiResource('brands', AdminBrandSlideController::class);
+    // Route cho Admins Account
+    Route::apiResource('admins', AminAccountController::class);
     
+    Route::apiResource('brands', AdminBrandSlideController::class);
 });
 
-// Route lấy thông tin user hiện tại (cần token)
+// Route lấy thông tin user hiện tại
 Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
     return $request->user();
 });

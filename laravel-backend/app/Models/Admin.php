@@ -22,7 +22,8 @@ class Admin extends Authenticatable
         'password',
         'avatar_url',
         'status',
-        'role_id'
+        'role_id',
+        'address' // Thêm address nếu có
     ];
 
     /**
@@ -46,5 +47,14 @@ class Admin extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Định nghĩa quan hệ với bảng Roles
+     * Giả sử Model Role nằm ở App\Models\Role
+     */
+    public function role()
+    {
+        return $this->belongsTo(Role::class, 'role_id', 'id');
     }
 }
