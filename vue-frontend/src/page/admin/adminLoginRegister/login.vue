@@ -1,54 +1,17 @@
 <script setup>
 import { ref, reactive } from 'vue';
-// Giả sử bạn import các thư viện này ở file main.js hoặc chúng có sẵn
-// import axios from 'axios';
-// import Swal from 'sweetalert2';
-// import { useRouter } from 'vue-router';
+import apiService from '../../../apiService';
+import Swal from 'sweetalert2';
+import { useRouter } from 'vue-router';
 
-// --- BẮT ĐẦU LOGIC GỐC CỦA BẠN ---
-
-// const router = useRouter(); // Giả lập router
-const router = { push: (route) => console.log('Chuyển hướng đến:', route.name) };
-
-// Giả lập axios và Swal để demo
-const axios = {
-    post: (url, payload) => {
-        console.log('AXIOS POST:', url, payload);
-        return new Promise((resolve, reject) => {
-            setTimeout(() => {
-                if (payload.username === "error" || payload.password !== "12345678") {
-                    reject({
-                        response: {
-                            status: 401,
-                            data: { message: "Tên đăng nhập hoặc mật khẩu không chính xác." }
-                        }
-                    });
-                } else {
-                    resolve({ status: 200, data: { token: 'mock-jwt-token-12345' } });
-                }
-            }, 1500);
-        });
-    }
-};
-
-const Swal = {
-    fire: (options) => {
-        console.log('SWAL:', options.title);
-        // Thay thế alert() bằng console.log() để tránh bị chặn
-        console.log(`SWAL: ${options.title}\n${options.text || ''}`);
-        return Promise.resolve({ isConfirmed: true });
-    }
-};
-// --- KẾT THÚC GIẢ LẬP ---
-
-
+const router = useRouter();
 const formData = reactive({
-    username: '',
+    login_id: '',
     password: '',
 });
 
 const errors = reactive({
-    username: '',
+    login_id: '',
     password: '',
     general: ''
 });
@@ -61,12 +24,12 @@ const togglePasswordVisibility = () => {
 };
 
 const handleLogin = async () => {
-    errors.username = '';
+    errors.login_id = '';
     errors.password = '';
     errors.general = '';
 
-    if (!formData.username) {
-        errors.username = 'Vui lòng nhập tên hiển thị hoặc email.';
+    if (!formData.login_id) {
+        errors.login_id = 'Vui lòng nhập tên hiển thị hoặc email.';
         return;
     }
     if (!formData.password) {
@@ -77,19 +40,21 @@ const handleLogin = async () => {
     isLoading.value = true;
 
     try {
-        // Thay thế URL API thực tế của bạn ở đây
-        const response = await axios.post('/api/login', formData);
-        const token = response.data.token;
-        // Tạm thời comment out localStorage để tránh lỗi trong môi trường demo
-        // localStorage.setItem('authToken', token);
-        console.log('Đã nhận token:', token);
+        const response = await apiService.post('/admin/login', formData);
+        const { token, user } = response.data;
+
+        localStorage.setItem('adminToken', token);
+        localStorage.setItem('adminData', JSON.stringify(user));
+
+        console.log('Đã lưu adminToken:', token);
 
         await Swal.fire({
             icon: 'success',
             title: 'Đăng nhập thành công!',
-            text: 'Đang chuyển hướng...',
+            text: `Chào mừng ${user.fullname || 'Admin'}`,
             timer: 1500,
-            showConfirmButton: false,
+            confirmButtonText: 'Đi đến trang dashboard',
+            confirmButtonColor: '#009981'
         });
 
         router.push({ name: 'admin-dashboard' });
@@ -100,10 +65,10 @@ const handleLogin = async () => {
             const data = error.response.data;
 
             if (status === 422 && data.errors) {
-                errors.username = data.errors.username ? data.errors.username[0] : '';
+                errors.login_id = data.errors.login_id ? data.errors.login_id[0] : '';
                 errors.password = data.errors.password ? data.errors.password[0] : '';
             } else if (status === 401 || status === 403) {
-                errors.general = 'Tên đăng nhập hoặc mật khẩu không chính xác.';
+                errors.general = data.message || 'Email/SĐT hoặc mật khẩu không chính xác.';
             } else {
                 errors.general = 'Đã có lỗi xảy ra. Vui lòng thử lại sau.';
             }
@@ -145,14 +110,14 @@ const handleLogin = async () => {
                                 </div>
 
                                 <div class="mb-3">
-                                    <label for="loginUsername" class="form-label">Email hoặc Tên đăng nhập</label>
+                                    <label for="loginUsername" class="form-label">Email hoặc số điện thoại</label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
-                                        <input id="loginUsername" type="text" v-model="formData.username"
-                                            placeholder="Nhập email hoặc tên đăng nhập"
-                                            :class="['form-control', errors.username ? 'is-invalid' : '']" />
+                                        <input id="loginUsername" type="text" v-model="formData.login_id"
+                                            placeholder="Nhập email hoặc số điện thoại"
+                                            :class="['form-control', errors.login_id ? 'is-invalid' : '']" />
                                     </div>
-                                    <div v-if="errors.username" class="invalid-feedback d-block">{{ errors.username }}
+                                    <div v-if="errors.login_id" class="invalid-feedback d-block">{{ errors.login_id }}
                                     </div>
                                 </div>
 

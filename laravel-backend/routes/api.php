@@ -3,7 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// Client
+// Client Controllers
 use App\Http\Controllers\Api\Client\ProductController;
 use App\Http\Controllers\Api\Client\CategoryController;
 use App\Http\Controllers\Api\Client\VariantController;
@@ -18,8 +18,11 @@ use App\Http\Controllers\Api\Client\UserAddressController;
 use App\Http\Controllers\Api\Client\RoleController;
 use App\Http\Controllers\Api\Client\CartController;
 use App\Http\Controllers\Api\Client\OrderController;
+use App\Http\Controllers\Api\Client\AuthController;
+use App\Http\Controllers\Api\Client\BrandSlideController;
 
-// admin
+// Admin Controllers
+use App\Http\Controllers\Api\admin\AdminAuthController;
 use App\Http\Controllers\Api\admin\AdminProductController;
 use App\Http\Controllers\Api\admin\AdminCategoryController;
 use App\Http\Controllers\Api\admin\AdminUserController;
@@ -29,13 +32,32 @@ use App\Http\Controllers\Api\admin\AdminCouponController;
 use App\Http\Controllers\Api\admin\AdminImageProductController;
 use App\Http\Controllers\Api\admin\AdminNewController;
 use App\Http\Controllers\Api\admin\AdminOrderController;
-use App\Http\Controllers\Api\admin\AdminReviewController; 
-use App\Http\Controllers\Api\admin\AdminRoleController; 
-use App\Http\Controllers\Api\admin\AdminSlideController; 
-use App\Http\Controllers\Api\admin\AminAccountController; 
+use App\Http\Controllers\Api\admin\AdminReviewController;
+use App\Http\Controllers\Api\admin\AdminRoleController;
+use App\Http\Controllers\Api\admin\AdminSlideController;
+use App\Http\Controllers\Api\admin\AminAccountController;
+use App\Http\Controllers\Api\admin\AdminBrandSlideController;
 
-// client
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+|
+| Here is where you can register API routes for your application. These
+| routes are loaded by the RouteServiceProvider and all of them will
+| be assigned to the "api" middleware group. Make something great!
+|
+*/
 
+
+// Auth
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
+
+Route::post('/admin/register', [AdminAuthController::class, 'register']);
+Route::post('/admin/login', [AdminAuthController::class, 'login']);
+
+// Public Data
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/product/{id}', [ProductController::class, 'show']);
 
@@ -76,11 +98,13 @@ Route::get('/carts', [CartController::class, 'index']);
 Route::get('/orders', [OrderController::class, 'index']);
 Route::get('/order/{id}', [OrderController::class, 'show']);
 
-// Admin
+Route::get('/brands', [BrandSlideController::class, 'index']);
+Route::get('/brand/{id}', [BrandSlideController::class, 'show']);
 
+// --- ADMIN ROUTES ---
 Route::group([
     'prefix' => 'admin',
-    // 'middleware' => 'auth:sanctum'
+    'middleware' => ['auth:sanctum', 'admin']
 ], function () {
 
     Route::get('/products', [AdminProductController::class, 'index']);
@@ -88,9 +112,14 @@ Route::group([
 
     Route::get('/categories', [AdminCategoryController::class, 'index']);
     Route::get('/category/{id}', [AdminCategoryController::class, 'show']);
+    Route::apiResource('categories', AdminCategoryController::class);
 
     Route::get('/users', [AdminUserController::class, 'index']);
     Route::get('/user/{id}', [AdminUserController::class, 'show']);
+    // Thêm xoá sửa
+    Route::post('/users', [AdminUserController::class, 'store']);
+    Route::patch('/users/{id}', [AdminUserController::class, 'update']);
+    Route::delete('/users/{id}', [AdminUserController::class, 'destroy']);
 
     Route::get('/variants', [AdminVariantController::class, 'index']);
     Route::get('/variant/{id}', [AdminVariantController::class, 'show']);
@@ -118,11 +147,18 @@ Route::group([
 
     Route::get('/slides', [AdminSlideController::class, 'index']);
     Route::get('/slide/{id}', [AdminSlideController::class, 'show']);
+    Route::apiResource('slides', AdminSlideController::class);
 
     Route::get('/admins', [AminAccountController::class, 'index']);
     Route::get('/admin/{id}', [AminAccountController::class, 'show']);
+
+    Route::get('/brands', [AdminBrandSlideController::class, 'index']);
+    Route::get('/brand/{id}', [AdminBrandSlideController::class, 'show']);
+    Route::apiResource('brands', AdminBrandSlideController::class);
+    
 });
 
+// Route lấy thông tin user hiện tại (cần token)
 Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
     return $request->user();
 });

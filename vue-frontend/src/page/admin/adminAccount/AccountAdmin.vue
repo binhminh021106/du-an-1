@@ -24,14 +24,14 @@ const isRoleEditMode = ref(false);
 // --- Forms ---
 const formData = reactive({
   id: null,
-  username: '',
+  fullname: '',
   email: '',
   phone: '',
   address: '',
   role: 'nhanvien',
   status: 'active',
-  password: '', // Thêm mật khẩu
-  password_confirmation: '' // Thêm xác nhận mật khẩu
+  password: '', 
+  password_confirmation: '' 
 });
 
 const errors = reactive({
@@ -86,11 +86,6 @@ const otherUsers = computed(() => {
   return filteredUsers.value.filter(user => user.role !== 'admin');
 });
 
-// Lọc vai trò (trừ 'user')
-const availableRoles = computed(() => {
-  return roles.value.filter(r => r.value !== 'user');
-});
-
 // Tổng trang (other users)
 const otherUsersTotalPages = computed(() => {
   return Math.ceil(otherUsers.value.length / otherUsersItemsPerPage.value);
@@ -127,8 +122,8 @@ function getFormattedDate(dateString) {
 
 // --- Hooks ---
 onMounted(() => {
-  fetchUsers(); // Tải user (admin, nhanvien...)
-  fetchRoles(); // Tải tất cả role để hiển thị badge
+  fetchUsers(); 
+  fetchRoles();
 
   if (userModalRef.value) {
     userModalInstance.value = new Modal(userModalRef.value, { backdrop: 'static' });
@@ -146,7 +141,7 @@ async function fetchUsers() {
   isLoading.value = true;
   try {
     // THAY ĐỔI: Gọi /admins (plural) thay vì /admin
-    const response = await apiService.get(`/admins`);
+    const response = await apiService.get(`admin/admins`);
 
     users.value = response.data.map(user => ({
       ...user,

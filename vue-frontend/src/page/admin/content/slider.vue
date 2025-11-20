@@ -1,12 +1,13 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-import apiService from '../../../apiService.js';
+import apiService from '../../../apiService.js'; // Đảm bảo apiService hỗ trợ gửi FormData
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
 // --- STATE CHUNG ---
 const isLoading = ref(true);
 const isLoadingBrands = ref(true);
+const isUploading = ref(false); // Trạng thái đang upload ảnh
 
 // --- STATE SLIDES ---
 const allSlides = ref([]);
@@ -17,6 +18,12 @@ const viewModalRef = ref(null);
 const viewModalInstance = ref(null);
 const viewingSlide = ref({});
 const isEditMode = ref(false);
+
+// State xử lý file ảnh Slide
+const slideFile = ref(null);
+const slidePreviewImage = ref('');
+const slideFileInputRef = ref(null); // Để reset input file
+
 const slidePagination = reactive({
   currentPage: 1,
   itemsPerPage: 5,
@@ -34,6 +41,12 @@ const brandSearchQuery = ref('');
 const brandModalRef = ref(null);
 const brandModalInstance = ref(null);
 const isBrandEditMode = ref(false);
+
+// State xử lý file ảnh Brand
+const brandFile = ref(null);
+const brandPreviewImage = ref('');
+const brandFileInputRef = ref(null);
+
 const brandPagination = reactive({
   currentPage: 1,
   itemsPerPage: 5,
@@ -49,7 +62,7 @@ const brandErrors = reactive({
 onMounted(() => {
   fetchAllSlides();
   fetchAllBrands();
-  
+
   if (slideModalRef.value) {
     slideModalInstance.value = new Modal(slideModalRef.value, { backdrop: 'static' });
   }
@@ -110,11 +123,10 @@ function goToBrandPage(page) {
 async function fetchAllSlides() {
   isLoading.value = true;
   try {
-    const response = await apiService.get(`/slides?_sort=order&_order=asc`);
+    const response = await apiService.get(`admin/slides`);
     allSlides.value = response.data.map(s => ({ ...s, created_at: s.created_at || new Date().toISOString() }));
   } catch (error) {
     console.error("Lỗi khi tải slide:", error);
-    Swal.fire('Lỗi', 'Không thể tải danh sách slide.', 'error');
   } finally {
     isLoading.value = false;
   }
@@ -127,7 +139,6 @@ async function fetchAllBrands() {
     allBrands.value = response.data.map(b => ({ ...b, status: b.status || 'published' }));
   } catch (error) {
     console.error("Lỗi khi tải brand:", error);
-    // Không báo lỗi, có thể endpoint chưa tồn tại
   } finally {
     isLoadingBrands.value = false;
   }
@@ -143,11 +154,50 @@ function getFormattedDate(dateString) {
   return new Date(dateString).toLocaleDateString('vi-VN');
 }
 
+// --- HÀM UPLOAD FILE (QUAN TRỌNG) ---
+async function uploadFileToServer(file) {
+  const formData = new FormData();
+  formData.append('file', file); // 'file' là tên trường mà Server mong đợi
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      // Giả sử server trả về đường dẫn ảnh
+      console.log("Giả lập upload file:", file.name);
+      // Trả về URL tạm thời để demo (trong thực tế đây sẽ là URL từ server trả về)
+      resolve(`https://placehold.co/600x400?text=${encodeURIComponent(file.name)}`);
+    }, 1000);
+  });
+}
+
+// --- XỬ LÝ ẢNH SLIDE ---
+function onSlideFileChange(event) {
+  const file = event.target.files[0];
+  if (file) {
+    // Kiểm tra định dạng
+    if (!file.type.startsWith('image/')) {
+      Swal.fire('Lỗi', 'Vui lòng chọn file hình ảnh.', 'error');
+      return;
+    }
+    // Kiểm tra kích thước (ví dụ 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      Swal.fire('Lỗi', 'Kích thước ảnh không được quá 2MB.', 'error');
+      return;
+    }
+
+    slideFile.value = file;
+    // Tạo URL preview local
+    slidePreviewImage.value = URL.createObjectURL(file);
+    slideErrors.imageUrl = ''; // Xóa lỗi nếu có
+  }
+}
+
 // --- CRUD SLIDES ---
 function resetSlideForm() {
   Object.assign(slideFormData, {
     id: null, title: '', description: '', imageUrl: '', linkUrl: '', status: 'published', order: 0
   });
+  slideFile.value = null;
+  slidePreviewImage.value = '';
+  if (slideFileInputRef.value) slideFileInputRef.value.value = ''; // Reset input file
   Object.keys(slideErrors).forEach(key => slideErrors[key] = '');
 }
 
@@ -168,6 +218,11 @@ function openEditSlideModal(slide) {
     status: slide.status,
     order: slide.order
   });
+  // Khi edit, preview ban đầu là ảnh cũ từ server
+  slidePreviewImage.value = slide.imageUrl;
+  slideFile.value = null; // Chưa chọn file mới
+  if (slideFileInputRef.value) slideFileInputRef.value.value = '';
+
   Object.keys(slideErrors).forEach(key => slideErrors[key] = '');
   slideModalInstance.value.show();
 }
@@ -180,14 +235,23 @@ function openViewSlideModal(slide) {
 function validateSlideForm() {
   Object.keys(slideErrors).forEach(key => slideErrors[key] = '');
   let isValid = true;
+
   if (!slideFormData.title.trim()) {
     slideErrors.title = 'Vui lòng nhập tiêu đề slide.';
     isValid = false;
   }
-  if (!slideFormData.imageUrl.trim()) {
-    slideErrors.imageUrl = 'Vui lòng nhập URL hình ảnh.';
+
+  // Logic validate ảnh:
+  // Nếu tạo mới: Phải chọn file (slideFile khác null)
+  // Nếu sửa: Nếu không chọn file mới (slideFile null) thì phải có ảnh cũ (imageUrl)
+  if (!isEditMode.value && !slideFile.value) {
+    slideErrors.imageUrl = 'Vui lòng chọn hình ảnh.';
+    isValid = false;
+  } else if (isEditMode.value && !slideFile.value && !slideFormData.imageUrl) {
+    slideErrors.imageUrl = 'Slide chưa có hình ảnh.';
     isValid = false;
   }
+
   if (slideFormData.order === null || slideFormData.order < 0) {
     slideErrors.order = 'Thứ tự phải là một số không âm.';
     isValid = false;
@@ -198,25 +262,62 @@ function validateSlideForm() {
 async function handleSaveSlide() {
   if (!validateSlideForm()) return;
   isLoading.value = true;
-  const payload = { ...slideFormData, order: parseInt(slideFormData.order) || 0 };
+  isUploading.value = true; // Hiển thị loading ảnh
 
   try {
+    // 1. Tạo đối tượng FormData
+    const formData = new FormData();
+
+    // 2. Đưa dữ liệu text vào
+    formData.append('title', slideFormData.title);
+    formData.append('description', slideFormData.description || '');
+    formData.append('linkUrl', slideFormData.linkUrl || '');
+    formData.append('order', slideFormData.order);
+    formData.append('status', slideFormData.status);
+
+    // 3. QUAN TRỌNG: Đưa file ảnh vào (nếu có chọn)
+    // Key 'image' phải trùng với $request->validate(['image' => ...]) bên Laravel
+    if (slideFile.value) {
+      formData.append('image', slideFile.value);
+    }
+
+    // 4. Gửi API
     if (isEditMode.value) {
-      await apiService.put(`/slides/${payload.id}`, payload);
+      // MẸO: Laravel Put không nhận file trực tiếp, phải dùng POST + _method: 'PUT'
+      formData.append('_method', 'PUT');
+
+      await apiService.post(`admin/slides/${slideFormData.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
       Swal.fire('Thành công', 'Đã cập nhật slide!', 'success');
     } else {
-      delete payload.id;
-      payload.created_at = new Date().toISOString();
-      await apiService.post(`/slides`, payload);
+      // Thêm mới dùng POST bình thường
+      await apiService.post(`admin/slides`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
       Swal.fire('Thành công', 'Đã tạo slide mới!', 'success');
     }
+
     slideModalInstance.value.hide();
-    fetchAllSlides();
+    fetchAllSlides(); // Tải lại danh sách
+
   } catch (error) {
     console.error("Lỗi khi lưu slide:", error);
-    Swal.fire('Thất bại', 'Đã có lỗi xảy ra.', 'error');
+
+    // Hiển thị lỗi chi tiết từ Laravel trả về
+    if (error.response && error.response.data && error.response.data.errors) {
+      const errs = error.response.data.errors;
+      if (errs.title) slideErrors.title = errs.title[0];
+      if (errs.image) slideErrors.imageUrl = errs.image[0]; // Hiển thị lỗi ảnh (ví dụ: file quá lớn)
+      Swal.fire('Lỗi nhập liệu', 'Vui lòng kiểm tra lại thông tin.', 'warning');
+    } else {
+      Swal.fire('Thất bại', 'Đã có lỗi xảy ra phía Server.', 'error');
+    }
   } finally {
     isLoading.value = false;
+    isUploading.value = false;
   }
 }
 
@@ -233,7 +334,7 @@ async function handleDeleteSlide(slide) {
   });
   if (result.isConfirmed) {
     try {
-      await apiService.delete(`/slides/${slide.id}`);
+      await apiService.delete(`admin/slides/${slide.id}`);
       Swal.fire('Đã xóa!', 'Slide đã được xóa.', 'success');
       fetchAllSlides();
     } catch (error) {
@@ -243,11 +344,28 @@ async function handleDeleteSlide(slide) {
   }
 }
 
-// --- CRUD BRANDS (MỚI) ---
+// --- XỬ LÝ ẢNH BRAND ---
+function onBrandFileChange(event) {
+  const file = event.target.files[0];
+  if (file) {
+    if (!file.type.startsWith('image/')) {
+      Swal.fire('Lỗi', 'Vui lòng chọn file hình ảnh.', 'error');
+      return;
+    }
+    brandFile.value = file;
+    brandPreviewImage.value = URL.createObjectURL(file);
+    brandErrors.imageUrl = '';
+  }
+}
+
+// --- CRUD BRANDS ---
 function resetBrandForm() {
   Object.assign(brandFormData, {
     id: null, name: '', imageUrl: '', linkUrl: '', order: 0, status: 'published'
   });
+  brandFile.value = null;
+  brandPreviewImage.value = '';
+  if (brandFileInputRef.value) brandFileInputRef.value.value = '';
   Object.keys(brandErrors).forEach(key => brandErrors[key] = '');
 }
 
@@ -267,6 +385,10 @@ function openEditBrandModal(brand) {
     status: brand.status,
     order: brand.order
   });
+  brandPreviewImage.value = brand.imageUrl;
+  brandFile.value = null;
+  if (brandFileInputRef.value) brandFileInputRef.value.value = '';
+
   Object.keys(brandErrors).forEach(key => brandErrors[key] = '');
   brandModalInstance.value.show();
 }
@@ -278,10 +400,16 @@ function validateBrandForm() {
     brandErrors.name = 'Vui lòng nhập tên brand.';
     isValid = false;
   }
-  if (!brandFormData.imageUrl.trim()) {
-    brandErrors.imageUrl = 'Vui lòng nhập URL hình ảnh.';
+
+  // Logic validate ảnh Brand
+  if (!isBrandEditMode.value && !brandFile.value) {
+    brandErrors.imageUrl = 'Vui lòng chọn hình ảnh.';
+    isValid = false;
+  } else if (isBrandEditMode.value && !brandFile.value && !brandFormData.imageUrl) {
+    brandErrors.imageUrl = 'Brand chưa có hình ảnh.';
     isValid = false;
   }
+
   if (brandFormData.order === null || brandFormData.order < 0) {
     brandErrors.order = 'Thứ tự phải là một số không âm.';
     isValid = false;
@@ -292,24 +420,41 @@ function validateBrandForm() {
 async function handleSaveBrand() {
   if (!validateBrandForm()) return;
   isLoadingBrands.value = true;
-  const payload = { ...brandFormData, order: parseInt(brandFormData.order) || 0 };
 
   try {
+    const formData = new FormData();
+    formData.append('name', brandFormData.name);
+    formData.append('linkUrl', brandFormData.linkUrl || '');
+    formData.append('order', brandFormData.order);
+    formData.append('status', brandFormData.status);
+
+    // Key 'image' phải khớp với Controller Brand
+    if (brandFile.value) {
+      formData.append('image', brandFile.value);
+    }
+
     if (isBrandEditMode.value) {
-      await apiService.put(`/brands/${payload.id}`, payload);
+      formData.append('_method', 'PUT');
+      await apiService.post(`admin/brands/${brandFormData.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       Swal.fire('Thành công', 'Đã cập nhật brand!', 'success');
     } else {
-      delete payload.id;
-      await apiService.post(`/brands`, payload);
+      // SỬA LỖI 405: Thêm admin/ vào trước
+      await apiService.post(`admin/brands`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       Swal.fire('Thành công', 'Đã tạo brand mới!', 'success');
     }
+
     brandModalInstance.value.hide();
     fetchAllBrands();
   } catch (error) {
-    console.error("Lỗi khi lưu brand:", error);
+    console.error("Lỗi lưu brand:", error);
     Swal.fire('Thất bại', 'Đã có lỗi xảy ra.', 'error');
   } finally {
     isLoadingBrands.value = false;
+    if (brandFileInputRef.value) brandFileInputRef.value.value = '';
   }
 }
 
@@ -318,7 +463,7 @@ async function handleBrandToggleStatus(brand) {
   const actionText = newStatus === 'published' ? 'hiển thị' : 'ẩn';
   try {
     brand.status = newStatus; // Cập nhật UI trước
-    await apiService.patch(`/brands/${brand.id}`, { status: newStatus });
+    await apiService.patch(`admin/brands/${brand.id}`, { status: newStatus });
     Swal.fire({
       toast: true,
       position: 'top-end',
@@ -347,7 +492,7 @@ async function handleDeleteBrand(brand) {
   });
   if (result.isConfirmed) {
     try {
-      await apiService.delete(`/brands/${brand.id}`);
+      await apiService.delete(`admin/brands/${brand.id}`);
       Swal.fire('Đã xóa!', 'Brand đã được xóa.', 'success');
       fetchAllBrands();
     } catch (error) {
@@ -359,7 +504,6 @@ async function handleDeleteBrand(brand) {
 </script>
 
 <template>
-  <!-- 1. Header của trang -->
   <div class="app-content-header">
     <div class="container-fluid">
       <div class="row">
@@ -378,10 +522,8 @@ async function handleDeleteBrand(brand) {
     </div>
   </div>
 
-  <!-- 2. Nội dung chính của trang -->
   <div class="app-content">
     <div class="container-fluid">
-      <!-- Card Slides -->
       <div class="row">
         <div class="col-12">
           <div class="card">
@@ -434,8 +576,8 @@ async function handleDeleteBrand(brand) {
                         <span class="badge text-bg-dark" style="font-size: 0.9rem;">{{ slide.order }}</span>
                       </td>
                       <td>
-                        <img :src="slide.imageUrl || 'https://placehold.co/100x50?text=N/A'"
-                          alt="Ảnh slide" class="img-thumbnail" >
+                        <img :src="slide.imageUrl || 'https://placehold.co/100x50?text=N/A'" alt="Ảnh slide"
+                          class="img-thumbnail">
                       </td>
                       <td>
                         <strong>{{ slide.title }}</strong>
@@ -451,14 +593,15 @@ async function handleDeleteBrand(brand) {
                         </span>
                       </td>
                       <td class="text-center gap-2">
-                        <button class="btn btn-outline-info btn-sm me-1" @click="openViewSlideModal(slide)" title="Xem chi tiết">
+                        <button class="btn btn-outline-info btn-sm me-1" @click="openViewSlideModal(slide)"
+                          title="Xem chi tiết">
                           <i class="bi bi-eye"></i>
                         </button>
                         <button class="btn btn-outline-warning btn-sm me-1" @click="openEditSlideModal(slide)">
                           <i class="bi bi-pencil"></i>
                         </button>
                         <button class="btn btn-outline-danger btn-sm" @click="handleDeleteSlide(slide)">
-                          <i class="bi bi-trash"></i> 
+                          <i class="bi bi-trash"></i>
                         </button>
                       </td>
                     </tr>
@@ -466,17 +609,19 @@ async function handleDeleteBrand(brand) {
                 </table>
               </div>
             </div>
-            <div class="card-footer clearfix" v-if="!isLoading && totalPages > 1">
+            <div class="card-footer clearfix" v-if="!isLoading && totalSlidePages > 1">
               <ul class="pagination pagination-sm m-0 float-end">
                 <li class="page-item" :class="{ disabled: slidePagination.currentPage === 1 }">
-                  <a class="page-link" href="#" @click.prevent="goToSlidePage(slidePagination.currentPage - 1)">&laquo;</a>
+                  <a class="page-link" href="#"
+                    @click.prevent="goToSlidePage(slidePagination.currentPage - 1)">&laquo;</a>
                 </li>
-                <li v-for="page in totalPages" :key="page" class="page-item"
+                <li v-for="page in totalSlidePages" :key="page" class="page-item"
                   :class="{ active: slidePagination.currentPage === page }">
                   <a class="page-link" href="#" @click.prevent="goToSlidePage(page)">{{ page }}</a>
                 </li>
-                <li class="page-item" :class="{ disabled: slidePagination.currentPage === totalPages }">
-                  <a class="page-link" href="#" @click.prevent="goToSlidePage(slidePagination.currentPage + 1)">&raquo;</a>
+                <li class="page-item" :class="{ disabled: slidePagination.currentPage === totalSlidePages }">
+                  <a class="page-link" href="#"
+                    @click.prevent="goToSlidePage(slidePagination.currentPage + 1)">&raquo;</a>
                 </li>
               </ul>
             </div>
@@ -484,7 +629,6 @@ async function handleDeleteBrand(brand) {
         </div>
       </div>
 
-      <!-- Card Brand Banners (MỚI) -->
       <div class="row mt-4">
         <div class="col-12">
           <div class="card">
@@ -493,13 +637,13 @@ async function handleDeleteBrand(brand) {
                 <div class="col-md-4 col-12 mb-2 mb-md-0">
                   <h3 class="card-title mb-0">Danh sách Brand Banner</h3>
                 </div>
-                 <div class="col-md-5 col-12 mb-2 mb-md-0">
-                   <div class="input-group">
-                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
-                     <input type="text" class="form-control border-start-0 ps-0" placeholder="Tìm brand theo tên..."
-                       v-model="brandSearchQuery">
-                   </div>
-                 </div>
+                <div class="col-md-5 col-12 mb-2 mb-md-0">
+                  <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control border-start-0 ps-0" placeholder="Tìm brand theo tên..."
+                      v-model="brandSearchQuery">
+                  </div>
+                </div>
                 <div class="col-md-3 col-12 text-md-end">
                   <button type="button" class="btn btn-success" @click="openCreateBrandModal">
                     <i class="bi bi-plus-lg"></i> Thêm mới Brand
@@ -537,8 +681,8 @@ async function handleDeleteBrand(brand) {
                         <span class="badge text-bg-dark" style="font-size: 0.9rem;">{{ brand.order }}</span>
                       </td>
                       <td>
-                        <img :src="brand.imageUrl || 'https://placehold.co/100x50?text=N/A'"
-                          alt="Ảnh brand" class="img-thumbnail" width="120">
+                        <img :src="brand.imageUrl || 'https://placehold.co/100x50?text=N/A'" alt="Ảnh brand"
+                          class="img-thumbnail" width="120">
                       </td>
                       <td><strong>{{ brand.name }}</strong></td>
                       <td>
@@ -551,40 +695,43 @@ async function handleDeleteBrand(brand) {
                         </span>
                       </td>
                       <td class="text-center">
-                         <div class="d-flex justify-content-center align-items-center">
-                            <div class="form-check form-switch d-inline-block align-middle me-3" title="Kích hoạt/Vô hiệu hóa">
-                              <input class="form-check-input" type="checkbox" role="switch"
-                                style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                                :id="'brandStatusSwitch-' + brand.id"
-                                :checked="brand.status === 'published'"
-                                @click.prevent="handleBrandToggleStatus(brand)">
-                            </div>
-                           <div class="btn-group btn-group-sm">
-                              <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditBrandModal(brand)">
-                                <i class="bi bi-pencil"></i>
-                              </button>
-                              <button class="btn btn-outline-danger" title="Xóa" @click="handleDeleteBrand(brand)">
-                                <i class="bi bi-trash"></i>
-                              </button>
-                           </div>
-                         </div>
+                        <div class="d-flex justify-content-center align-items-center">
+                          <div class="form-check form-switch d-inline-block align-middle me-3"
+                            title="Kích hoạt/Vô hiệu hóa">
+                            <input class="form-check-input" type="checkbox" role="switch"
+                              style="width: 2.5em; height: 1.25em; cursor: pointer;"
+                              :id="'brandStatusSwitch-' + brand.id" :checked="brand.status === 'published'"
+                              @click.prevent="handleBrandToggleStatus(brand)">
+                          </div>
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary" title="Chỉnh sửa"
+                              @click="openEditBrandModal(brand)">
+                              <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-outline-danger" title="Xóa" @click="handleDeleteBrand(brand)">
+                              <i class="bi bi-trash"></i>
+                            </button>
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             </div>
-             <div class="card-footer clearfix" v-if="!isLoadingBrands && totalBrandPages > 1">
+            <div class="card-footer clearfix" v-if="!isLoadingBrands && totalBrandPages > 1">
               <ul class="pagination pagination-sm m-0 float-end">
                 <li class="page-item" :class="{ disabled: brandPagination.currentPage === 1 }">
-                  <a class="page-link" href="#" @click.prevent="goToBrandPage(brandPagination.currentPage - 1)">&laquo;</a>
+                  <a class="page-link" href="#"
+                    @click.prevent="goToBrandPage(brandPagination.currentPage - 1)">&laquo;</a>
                 </li>
                 <li v-for="page in totalBrandPages" :key="page" class="page-item"
                   :class="{ active: brandPagination.currentPage === page }">
                   <a class="page-link" href="#" @click.prevent="goToBrandPage(page)">{{ page }}</a>
                 </li>
                 <li class="page-item" :class="{ disabled: brandPagination.currentPage === totalBrandPages }">
-                  <a class="page-link" href="#" @click.prevent="goToBrandPage(brandPagination.currentPage + 1)">&raquo;</a>
+                  <a class="page-link" href="#"
+                    @click.prevent="goToBrandPage(brandPagination.currentPage + 1)">&raquo;</a>
                 </li>
               </ul>
             </div>
@@ -594,10 +741,9 @@ async function handleDeleteBrand(brand) {
     </div>
   </div>
 
-  <!-- Modal Thêm/Sửa Slide (Cập nhật layout) -->
   <div class="modal fade" id="slideModal" ref="slideModalRef" tabindex="-1" aria-labelledby="slideModalLabel"
     aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"> <!-- Thay đổi: modal-lg -> modal-xl -->
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="slideModalLabel">
@@ -608,12 +754,11 @@ async function handleDeleteBrand(brand) {
         <div class="modal-body">
           <form @submit.prevent="handleSaveSlide" id="slideForm">
             <div class="row">
-              <!-- Cột thông tin (col-md-6) -->
               <div class="col-md-6">
                 <div class="mb-3">
                   <label for="title" class="form-label required">Tiêu đề</label>
-                  <input type="text" class="form-control" :class="{ 'is-invalid': slideErrors.title }"
-                    id="title" v-model="slideFormData.title">
+                  <input type="text" class="form-control" :class="{ 'is-invalid': slideErrors.title }" id="title"
+                    v-model="slideFormData.title">
                   <div class="invalid-feedback" v-if="slideErrors.title">{{ slideErrors.title }}</div>
                 </div>
 
@@ -633,8 +778,7 @@ async function handleDeleteBrand(brand) {
                   <div class="col-md-6">
                     <div class="mb-3">
                       <label for="order" class="form-label required">Thứ tự</label>
-                      <input type="number" class="form-control"
-                        :class="{ 'is-invalid': slideErrors.order }" id="order"
+                      <input type="number" class="form-control" :class="{ 'is-invalid': slideErrors.order }" id="order"
                         v-model.number="slideFormData.order" min="0">
                       <div class="invalid-feedback" v-if="slideErrors.order">{{ slideErrors.order }}</div>
                     </div>
@@ -651,20 +795,28 @@ async function handleDeleteBrand(brand) {
                 </div>
               </div>
 
-              <!-- Cột Ảnh (col-md-6) -->
               <div class="col-md-6">
                 <div class="mb-3">
-                  <label for="imageUrl" class="form-label required">URL Hình ảnh</label>
-                  <input type="text" class="form-control" :class="{ 'is-invalid': slideErrors.imageUrl }"
-                    id="imageUrl" v-model="slideFormData.imageUrl" placeholder="https://...">
+                  <label for="slideFile" class="form-label required">Hình ảnh</label>
+                  <input type="file" class="form-control" :class="{ 'is-invalid': slideErrors.imageUrl }" id="slideFile"
+                    ref="slideFileInputRef" accept="image/*" @change="onSlideFileChange">
                   <div class="invalid-feedback" v-if="slideErrors.imageUrl">{{ slideErrors.imageUrl }}</div>
+                  <small class="text-muted" v-if="isEditMode">Để trống nếu không muốn thay đổi ảnh.</small>
                 </div>
 
                 <label class="form-label">Xem trước:</label>
-                <div class="image-preview-container-lg">
-                  <img v-if="slideFormData.imageUrl" :src="slideFormData.imageUrl" class="img-thumbnail"
-                    alt="Preview" @error="(e) => e.target.src = 'https://placehold.co/600x300?text=Image+Error'">
-                  <img v-else src="https://placehold.co/600x300?text=Preview" class="img-thumbnail"
+                <div class="image-preview-container-lg position-relative">
+                  <div v-if="isUploading"
+                    class="position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center bg-light bg-opacity-75"
+                    style="z-index: 5;">
+                    <div class="spinner-border text-primary" role="status">
+                      <span class="visually-hidden">Uploading...</span>
+                    </div>
+                  </div>
+
+                  <img v-if="slidePreviewImage" :src="slidePreviewImage" class="img-thumbnail" alt="Preview"
+                    @error="(e) => e.target.src = 'https://placehold.co/600x300?text=Image+Error'">
+                  <img v-else src="https://placehold.co/600x300?text=Chưa+có+ảnh" class="img-thumbnail"
                     alt="Chưa có ảnh">
                 </div>
               </div>
@@ -673,16 +825,15 @@ async function handleDeleteBrand(brand) {
         </div>
         <div class="modal-footer bg-light">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
-          <button type="submit" form="slideForm" class="btn btn-primary" :disabled="isLoading">
-            <span v-if="isLoading" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-            Lưu lại
+          <button type="submit" form="slideForm" class="btn btn-primary" :disabled="isLoading || isUploading">
+            <span v-if="isLoading || isUploading" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            {{ isUploading ? 'Đang tải ảnh...' : 'Lưu lại' }}
           </button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Modal Thêm/Sửa Brand (MỚI) -->
   <div class="modal fade" id="brandModal" ref="brandModalRef" tabindex="-1" aria-labelledby="brandModalLabel"
     aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
@@ -696,12 +847,11 @@ async function handleDeleteBrand(brand) {
         <div class="modal-body">
           <form @submit.prevent="handleSaveBrand" id="brandForm">
             <div class="row">
-              <!-- Cột thông tin (col-md-6) -->
               <div class="col-md-6">
                 <div class="mb-3">
                   <label for="brandName" class="form-label required">Tên Brand</label>
-                  <input type="text" class="form-control" :class="{ 'is-invalid': brandErrors.name }"
-                    id="brandName" v-model="brandFormData.name">
+                  <input type="text" class="form-control" :class="{ 'is-invalid': brandErrors.name }" id="brandName"
+                    v-model="brandFormData.name">
                   <div class="invalid-feedback" v-if="brandErrors.name">{{ brandErrors.name }}</div>
                 </div>
 
@@ -715,9 +865,8 @@ async function handleDeleteBrand(brand) {
                   <div class="col-md-6">
                     <div class="mb-3">
                       <label for="brandOrder" class="form-label required">Thứ tự</label>
-                      <input type="number" class="form-control"
-                        :class="{ 'is-invalid': brandErrors.order }" id="brandOrder"
-                        v-model.number="brandFormData.order" min="0">
+                      <input type="number" class="form-control" :class="{ 'is-invalid': brandErrors.order }"
+                        id="brandOrder" v-model.number="brandFormData.order" min="0">
                       <div class="invalid-feedback" v-if="brandErrors.order">{{ brandErrors.order }}</div>
                     </div>
                   </div>
@@ -733,20 +882,20 @@ async function handleDeleteBrand(brand) {
                 </div>
               </div>
 
-              <!-- Cột Ảnh (col-md-6) -->
               <div class="col-md-6">
                 <div class="mb-3">
-                  <label for="brandImageUrl" class="form-label required">URL Hình ảnh</label>
-                  <input type="text" class="form-control" :class="{ 'is-invalid': brandErrors.imageUrl }"
-                    id="brandImageUrl" v-model="brandFormData.imageUrl" placeholder="https://...">
+                  <label for="brandFile" class="form-label required">Hình ảnh</label>
+                  <input type="file" class="form-control" :class="{ 'is-invalid': brandErrors.imageUrl }" id="brandFile"
+                    ref="brandFileInputRef" accept="image/*" @change="onBrandFileChange">
                   <div class="invalid-feedback" v-if="brandErrors.imageUrl">{{ brandErrors.imageUrl }}</div>
+                  <small class="text-muted" v-if="isBrandEditMode">Để trống nếu không muốn thay đổi ảnh.</small>
                 </div>
 
                 <label class="form-label">Xem trước:</label>
                 <div class="image-preview-container-lg">
-                  <img v-if="brandFormData.imageUrl" :src="brandFormData.imageUrl" class="img-thumbnail"
-                    alt="Preview" @error="(e) => e.target.src = 'https://placehold.co/600x300?text=Image+Error'">
-                  <img v-else src="https://placehold.co/600x300?text=Preview" class="img-thumbnail"
+                  <img v-if="brandPreviewImage" :src="brandPreviewImage" class="img-thumbnail" alt="Preview"
+                    @error="(e) => e.target.src = 'https://placehold.co/600x300?text=Image+Error'">
+                  <img v-else src="https://placehold.co/600x300?text=Chưa+có+ảnh" class="img-thumbnail"
                     alt="Chưa có ảnh">
                 </div>
               </div>
@@ -764,7 +913,6 @@ async function handleDeleteBrand(brand) {
     </div>
   </div>
 
-  <!-- Modal Xem Chi Tiết Slide (MỚI) -->
   <div class="modal fade" id="slideViewModal" ref="viewModalRef" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content">
@@ -779,8 +927,8 @@ async function handleDeleteBrand(brand) {
           </div>
 
           <div class="text-center mb-4 mt-3">
-            <img :src="viewingSlide.imageUrl || 'https://placehold.co/600x300?text=N/A'"
-              class="img-thumbnail shadow-sm" alt="Slide Image"
+            <img :src="viewingSlide.imageUrl || 'https://placehold.co/600x300?text=N/A'" class="img-thumbnail shadow-sm"
+              alt="Slide Image"
               style="width: 100%; height: auto; max-height: 300px; object-fit: cover; border-radius: 8px;">
             <h4 class="mt-3 mb-1">{{ viewingSlide.title }}</h4>
             <p class="text-muted mb-0">ID: {{ viewingSlide.id }}</p>
@@ -799,7 +947,8 @@ async function handleDeleteBrand(brand) {
             </div>
             <div class="list-group-item px-0">
               <h6 class="mb-2"><i class="bi bi-link-45deg me-3 text-info"></i>Link liên kết</h6>
-              <a :href="viewingSlide.linkUrl" target="_blank" class="mb-1 text-info small" v-if="viewingSlide.linkUrl">{{ viewingSlide.linkUrl }}</a>
+              <a :href="viewingSlide.linkUrl" target="_blank" class="mb-1 text-info small"
+                v-if="viewingSlide.linkUrl">{{ viewingSlide.linkUrl }}</a>
               <p v-else class="mb-1 text-muted small">Không có.</p>
             </div>
             <div class="list-group-item px-0">
@@ -825,19 +974,23 @@ async function handleDeleteBrand(brand) {
   margin-bottom: 2px;
   font-size: 0.8rem;
 }
+
 .card-body.p-0 .table {
   margin-bottom: 0;
 }
+
 .image-preview-container-lg .img-thumbnail {
   width: 100%;
   max-height: 300px;
   object-fit: contain;
   background-color: #f8f9fa;
 }
+
 .required::after {
   content: " *";
   color: red;
 }
+
 .form-check-input {
   width: 2.5em;
   height: 1.25em;

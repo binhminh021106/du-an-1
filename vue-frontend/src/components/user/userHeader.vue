@@ -164,7 +164,7 @@ onUnmounted(() => {
           <div v-else class="side-menu-container user-menu" ref="userMenuContainer">
             <button @click="toggleUserMenu" class="action-item user-menu-trigger">
               <i class="fa-solid fa-circle-user"></i>
-              <span>{{ user.name || user.email }}</span>
+              <span>{{ user.fullName || user.email }}</span>
             </button>
 
             <div class="dropdown-menu user-dropdown" :class="{ active: isUserMenuActive }">
@@ -173,7 +173,7 @@ onUnmounted(() => {
                 <small>{{ user.email }}</small>
               </div>
               <ul class="menu-list">
-                <li><router-link :to="{ name: 'home' }"><i class="fa-solid fa-address-card"></i> Tài khoản của
+                <li><router-link :to="{ name: 'profile' }"><i class="fa-solid fa-address-card"></i> Tài khoản của
                     tôi</router-link></li>
                 <li><router-link :to="{ name: 'home' }"><i class="fa-solid fa-box-archive"></i> Đơn hàng</router-link>
                 </li>
