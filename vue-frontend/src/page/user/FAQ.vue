@@ -30,31 +30,55 @@
             <div class="accordion-group">
               
               <div class="accordion-item">
-                <button class="accordion-header">
+                <button 
+                  class="accordion-header" 
+                  :class="{ active: activeQuestion === 'gd1' }"
+                  @click="toggleAccordion('gd1')"
+                >
                   Cửa hàng chấp nhận những hình thức thanh toán nào?
-                  <span class="icon">+</span>
+                  <span class="icon">{{ activeQuestion === 'gd1' ? '—' : '+' }}</span>
                 </button>
-                <div class="accordion-body">
+                <div 
+                  class="accordion-body" 
+                  :class="{ 'is-open': activeQuestion === 'gd1' }"
+                  :style="activeQuestion === 'gd1' ? { maxHeight: '500px', padding: '15px 25px 30px 25px' } : {}"
+                >
                   <p>Chúng tôi chấp nhận Thanh toán khi nhận hàng (COD), Chuyển khoản ngân hàng, và Thanh toán qua các ví điện tử phổ biến (Momo, ZaloPay, VNPay).</p>
                 </div>
               </div>
 
               <div class="accordion-item">
-                <button class="accordion-header active">
+                <button 
+                  class="accordion-header" 
+                  :class="{ active: activeQuestion === 'gd2' }"
+                  @click="toggleAccordion('gd2')"
+                >
                   Làm thế nào để xuất hóa đơn VAT?
-                  <span class="icon">—</span>
+                  <span class="icon">{{ activeQuestion === 'gd2' ? '—' : '+' }}</span>
                 </button>
-                <div class="accordion-body is-open">
+                <div 
+                  class="accordion-body" 
+                  :class="{ 'is-open': activeQuestion === 'gd2' }"
+                  :style="activeQuestion === 'gd2' ? { maxHeight: '500px', padding: '15px 25px 30px 25px' } : {}"
+                >
                   <p>Quý khách vui lòng cung cấp thông tin công ty (Tên, Mã số thuế, Địa chỉ) tại bước thanh toán. Hóa đơn VAT sẽ được gửi kèm sản phẩm hoặc qua email.</p>
                 </div>
               </div>
               
               <div class="accordion-item">
-                <button class="accordion-header">
+                <button 
+                  class="accordion-header" 
+                  :class="{ active: activeQuestion === 'gd3' }"
+                  @click="toggleAccordion('gd3')"
+                >
                   Tôi có thể thanh toán trả góp không?
-                  <span class="icon">+</span>
+                  <span class="icon">{{ activeQuestion === 'gd3' ? '—' : '+' }}</span>
                 </button>
-                <div class="accordion-body">
+                <div 
+                  class="accordion-body" 
+                  :class="{ 'is-open': activeQuestion === 'gd3' }"
+                  :style="activeQuestion === 'gd3' ? { maxHeight: '500px', padding: '15px 25px 30px 25px' } : {}"
+                >
                   <p>Có. Chúng tôi hỗ trợ trả góp 0% qua thẻ tín dụng của hơn 20 ngân hàng lớn. Vui lòng chọn hình thức trả góp khi thanh toán.</p>
                 </div>
               </div>
@@ -67,21 +91,37 @@
             <div class="accordion-group">
               
               <div class="accordion-item">
-                <button class="accordion-header">
+                <button 
+                  class="accordion-header" 
+                  :class="{ active: activeQuestion === 'vc1' }"
+                  @click="toggleAccordion('vc1')"
+                >
                   Thời gian giao hàng tiêu chuẩn là bao lâu?
-                  <span class="icon">+</span>
+                  <span class="icon">{{ activeQuestion === 'vc1' ? '—' : '+' }}</span>
                 </button>
-                <div class="accordion-body">
-                  <p>Thời gian xử lý đơn hàng là <strong>1-2 ngày làm việc</strong>. Thời gian vận chuyển thường là <strong>1-5 ngày</strong> tùy thuộc vào vị trí địa lý của quý khách.</p>
+                <div 
+                  class="accordion-body" 
+                  :class="{ 'is-open': activeQuestion === 'vc1' }"
+                  :style="activeQuestion === 'vc1' ? { maxHeight: '500px', padding: '15px 25px 30px 25px' } : {}"
+                >
+                  <p>Thời gian xử lý đơn hàng là **1-2 ngày làm việc**. Thời gian vận chuyển thường là **1-5 ngày** tùy thuộc vào vị trí địa lý của quý khách.</p>
                 </div>
               </div>
               
               <div class="accordion-item">
-                <button class="accordion-header">
+                <button 
+                  class="accordion-header" 
+                  :class="{ active: activeQuestion === 'vc2' }"
+                  @click="toggleAccordion('vc2')"
+                >
                   Tôi có thể kiểm tra hàng trước khi thanh toán (COD) không?
-                  <span class="icon">+</span>
+                  <span class="icon">{{ activeQuestion === 'vc2' ? '—' : '+' }}</span>
                 </button>
-                <div class="accordion-body">
+                <div 
+                  class="accordion-body" 
+                  :class="{ 'is-open': activeQuestion === 'vc2' }"
+                  :style="activeQuestion === 'vc2' ? { maxHeight: '500px', padding: '15px 25px 30px 25px' } : {}"
+                >
                   <p>Có. Với đơn hàng COD, quý khách được quyền kiểm tra ngoại quan kiện hàng trước khi thanh toán. Nếu có bất thường (rách, móp), vui lòng từ chối nhận.</p>
                 </div>
               </div>
@@ -94,25 +134,64 @@
             <div class="accordion-group">
               
               <div class="accordion-item">
-                <button class="accordion-header">
+                <button 
+                  class="accordion-header" 
+                  :class="{ active: activeQuestion === 'dt1' }"
+                  @click="toggleAccordion('dt1')"
+                >
                   Chính sách đổi trả sản phẩm trong bao lâu?
-                  <span class="icon">+</span>
+                  <span class="icon">{{ activeQuestion === 'dt1' ? '—' : '+' }}</span>
                 </button>
-                <div class="accordion-body">
-                  <p>Chính sách đổi trả áp dụng trong vòng <strong>7 ngày</strong> kể từ ngày nhận hàng, chỉ áp dụng cho trường hợp lỗi kỹ thuật do nhà sản xuất hoặc giao sai sản phẩm.</p>
+                <div 
+                  class="accordion-body" 
+                  :class="{ 'is-open': activeQuestion === 'dt1' }"
+                  :style="activeQuestion === 'dt1' ? { maxHeight: '500px', padding: '15px 25px 30px 25px' } : {}"
+                >
+                  <p>Chính sách đổi trả áp dụng trong vòng **7 ngày** kể từ ngày nhận hàng, chỉ áp dụng cho trường hợp lỗi kỹ thuật do nhà sản xuất hoặc giao sai sản phẩm.</p>
                 </div>
               </div>
               
               <div class="accordion-item">
-                <button class="accordion-header">
+                <button 
+                  class="accordion-header" 
+                  :class="{ active: activeQuestion === 'dt2' }"
+                  @click="toggleAccordion('dt2')"
+                >
                   Sản phẩm được bảo hành theo tiêu chuẩn nào?
-                  <span class="icon">+</span>
+                  <span class="icon">{{ activeQuestion === 'dt2' ? '—' : '+' }}</span>
                 </button>
-                <div class="accordion-body">
-                  <p>Tất cả sản phẩm chính hãng đều được bảo hành theo đúng <strong>chính sách của Nhà sản xuất</strong> tại Việt Nam. Vui lòng xem mô tả sản phẩm để biết chi tiết thời gian bảo hành cụ thể.</p>
+                <div 
+                  class="accordion-body" 
+                  :class="{ 'is-open': activeQuestion === 'dt2' }"
+                  :style="activeQuestion === 'dt2' ? { maxHeight: '500px', padding: '15px 25px 30px 25px' } : {}"
+                >
+                  <p>Tất cả sản phẩm chính hãng đều được bảo hành theo đúng **chính sách của Nhà sản xuất** tại Việt Nam. Vui lòng xem mô tả sản phẩm để biết chi tiết thời gian bảo hành cụ thể.</p>
                 </div>
               </div>
               
+            </div>
+          </article>
+          
+          <article id="san-pham" class="faq-category">
+            <h3 class="category-title"># Thông tin sản phẩm</h3>
+            <div class="accordion-group">
+                <div class="accordion-item">
+                    <button 
+                      class="accordion-header" 
+                      :class="{ active: activeQuestion === 'sp1' }"
+                      @click="toggleAccordion('sp1')"
+                    >
+                        Sản phẩm có hàng giả/hàng nhái không?
+                        <span class="icon">{{ activeQuestion === 'sp1' ? '—' : '+' }}</span>
+                    </button>
+                    <div 
+                      class="accordion-body" 
+                      :class="{ 'is-open': activeQuestion === 'sp1' }"
+                      :style="activeQuestion === 'sp1' ? { maxHeight: '500px', padding: '15px 25px 30px 25px' } : {}"
+                    >
+                        <p>Chúng tôi cam kết 100% sản phẩm bán ra là **chính hãng**, có tem chống giả và chứng nhận xuất xứ rõ ràng. Phát hiện hàng giả, hoàn tiền 200%.</p>
+                    </div>
+                </div>
             </div>
           </article>
         </section>
@@ -127,7 +206,34 @@
   </section>
 </template>
 
+<script setup>
+import { ref, onMounted } from 'vue';
+
+// ref để lưu trữ ID của câu hỏi đang mở. 
+// Chỉ một câu hỏi được mở tại một thời điểm (Accordion)
+// Khởi tạo 'gd2' để câu hỏi này mở mặc định
+const activeQuestion = ref('gd2'); 
+
+// Hàm xử lý việc đóng mở
+const toggleAccordion = (questionId) => {
+  // Nếu câu hỏi đang mở được click, đóng nó lại (gán giá trị null/rỗng)
+  if (activeQuestion.value === questionId) {
+    activeQuestion.value = null; 
+  } else {
+    // Nếu câu hỏi đang đóng được click, mở nó ra (gán ID mới)
+    activeQuestion.value = questionId;
+  }
+};
+
+// Đảm bảo scroll-behavior mượt mà
+onMounted(() => {
+  document.documentElement.style.scrollBehavior = 'smooth';
+});
+</script>
+
 <style scoped>
+/* Toàn bộ phần CSS giữ nguyên từ mã ban đầu của bạn */
+
 :root {
   --primary: #009981; /* rgb(0, 153, 129) */
   --accent: #00483D; /* rgb(0, 72, 61) */
@@ -305,13 +411,13 @@
 .accordion-body {
     background-color: #F8FCF9;
     padding: 0 25px;
-    max-height: 0;
+    /* Sử dụng transition cho max-height và padding */
+    transition: max-height 0.4s ease-in-out, padding 0.4s ease-in-out; 
+    max-height: 0; /* Mặc định là đóng */
     overflow: hidden;
-    transition: max-height 0.4s ease-in-out, padding 0.4s ease-in-out;
 }
+/* is-open chỉ dùng để tạo border-top khi mở, maxHeight được set qua :style binding trong Vue */
 .accordion-body.is-open {
-    max-height: 500px; 
-    padding: 15px 25px 30px 25px;
     border-top: 1px dashed #B2DFDB;
 }
 .accordion-body p {

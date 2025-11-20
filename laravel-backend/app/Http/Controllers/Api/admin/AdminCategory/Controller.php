@@ -1,20 +1,18 @@
 <?php
 
-namespace App\Http\Controllers\Api\admin;
+namespace App\Http\Controllers\Api\admin\AdminCategory;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Category;
 
-class AdminCategoryController extends Controller
+class Controller extends Controller
 {
     /**
      * Display a listing of the resource.
      */
     public function index()
     {
-        $categories = Category::all();
-        return response()->json($categories);
+        //
     }
 
     /**
@@ -30,9 +28,7 @@ class AdminCategoryController extends Controller
      */
     public function show(string $id)
     {
-        $category = Category::findOrFail($id);
-
-        return response()->json($category);
+        //
     }
 
     /**
