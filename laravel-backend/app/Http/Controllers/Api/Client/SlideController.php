@@ -13,9 +13,22 @@ class SlideController extends Controller
      */
     public function index()
     {
-        $slides = Slide::all();
+        $slides = Slide::where('status', 'published')
+            ->orderBy('order_number', 'asc')
+            ->get();
 
-        return response()->json($slides);
+        $data = $slides->map(function ($slide) {
+            return [
+                'id' => $slide->id,
+                'title' => $slide->title,
+                'description' => $slide->description,
+                'imageUrl' => $slide->image_url ? asset($slide->image_url) : null,
+                'linkUrl' => $slide->link_url,
+                'order' => $slide->order_number,
+            ];
+        });
+
+        return response()->json($data);
     }
 
     /**
