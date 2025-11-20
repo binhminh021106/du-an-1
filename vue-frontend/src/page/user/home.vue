@@ -139,10 +139,8 @@ onBeforeUnmount(stopAutoSlide);
             </section>
 
             <section class="brand-banner" style="margin-top: 15px;">
-                <router-link to="/khuyen-mai">
                     <img src="#" alt="Brand Banner"
                         style="width: 100%; height: 200px; background: #eee; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #aaa; font-style: italic;">
-                </router-link>
             </section>
 
             <section class="trust-block">
