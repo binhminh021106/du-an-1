@@ -165,13 +165,16 @@ onMounted(async () => {
 async function fetchProducts() {
   isLoading.value = true;
   try {
+    // --- SỬA LỖI TẠI ĐÂY: Đổi /images thành /imageProducts ---
+    // VÀ ĐỔI API LẤY SẢN PHẨM THÀNH ADMIN API ĐỂ CÓ QUYỀN FULL
     const [productsRes, variantsRes, imagesRes] = await Promise.all([
-      apiService.get('/products'),  
+      apiService.get('/admin/products'),  // <-- Đổi thành /admin/products
       apiService.get('/variants'),  
-      apiService.get('/images')  
+      apiService.get('/imageProducts') // <-- Đã sửa từ /images thành /imageProducts để khớp với route Laravel
     ]);
 
-    const rawProducts = productsRes.data;
+    // Xử lý dữ liệu phân trang của Laravel nếu có
+    const rawProducts = productsRes.data.data ? productsRes.data.data : productsRes.data;
     const allCategories = categories.value;
     const allVariants = variantsRes.data;
     const allImages = imagesRes.data;
@@ -179,7 +182,8 @@ async function fetchProducts() {
     // BƯỚC 2: Nhúng (embed) thủ công Categories, Variants, Images
     products.value = rawProducts.map(p => {
       // 1. Nhúng Category (dùng category_id)
-      const category = allCategories.find(c => c.category_id === p.category_id);
+      // *** SỬA LOGIC: Trong MySQL category dùng 'id', không phải 'category_id' ***
+      const category = allCategories.find(c => c.id === p.category_id);
       
       // 2. Nhúng Variants (dùng product_id)
       // Dùng == để so sánh số/chuỗi (ví dụ product_id 1 == "1")
@@ -243,11 +247,20 @@ async function fetchProducts() {
 
 async function fetchCategories() {
   try {
-    // API lấy danh mục, json-server dùng category_id
+    // API lấy danh mục
     const response = await apiService.get(`/categories?status=active&_sort=order&_order=asc`);
-    categories.value = response.data.map(c => ({
+    
+    // *** FIX LỖI DANH MỤC TẠI ĐÂY ***
+    // MySQL trả về cột 'id', không phải 'category_id'.
+    // Không map lại id sai nữa.
+    
+    // Kiểm tra xem API trả về mảng trực tiếp hay object có data
+    const data = Array.isArray(response.data) ? response.data : (response.data.data || []);
+    
+    categories.value = data.map(c => ({
         ...c,
-        id: c.category_id // Gán id = category_id để <select> hoạt động
+        // Giữ nguyên id từ database (MySQL dùng 'id')
+        id: c.id 
     }));
   } catch (error) {
     console.error("Lỗi khi tải danh mục:", error);
@@ -398,12 +411,14 @@ function openEditModal(product) {
   
   formData.name = product.name;
   formData.description = product.description;
-  formData.category_id = product.category_id; // category_id từ product
+  // *** SỬA LOGIC: Lấy category_id đúng chuẩn ***
+  // Nếu product.category_id tồn tại thì dùng, nếu không (do logic nhúng object) thì lấy product.category.id
+  formData.category_id = product.category_id || (product.category ? product.category.id : null);
   formData.status = product.status || 'active';
 
   // Lấy ảnh
   formData.existing_images = reactive(product.images ? product.images.map(img => ({  
-    id: img.img_id, // Lấy img_id
+    id: img.img_id || img.id, // Lấy img_id hoặc id
     url: img.image_url || img.url  
   })) : []);
 
@@ -539,7 +554,8 @@ async function handleSave() {
       }
       
       // 2. Cập nhật Product chính (Dùng PATCH theo ID CSDL)
-      const apiEndpoint = `/products/${dbIdString}`;  
+      // *** FIX LỖI 405: Dùng route ADMIN để Update ***
+      const apiEndpoint = `/admin/products/${dbIdString}`;  // <-- Thêm /admin vào đây
       console.log("DEBUG: API Endpoint for PATCH:", apiEndpoint);
       
       await apiService.patch(apiEndpoint, productData);  
@@ -556,11 +572,15 @@ async function handleSave() {
       productData.created_at = new Date().toISOString();
 
       // 1. Tạo Product mới
-      const createRes = await apiService.post(`/products`, productData);
+      // *** FIX LỖI 405: Dùng route ADMIN để Create ***
+      const createRes = await apiService.post(`/admin/products`, productData); // <-- Thêm /admin vào đây
       
       // Cập nhật lại ID từ server (phòng trường hợp server tự tạo ID khác)
+      // Chú ý: Với JSON server, ID trả về nằm trong data.id. Với Laravel, cũng vậy.
+      // Tuy nhiên, cần cẩn thận nếu Laravel trả về ID số còn mình dùng ID chuỗi.
+      // Ở đây giả định Laravel trả về object sản phẩm vừa tạo.
       dbId = createRes.data.id; 
-      businessProductId = createRes.data.product_id;
+      businessProductId = createRes.data.product_id || createRes.data.id; // Fallback to ID if product_id missing
     }
     
     // --- LƯU VARIANT VÀ IMAGE VÀO COLLECTION RIÊNG ---
@@ -581,14 +601,16 @@ async function handleSave() {
       // Đây là logic kiểm tra ID cũ vs ID mới (UUID)
       if (variantIdString && !variantIdString.includes('-') && variantIdString.length < 10) {  
         // Cập nhật variant cũ
-        await apiService.patch(`/variants/${variantIdString}`, variantPayload);
+        // *** FIX LỖI 405: Dùng route ADMIN cho variants *** (giả định có route này)
+        await apiService.patch(`/admin/variants/${variantIdString}`, variantPayload);
       } else {
         // Tạo variant mới
         // Gán ID CSDL và ID nghiệp vụ mới cho variant
         const newVariantId = generateShortId();
         variantPayload.id = newVariantId;
         variantPayload.variant_id = newVariantId;
-        await apiService.post(`/variants`, variantPayload);
+        // *** FIX LỖI 405: Dùng route ADMIN cho variants *** (giả định có route này)
+        await apiService.post(`/admin/variants`, variantPayload);
       }
     }
 
@@ -619,7 +641,8 @@ async function toggleStatus(product) {
     product.status = newStatus;
     try {
       // *** SỬA: Dùng PATCH trên endpoint 'id' (ID của json-server) ***
-      await apiService.patch(`/products/${String(product.id)}`, { status: newStatus });
+      // *** FIX LỖI 405: Dùng route ADMIN ***
+      await apiService.patch(`/admin/products/${String(product.id)}`, { status: newStatus });
       Swal.fire('Thành công', `Đã ${newStatus === 'active' ? 'kích hoạt' : 'vô hiệu hóa'} sản phẩm.`, 'success');
     } catch (error) {
       console.error("Lỗi cập nhật trạng thái:", error); // Lỗi 404 sẽ không còn ở đây
@@ -637,7 +660,8 @@ async function handleDelete(product) {
   if (result.isConfirmed) {
     try {
       // *** SỬA: Dùng DELETE trên endpoint 'id' (ID của json-server) ***
-      await apiService.delete(`/products/${String(product.id)}`);
+      // *** FIX LỖI 405: Dùng route ADMIN ***
+      await apiService.delete(`/admin/products/${String(product.id)}`);
       
       // LƯU Ý: Với json-server, bạn phải tự xóa variants và images liên quan nếu muốn
       // TẠM BỎ QUA do phức tạp, chỉ xóa sản phẩm chính
@@ -843,7 +867,8 @@ function goToPage(page) {
                   <select class="form-select" :class="{ 'is-invalid': errors.category_id }" id="category_id"
                     v-model="formData.category_id">
                     <option :value="null" disabled>-- Chọn danh mục --</option>
-                    <option v-for="cat in categories" :key="cat.id" :value="cat.category_id">{{ cat.name }}</option>
+                    <!-- SỬA: Dùng cat.id làm value để khớp với MySQL -->
+                    <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
                   </select>
                   <div class="invalid-feedback" v-if="errors.category_id">{{ errors.category_id }}</div>
                 </div>
