@@ -7,39 +7,64 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 use App\Models\OrderItem;
+// Thêm Model AttributeValue để thiết lập quan hệ
+use App\Models\AttributeValue; 
+use App\Models\Product; // Đảm bảo đã có Product Model
 
 class Variant extends Model
 {
     use HasFactory;
     use SoftDeletes;
 
-    /**
-     * Tên bảng mà Model này quản lý.
-     * * Ghi chú: Dòng này KHÔNG bắt buộc nếu tên bảng của bạn
-     * là 'products'. Laravel tự đoán được.
-     * Mình thêm vào để bạn biết cách làm nếu lỡ đặt tên bảng khác (ví dụ: 'san_pham').
-     */
     protected $table = 'variants';
 
 
-    /**
-     * Khai báo CÁC CỘT (column) MÀ BẠN CHO PHÉP
-     * được "thêm" hoặc "sửa" hàng loạt từ bên ngoài (ví dụ: từ API).
-     *
-     * Đây là tính năng bảo mật Mass Assignment của Laravel.
-     */
     protected $fillable = [
         'product_id',
         'price',
-        'original_price', // giá gốc,
+        'original_price', 
         'stock',
-        'configuration', // Cấu hình (vd: 512gb, ...)
-        'color',
+        // Giả sử 2 cột này được thay thế bằng quan hệ attributes
+        // 'configuration', 
+        // 'color',
     ];
 
+    /**
+     * Thiết lập quan hệ many-to-many với các giá trị thuộc tính.
+     * Sử dụng bảng trung gian 'variant_attribute_values'.
+     */
+    public function attributeValues()
+    {
+        return $this->belongsToMany(
+            AttributeValue::class,
+            'variant_attribute_values',
+            'variant_id',
+            'attribute_value_id'
+        )->withTimestamps();
+    }
+    
+    /**
+     * Một Variant thuộc về một Product.
+     */
+    public function product()
+    {
+        return $this->belongsTo(Product::class, 'product_id', 'id');
+    }
 
     public function orderItems()
     {
         return $this->hasMany(OrderItem::class, 'variant_id', 'id');
+    }
+    
+    /**
+     * Xóa mềm các quan hệ khi xóa mềm Variant
+     */
+    protected static function booted()
+    {
+        static::deleting(function ($variant) {
+            // Khi xóa mềm Variant, xóa cứng các liên kết trong bảng pivot
+            // Bạn có thể cân nhắc xóa mềm các orderItems nếu OrderItem cũng có SoftDeletes
+            $variant->attributeValues()->detach(); 
+        });
     }
 }

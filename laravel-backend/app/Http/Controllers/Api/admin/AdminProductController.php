@@ -140,13 +140,22 @@ class AdminProductController extends Controller
             return response()->json(['message' => 'Không tìm thấy sản phẩm'], 404);
         }
 
-        // 1. Validate
-        $validator = Validator::make($request->all(), [
-            'name' => 'sometimes|string|max:255',
-            'category_id' => 'sometimes|exists:categories,id',
-            'status' => 'sometimes|in:active,inactive',
-            'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-        ]);
+        // 1. Thiết lập rules validation động
+        // Chỉ validate những trường ĐƯỢC GỬI LÊN (sử dụng sometimes)
+        $rules = [
+            'name' => 'sometimes|required|string|max:255',
+            'category_id' => 'sometimes|required|exists:categories,id',
+            'status' => 'sometimes|required|in:active,inactive',
+            'description' => 'sometimes|nullable|string',
+        ];
+
+        // Chỉ validate thumbnail nếu người dùng thực sự gửi file lên
+        // Điều này tránh lỗi khi gửi JSON update status mà không có file
+        if ($request->hasFile('thumbnail')) {
+            $rules['thumbnail'] = 'image|mimes:jpeg,png,jpg,gif|max:2048';
+        }
+
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
@@ -154,11 +163,13 @@ class AdminProductController extends Controller
 
         DB::beginTransaction();
         try {
-            $dataUpdate = $request->only(['name', 'category_id', 'description', 'status']);
+            // Lấy dữ liệu hợp lệ từ request (chỉ những trường có trong rules)
+            // Loại bỏ các trường rác hoặc null không mong muốn
+            $dataUpdate = $request->only(array_keys($rules));
 
-            // Xử lý Thumbnail mới (nếu có)
+            // Xử lý Thumbnail mới (nếu có file)
             if ($request->hasFile('thumbnail')) {
-                // Xóa ảnh cũ nếu tồn tại (logic tùy chọn)
+                // Xóa ảnh cũ nếu tồn tại
                 if ($product->thumbnail_url) {
                     $oldPath = str_replace('/storage/', '', $product->thumbnail_url);
                     if (Storage::disk('public')->exists($oldPath)) {
@@ -170,6 +181,7 @@ class AdminProductController extends Controller
                 $dataUpdate['thumbnail_url'] = '/storage/' . $path;
             }
 
+            // Cập nhật
             $product->update($dataUpdate);
 
             // Xử lý thêm ảnh vào Album (nếu có)
@@ -182,9 +194,6 @@ class AdminProductController extends Controller
                     ]);
                 }
             }
-
-            // NOTE: Việc update Variants thường phức tạp, nên tách ra API riêng 
-            // hoặc xử lý logic sync (xóa cũ thêm mới) tại đây tùy nhu cầu.
 
             DB::commit();
 
@@ -211,8 +220,6 @@ class AdminProductController extends Controller
         }
 
         try {
-            // Gọi delete() sẽ kích hoạt SoftDeletes và hàm booted() trong Model
-            // để xóa mềm cả variants và images liên quan
             $product->delete();
 
             return response()->json(['message' => 'Đã xóa sản phẩm thành công']);
