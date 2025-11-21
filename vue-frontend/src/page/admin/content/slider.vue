@@ -135,7 +135,7 @@ async function fetchAllSlides() {
 async function fetchAllBrands() {
   isLoadingBrands.value = true;
   try {
-    const response = await apiService.get(`/brands?_sort=order&_order=asc`);
+    const response = await apiService.get(`admin/brands`);
     allBrands.value = response.data.map(b => ({ ...b, status: b.status || 'published' }));
   } catch (error) {
     console.error("Lỗi khi tải brand:", error);
@@ -462,7 +462,7 @@ async function handleBrandToggleStatus(brand) {
   const newStatus = brand.status === 'published' ? 'draft' : 'published';
   const actionText = newStatus === 'published' ? 'hiển thị' : 'ẩn';
   try {
-    brand.status = newStatus; // Cập nhật UI trước
+    brand.status = newStatus;
     await apiService.patch(`admin/brands/${brand.id}`, { status: newStatus });
     Swal.fire({
       toast: true,
@@ -474,7 +474,7 @@ async function handleBrandToggleStatus(brand) {
     });
   } catch (error) {
     console.error("Lỗi cập nhật trạng thái brand:", error);
-    brand.status = newStatus === 'published' ? 'draft' : 'published'; // Hoàn nguyên
+    brand.status = newStatus === 'published' ? 'draft' : 'published';
     Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
   }
 }
@@ -701,7 +701,7 @@ async function handleDeleteBrand(brand) {
                             <input class="form-check-input" type="checkbox" role="switch"
                               style="width: 2.5em; height: 1.25em; cursor: pointer;"
                               :id="'brandStatusSwitch-' + brand.id" :checked="brand.status === 'published'"
-                              @click.prevent="handleBrandToggleStatus(brand)">
+                              @change="handleBrandToggleStatus(brand)"> 
                           </div>
                           <div class="btn-group btn-group-sm">
                             <button class="btn btn-outline-primary" title="Chỉnh sửa"

@@ -73,9 +73,7 @@ onMounted(() => {
 async function fetchComments() {
   isLoading.value = true;
   try {
-    const response = await apiService.get(
-      `/comments?_sort=id&_order=desc&_expand=product&_expand=user`
-    );
+    const response = await apiService.get(`admin/comments`);
     allComments.value = response.data;
   } catch (error) {
     console.error("Lỗi khi tải bình luận:", error);
@@ -131,12 +129,12 @@ function openViewModal(comment) {
  */
 async function handleUpdateStatus(comment, newStatus) {
   try {
-    const response = await apiService.patch(`/comments/${comment.id}`, {
+    const response = await apiService.put(`admin/comments/${comment.id}`, {
       status: newStatus
     });
-    // Cập nhật lại dữ liệu trên giao diện mà không cần tải lại
-    comment.status = response.data.status;
 
+    // Cập nhật UI
+    comment.status = newStatus;
     Swal.fire({
       toast: true,
       position: 'top-end',
@@ -147,7 +145,7 @@ async function handleUpdateStatus(comment, newStatus) {
     });
 
   } catch (error) {
-    console.error("Lỗi khi cập nhật trạng thái:", error);
+    console.error("Lỗi cập nhật:", error);
     Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
   }
 }
@@ -171,13 +169,13 @@ async function handleDelete(comment) {
 
   if (result.isConfirmed) {
     try {
-      await apiService.delete(`/comments/${comment.id}`);
+      await apiService.delete(`admin/comments/${comment.id}`);
       Swal.fire(
         'Đã xóa!',
         'Bình luận đã được xóa.',
         'success'
       );
-      
+
       // Tải lại toàn bộ dữ liệu
       fetchComments();
 
@@ -280,10 +278,10 @@ async function handleDelete(comment) {
                       <td>{{ formatDate(comment.createdAt) }}</td>
                       <td>
                         <!-- Nút XEM MỚI -->
-                         <button class="btn btn-info btn-sm me-1" @click="openViewModal(comment)" title="Xem chi tiết">
-                            <i class="bi bi-eye"></i>
-                          </button>
-                          
+                        <button class="btn btn-info btn-sm me-1" @click="openViewModal(comment)" title="Xem chi tiết">
+                          <i class="bi bi-eye"></i>
+                        </button>
+
                         <button v-if="comment.status !== 'approved'" class="btn btn-success btn-sm me-1"
                           @click="handleUpdateStatus(comment, 'approved')">
                           <i class="bi bi-check-lg"></i> Duyệt
@@ -349,7 +347,7 @@ async function handleDelete(comment) {
 
           <!-- Thông tin người gửi -->
           <div class="text-center mb-4 mt-3">
-             <img
+            <img
               :src="viewingComment.user?.avatar || `https://placehold.co/120x120/EBF4FF/1D62F0?text=${viewingComment.user?.username ? viewingComment.user.username.charAt(0).toUpperCase() : 'U'}`"
               class="rounded-circle img-thumbnail shadow-sm" alt="Avatar"
               style="width: 120px; height: 120px; object-fit: cover;">
@@ -359,22 +357,22 @@ async function handleDelete(comment) {
 
           <!-- Chi tiết bình luận -->
           <div class="list-group list-group-flush">
-             <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-box-seam me-3 text-primary"></i>Sản phẩm</h6>
-               <p class="mb-1 text-muted small">{{ viewingComment.product?.name || '(Không rõ)' }}</p>
-            </div>
-             <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-chat-dots me-3 text-muted"></i>Nội dung bình luận</h6>
-               <p class="mb-1 text-muted small" style="white-space: pre-wrap;">{{ viewingComment.content || 'Không có nội dung.' }}</p>
+            <div class="list-group-item px-0">
+              <h6 class="mb-2"><i class="bi bi-box-seam me-3 text-primary"></i>Sản phẩm</h6>
+              <p class="mb-1 text-muted small">{{ viewingComment.product?.name || '(Không rõ)' }}</p>
             </div>
             <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-calendar-event me-3 text-muted"></i>Ngày gửi</h6>
-               <p class="mb-1 text-muted small">{{ formatDate(viewingComment.createdAt) }}</p>
+              <h6 class="mb-2"><i class="bi bi-chat-dots me-3 text-muted"></i>Nội dung bình luận</h6>
+              <p class="mb-1 text-muted small" style="white-space: pre-wrap;">{{ viewingComment.content || 'Không có nội dung.' }}</p>
+            </div>
+            <div class="list-group-item px-0">
+              <h6 class="mb-2"><i class="bi bi-calendar-event me-3 text-muted"></i>Ngày gửi</h6>
+              <p class="mb-1 text-muted small">{{ formatDate(viewingComment.created_at) }}</p>
             </div>
           </div>
         </div>
         <div class="modal-footer bg-light justify-content-center">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
         </div>
       </div>
     </div>

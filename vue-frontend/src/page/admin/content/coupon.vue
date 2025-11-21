@@ -89,7 +89,7 @@ onMounted(() => {
 async function fetchCoupons() {
   isLoading.value = true;
   try {
-    const response = await apiService.get(`/coupons?_sort=id&_order=desc`);
+    const response = await apiService.get(`admin/coupons`);
     console.log('Dữ liệu tải về:', response.data);
     allCoupons.value = response.data;
   } catch (error) {
@@ -132,9 +132,11 @@ function formatValue(coupon) {
   return formatCurrency(coupon.value);
 }
 
+// --- SỬA HÀM NÀY ---
 function formatUsage(coupon) {
-  const count = coupon.usageCount || 0;
-  const limit = coupon.usageLimit;
+  // Backend trả về: usage_count, usage_limit
+  const count = coupon.usage_count || 0;
+  const limit = coupon.usage_limit;
 
   if (!limit || limit === 0) {
     return `${count} / Không giới hạn`;
@@ -142,17 +144,21 @@ function formatUsage(coupon) {
   return `${count} / ${limit}`;
 }
 
+// --- VÀ SỬA HÀM NÀY ---
 function getStatus(coupon) {
-  if (coupon.expiresAt) {
+  // Backend trả về: expires_at
+  if (coupon.expires_at) {
     const today = new Date();
-    const expiryDate = new Date(coupon.expiresAt);
+    const expiryDate = new Date(coupon.expires_at);
     expiryDate.setHours(23, 59, 59, 999);
     if (expiryDate < today) {
       return { text: 'Đã hết hạn', class: 'text-bg-danger' };
     }
   }
-  const count = coupon.usageCount || 0;
-  const limit = coupon.usageLimit;
+
+  const count = coupon.usage_count || 0;
+  const limit = coupon.usage_limit;
+
   if (limit && limit > 0 && count >= limit) {
     return { text: 'Hết lượt dùng', class: 'text-bg-warning' };
   }
@@ -191,10 +197,11 @@ function openEditModal(coupon) {
   couponForm.code = coupon.code;
   couponForm.type = coupon.type;
   couponForm.value = coupon.value;
-  couponForm.expiresAt = formatDateForInput(coupon.expiresAt);
-  couponForm.usageLimit = coupon.usageLimit;
-  couponForm.usageCount = coupon.usageCount || 0;
-  couponForm.limitPerUser = coupon.limitPerUser || 1;
+
+  couponForm.expiresAt = formatDateForInput(coupon.expires_at);
+  couponForm.usageLimit = coupon.usage_limit;
+  couponForm.usageCount = coupon.usage_count || 0;
+  couponForm.limitPerUser = coupon.usage_limit_per_user || 1;
   couponModalInstance.value.show();
 }
 
@@ -220,12 +227,12 @@ async function handleSave() {
   try {
     if (dataToSave.id) {
       // --- CẬP NHẬT (UPDATE) ---
-      await apiService.patch(`/coupons/${dataToSave.id}`, dataToSave);
+      await apiService.patch(`admin/coupons/${dataToSave.id}`, dataToSave);
     } else {
       // --- TẠO MỚI (CREATE) ---
       delete dataToSave.id;
       dataToSave.usageCount = 0;
-      await apiService.post("/coupons", dataToSave);
+      await apiService.post("admin/coupons", dataToSave);
     }
 
     couponModalInstance.value.hide();
@@ -253,8 +260,7 @@ async function handleDelete(coupon) {
   }).then(async (result) => {
     if (result.isConfirmed) {
       try {
-        // ✅ Gọi API đúng endpoint /coupons/:id
-        await apiService.delete(`/coupons/${coupon.id}`);
+        await apiService.delete(`admin/coupons/${coupon.id}`);
 
         Swal.fire('Đã xóa!', 'Mã giảm giá đã được xóa.', 'success');
 
@@ -351,8 +357,8 @@ async function handleDelete(coupon) {
                       <td>{{ coupon.name }}</td>
                       <td>{{ formatValue(coupon) }}</td>
                       <td>{{ formatUsage(coupon) }}</td>
-                      <td>{{ coupon.limitPerUser || 1 }} lần</td>
-                      <td>{{ formatDateForDisplay(coupon.expiresAt) }}</td>
+                      <td>{{ coupon.usage_limit_per_user || 1 }} lần</td>
+                      <td>{{ formatDateForDisplay(coupon.expires_at) }}</td>
                       <td>
                         <span class="badge" :class="getStatus(coupon).class">
                           {{ getStatus(coupon).text }}
@@ -360,8 +366,9 @@ async function handleDelete(coupon) {
                       </td>
                       <td>
                         <!-- Thêm nút Xem -->
-                        <button class="btn btn-outline-info btn-sm me-1" @click="openViewModal(coupon)" title="Xem chi tiết">
-                           <i class="bi bi-eye"></i>
+                        <button class="btn btn-outline-info btn-sm me-1" @click="openViewModal(coupon)"
+                          title="Xem chi tiết">
+                          <i class="bi bi-eye"></i>
                         </button>
                         <button class="btn btn-outline-warning btn-sm me-1" @click="openEditModal(coupon)">
                           <i class="bi bi-pencil"></i>
@@ -478,7 +485,7 @@ async function handleDelete(coupon) {
       </div>
     </div>
   </div>
-  
+
   <!-- Modal Xem Chi Tiết (MỚI) -->
   <div class="modal fade" id="viewModal" ref="viewModalRef" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -496,10 +503,10 @@ async function handleDelete(coupon) {
 
           <!-- Thông tin chính -->
           <div class="text-center mb-4 mt-3">
-             <div class="img-thumbnail d-flex align-items-center justify-content-center bg-light shadow-sm"
+            <div class="img-thumbnail d-flex align-items-center justify-content-center bg-light shadow-sm"
               style="width: 120px; height: 120px; font-size: 2rem; margin: auto; border-radius: .5rem;">
-                <!-- Thay đổi icon từ bootstrap sang font awesome -->
-                <i class="fas fa-ticket text-primary"></i>
+              <!-- Thay đổi icon từ bootstrap sang font awesome -->
+              <i class="fas fa-ticket text-primary"></i>
             </div>
             <h4 class="mt-3 mb-1">{{ viewingCoupon.code }}</h4>
             <p class="text-muted mb-0">{{ viewingCoupon.name }}</p>
@@ -508,20 +515,20 @@ async function handleDelete(coupon) {
           <!-- Chi tiết -->
           <div class="list-group list-group-flush">
             <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-tag me-3 text-success"></i>Giá trị</h6>
-               <p class="mb-1 text-dark fw-bold" style="font-size: 1.2rem;">{{ formatValue(viewingCoupon) }}</p>
-            </div>
-             <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-pie-chart me-3 text-muted"></i>Lượt sử dụng (Tổng)</h6>
-               <p class="mb-1 text-muted small">{{ formatUsage(viewingCoupon) }}</p>
-            </div>
-             <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-person me-3 text-muted"></i>Lượt sử dụng (User)</h6>
-               <p class="mb-1 text-muted small">{{ viewingCoupon.limitPerUser || 1 }} lần / người</p>
+              <h6 class="mb-2"><i class="bi bi-tag me-3 text-success"></i>Giá trị</h6>
+              <p class="mb-1 text-dark fw-bold" style="font-size: 1.2rem;">{{ formatValue(viewingCoupon) }}</p>
             </div>
             <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-calendar-event me-3 text-muted"></i>Ngày hết hạn</h6>
-               <p class="mb-1 text-muted small">{{ formatDateForDisplay(viewingCoupon.expiresAt) }}</p>
+              <h6 class="mb-2"><i class="bi bi-pie-chart me-3 text-muted"></i>Lượt sử dụng (Tổng)</h6>
+              <p class="mb-1 text-muted small">{{ formatUsage(viewingCoupon) }}</p>
+            </div>
+            <div class="list-group-item px-0">
+              <h6 class="mb-2"><i class="bi bi-person me-3 text-muted"></i>Lượt sử dụng (User)</h6>
+              <p class="mb-1 text-muted small">{{ viewingCoupon.limitPerUser || 1 }} lần / người</p>
+            </div>
+            <div class="list-group-item px-0">
+              <h6 class="mb-2"><i class="bi bi-calendar-event me-3 text-muted"></i>Ngày hết hạn</h6>
+              <p class="mb-1 text-muted small">{{ formatDateForDisplay(viewingCoupon.expiresAt) }}</p>
             </div>
           </div>
         </div>
@@ -534,7 +541,7 @@ async function handleDelete(coupon) {
       </div>
     </div>
   </div>
-  
+
 </template>
 
 <style scoped>
@@ -542,12 +549,15 @@ async function handleDelete(coupon) {
   margin-top: 2px;
   margin-bottom: 2px;
 }
+
 .card-body.p-0 .table {
   margin-bottom: 0;
 }
+
 .card-header .card-tools {
   float: right;
 }
+
 /* Thêm CSS cho label bắt buộc */
 .required::after {
   content: " *";

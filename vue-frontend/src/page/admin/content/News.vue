@@ -228,7 +228,7 @@ function validateForm() {
     if (!formData.slug.trim()) { errors.slug = 'Vui lòng nhập đường dẫn (slug).'; isValid = false; }
     if (!formData.author_id) { errors.author_id = 'Vui lòng chọn tác giả.'; isValid = false; }
     if (!formData.content.trim()) { errors.content = 'Vui lòng nhập nội dung.'; isValid = false; }
-    
+
     updateEditorValidationState(errors.content);
     return isValid;
 }
@@ -256,11 +256,11 @@ function openViewModal(newsItem) {
 // --- API METHODS ---
 async function fetchAuthors() {
     try {
-        const response = await apiService.get(`/users`);
-        authors.value = response.data.map(u => ({ id: u.id, name: u.name }));
+        const response = await apiService.get(`admin/users`);
+        authors.value = response.data.map(u => ({ id: u.id, name: u.fullName }));
     } catch (error) {
         console.error("Lỗi tải tác giả:", error);
-        authors.value = [{ id: 1, name: 'Admin (Mock)' }]; // Fallback
+        authors.value = [{ id: 1, name: 'Admin (Mock)' }];
     }
 }
 
@@ -268,7 +268,7 @@ async function fetchNews() {
     isLoading.value = true;
     try {
         // Sắp xếp theo ID giảm dần (mới nhất trước)
-        const response = await apiService.get(`/news?_sort=id&_order=desc`);
+        const response = await apiService.get(`admin/news`);
         news.value = response.data.map(item => ({
             ...item,
             created_at: item.created_at || new Date().toISOString()
@@ -290,12 +290,12 @@ async function handleSave() {
 
     try {
         if (isEditMode.value) {
-            await apiService.put(`/news/${payload.id}`, payload);
+            await apiService.put(`admin/news/${payload.id}`, payload);
             Swal.fire('Thành công', 'Đã cập nhật tin tức!', 'success');
         } else {
             delete payload.id;
             payload.created_at = new Date().toISOString();
-            await apiService.post(`/news`, payload);
+            await apiService.post(`admin/news`, payload);
             Swal.fire('Thành công', 'Đã tạo tin tức mới!', 'success');
         }
         modalInstance.value?.hide();
@@ -312,7 +312,7 @@ async function handleSave() {
 async function handleToggleStatus(newsItem) {
     const originalStatus = newsItem.status;
     const newStatus = originalStatus === 'published' ? 'draft' : 'published';
-    
+
     const actionText = newStatus === 'published' ? 'XUẤT BẢN' : 'CHUYỂN VỀ BẢN NHÁP';
     const confirmText = `Bạn có chắc chắn muốn ${actionText} bài viết "${newsItem.title}" không?`;
 
@@ -329,18 +329,17 @@ async function handleToggleStatus(newsItem) {
 
     if (result.isConfirmed) {
         // Cập nhật trạng thái mới và ngày update
-        const payload = { 
-            status: newStatus, 
-            updated_at: new Date().toISOString() 
+        const payload = {
+            status: newStatus,
+            updated_at: new Date().toISOString()
         };
 
         try {
-            // Dùng PATCH chỉ để update 2 trường này (giống categories.vue)
-            await apiService.patch(`/news/${newsItem.id}`, payload);
-            
+            await apiService.patch(`admin/news/${newsItem.id}`, payload);
+
             // Cập nhật UI
-            newsItem.status = newStatus; 
-            
+            newsItem.status = newStatus;
+
             Swal.fire({
                 toast: true,
                 position: 'top-end',
@@ -352,11 +351,8 @@ async function handleToggleStatus(newsItem) {
         } catch (error) {
             console.error("Lỗi cập nhật trạng thái:", error);
             Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
-            // Không cần fetchNews() vì optimistic UI đã bị hủy bỏ (chưa đổi)
-            // Hoặc có thể fetch lại nếu logic của bạn cần
         }
     }
-    // Nếu hủy, không làm gì cả, @click.prevent sẽ giữ nguyên checkbox
 }
 
 async function handleDelete(newsItem) {
@@ -369,7 +365,6 @@ async function handleDelete(newsItem) {
         cancelButtonColor: '#3085d6',
         confirmButtonText: 'Xóa',
         cancelButtonText: 'Hủy',
-        // Thêm icon nhất quán
         customClass: {
             confirmButton: 'btn btn-danger me-2',
             cancelButton: 'btn btn-secondary'
@@ -379,7 +374,7 @@ async function handleDelete(newsItem) {
 
     if (result.isConfirmed) {
         try {
-            await apiService.delete(`/news/${newsItem.id}`);
+            await apiService.delete(`admin/news/${newsItem.id}`);
             Swal.fire('Đã xóa!', 'Tin tức đã bị xóa.', 'success');
             if (paginatedNews.value.length === 1 && currentPage.value > 1) {
                 currentPage.value--;
@@ -496,9 +491,10 @@ function goToPage(page) {
                                     <td class="text-center">
                                         <!-- d-flex (Giống categories.vue) -->
                                         <div class="d-flex justify-content-center align-items-center">
-                                            
+
                                             <!-- Toggle Switch (Giống categories.vue) -->
-                                            <div class="form-check form-switch d-inline-block align-middle me-3" title="Kích hoạt/Vô hiệu hóa">
+                                            <div class="form-check form-switch d-inline-block align-middle me-3"
+                                                title="Kích hoạt/Vô hiệu hóa">
                                                 <input class="form-check-input" type="checkbox" role="switch"
                                                     style="width: 2.5em; height: 1.25em; cursor: pointer;"
                                                     :id="'statusSwitch-' + newsItem.id"
@@ -508,13 +504,16 @@ function goToPage(page) {
 
                                             <!-- Nhóm nút (Giống categories.vue) -->
                                             <div class="btn-group btn-group-sm">
-                                                <button class="btn btn-outline-secondary" title="Xem chi tiết" @click="openViewModal(newsItem)">
+                                                <button class="btn btn-outline-secondary" title="Xem chi tiết"
+                                                    @click="openViewModal(newsItem)">
                                                     <i class="bi bi-eye"></i>
                                                 </button>
-                                                <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(newsItem)">
+                                                <button class="btn btn-outline-primary" title="Chỉnh sửa"
+                                                    @click="openEditModal(newsItem)">
                                                     <i class="bi bi-pencil"></i>
                                                 </button>
-                                                <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(newsItem)">
+                                                <button class="btn btn-outline-danger" title="Xóa"
+                                                    @click="handleDelete(newsItem)">
                                                     <i class="bi bi-trash"></i>
                                                 </button>
                                             </div>
@@ -612,8 +611,7 @@ function goToPage(page) {
                                         id="author_id" v-model.number="formData.author_id">
                                         <option :value="null" disabled>-- Chọn tác giả --</option>
                                         <option v-for="author in authors" :key="author.id" :value="author.id">
-                                            {{ author.name }}
-                                        </option>
+                                            {{ author.name }} </option>
                                     </select>
                                     <div class="invalid-feedback" v-if="errors.author_id">{{ errors.author_id }}</div>
                                 </div>
@@ -656,7 +654,7 @@ function goToPage(page) {
     <div class="modal fade" id="viewNewsModal" ref="viewModalRef" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
-                 <div class="modal-body p-4 position-relative">
+                <div class="modal-body p-4 position-relative">
                     <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal"
                         aria-label="Close"></button>
 
@@ -669,23 +667,23 @@ function goToPage(page) {
 
                     <!-- Header -->
                     <div class="text-center mb-4 mt-4">
-                         <h3 class="mt-3 mb-1">{{ viewingNewsItem.title }}</h3>
-                         <p class="text-muted mb-0">ID: {{ viewingNewsItem.id }}</p>
+                        <h3 class="mt-3 mb-1">{{ viewingNewsItem.title }}</h3>
+                        <p class="text-muted mb-0">ID: {{ viewingNewsItem.id }}</p>
                     </div>
 
                     <!-- Image -->
                     <img v-if="viewingNewsItem.image_url" :src="viewingNewsItem.image_url"
                         class="img-fluid rounded mb-3" alt="News Image">
-                    
+
                     <!-- Details List -->
                     <div class="list-group list-group-flush mb-3">
-                         <div class="list-group-item px-0">
+                        <div class="list-group-item px-0">
                             <div class="d-flex w-100 justify-content-between">
                                 <h6 class="mb-1"><i class="bi bi-person-circle me-3 text-primary"></i>Tác giả</h6>
                                 <span class="text-muted">{{ getAuthorName(viewingNewsItem.author_id) }}</span>
                             </div>
                         </div>
-                         <div class="list-group-item px-0">
+                        <div class="list-group-item px-0">
                             <div class="d-flex w-100 justify-content-between">
                                 <h6 class="mb-1"><i class="bi bi-calendar-event me-3 text-muted"></i>Ngày tạo</h6>
                                 <span class="text-muted">{{ getFormattedDate(viewingNewsItem.created_at) }}</span>
@@ -695,7 +693,7 @@ function goToPage(page) {
                             <h6 class="mb-2"><i class="bi bi-link-45deg me-3 text-muted"></i>Đường dẫn (Slug)</h6>
                             <code class="mb-1 text-dark small">{{ viewingNewsItem.slug }}</code>
                         </div>
-                         <div class="list-group-item px-0">
+                        <div class="list-group-item px-0">
                             <h6 class="mb-2"><i class="bi bi-card-text me-3 text-muted"></i>Mô tả ngắn</h6>
                             <p class="mb-1 text-muted small fst-italic">{{ viewingNewsItem.excerpt || 'Không có mô tả ngắn.' }}</p>
                         </div>
@@ -703,11 +701,12 @@ function goToPage(page) {
 
                     <!-- Content -->
                     <h5 class="mb-3">Nội dung chi tiết</h5>
-                    <div class="news-content-view p-3 rounded border bg-light" v-html="viewingNewsItem.content || '<p>Không có nội dung.</p>'">
+                    <div class="news-content-view p-3 rounded border bg-light"
+                        v-html="viewingNewsItem.content || '<p>Không có nội dung.</p>'">
                     </div>
 
-                 </div>
-                 <!-- Footer (Giống categories.vue) -->
+                </div>
+                <!-- Footer (Giống categories.vue) -->
                 <div class="modal-footer bg-light justify-content-center">
                     <button type="button" class="btn btn-primary px-4"
                         @click="() => { viewModalInstance.hide(); openEditModal(viewingNewsItem); }">
