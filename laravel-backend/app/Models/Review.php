@@ -23,7 +23,7 @@ class Review extends Model
         'user_id',
         'rating',
         'content',
-        'status' // (ví dụ: 'pending', 'approved')
+        'status'
     ];
 
     /**

@@ -6,7 +6,7 @@ import { Modal } from 'bootstrap';
 
 // --- STATE QUẢN LÝ ---
 
-const allReviews = ref([]); // Danh sách TẤT CẢ đánh giá
+const allReviews = ref([]); // Danh sách TẤT CẢ đánh giá  
 const isLoading = ref(true);
 const searchQuery = ref('');
 
@@ -76,7 +76,7 @@ async function fetchReviews() {
   try {
     // Tải tất cả, sắp xếp theo ID, và lấy kèm product, user
     const response = await apiService.get(
-      `/reviews?_sort=id&_order=desc&_expand=product&_expand=user`
+      `admin/reviews`
     );
 
     allReviews.value = response.data;
@@ -147,7 +147,7 @@ function openViewModal(review) {
  */
 async function handleUpdateStatus(review, newStatus) {
   try {
-    const response = await apiService.patch(`/reviews/${review.id}`, {
+    const response = await apiService.patch(`admin/reviews/${review.id}`, {
       status: newStatus
     });
 
@@ -188,7 +188,7 @@ async function handleDelete(review) {
 
   if (result.isConfirmed) {
     try {
-      await apiService.delete(`/reviews/${review.id}`);
+      await apiService.delete(`admin/reviews/${review.id}`);
       Swal.fire(
         'Đã xóa!',
         'Đánh giá đã được xóa.',
@@ -301,7 +301,7 @@ async function handleDelete(review) {
                           {{ getStatusBadge(review.status).text }}
                         </span>
                       </td>
-                      <td>{{ formatDate(review.createdAt) }}</td>
+                      <td>{{ formatDate(review.created_at) }}</td>
                       <td>
                         <!-- Thêm nút Xem -->
                         <button class="btn btn-info btn-sm me-1" @click="openViewModal(review)" title="Xem chi tiết">
