@@ -101,7 +101,7 @@ onUnmounted(() => {
         <div class="top-bar-links">
           <ul>
             <li><router-link :to="{ name: 'admin-login' }">Kênh Người Bán</router-link></li>
-            <li><a href="#">Kết nối</a></li>
+            <li><router-link :to="{ name: 'about' }">Kết nối</router-link></li>
             <li><router-link :to="{ name: 'policy' }">Chính sách</router-link></li>
             <li><router-link :to="{ name: 'contact' }">Liên hệ</router-link></li>
             <li><router-link :to="{ name: 'FAQ' }">FAQ</router-link></li>
