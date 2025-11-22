@@ -9,46 +9,54 @@ use App\Models\Review;
 class AdminReviewController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * Lấy danh sách đánh giá
      */
     public function index()
     {
-        $reviews = Review::all();
+        $reviews = Review::with(['user:id,fullName,avatar_url', 'product:id,name'])
+            ->with(['product.images'])
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return response()->json($reviews);
     }
 
     /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
+     * Xem chi tiết 1 đánh giá
      */
     public function show(string $id)
     {
-        $review = Review::findOrFail($id);
-
+        $review = Review::with(['user', 'product.images'])->findOrFail($id);
         return response()->json($review);
     }
 
     /**
-     * Update the specified resource in storage.
+     * Cập nhật trạng thái (Duyệt / Từ chối)
      */
     public function update(Request $request, string $id)
     {
-        //
+        $review = Review::findOrFail($id);
+
+        $request->validate([
+            'status' => 'required|in:pending,approved,rejected',
+        ]);
+
+        $review->update(['status' => $request->status]);
+
+        return response()->json([
+            'message' => 'Cập nhật trạng thái đánh giá thành công',
+            'data'    => $review
+        ]);
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Xóa đánh giá
      */
     public function destroy(string $id)
     {
-        //
+        $review = Review::findOrFail($id);
+        $review->delete();
+
+        return response()->json(['message' => 'Đã xóa đánh giá thành công']);
     }
 }

@@ -20,7 +20,6 @@ class BrandSlideController extends Controller
             return [
                 'id' => $brand->id,
                 'name' => $brand->name,
-                // Tạo link đầy đủ: https://domain.app/storage/brands/abc.jpg
                 'imageUrl' => $brand->image_url ? asset($brand->image_url) : null,
                 'linkUrl' => $brand->link_url,
                 'order' => $brand->order_number,

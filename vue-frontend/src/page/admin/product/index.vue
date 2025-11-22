@@ -24,7 +24,7 @@ const viewingProduct = ref({
   sold_count: 0,
   favorite_count: 0,
   review_count: 0,
-  average_rating: 0.0  
+  average_rating: 0.0
 });
 
 // State Tìm kiếm & Phân trang
@@ -33,7 +33,7 @@ const currentPage = ref(1);
 const itemsPerPage = ref(10);
 
 // STATE MỚI ĐỂ SẮP XẾP
-const sortCriteria = ref('product_id-desc');  
+const sortCriteria = ref('product_id-desc');
 
 // Dữ liệu cho form sản phẩm
 const formData = reactive({
@@ -42,7 +42,7 @@ const formData = reactive({
   description: '',
   category_id: null,
   status: 'active',
-  attribute_definitions: reactive([]),  
+  attribute_definitions: reactive([]),
   variants: reactive([]),
   existing_images: reactive([]),
   new_images: [],
@@ -64,7 +64,7 @@ const errors = reactive({
 
 // --- HELPER FUNCTION: Tạo ID ngắn cho json-server ---
 function generateShortId() {
-  // Tạo chuỗi 4-6 ký tự ngẫu nhiên để mô phỏng ID ngắn của json-server  
+  // Tạo chuỗi 4-6 ký tự ngẫu nhiên để mô phỏng ID ngắn của json-server
   // và tránh lỗi định tuyến với UUID quá dài.
   return Math.random().toString(36).substring(2, 8);
 }
@@ -75,7 +75,7 @@ const filteredProducts = computed(() => {
   // 1. Lọc (Filtering)
   const query = searchQuery.value.toLowerCase().trim();
   let filtered = products.value;
-  
+
   if (query) {
     filtered = products.value.filter(product =>
       product.name.toLowerCase().includes(query) ||
@@ -85,9 +85,9 @@ const filteredProducts = computed(() => {
 
   // 2. Sắp xếp (Sorting)
   const [key, order] = sortCriteria.value.split('-');
-  
+
   // Tạo một bản sao để sắp xếp, tránh thay đổi 'products' gốc
-  const sorted = [...filtered];  
+  const sorted = [...filtered];
 
   sorted.sort((a, b) => {
     let valA, valB;
@@ -122,7 +122,7 @@ const filteredProducts = computed(() => {
     } else if (valA < valB) {
       comparison = -1;
     }
-    
+
     // Đảo ngược nếu là 'desc'
     return order === 'asc' ? comparison : -comparison;
   });
@@ -141,18 +141,18 @@ const paginatedProducts = computed(() => {
 });
 
 watch(searchQuery, () => {
-  currentPage.value = 1;  
+  currentPage.value = 1;
 });
 
 // THÊM WATCHER CHO SẮP XẾP
 watch(sortCriteria, () => {
-  currentPage.value = 1;  
+  currentPage.value = 1;
 });
 
 onMounted(async () => {
   await fetchCategories();
-  fetchProducts();         
-  
+  fetchProducts();
+
   if (modalRef.value) {
     modalInstance.value = new Modal(modalRef.value, { backdrop: 'static' });
   }
@@ -165,13 +165,16 @@ onMounted(async () => {
 async function fetchProducts() {
   isLoading.value = true;
   try {
+    // --- SỬA LỖI TẠI ĐÂY: Đổi /images thành /imageProducts ---
+    // VÀ ĐỔI API LẤY SẢN PHẨM THÀNH ADMIN API ĐỂ CÓ QUYỀN FULL
     const [productsRes, variantsRes, imagesRes] = await Promise.all([
-      apiService.get('/products'),  
-      apiService.get('/variants'),  
-      apiService.get('/images')  
+      apiService.get('/admin/products'),  // <-- Đổi thành /admin/products
+      apiService.get('/variants'),
+      apiService.get('/imageProducts') // <-- Đã sửa từ /images thành /imageProducts để khớp với route Laravel
     ]);
 
-    const rawProducts = productsRes.data;
+    // Xử lý dữ liệu phân trang của Laravel nếu có
+    const rawProducts = productsRes.data.data ? productsRes.data.data : productsRes.data;
     const allCategories = categories.value;
     const allVariants = variantsRes.data;
     const allImages = imagesRes.data;
@@ -179,15 +182,16 @@ async function fetchProducts() {
     // BƯỚC 2: Nhúng (embed) thủ công Categories, Variants, Images
     products.value = rawProducts.map(p => {
       // 1. Nhúng Category (dùng category_id)
-      const category = allCategories.find(c => c.category_id === p.category_id);
-      
+      // *** SỬA LOGIC: Trong MySQL category dùng 'id', không phải 'category_id' ***
+      const category = allCategories.find(c => c.id === p.category_id);
+
       // 2. Nhúng Variants (dùng product_id)
       // Dùng == để so sánh số/chuỗi (ví dụ product_id 1 == "1")
-      const productVariants = allVariants.filter(v => v.product_id == p.product_id); 
-      
+      const productVariants = allVariants.filter(v => v.product_id == p.product_id);
+
       // 3. Nhúng Images (dùng product_id)
       const productImages = allImages.filter(img => img.product_id == p.product_id);
-      
+
       // Khởi tạo các trường cần thiết nếu API không có
       const defaultData = {
         sold_count: 0,
@@ -201,36 +205,36 @@ async function fetchProducts() {
       // *** SỬA LOGIC ID ***
       // p.id LÀ ID THẬT CỦA JSON-SERVER (ví dụ: "587a", 1, "37c3")
       // p.product_id LÀ ID NGHIỆP VỤ (ví dụ: "e9fbc...", 1, "37c3")
-      
+
       return {
         ...defaultData,
         ...p, // Giữ lại 'id' thật từ json-server (ví dụ: "587a")
-        
+
         // id: p.product_id, // <-- *** XÓA DÒNG NÀY *** (Đây là nguyên nhân lỗi)
 
         // Đảm bảo product_id (nghiệp vụ) luôn tồn tại
-        product_id: p.product_id || p.id, 
-        
+        product_id: p.product_id || p.id,
+
         category: category || null,
-        variants: productVariants,  
+        variants: productVariants,
         images: productImages,
         thumbnail_url: p.thumbnail_url || (productImages.length > 0 ? productImages[0].image_url : 'https://placehold.co/150x150?text=No+Img')
       };
     });
-    
+
     // Sắp xếp lại danh sách sản phẩm sau khi nhúng (vì json-server chỉ sort trên product_id)
     const [key, order] = sortCriteria.value.split('-');
     if (key === 'product_id' && order === 'desc') {
-       // Nếu là sắp xếp mặc định (product_id-desc), giữ nguyên thứ tự API trả về (thường là ID tăng dần, nhưng mình muốn mới nhất là lớn nhất)
-       products.value.sort((a, b) => {
-         // Chuyển ID sang chuỗi trước khi so sánh, sau đó ép về số nếu được
-         // Sắp xếp theo product_id (nghiệp vụ)
-         const idA = isNaN(Number(a.product_id)) ? a.product_id : Number(a.product_id);
-         const idB = isNaN(Number(b.product_id)) ? b.product_id : Number(b.product_id);
-         if (idA < idB) return 1;
-         if (idA > idB) return -1;
-         return 0;
-       });
+      // Nếu là sắp xếp mặc định (product_id-desc), giữ nguyên thứ tự API trả về (thường là ID tăng dần, nhưng mình muốn mới nhất là lớn nhất)
+      products.value.sort((a, b) => {
+        // Chuyển ID sang chuỗi trước khi so sánh, sau đó ép về số nếu được
+        // Sắp xếp theo product_id (nghiệp vụ)
+        const idA = isNaN(Number(a.product_id)) ? a.product_id : Number(a.product_id);
+        const idB = isNaN(Number(b.product_id)) ? b.product_id : Number(b.product_id);
+        if (idA < idB) return 1;
+        if (idA > idB) return -1;
+        return 0;
+      });
     }
 
   } catch (error) {
@@ -243,11 +247,20 @@ async function fetchProducts() {
 
 async function fetchCategories() {
   try {
-    // API lấy danh mục, json-server dùng category_id
+    // API lấy danh mục
     const response = await apiService.get(`/categories?status=active&_sort=order&_order=asc`);
-    categories.value = response.data.map(c => ({
-        ...c,
-        id: c.category_id // Gán id = category_id để <select> hoạt động
+
+    // *** FIX LỖI DANH MỤC TẠI ĐÂY ***
+    // MySQL trả về cột 'id', không phải 'category_id'.
+    // Không map lại id sai nữa.
+
+    // Kiểm tra xem API trả về mảng trực tiếp hay object có data
+    const data = Array.isArray(response.data) ? response.data : (response.data.data || []);
+
+    categories.value = data.map(c => ({
+      ...c,
+      // Giữ nguyên id từ database (MySQL dùng 'id')
+      id: c.id
     }));
   } catch (error) {
     console.error("Lỗi khi tải danh mục:", error);
@@ -290,7 +303,7 @@ function getPriceRange(variants) {
   if (prices.length === 0) {
     return 'N/A';
   }
-  
+
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
 
@@ -316,9 +329,9 @@ function addAttributeDefinition() {
   const newAttr = reactive({ id: crypto.randomUUID(), name: name });
   formData.attribute_definitions.push(newAttr);
   // Khởi tạo thuộc tính cho variants hiện có
-  formData.variants.forEach(variant => {  
+  formData.variants.forEach(variant => {
     if (!variant.attributes) variant.attributes = {};
-    variant.attributes[name] = '';  
+    variant.attributes[name] = '';
   });
   newAttributeName.value = '';
 }
@@ -334,8 +347,8 @@ function addVariantRow() {
   formData.attribute_definitions.forEach(attrDef => { newAttributes[attrDef.name] = ''; });
   formData.variants.push(reactive({
     variant_id: crypto.randomUUID(), // Dùng variant_id
-    price: 0,  
-    stock: 0,  
+    price: 0,
+    stock: 0,
     attributes: newAttributes
   }));
 }
@@ -385,7 +398,7 @@ function resetForm() {
 function openCreateModal() {
   resetForm();
   isEditMode.value = false;
-  addVariantRow();  
+  addVariantRow();
   modalInstance.value.show();
 }
 
@@ -394,17 +407,19 @@ function openEditModal(product) {
   isEditMode.value = true;
 
   // *** SỬA: Dùng 'id' (ID của json-server) làm ID chính của form ***
-  formData.id = product.id;  
-  
+  formData.id = product.id;
+
   formData.name = product.name;
   formData.description = product.description;
-  formData.category_id = product.category_id; // category_id từ product
+  // *** SỬA LOGIC: Lấy category_id đúng chuẩn ***
+  // Nếu product.category_id tồn tại thì dùng, nếu không (do logic nhúng object) thì lấy product.category.id
+  formData.category_id = product.category_id || (product.category ? product.category.id : null);
   formData.status = product.status || 'active';
 
   // Lấy ảnh
-  formData.existing_images = reactive(product.images ? product.images.map(img => ({  
-    id: img.img_id, // Lấy img_id
-    url: img.image_url || img.url  
+  formData.existing_images = reactive(product.images ? product.images.map(img => ({
+    id: img.img_id || img.id, // Lấy img_id hoặc id
+    url: img.image_url || img.url
   })) : []);
 
   // Lấy thuộc tính và biến thể
@@ -422,14 +437,14 @@ function openEditModal(product) {
     productVariants.map(v => {
       const variantAttributes = reactive({});
       allKeys.forEach(key => { variantAttributes[key] = v.attributes?.[key] || ''; });
-      return reactive({  
-        ...v,  
+      return reactive({
+        ...v,
         variant_id: v.variant_id || crypto.randomUUID(), // Đảm bảo có variant_id
-        attributes: variantAttributes  
+        attributes: variantAttributes
       });
     })
   );
-  if(formData.variants.length === 0) { addVariantRow(); }
+  if (formData.variants.length === 0) { addVariantRow(); }
 
   modalInstance.value.show();
 }
@@ -447,7 +462,7 @@ function openViewModal(product) {
     favorite_count: product.favorite_count || 0,
     review_count: product.review_count || 0,
     average_rating: product.average_rating || 0.0,
-    images: product.images || []  
+    images: product.images || []
   };
   viewModalInstance.value.show();
 }
@@ -461,7 +476,7 @@ function validateForm() {
   if (!formData.category_id) {
     errors.category_id = 'Vui lòng chọn danh mục.'; isValid = false;
   }
-  
+
   // Bỏ qua kiểm tra ảnh
   if (formData.variants.length === 0) {
     errors.variants = 'Sản phẩm phải có ít nhất 1 biến thể (SKU).'; isValid = false;
@@ -470,15 +485,15 @@ function validateForm() {
       if ((variant.price === null || variant.price < 0) || (variant.stock === null || variant.stock < 0)) {
         errors.variants = 'Giá và Số lượng của biến thể không hợp lệ.'; isValid = false; break;
       }
-      if(formData.attribute_definitions.length > 0) {
-          for(const attrDef of formData.attribute_definitions) {
-              if(!variant.attributes[attrDef.name] || !variant.attributes[attrDef.name].trim()) {
-                  errors.variants = `Vui lòng điền giá trị cho thuộc tính "${attrDef.name}" của tất cả biến thể.`;
-                  isValid = false; break;
-              }
+      if (formData.attribute_definitions.length > 0) {
+        for (const attrDef of formData.attribute_definitions) {
+          if (!variant.attributes[attrDef.name] || !variant.attributes[attrDef.name].trim()) {
+            errors.variants = `Vui lòng điền giá trị cho thuộc tính "${attrDef.name}" của tất cả biến thể.`;
+            isValid = false; break;
           }
+        }
       }
-      if(!isValid) break;
+      if (!isValid) break;
     }
   }
   return isValid;
@@ -493,22 +508,22 @@ async function handleSave() {
   isLoading.value = true;
 
   // 'dbId' LÀ ID CỦA JSON-SERVER (ví dụ: "587a", 1, "37c3")
-  let dbId = formData.id; 
+  let dbId = formData.id;
   const dbIdString = String(dbId);
-  
+
   // 'businessProductId' LÀ ID NGHIỆP VỤ (ví dụ: "e9fbc...", 1, "37c3")
   // Khởi tạo là null, sẽ được gán
-  let businessProductId = null; 
-  
+  let businessProductId = null;
+
   // Chuẩn bị Product Data (chưa bao gồm ID)
   const productData = {
     name: formData.name,
     description: formData.description,
-    category_id: formData.category_id,  
+    category_id: formData.category_id,
     status: formData.status,
     updated_at: new Date().toISOString(),
     thumbnail_url: formData.existing_images[0]?.url || 'https://placehold.co/150x150?text=No+Img',
-    
+
     // Giữ các trường thống kê (Sẽ cập nhật lại khi là Edit)
     sold_count: 0,
     favorite_count: 0,
@@ -521,34 +536,35 @@ async function handleSave() {
       // 1. Lấy lại các trường thống kê cũ và ID
       // Tìm bằng 'dbId' (ID của json-server)
       const oldProduct = products.value.find(p => p.id == dbId);
-      if(oldProduct) {
+      if (oldProduct) {
         productData.sold_count = oldProduct.sold_count;
         productData.favorite_count = oldProduct.favorite_count;
         productData.review_count = oldProduct.review_count;
         productData.average_rating = oldProduct.average_rating;
 
         // *** QUAN TRỌNG: Lấy ID nghiệp vụ và ID CSDL ***
-        businessProductId = oldProduct.product_id; 
+        businessProductId = oldProduct.product_id;
         productData.product_id = oldProduct.product_id; // Gửi lại ID nghiệp vụ
         productData.id = oldProduct.id; // Gửi lại ID CSDL
       } else {
-         // Fallback (dù không nên xảy ra)
-         businessProductId = dbId;
-         productData.product_id = dbId;
-         productData.id = dbId;
+        // Fallback (dù không nên xảy ra)
+        businessProductId = dbId;
+        productData.product_id = dbId;
+        productData.id = dbId;
       }
-      
-      // 2. Cập nhật Product chính (Dùng PATCH theo ID CSDL)
-      const apiEndpoint = `/products/${dbIdString}`;  
-      console.log("DEBUG: API Endpoint for PATCH:", apiEndpoint);
-      
-      await apiService.patch(apiEndpoint, productData);  
 
-    
+      // 2. Cập nhật Product chính (Dùng PATCH theo ID CSDL)
+      // *** FIX LỖI 405: Dùng route ADMIN để Update ***
+      const apiEndpoint = `/admin/products/${dbIdString}`;  // <-- Thêm /admin vào đây
+      console.log("DEBUG: API Endpoint for PATCH:", apiEndpoint);
+
+      await apiService.patch(apiEndpoint, productData);
+
+
     } else {
       // SỬA: Thay thế UUID dài bằng ID ngắn, đơn giản để json-server dễ xử lý.
-      const newShortId = generateShortId();  
-      
+      const newShortId = generateShortId();
+
       // Gán cả ID CSDL và ID Nghiệp vụ
       businessProductId = newShortId;
       productData.product_id = newShortId;
@@ -556,39 +572,45 @@ async function handleSave() {
       productData.created_at = new Date().toISOString();
 
       // 1. Tạo Product mới
-      const createRes = await apiService.post(`/products`, productData);
-      
+      // *** FIX LỖI 405: Dùng route ADMIN để Create ***
+      const createRes = await apiService.post(`/admin/products`, productData); // <-- Thêm /admin vào đây
+
       // Cập nhật lại ID từ server (phòng trường hợp server tự tạo ID khác)
-      dbId = createRes.data.id; 
-      businessProductId = createRes.data.product_id;
+      // Chú ý: Với JSON server, ID trả về nằm trong data.id. Với Laravel, cũng vậy.
+      // Tuy nhiên, cần cẩn thận nếu Laravel trả về ID số còn mình dùng ID chuỗi.
+      // Ở đây giả định Laravel trả về object sản phẩm vừa tạo.
+      dbId = createRes.data.id;
+      businessProductId = createRes.data.product_id || createRes.data.id; // Fallback to ID if product_id missing
     }
-    
+
     // --- LƯU VARIANT VÀ IMAGE VÀO COLLECTION RIÊNG ---
     // *** SỬA: Dùng 'businessProductId' để liên kết ***
-    
+
     for (const variant of formData.variants) {
       const variantPayload = {
         // Sử dụng ID nghiệp vụ (businessProductId) đã được xác định/cập nhật
-        product_id: businessProductId,  
+        product_id: businessProductId,
         price: variant.price,
         stock: variant.stock,
         attributes: variant.attributes
       };
-      
+
       const variantIdString = String(variant.variant_id);
 
       // Kiểm tra nếu variant_id là số (ID cũ) hoặc không chứa '-' (ID cũ của json-server)
       // Đây là logic kiểm tra ID cũ vs ID mới (UUID)
-      if (variantIdString && !variantIdString.includes('-') && variantIdString.length < 10) {  
+      if (variantIdString && !variantIdString.includes('-') && variantIdString.length < 10) {
         // Cập nhật variant cũ
-        await apiService.patch(`/variants/${variantIdString}`, variantPayload);
+        // *** FIX LỖI 405: Dùng route ADMIN cho variants *** (giả định có route này)
+        await apiService.patch(`/admin/variants/${variantIdString}`, variantPayload);
       } else {
         // Tạo variant mới
         // Gán ID CSDL và ID nghiệp vụ mới cho variant
         const newVariantId = generateShortId();
         variantPayload.id = newVariantId;
         variantPayload.variant_id = newVariantId;
-        await apiService.post(`/variants`, variantPayload);
+        // *** FIX LỖI 405: Dùng route ADMIN cho variants *** (giả định có route này)
+        await apiService.post(`/admin/variants`, variantPayload);
       }
     }
 
@@ -603,12 +625,14 @@ async function handleSave() {
   } finally {
     isLoading.value = false;
   }
-}  
+}
 
 // --- CÁC HÀM KHÁC (ĐÃ SỬA ID) ---
 
 async function toggleStatus(product) {
-  const newStatus = product.status === 'active' ? 'disabled' : 'active';
+  // SỬA: Dùng 'inactive' thay vì 'disabled' để khớp với validation Backend
+  const newStatus = product.status === 'active' ? 'inactive' : 'active';
+
   const confirmText = `Bạn có chắc chắn muốn ${newStatus === 'active' ? 'KÍCH HOẠT' : 'VÔ HIỆU HÓA'} sản phẩm "${product.name}"?`;
   const result = await Swal.fire({
     title: 'Thay đổi trạng thái', text: confirmText, icon: 'question',
@@ -619,11 +643,13 @@ async function toggleStatus(product) {
     product.status = newStatus;
     try {
       // *** SỬA: Dùng PATCH trên endpoint 'id' (ID của json-server) ***
-      await apiService.patch(`/products/${String(product.id)}`, { status: newStatus });
+      // *** FIX LỖI 405: Dùng route ADMIN ***
+      await apiService.patch(`/admin/products/${String(product.id)}`, { status: newStatus });
       Swal.fire('Thành công', `Đã ${newStatus === 'active' ? 'kích hoạt' : 'vô hiệu hóa'} sản phẩm.`, 'success');
     } catch (error) {
       console.error("Lỗi cập nhật trạng thái:", error); // Lỗi 404 sẽ không còn ở đây
-      product.status = newStatus === 'active' ? 'disabled' : 'active';
+      // Revert nếu lỗi
+      product.status = newStatus === 'active' ? 'inactive' : 'active';
       Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
     }
   }
@@ -637,8 +663,9 @@ async function handleDelete(product) {
   if (result.isConfirmed) {
     try {
       // *** SỬA: Dùng DELETE trên endpoint 'id' (ID của json-server) ***
-      await apiService.delete(`/products/${String(product.id)}`);
-      
+      // *** FIX LỖI 405: Dùng route ADMIN ***
+      await apiService.delete(`/admin/products/${String(product.id)}`);
+
       // LƯU Ý: Với json-server, bạn phải tự xóa variants và images liên quan nếu muốn
       // TẠM BỎ QUA do phức tạp, chỉ xóa sản phẩm chính
 
@@ -681,7 +708,7 @@ function goToPage(page) {
     <div class="container-fluid">
       <div class="card mb-4">
         <div class="card-header">
-          <div class="row align-items-center gy-2">  
+          <div class="row align-items-center gy-2">
             <div class="col-md-5 col-12">
               <div class="input-group">
                 <span class="input-group-text bg-white border-end-0">
@@ -704,7 +731,7 @@ function goToPage(page) {
                 <option value="price-desc">Giá: Cao đến Thấp</option>
               </select>
             </div>
-            
+
             <div class="col-md-3 col-12 text-md-end">
               <button type="button" class="btn btn-primary" @click="openCreateModal">
                 <i class="bi bi-plus-lg"></i> Thêm mới Sản phẩm
@@ -745,7 +772,7 @@ function goToPage(page) {
                 <!-- SỬA: Dùng product.id làm key (vì nó là ID duy nhất của json-server) -->
                 <tr v-for="product in paginatedProducts" :key="product.id">
                   <!-- Hiển thị product_id (nghiệp vụ) -->
-                  <td>{{ product.product_id }}</td>  
+                  <td>{{ product.product_id }}</td>
                   <td>
                     <img :src="product.thumbnail_url || 'https://placehold.co/60x60?text=N/A'"
                       alt="Ảnh SP" class="img-thumbnail" style="width: 60px; height: 60px; object-fit: cover;">
@@ -843,7 +870,8 @@ function goToPage(page) {
                   <select class="form-select" :class="{ 'is-invalid': errors.category_id }" id="category_id"
                     v-model="formData.category_id">
                     <option :value="null" disabled>-- Chọn danh mục --</option>
-                    <option v-for="cat in categories" :key="cat.id" :value="cat.category_id">{{ cat.name }}</option>
+                    <!-- SỬA: Dùng cat.id làm value để khớp với MySQL -->
+                    <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
                   </select>
                   <div class="invalid-feedback" v-if="errors.category_id">{{ errors.category_id }}</div>
                 </div>
@@ -851,7 +879,7 @@ function goToPage(page) {
                   <label for="status" class="form-label fw-bold">Trạng thái</label>
                   <select class="form-select" id="status" v-model="formData.status">
                     <option value="active">Hoạt động (Hiển thị)</option>
-                    <option value="disabled">Vô hiệu hóa (Ẩn)</option>
+                    <option value="inactive">Vô hiệu hóa (Ẩn)</option> <!-- Đổi disabled -> inactive -->
                   </select>
                 </div>
                 <!-- Quản lý ảnh -->
@@ -860,7 +888,7 @@ function goToPage(page) {
                   <input type="file" class="form-control" :class="{ 'is-invalid': errors.images }" id="product_images"
                     @change="handleImageUpload" accept="image/*" multiple>
                   <div class="form-text">
-                    <b>Lưu ý:</b> <code>json-server</code> không hỗ trợ upload file.  
+                    <b>Lưu ý:</b> <code>json-server</code> không hỗ trợ upload file.
                     Ảnh mới sẽ không được lưu. Chỉ ảnh có sẵn mới được giữ lại.
                   </div>
                   <div class="invalid-feedback" v-if="errors.images">{{ errors.images }}</div>
@@ -891,10 +919,10 @@ function goToPage(page) {
               <div class="row gx-2">
                   <div class="col">
                     <label for="newAttribute" class="form-label">Tên thuộc tính mới</label>
-                    <input type="text" class="form-control" id="newAttribute"  
-                          placeholder="ví dụ: Màu sắc, Kích cỡ, RAM..."
-                          v-model="newAttributeName"
-                          @keydown.enter.prevent="addAttributeDefinition">
+                    <input type="text" class="form-control" id="newAttribute"
+                           placeholder="ví dụ: Màu sắc, Kích cỡ, RAM..."
+                           v-model="newAttributeName"
+                           @keydown.enter.prevent="addAttributeDefinition">
                   </div>
                   <div class="col-auto d-flex align-items-end">
                     <button class="btn btn-info" @click.prevent="addAttributeDefinition">
@@ -904,12 +932,12 @@ function goToPage(page) {
               </div>
               <div class="invalid-feedback d-block" v-if="errors.attributes">{{ errors.attributes }}</div>
               <div class="mt-2 d-flex flex-wrap gap-2" v-if="formData.attribute_definitions.length > 0">
-                  <span v-for="attr in formData.attribute_definitions" :key="attr.id"  
+                  <span v-for="attr in formData.attribute_definitions" :key="attr.id"
                         class="badge text-bg-secondary fs-6">
                     {{ attr.name }}
-                    <button type="button" class="btn-close btn-close-white ms-1"  
+                    <button type="button" class="btn-close btn-close-white ms-1"
                             style="font-size: 0.6em;"
-                            @click="removeAttributeDefinition(attr)"  
+                            @click="removeAttributeDefinition(attr)"
                             aria-label="Close"></button>
                   </span>
               </div>
@@ -940,17 +968,17 @@ function goToPage(page) {
                   </tr>
                   <tr v-for="(variant, index) in formData.variants" :key="variant.variant_id">
                     <td v-for="attrDef in formData.attribute_definitions" :key="attrDef.id">
-                      <input type="text" class="form-control form-control-sm"  
-                            :placeholder="attrDef.name"
-                            v-model="variant.attributes[attrDef.name]">
+                      <input type="text" class="form-control form-control-sm"
+                             :placeholder="attrDef.name"
+                             v-model="variant.attributes[attrDef.name]">
                     </td>
                     <td>
-                      <input type="number" class="form-control form-control-sm" placeholder="Giá"  
-                            v-model.number="variant.price" min="0">
+                      <input type="number" class="form-control form-control-sm" placeholder="Giá"
+                             v-model.number="variant.price" min="0">
                     </td>
                     <td>
-                      <input type="number" class="form-control form-control-sm" placeholder="SL"  
-                            v-model.number="variant.stock" min="0">
+                      <input type="number" class="form-control form-control-sm" placeholder="SL"
+                             v-model.number="variant.stock" min="0">
                     </td>
                     <td class="text-center">
                       <button class="btn btn-danger btn-sm" @click.prevent="removeVariantRow(index)"
@@ -1021,7 +1049,7 @@ function goToPage(page) {
               </div>
             </div>
           </div>
-          
+
           <!-- Thống kê sản phẩm -->
           <hr class="my-3">
           <h5 class="mb-3">Thống kê</h5>
@@ -1083,7 +1111,7 @@ function goToPage(page) {
               </tbody>
             </table>
           </div>
-          
+
           <!-- Thư viện ảnh -->
           <hr class="my-4">
           <h5 class="mb-3">Thư viện ảnh</h5>
@@ -1147,7 +1175,7 @@ function goToPage(page) {
   border-radius: 50%;
   background-color: red;
   color: white;
-  border: none;  
+  border: none;
   font-weight: bold;
   font-size: 12px;
   line-height: 1;
@@ -1170,6 +1198,6 @@ function goToPage(page) {
 }
 
 .table-responsive {
-    overflow-x: auto;  
+    overflow-x: auto;
 }
 </style>

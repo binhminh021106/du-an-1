@@ -8,6 +8,7 @@ const router = useRouter();
 
 // State
 const categories = ref([]);
+const brands = ref([]);
 const slides = ref([]);
 const products = ref([]);
 const users = ref([]);
@@ -19,13 +20,13 @@ let interval = null;
 // --- FETCH DATA ---
 const fetchData = async () => {
     try {
-        const [catRes, slideRes, prodRes, userRes, newsRes] = await Promise.all([
+        const [catRes, slideRes, prodRes, userRes, newsRes, brandRes] = await Promise.all([
             apiService.get(`/categories`),
             apiService.get(`/slides`),
             apiService.get(`/products`),
             apiService.get(`/users`),
             apiService.get(`/news`),
-            apiService.get(`/variants`)
+            apiService.get(`/brands`),
         ]);
 
         categories.value = catRes.data;
@@ -33,6 +34,7 @@ const fetchData = async () => {
         products.value = prodRes.data;
         users.value = userRes.data;
         newsList.value = newsRes.data;
+        brands.value = brandRes.data;
 
     } catch (err) {
         console.error("Lỗi tải dữ liệu:", err);
@@ -138,9 +140,11 @@ onBeforeUnmount(stopAutoSlide);
                 </aside> -->
             </section>
 
-            <section class="brand-banner" style="margin-top: 15px;">
-                    <img src="#" alt="Brand Banner"
-                        style="width: 100%; height: 200px; background: #eee; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #aaa; font-style: italic;">
+            <section class="brand-banner" style="margin-top: 15px;" v-if="brands.length > 0">
+                <a :href="brands[0].linkUrl || '#'">
+                    <img :src="brands[0].imageUrl" alt="Brand Banner"
+                        style="width: 100%; height: 200px; object-fit: cover; border-radius: 8px;">
+                </a>
             </section>
 
             <section class="trust-block">
