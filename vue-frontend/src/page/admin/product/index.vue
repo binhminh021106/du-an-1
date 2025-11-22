@@ -64,7 +64,7 @@ const errors = reactive({
 
 // --- HELPER FUNCTION: Tạo ID ngắn cho json-server ---
 function generateShortId() {
-  // Tạo chuỗi 4-6 ký tự ngẫu nhiên để mô phỏng ID ngắn của json-server  
+  // Tạo chuỗi 4-6 ký tự ngẫu nhiên để mô phỏng ID ngắn của json-server
   // và tránh lỗi định tuyến với UUID quá dài.
   return Math.random().toString(36).substring(2, 8);
 }
@@ -630,7 +630,9 @@ async function handleSave() {
 // --- CÁC HÀM KHÁC (ĐÃ SỬA ID) ---
 
 async function toggleStatus(product) {
+  // SỬA: Dùng 'inactive' thay vì 'disabled' để khớp với validation Backend
   const newStatus = product.status === 'active' ? 'inactive' : 'active';
+
   const confirmText = `Bạn có chắc chắn muốn ${newStatus === 'active' ? 'KÍCH HOẠT' : 'VÔ HIỆU HÓA'} sản phẩm "${product.name}"?`;
   const result = await Swal.fire({
     title: 'Thay đổi trạng thái', text: confirmText, icon: 'question',
@@ -646,6 +648,7 @@ async function toggleStatus(product) {
       Swal.fire('Thành công', `Đã ${newStatus === 'active' ? 'kích hoạt' : 'vô hiệu hóa'} sản phẩm.`, 'success');
     } catch (error) {
       console.error("Lỗi cập nhật trạng thái:", error); // Lỗi 404 sẽ không còn ở đây
+      // Revert nếu lỗi
       product.status = newStatus === 'active' ? 'inactive' : 'active';
       Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
     }
@@ -771,25 +774,26 @@ function goToPage(page) {
                   <!-- Hiển thị product_id (nghiệp vụ) -->
                   <td>{{ product.product_id }}</td>
                   <td>
-                    <img :src="product.thumbnail_url || 'https://placehold.co/60x60?text=N/A'" alt="Ảnh SP"
-                      class="img-thumbnail" style="width: 60px; height: 60px; object-fit: cover;">
+                    <img :src="product.thumbnail_url || 'https://placehold.co/60x60?text=N/A'"
+                      alt="Ảnh SP" class="img-thumbnail" style="width: 60px; height: 60px; object-fit: cover;">
                   </td>
                   <td>{{ product.name }}</td>
                   <td>{{ product.category?.name || 'N/A' }}</td>
                   <td style="min-width: 160px;">{{ getPriceRange(product.variants) }}</td>
                   <td>{{ calculateTotalStock(product.variants) }}</td>
                   <td>
-                    <span :class="['badge', product.status === 'active' ? 'text-bg-success' : 'text-bg-secondary']">
+                    <span :class="['badge', product.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
                       {{ product.status === 'active' ? 'Hoạt động' : 'Vô hiệu hóa' }}
                     </span>
                   </td>
                   <td class="text-center">
                     <div class="d-flex justify-content-center align-items-center">
-                      <div class="form-check form-switch d-inline-block align-middle me-3"
-                        title="Kích hoạt/Vô hiệu hóa">
+                      <div class="form-check form-switch d-inline-block align-middle me-3" title="Kích hoạt/Vô hiệu hóa">
                         <input class="form-check-input" type="checkbox" role="switch"
-                          style="width: 2.5em; height: 1.25em; cursor: pointer;" :id="'statusSwitch-' + product.id"
-                          :checked="product.status === 'active'" @click.prevent="toggleStatus(product)">
+                          style="width: 2.5em; height: 1.25em; cursor: pointer;"
+                          :id="'statusSwitch-' + product.id"
+                          :checked="product.status === 'active'"
+                          @click.prevent="toggleStatus(product)">
                       </div>
                       <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-secondary" title="Xem chi tiết" @click="openViewModal(product)">
@@ -811,24 +815,24 @@ function goToPage(page) {
         </div>
 
         <div class="card-footer clearfix" v-if="totalPages > 1">
-          <div class="d-flex justify-content-between align-items-center">
-            <small class="text-muted">
-              Hiển thị {{ (currentPage - 1) * itemsPerPage + 1 }} đến
-              {{ Math.min(currentPage * itemsPerPage, filteredProducts.length) }}
-              trong tổng số {{ filteredProducts.length }} sản phẩm
-            </small>
-            <ul class="pagination pagination-sm m-0">
-              <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                <button class="page-link" @click="goToPage(currentPage - 1)">&laquo;</button>
-              </li>
-              <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
-                <button class="page-link" @click="goToPage(page)">{{ page }}</button>
-              </li>
-              <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                <button class="page-link" @click="goToPage(currentPage + 1)">&raquo;</button>
-              </li>
-            </ul>
-          </div>
+           <div class="d-flex justify-content-between align-items-center">
+             <small class="text-muted">
+               Hiển thị {{ (currentPage - 1) * itemsPerPage + 1 }} đến
+               {{ Math.min(currentPage * itemsPerPage, filteredProducts.length) }}
+               trong tổng số {{ filteredProducts.length }} sản phẩm
+             </small>
+             <ul class="pagination pagination-sm m-0">
+               <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                 <button class="page-link" @click="goToPage(currentPage - 1)">&laquo;</button>
+               </li>
+               <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
+                 <button class="page-link" @click="goToPage(page)">{{ page }}</button>
+               </li>
+               <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                 <button class="page-link" @click="goToPage(currentPage + 1)">&raquo;</button>
+               </li>
+             </ul>
+           </div>
         </div>
       </div>
     </div>
@@ -875,7 +879,7 @@ function goToPage(page) {
                   <label for="status" class="form-label fw-bold">Trạng thái</label>
                   <select class="form-select" id="status" v-model="formData.status">
                     <option value="active">Hoạt động (Hiển thị)</option>
-                    <option value="inactive">Vô hiệu hóa (Ẩn)</option>
+                    <option value="inactive">Vô hiệu hóa (Ẩn)</option> <!-- Đổi disabled -> inactive -->
                   </select>
                 </div>
                 <!-- Quản lý ảnh -->
@@ -899,7 +903,8 @@ function goToPage(page) {
                     </div>
                     <div v-for="(url, index) in newImagePreviews" :key="`new-${index}`" class="image-preview-item">
                       <img :src="url" class="img-thumbnail" alt="Ảnh mới">
-                      <button class="btn btn-danger btn-sm btn-remove-image" @click.prevent="removeNewImage(index)">
+                      <button class="btn btn-danger btn-sm btn-remove-image"
+                        @click.prevent="removeNewImage(index)">
                         &times;
                       </button>
                     </div>
@@ -912,26 +917,29 @@ function goToPage(page) {
             <h5>Định nghĩa Thuộc tính</h5>
             <div class="card bg-light p-3 mb-3">
               <div class="row gx-2">
-                <div class="col">
-                  <label for="newAttribute" class="form-label">Tên thuộc tính mới</label>
-                  <input type="text" class="form-control" id="newAttribute"
-                    placeholder="ví dụ: Màu sắc, Kích cỡ, RAM..." v-model="newAttributeName"
-                    @keydown.enter.prevent="addAttributeDefinition">
-                </div>
-                <div class="col-auto d-flex align-items-end">
-                  <button class="btn btn-info" @click.prevent="addAttributeDefinition">
-                    <i class="bi bi-plus"></i> Thêm
-                  </button>
-                </div>
+                  <div class="col">
+                    <label for="newAttribute" class="form-label">Tên thuộc tính mới</label>
+                    <input type="text" class="form-control" id="newAttribute"
+                           placeholder="ví dụ: Màu sắc, Kích cỡ, RAM..."
+                           v-model="newAttributeName"
+                           @keydown.enter.prevent="addAttributeDefinition">
+                  </div>
+                  <div class="col-auto d-flex align-items-end">
+                    <button class="btn btn-info" @click.prevent="addAttributeDefinition">
+                      <i class="bi bi-plus"></i> Thêm
+                    </button>
+                  </div>
               </div>
               <div class="invalid-feedback d-block" v-if="errors.attributes">{{ errors.attributes }}</div>
               <div class="mt-2 d-flex flex-wrap gap-2" v-if="formData.attribute_definitions.length > 0">
-                <span v-for="attr in formData.attribute_definitions" :key="attr.id"
-                  class="badge text-bg-secondary fs-6">
-                  {{ attr.name }}
-                  <button type="button" class="btn-close btn-close-white ms-1" style="font-size: 0.6em;"
-                    @click="removeAttributeDefinition(attr)" aria-label="Close"></button>
-                </span>
+                  <span v-for="attr in formData.attribute_definitions" :key="attr.id"
+                        class="badge text-bg-secondary fs-6">
+                    {{ attr.name }}
+                    <button type="button" class="btn-close btn-close-white ms-1"
+                            style="font-size: 0.6em;"
+                            @click="removeAttributeDefinition(attr)"
+                            aria-label="Close"></button>
+                  </span>
               </div>
             </div>
             <!-- Bảng Biến thể động -->
@@ -953,27 +961,28 @@ function goToPage(page) {
                 </thead>
                 <tbody>
                   <tr v-if="formData.variants.length === 0">
-                    <td :colspan="formData.attribute_definitions.length + 3" class="text-center text-muted p-3">
-                      <span v-if="formData.attribute_definitions.length === 0">Vui lòng thêm thuộc tính...</span>
-                      <span v-else>Chưa có biến thể nào.</span>
-                    </td>
+                      <td :colspan="formData.attribute_definitions.length + 3" class="text-center text-muted p-3">
+                        <span v-if="formData.attribute_definitions.length === 0">Vui lòng thêm thuộc tính...</span>
+                        <span v-else>Chưa có biến thể nào.</span>
+                      </td>
                   </tr>
                   <tr v-for="(variant, index) in formData.variants" :key="variant.variant_id">
                     <td v-for="attrDef in formData.attribute_definitions" :key="attrDef.id">
-                      <input type="text" class="form-control form-control-sm" :placeholder="attrDef.name"
-                        v-model="variant.attributes[attrDef.name]">
+                      <input type="text" class="form-control form-control-sm"
+                             :placeholder="attrDef.name"
+                             v-model="variant.attributes[attrDef.name]">
                     </td>
                     <td>
                       <input type="number" class="form-control form-control-sm" placeholder="Giá"
-                        v-model.number="variant.price" min="0">
+                             v-model.number="variant.price" min="0">
                     </td>
                     <td>
                       <input type="number" class="form-control form-control-sm" placeholder="SL"
-                        v-model.number="variant.stock" min="0">
+                             v-model.number="variant.stock" min="0">
                     </td>
                     <td class="text-center">
                       <button class="btn btn-danger btn-sm" @click.prevent="removeVariantRow(index)"
-                        :disabled="formData.variants.length <= 1">
+                            :disabled="formData.variants.length <= 1">
                         <i class="bi bi-trash"></i>
                       </button>
                     </td>
@@ -1035,8 +1044,7 @@ function goToPage(page) {
                 </div>
                 <div class="list-group-item px-0">
                   <h6 class="mb-2"><i class="bi bi-card-text me-3 text-muted"></i>Mô tả</h6>
-                  <p class="mb-1 text-muted small" style="white-space: pre-wrap;">{{ viewingProduct.description ||
-                    'Không có mô tả.' }}</p>
+                  <p class="mb-1 text-muted small" style="white-space: pre-wrap;">{{ viewingProduct.description || 'Không có mô tả.' }}</p>
                 </div>
               </div>
             </div>
@@ -1046,32 +1054,30 @@ function goToPage(page) {
           <hr class="my-3">
           <h5 class="mb-3">Thống kê</h5>
           <div class="row g-2 text-center">
-            <div class="col-6 col-md-3">
-              <div class="card p-2 shadow-sm">
-                <h6 class="text-muted mb-0">Đã bán</h6>
-                <span class="fs-4 fw-bold text-primary">{{ viewingProduct.sold_count }}</span>
+              <div class="col-6 col-md-3">
+                  <div class="card p-2 shadow-sm">
+                      <h6 class="text-muted mb-0">Đã bán</h6>
+                      <span class="fs-4 fw-bold text-primary">{{ viewingProduct.sold_count }}</span>
+                  </div>
               </div>
-            </div>
-            <div class="col-6 col-md-3">
-              <div class="card p-2 shadow-sm">
-                <h6 class="text-muted mb-0">Yêu thích</h6>
-                <span class="fs-4 fw-bold text-danger"><i class="bi bi-heart-fill"></i> {{ viewingProduct.favorite_count
-                  }}</span>
+              <div class="col-6 col-md-3">
+                  <div class="card p-2 shadow-sm">
+                      <h6 class="text-muted mb-0">Yêu thích</h6>
+                      <span class="fs-4 fw-bold text-danger"><i class="bi bi-heart-fill"></i> {{ viewingProduct.favorite_count }}</span>
+                  </div>
               </div>
-            </div>
-            <div class="col-6 col-md-3">
-              <div class="card p-2 shadow-sm">
-                <h6 class="text-muted mb-0">Đánh giá</h6>
-                <span class="fs-4 fw-bold text-info">{{ viewingProduct.review_count }}</span>
+              <div class="col-6 col-md-3">
+                  <div class="card p-2 shadow-sm">
+                      <h6 class="text-muted mb-0">Đánh giá</h6>
+                      <span class="fs-4 fw-bold text-info">{{ viewingProduct.review_count }}</span>
+                  </div>
               </div>
-            </div>
-            <div class="col-6 col-md-3">
-              <div class="card p-2 shadow-sm">
-                <h6 class="text-muted mb-0">Xếp hạng</h6>
-                <span class="fs-4 fw-bold text-warning">{{ viewingProduct.average_rating.toFixed(1) }} <i
-                    class="bi bi-star-fill"></i></span>
+              <div class="col-6 col-md-3">
+                  <div class="card p-2 shadow-sm">
+                      <h6 class="text-muted mb-0">Xếp hạng</h6>
+                      <span class="fs-4 fw-bold text-warning">{{ viewingProduct.average_rating.toFixed(1) }} <i class="bi bi-star-fill"></i></span>
+                  </div>
               </div>
-            </div>
           </div>
 
           <hr class="my-4">
@@ -1091,9 +1097,9 @@ function goToPage(page) {
               </thead>
               <tbody>
                 <tr v-if="!viewingProduct.variants || viewingProduct.variants.length === 0">
-                  <td :colspan="viewingProduct.attributeNames.length + 2" class="text-center text-muted">
-                    Không có biến thể
-                  </td>
+                    <td :colspan="viewingProduct.attributeNames.length + 2" class="text-center text-muted">
+                      Không có biến thể
+                    </td>
                 </tr>
                 <tr v-for="(variant, index) in viewingProduct.variants" :key="index">
                   <td v-for="attrName in viewingProduct.attributeNames" :key="attrName">
@@ -1110,13 +1116,12 @@ function goToPage(page) {
           <hr class="my-4">
           <h5 class="mb-3">Thư viện ảnh</h5>
           <div class="image-preview-container" style="max-height: 300px;">
-            <div v-if="!viewingProduct.images || viewingProduct.images.length === 0" class="text-muted p-3">
-              Không có ảnh chi tiết.
-            </div>
-            <div v-for="image in viewingProduct.images" :key="image.img_id" class="image-preview-item"
-              style="width: 120px; height: 120px;">
-              <img :src="image.image_url || image.url" class="img-thumbnail" alt="Ảnh chi tiết">
-            </div>
+              <div v-if="!viewingProduct.images || viewingProduct.images.length === 0" class="text-muted p-3">
+                  Không có ảnh chi tiết.
+              </div>
+              <div v-for="image in viewingProduct.images" :key="image.img_id" class="image-preview-item" style="width: 120px; height: 120px;">
+                  <img :src="image.image_url || image.url" class="img-thumbnail" alt="Ảnh chi tiết">
+              </div>
           </div>
 
 
@@ -1145,8 +1150,7 @@ function goToPage(page) {
   padding: 5px;
   border: 1px solid #dee2e6;
   border-radius: .375rem;
-  background: #f8f9fa;
-  /* Thêm nền nhẹ */
+  background: #f8f9fa; /* Thêm nền nhẹ */
 }
 
 .image-preview-item {
@@ -1194,6 +1198,6 @@ function goToPage(page) {
 }
 
 .table-responsive {
-  overflow-x: auto;
+    overflow-x: auto;
 }
 </style>
