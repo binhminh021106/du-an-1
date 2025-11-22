@@ -35,29 +35,20 @@ use App\Http\Controllers\Api\admin\AdminOrderController;
 use App\Http\Controllers\Api\admin\AdminReviewController;
 use App\Http\Controllers\Api\admin\AdminRoleController;
 use App\Http\Controllers\Api\admin\AdminSlideController;
-use App\Http\Controllers\Api\admin\AminAccountController;
+use App\Http\Controllers\Api\admin\AminAccountController; // Giữ nguyên tên class như bạn khai báo (Amin...)
 use App\Http\Controllers\Api\admin\AdminBrandSlideController;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "api" middleware group. Make something great!
-|
-*/
+/* API Routes */
 
-
-// Auth
+// --- AUTHENTICATION ---
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::post('/admin/register', [AdminAuthController::class, 'register']);
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
-// Public Data
+// --- PUBLIC DATA (CLIENT) ---
+// Giữ nguyên phần Client vì thường Client chỉ cần GET hoặc logic đặc thù
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/product/{id}', [ProductController::class, 'show']);
 
@@ -107,58 +98,26 @@ Route::group([
     'middleware' => ['auth:sanctum', 'admin']
 ], function () {
 
-    Route::get('/products', [AdminProductController::class, 'index']);
-    Route::get('/product/{id}', [AdminProductController::class, 'show']);
-
-    Route::get('/categories', [AdminCategoryController::class, 'index']);
-    Route::get('/category/{id}', [AdminCategoryController::class, 'show']);
-    Route::apiResource('categories', AdminCategoryController::class);
-
-    Route::get('/users', [AdminUserController::class, 'index']);
-    Route::get('/user/{id}', [AdminUserController::class, 'show']);
-    // Thêm xoá sửa
-    Route::post('/users', [AdminUserController::class, 'store']);
-    Route::patch('/users/{id}', [AdminUserController::class, 'update']);
-    Route::delete('/users/{id}', [AdminUserController::class, 'destroy']);
-
-    Route::get('/variants', [AdminVariantController::class, 'index']);
-    Route::get('/variant/{id}', [AdminVariantController::class, 'show']);
-
-    Route::get('/comments', [AdminCommentController::class, 'index']);
-    Route::get('/comment/{id}', [AdminCommentController::class, 'show']);
-
-    Route::get('/coupons', [AdminCouponController::class, 'index']);
-    Route::get('/coupon/{id}', [AdminCouponController::class, 'show']);
-
-    Route::get('/imageProducts', [AdminImageProductController::class, 'index']);
-    Route::get('/imageProduct/{id}', [AdminImageProductController::class, 'show']);
-
-    Route::get('/news', [AdminNewController::class, 'index']);
-    Route::get('/new/{id}', [AdminNewController::class, 'show']);
-
-    Route::get('/orders', [AdminOrderController::class, 'index']);
-    Route::get('/order/{id}', [AdminOrderController::class, 'show']);
-
-    Route::get('/reviews', [AdminReviewController::class, 'index']);
-    Route::get('/review/{id}', [AdminReviewController::class, 'show']);
-
-    Route::get('/roles', [AdminRoleController::class, 'index']);
-    Route::get('/role/{id}', [AdminRoleController::class, 'show']);
-
-    Route::get('/slides', [AdminSlideController::class, 'index']);
-    Route::get('/slide/{id}', [AdminSlideController::class, 'show']);
-    Route::apiResource('slides', AdminSlideController::class);
-
-    Route::get('/admins', [AminAccountController::class, 'index']);
-    Route::get('/admin/{id}', [AminAccountController::class, 'show']);
-
-    Route::get('/brands', [AdminBrandSlideController::class, 'index']);
-    Route::get('/brand/{id}', [AdminBrandSlideController::class, 'show']);
-    Route::apiResource('brands', AdminBrandSlideController::class);
+    // Sử dụng apiResource để tự động tạo đủ 5 route: index, store, show, update, destroy
+    // Cấu trúc URL chuẩn sẽ là số nhiều: /admin/products, /admin/products/{id}
     
+    Route::apiResource('products', AdminProductController::class);
+    Route::apiResource('categories', AdminCategoryController::class);
+    Route::apiResource('users', AdminUserController::class); // Thay thế cho 5 dòng thủ công cũ
+    Route::apiResource('variants', AdminVariantController::class);
+    Route::apiResource('comments', AdminCommentController::class);
+    Route::apiResource('coupons', AdminCouponController::class);
+    Route::apiResource('imageProducts', AdminImageProductController::class); // URL: /admin/imageProducts
+    Route::apiResource('news', AdminNewController::class); // Lưu ý: Laravel có thể hiểu lầm số nhiều của news, nên test kỹ
+    Route::apiResource('orders', AdminOrderController::class);
+    Route::apiResource('reviews', AdminReviewController::class);
+    Route::apiResource('roles', AdminRoleController::class);
+    Route::apiResource('slides', AdminSlideController::class);
+    Route::apiResource('admins', AminAccountController::class);
+    Route::apiResource('brands', AdminBrandSlideController::class);
 });
 
-// Route lấy thông tin user hiện tại (cần token)
+// Route lấy thông tin user hiện tại
 Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
     return $request->user();
 });

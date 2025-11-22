@@ -20,7 +20,6 @@ class AdminBrandSlideController extends Controller
             return [
                 'id'          => $brand->id,
                 'name'        => $brand->name,
-                // Trả về link ảnh đầy đủ (có domain)
                 'imageUrl'    => $brand->image_url ? asset($brand->image_url) : null,
                 'linkUrl'     => $brand->link_url,
                 'order'       => $brand->order_number,
@@ -75,17 +74,10 @@ class AdminBrandSlideController extends Controller
     {
         $brand = BrandSlide::findOrFail($id);
 
-        // --- ĐOẠN MỚI THÊM: Xử lý riêng cho nút Toggle Status ---
-        // Nếu request có 'status' mà KHÔNG có 'name' -> Coi như là đổi trạng thái nhanh
-        if ($request->has('status') && !$request->has('name')) {
-            $request->validate([
-                'status' => 'required|in:published,draft',
-            ]);
-
+        if ($request->has('status') && count($request->all()) == 1) {
             $brand->update(['status' => $request->status]);
             return response()->json(['message' => 'Cập nhật trạng thái thành công']);
         }
-        // ---------------------------------------------------------
 
         // Validate đầy đủ (cho trường hợp sửa trong form)
         $request->validate([
@@ -97,7 +89,7 @@ class AdminBrandSlideController extends Controller
 
         $updateData = [
             'name'         => $request->name,
-            'link_url'     => $request->linkUrl, 
+            'link_url'     => $request->linkUrl,
             'order_number' => $request->order ?? 0,
             'status'       => $request->status,
         ];

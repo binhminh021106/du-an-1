@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "vue3-apexcharts": "^1.10.0"
+  }
+}

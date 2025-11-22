@@ -10,7 +10,7 @@ const userLayoutRoutes = {
       {
         path: "about",
         name: "about",
-        component: () => import("../page/user/About.vue"),
+        component: () => import("../page/user/about.vue"),
       },
       {
         path: "contact",

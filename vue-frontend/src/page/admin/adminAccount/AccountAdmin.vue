@@ -4,9 +4,10 @@ import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-const users = ref([]); // Chỉ chứa admin/nhanvien (từ /admins)
+const users = ref([]);
 const isLoading = ref(true);
 const searchQuery = ref('');
+const currentAdminId = ref(null); // Lưu ID người đăng nhập để check quyền
 
 // --- Modals ---
 const userModalInstance = ref(null);
@@ -21,6 +22,11 @@ const roleModalInstance = ref(null);
 const roleModalRef = ref(null);
 const isRoleEditMode = ref(false);
 
+// --- Upload Ảnh ---
+const fileInputRef = ref(null);
+const previewImage = ref(null);
+const avatarFile = ref(null);
+
 // --- Forms ---
 const formData = reactive({
   id: null,
@@ -28,21 +34,22 @@ const formData = reactive({
   email: '',
   phone: '',
   address: '',
-  role: 'nhanvien',
+  role_id: '',
   status: 'active',
-  password: '', 
-  password_confirmation: '' 
+  password: '',
+  password_confirmation: ''
 });
 
 const errors = reactive({
-  username: '',
+  fullname: '',
   email: '',
   phone: '',
   address: '',
-  password: '', // Thêm lỗi mật khẩu
-  password_confirmation: '' // Thêm lỗi xác nhận
+  password: '',
+  password_confirmation: ''
 });
 
+// Role Form
 const roleFormData = reactive({
   id: null,
   value: '',
@@ -56,63 +63,77 @@ const roleErrors = reactive({
 });
 
 // --- Roles & Pagination ---
-const roles = ref([]); // Chứa TẤT CẢ vai trò (để lấy nhãn)
+const roles = ref([]);
 const otherUsersCurrentPage = ref(1);
 const otherUsersItemsPerPage = ref(5);
 
 // --- Computed ---
+const getRoleObj = (roleId) => {
+  if (!roleId) return {};
+  return roles.value.find(r => r.id == roleId) || {};
+};
 
-// Lọc users theo tìm kiếm
+// 1. CẬP NHẬT: Sắp xếp danh sách, đưa user hiện tại lên đầu
 const filteredUsers = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
-  if (!query) {
-    return users.value;
+  let result = users.value;
+
+  // Lọc theo từ khóa
+  if (query) {
+    result = users.value.filter(user =>
+      (user.fullname && user.fullname.toLowerCase().includes(query)) ||
+      (user.email && user.email.toLowerCase().includes(query)) ||
+      (user.phone && user.phone.toLowerCase().includes(query)) ||
+      getRoleLabel(user.role_id).toLowerCase().includes(query)
+    );
   }
-  return users.value.filter(user =>
-    user.username.toLowerCase().includes(query) ||
-    user.email.toLowerCase().includes(query) ||
-    (user.phone && user.phone.toLowerCase().includes(query)) || // Cải tiến: Tìm theo SĐT
-    getRoleLabel(user.role).toLowerCase().includes(query)
-  );
+
+  // Sắp xếp: Đưa người dùng hiện tại lên đầu danh sách
+  // Sử dụng [...result] để tạo bản sao trước khi sort
+  return [...result].sort((a, b) => {
+      if (a.id === currentAdminId.value) return -1; // a lên trước
+      if (b.id === currentAdminId.value) return 1;  // b lên trước
+      return 0; // Giữ nguyên thứ tự (theo created_at từ API)
+  });
 });
 
-// Lọc admins
 const adminUsers = computed(() => {
-  return filteredUsers.value.filter(user => user.role === 'admin');
+  return filteredUsers.value.filter(user => {
+    const roleObj = getRoleObj(user.role_id);
+    return roleObj.value === 'admin';
+  });
 });
 
-// Lọc other users (nhanvien, ketoan...)
 const otherUsers = computed(() => {
-  return filteredUsers.value.filter(user => user.role !== 'admin');
+  return filteredUsers.value.filter(user => {
+    const roleObj = getRoleObj(user.role_id);
+    return roleObj.value !== 'admin';
+  });
 });
 
-// Tổng trang (other users)
 const otherUsersTotalPages = computed(() => {
   return Math.ceil(otherUsers.value.length / otherUsersItemsPerPage.value);
 });
 
-// Phân trang (other users)
 const paginatedOtherUsers = computed(() => {
   const start = (otherUsersCurrentPage.value - 1) * otherUsersItemsPerPage.value;
   const end = start + otherUsersItemsPerPage.value;
   return otherUsers.value.slice(start, end);
 });
 
-// Reset trang khi tìm kiếm
 watch(searchQuery, () => {
   otherUsersCurrentPage.value = 1;
 });
 
 // --- Hàm Helper ---
-
-function getRoleBadge(roleValue) {
-  const role = roles.value.find(r => r.value === roleValue);
+function getRoleBadge(roleId) {
+  const role = roles.value.find(r => r.id == roleId);
   return role ? role.badgeClass : 'text-bg-secondary';
 }
 
-function getRoleLabel(roleValue) {
-  const role = roles.value.find(r => r.value === roleValue);
-  return role ? role.label : roleValue;
+function getRoleLabel(roleId) {
+  const role = roles.value.find(r => r.id == roleId);
+  return role ? role.label : 'Chưa phân quyền';
 }
 
 function getFormattedDate(dateString) {
@@ -122,8 +143,10 @@ function getFormattedDate(dateString) {
 
 // --- Hooks ---
 onMounted(() => {
-  fetchUsers(); 
-  fetchRoles();
+  fetchCurrentUser(); 
+  fetchRoles().then(() => {
+    fetchUsers();
+  });
 
   if (userModalRef.value) {
     userModalInstance.value = new Modal(userModalRef.value, { backdrop: 'static' });
@@ -136,23 +159,33 @@ onMounted(() => {
   }
 });
 
-// --- CRUD User (Đã cập nhật để dùng /admins) ---
+// Lấy ID admin đang đăng nhập
+async function fetchCurrentUser() {
+  try {
+    const response = await apiService.get('/user');
+    if (response.data && response.data.id) {
+      currentAdminId.value = response.data.id;
+    }
+  } catch (e) {
+    console.error("Không thể lấy thông tin user hiện tại", e);
+  }
+}
+
+// --- CRUD User ---
 async function fetchUsers() {
   isLoading.value = true;
   try {
-    // THAY ĐỔI: Gọi /admins (plural) thay vì /admin
     const response = await apiService.get(`admin/admins`);
-
     users.value = response.data.map(user => ({
       ...user,
-      username: user.username || user.name, // Đảm bảo username tồn tại
+      fullname: user.fullname || 'No Name',
+      role_id: user.role_id,
       created_at: user.created_at || new Date().toISOString(),
       status: user.status || 'active'
     }));
     otherUsersCurrentPage.value = 1;
   } catch (error) {
-    console.error("Lỗi khi tải danh sách người dùng (admin):", error);
-    Swal.fire('Lỗi', 'Không thể tải danh sách tài khoản nội bộ.', 'error');
+    console.error("Lỗi khi tải danh sách người dùng:", error);
   } finally {
     isLoading.value = false;
   }
@@ -160,15 +193,34 @@ async function fetchUsers() {
 
 function resetForm() {
   formData.id = null;
-  formData.username = '';
+  formData.fullname = '';
   formData.email = '';
   formData.phone = '';
   formData.address = '';
-  formData.role = 'nhanvien';
+  formData.role_id = roles.value.length > 0 ? roles.value[0].id : '';
   formData.status = 'active';
-  formData.password = ''; // Reset mật khẩu
-  formData.password_confirmation = ''; // Reset xác nhận
+  formData.password = '';
+  formData.password_confirmation = '';
+  
+  // Reset ảnh
+  previewImage.value = null;
+  avatarFile.value = null;
+  if (fileInputRef.value) fileInputRef.value.value = '';
+
   Object.keys(errors).forEach(key => errors[key] = '');
+}
+
+// Xử lý chọn file ảnh
+function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (file) {
+    if (!file.type.match('image.*')) {
+      Swal.fire('Lỗi', 'Vui lòng chọn file hình ảnh (jpg, png, gif).', 'warning');
+      return;
+    }
+    avatarFile.value = file;
+    previewImage.value = URL.createObjectURL(file);
+  }
 }
 
 function openCreateModal() {
@@ -181,13 +233,15 @@ function openEditModal(user) {
   resetForm();
   isEditMode.value = true;
   formData.id = user.id;
-  formData.username = user.username;
+  formData.fullname = user.fullname;
   formData.email = user.email;
   formData.phone = user.phone || '';
   formData.address = user.address || '';
-  formData.role = user.role;
+  formData.role_id = user.role_id;
   formData.status = user.status;
-  // Không gán mật khẩu khi sửa
+  
+  previewImage.value = user.avatar_url; 
+  
   userModalInstance.value.show();
 }
 
@@ -200,8 +254,8 @@ function validateForm() {
   Object.keys(errors).forEach(key => errors[key] = '');
   let isValid = true;
 
-  if (!formData.username.trim()) {
-    errors.username = 'Vui lòng nhập tên đăng nhập.';
+  if (!formData.fullname.trim()) {
+    errors.fullname = 'Vui lòng nhập họ và tên.';
     isValid = false;
   }
 
@@ -213,17 +267,21 @@ function validateForm() {
     isValid = false;
   }
 
-  if (formData.phone.trim() && !/^0\d{9}$/.test(formData.phone.trim())) {
+  if (!formData.role_id) {
+    Swal.fire('Lỗi', 'Vui lòng chọn vai trò.', 'warning');
+    isValid = false;
+  }
+
+  if (formData.phone && formData.phone.trim() && !/^0\d{9}$/.test(formData.phone.trim())) {
     errors.phone = 'SĐT không hợp lệ (phải đủ 10 số, bắt đầu bằng 0).';
     isValid = false;
   }
-  
-  if (formData.address.trim() && formData.address.trim().length > 255) {
+
+  if (formData.address && formData.address.trim().length > 255) {
     errors.address = 'Địa chỉ không được vượt quá 255 ký tự.';
     isValid = false;
   }
 
-  // --- THÊM VALIDATE MẬT KHẨU (CHỈ KHI TẠO MỚI) ---
   if (!isEditMode.value) {
     if (!formData.password) {
       errors.password = 'Vui lòng nhập mật khẩu.';
@@ -241,7 +299,6 @@ function validateForm() {
       isValid = false;
     }
   }
-  // --- KẾT THÚC VALIDATE MẬT KHẨU ---
 
   return isValid;
 }
@@ -252,57 +309,70 @@ async function handleSave() {
   }
   isLoading.value = true;
 
-  const payload = {
-    username: formData.username,
-    name: formData.username, // Đồng bộ name = username
-    email: formData.email,
-    phone: formData.phone,
-    role: formData.role,
-    status: formData.status,
-    address: formData.address,
-    avatar: '',
-  };
+  const submitData = new FormData();
+  submitData.append('fullname', formData.fullname);
+  submitData.append('email', formData.email);
+  submitData.append('phone', formData.phone || '');
+  submitData.append('role_id', formData.role_id);
+  submitData.append('status', formData.status);
+  submitData.append('address', formData.address || '');
+  
+  if (avatarFile.value) {
+    submitData.append('avatar', avatarFile.value);
+  }
 
-  // --- THÊM MẬT KHẨU VÀO PAYLOAD (CHỈ KHI TẠO MỚI) ---
   if (!isEditMode.value) {
-    payload.password = formData.password;
-    // API của bạn có thể chỉ cần 'password', không cần 'password_confirmation'
-    // Tùy thuộc vào backend, bạn có thể cần gửi cả hai
-    // payload.password_confirmation = formData.password_confirmation; 
+    submitData.append('password', formData.password);
+    submitData.append('password_confirmation', formData.password_confirmation);
   }
 
   try {
     if (isEditMode.value) {
-      // THAY ĐỔI: Dùng /admins (plural)
-      await apiService.patch(`/admins/${formData.id}`, payload);
-      Swal.fire('Thành công', 'Đã cập nhật người dùng!', 'success');
+      submitData.append('_method', 'PATCH');
+      await apiService.post(`admin/admins/${formData.id}`, submitData, {
+         headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      Swal.fire('Thành công', 'Đã cập nhật thông tin!', 'success');
     } else {
-      payload.created_at = new Date().toISOString();
-      // THAY ĐỔI: Dùng /admins (plural)
-      await apiService.post(`/admins`, payload);
-      Swal.fire('Thành công', 'Đã tạo người dùng mới!', 'success');
+      await apiService.post(`admin/admins`, submitData, {
+         headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      Swal.fire('Thành công', 'Đã tạo tài khoản mới!', 'success');
     }
     userModalInstance.value.hide();
     fetchUsers();
   } catch (apiError) {
     console.error("Lỗi khi lưu:", apiError);
-    // Xử lý lỗi từ server (ví dụ: email đã tồn tại)
-    if (apiError.response && apiError.response.data && apiError.response.data.message) {
-        // Giả sử server trả về lỗi trong 'message'
-        // Hoặc nếu lỗi validation chi tiết:
-        if (apiError.response.data.errors) {
-            const serverErrors = apiError.response.data.errors;
-            if (serverErrors.email) {
-                errors.email = serverErrors.email[0]; // Hiển thị lỗi email
-            }
-            if (serverErrors.username) {
-                errors.username = serverErrors.username[0]; // Hiển thị lỗi username
-            }
-            // ... các trường khác
-        }
-        Swal.fire('Thất bại', apiError.response.data.message || 'Đã có lỗi xảy ra. Vui lòng thử lại.', 'error');
+
+    if (apiError.response) {
+      const status = apiError.response.status;
+      const data = apiError.response.data;
+
+      if (status === 422 && data.errors) {
+        if (data.errors.email) errors.email = data.errors.email[0];
+        if (data.errors.fullname) errors.fullname = data.errors.fullname[0];
+        if (data.errors.phone) errors.phone = data.errors.phone[0];
+        if (data.errors.password) errors.password = data.errors.password[0];
+
+        Swal.fire('Dữ liệu không hợp lệ', 'Vui lòng kiểm tra lại các trường báo đỏ.', 'warning');
+      }
+      else if (status === 500) {
+        const errorMessage = data.message || 'Lỗi Server nội bộ.';
+        Swal.fire({
+          icon: 'error',
+          title: 'Lỗi Server (500)',
+          text: errorMessage,
+          footer: '<small>Kiểm tra lại cấu trúc Database hoặc Controller</small>'
+        });
+      }
+      else if (status === 403) {
+        Swal.fire('Cảnh báo', data.message || 'Bạn không có quyền thực hiện.', 'warning');
+      }
+      else {
+        Swal.fire('Thất bại', data.message || 'Đã có lỗi xảy ra.', 'error');
+      }
     } else {
-        Swal.fire('Thất bại', 'Đã có lỗi xảy ra. Vui lòng thử lại.', 'error');
+      Swal.fire('Lỗi kết nối', 'Không thể kết nối đến server.', 'error');
     }
   } finally {
     isLoading.value = false;
@@ -310,12 +380,17 @@ async function handleSave() {
 }
 
 async function toggleUserStatus(user) {
+  if (user.id === currentAdminId.value) {
+     Swal.fire('Cảnh báo', 'Bạn không thể tự vô hiệu hóa chính mình.', 'warning');
+     return;
+  }
+
   const newStatus = user.status === 'active' ? 'inactive' : 'active';
   const actionText = newStatus === 'inactive' ? 'vô hiệu hóa' : 'kích hoạt';
 
   const result = await Swal.fire({
     title: 'Bạn có chắc chắn?',
-    text: `Bạn muốn ${actionText} tài khoản "${user.username}"?`,
+    text: `Bạn muốn ${actionText} tài khoản của "${user.fullname}"?`,
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#3085d6',
@@ -327,14 +402,13 @@ async function toggleUserStatus(user) {
   if (result.isConfirmed) {
     isLoading.value = true;
     try {
-      // THAY ĐỔI: Dùng /admins (plural)
-      await apiService.patch(`/admins/${user.id}`, { status: newStatus });
-      Swal.fire('Thành công!', `Đã ${actionText} người dùng ${user.username}.`, 'success');
-      user.status = newStatus; // Cập nhật UI
+      await apiService.patch(`admin/admins/${user.id}`, { status: newStatus });
+      Swal.fire('Thành công!', `Đã ${actionText} người dùng.`, 'success');
+      user.status = newStatus;
     } catch (error) {
       console.error(`Lỗi khi ${actionText} người dùng:`, error);
       Swal.fire('Lỗi', `Không thể ${actionText} người dùng này.`, 'error');
-      fetchUsers(); // Tải lại nếu lỗi
+      fetchUsers();
     } finally {
       isLoading.value = false;
     }
@@ -342,9 +416,14 @@ async function toggleUserStatus(user) {
 }
 
 async function handleDelete(user) {
+  if (user.id === currentAdminId.value) {
+      Swal.fire('Cảnh báo', 'Bạn không thể tự xóa tài khoản chính mình.', 'warning');
+      return;
+  }
+
   const result = await Swal.fire({
     title: 'Bạn có chắc chắn?',
-    text: `Bạn sẽ xóa vĩnh viễn người dùng "${user.username}"!`,
+    text: `Bạn sẽ xóa vĩnh viễn tài khoản "${user.fullname}"!`,
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#3085d6',
@@ -355,32 +434,24 @@ async function handleDelete(user) {
 
   if (result.isConfirmed) {
     try {
-      // THAY ĐỔI: Dùng /admins (plural)
-      await apiService.delete(`/admins/${user.id}`);
-      Swal.fire('Đã xóa!', 'Người dùng đã được xóa.', 'success');
+      await apiService.delete(`admin/admins/${user.id}`);
+      Swal.fire('Đã xóa!', 'Tài khoản đã được xóa.', 'success');
       fetchUsers();
     } catch (error) {
       console.error("Lỗi khi xóa người dùng:", error);
-      Swal.fire('Lỗi', 'Không thể xóa người dùng này.', 'error');
+      Swal.fire('Lỗi', 'Không thể xóa tài khoản này.', 'error');
     }
   }
 }
 
-// --- CRUD Vai trò (Giữ nguyên, vẫn đọc từ /roles) ---
+// --- CRUD Vai trò ---
 async function fetchRoles() {
   try {
-    const response = await apiService.get(`/roles`);
+    const response = await apiService.get(`admin/roles`);
     roles.value = response.data;
   } catch (error) {
     console.error("Lỗi khi tải danh sách vai trò:", error);
-    // Dữ liệu dự phòng
-    roles.value = [
-      { value: 'admin', label: 'Quản trị viên (Admin)', badgeClass: 'text-bg-danger', id: 1 },
-      { value: 'manager', label: 'Quản lý', badgeClass: 'text-bg-info', id: 2 },
-      { value: 'nhanvien', label: 'Nhân viên', badgeClass: 'text-bg-success', id: 3 },
-      { value: 'ketoan', label: 'Kế toán', badgeClass: 'text-bg-primary', id: 4 },
-      { value: 'user', label: 'Khách hàng (User)', badgeClass: 'text-bg-light', id: 5 }
-    ];
+    roles.value = [];
   }
 }
 
@@ -440,10 +511,10 @@ async function handleSaveRole() {
   };
   try {
     if (isRoleEditMode.value) {
-      await apiService.put(`/roles/${roleFormData.id}`, payload);
+      await apiService.put(`admin/roles/${roleFormData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật vai trò!', 'success');
     } else {
-      await apiService.post(`/roles`, payload);
+      await apiService.post(`admin/roles`, payload);
       Swal.fire('Thành công', 'Đã tạo vai trò mới!', 'success');
     }
     roleModalInstance.value.hide();
@@ -471,7 +542,7 @@ async function handleDeleteRole(role) {
   });
   if (result.isConfirmed) {
     try {
-      await apiService.delete(`/roles/${role.id}`);
+      await apiService.delete(`admin/roles/${role.id}`);
       Swal.fire('Đã xóa!', 'Vai trò đã được xóa.', 'success');
       fetchRoles();
     } catch (error) {
@@ -479,19 +550,6 @@ async function handleDeleteRole(role) {
       Swal.fire('Lỗi', 'Không thể xóa vai trò này.', 'error');
     }
   }
-}
-
-// --- Xử lý phân trang ---
-function goToOtherUsersPage(page) {
-  if (page >= 1 && page <= otherUsersTotalPages.value) {
-    otherUsersCurrentPage.value = page;
-  }
-}
-function prevOtherUsersPage() {
-  goToOtherUsersPage(otherUsersCurrentPage.value - 1);
-}
-function nextOtherUsersPage() {
-  goToOtherUsersPage(otherUsersCurrentPage.value + 1);
 }
 </script>
 
@@ -528,7 +586,7 @@ function nextOtherUsersPage() {
                   <i class="bi bi-search text-muted"></i>
                 </span>
                 <input type="text" class="form-control border-start-0 ps-0"
-                  placeholder="Tìm theo tên, email, SĐT, vai trò..." v-model="searchQuery">
+                  placeholder="Tìm theo họ tên, email, SĐT, vai trò..." v-model="searchQuery">
               </div>
             </div>
 
@@ -566,7 +624,7 @@ function nextOtherUsersPage() {
                     <thead>
                       <tr>
                         <th>ID</th>
-                        <th>Tên đăng nhập</th>
+                        <th>Họ và tên</th>
                         <th>Liên hệ</th>
                         <th>Vai trò</th>
                         <th>Trạng thái</th>
@@ -581,16 +639,22 @@ function nextOtherUsersPage() {
                         </td>
                       </tr>
                       <tr v-for="user in adminUsers" :key="user.id"
-                        :class="{ 'inactive-row': user.status !== 'active' }">
+                        :class="{ 
+                          'inactive-row': user.status !== 'active',
+                          'current-user-row': user.id === currentAdminId 
+                        }">
                         <td>{{ user.id }}</td>
                         <td>
                           <div class="d-flex align-items-center">
                             <img
-                              :src="user.avatar || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${user.username.charAt(0).toUpperCase()}`"
+                              :src="user.avatar_url || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${(user.fullname || 'U').charAt(0).toUpperCase()}`"
                               class="rounded-circle me-3" alt="Avatar"
                               style="width: 40px; height: 40px; object-fit: cover;">
                             <div>
-                              <div class="fw-bold">{{ user.username }}</div>
+                              <div class="fw-bold">
+                                {{ user.fullname }}
+                                <span v-if="user.id === currentAdminId" class="badge bg-primary ms-1">Bạn</span>
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -599,7 +663,7 @@ function nextOtherUsersPage() {
                           <div v-if="user.phone"><i class="bi bi-telephone me-1 text-muted"></i> {{ user.phone }}</div>
                         </td>
                         <td>
-                          <span :class="['badge', getRoleBadge(user.role)]">{{ getRoleLabel(user.role) }}</span>
+                          <span :class="['badge', getRoleBadge(user.role_id)]">{{ getRoleLabel(user.role_id) }}</span>
                         </td>
                         <td>
                           <span :class="['badge', user.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
@@ -609,11 +673,14 @@ function nextOtherUsersPage() {
                         <td>{{ getFormattedDate(user.created_at) }}</td>
                         <td class="text-center">
                           <div class="d-flex justify-content-center align-items-center">
+                            <!-- SWITCH STATUS: Disable nếu là user hiện tại -->
                             <div class="form-check form-switch d-inline-block align-middle me-3"
                               title="Kích hoạt/Vô hiệu hóa">
                               <input class="form-check-input" type="checkbox" role="switch"
                                 style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                                :checked="user.status === 'active'" @click.prevent="toggleUserStatus(user)">
+                                :checked="user.status === 'active'"
+                                :disabled="user.id === currentAdminId"
+                                @click.prevent="toggleUserStatus(user)">
                             </div>
 
                             <div class="btn-group btn-group-sm">
@@ -621,10 +688,10 @@ function nextOtherUsersPage() {
                                 @click="openViewModal(user)">
                                 <i class="bi bi-eye"></i>
                               </button>
-                              <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(user)">
+                              <button  class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(user)">
                                 <i class="bi bi-pencil"></i>
                               </button>
-                              <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(user)">
+                              <button v-if="user.id !== currentAdminId" class="btn btn-outline-danger" title="Xóa" @click="handleDelete(user)">
                                 <i class="bi bi-trash"></i>
                               </button>
                             </div>
@@ -652,7 +719,7 @@ function nextOtherUsersPage() {
                     <thead>
                       <tr>
                         <th>ID</th>
-                        <th>Tên đăng nhập</th>
+                        <th>Họ và tên</th>
                         <th>Liên hệ</th>
                         <th>Vai trò</th>
                         <th>Trạng thái</th>
@@ -667,16 +734,22 @@ function nextOtherUsersPage() {
                         </td>
                       </tr>
                       <tr v-for="user in paginatedOtherUsers" :key="user.id"
-                        :class="{ 'inactive-row': user.status !== 'active' }">
+                        :class="{ 
+                          'inactive-row': user.status !== 'active',
+                          'current-user-row': user.id === currentAdminId 
+                        }">
                         <td>{{ user.id }}</td>
                         <td>
                           <div class="d-flex align-items-center">
                             <img
-                              :src="user.avatar || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${user.username.charAt(0).toUpperCase()}`"
+                              :src="user.avatar_url || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${(user.fullname || 'U').charAt(0).toUpperCase()}`"
                               class="rounded-circle me-3" alt="Avatar"
                               style="width: 40px; height: 40px; object-fit: cover;">
                             <div>
-                              <div class="fw-bold">{{ user.username }}</div>
+                              <div class="fw-bold">
+                                {{ user.fullname }}
+                                <span v-if="user.id === currentAdminId" class="badge bg-primary ms-1">Bạn</span>
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -685,7 +758,7 @@ function nextOtherUsersPage() {
                           <div v-if="user.phone"><i class="bi bi-telephone me-1 text-muted"></i> {{ user.phone }}</div>
                         </td>
                         <td>
-                          <span :class="['badge', getRoleBadge(user.role)]">{{ getRoleLabel(user.role) }}</span>
+                          <span :class="['badge', getRoleBadge(user.role_id)]">{{ getRoleLabel(user.role_id) }}</span>
                         </td>
                         <td>
                           <span :class="['badge', user.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
@@ -699,7 +772,9 @@ function nextOtherUsersPage() {
                               title="Kích hoạt/Vô hiệu hóa">
                               <input class="form-check-input" type="checkbox" role="switch"
                                 style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                                :checked="user.status === 'active'" @click.prevent="toggleUserStatus(user)">
+                                :checked="user.status === 'active'"
+                                :disabled="user.id === currentAdminId"
+                                @click.prevent="toggleUserStatus(user)">
                             </div>
 
                             <div class="btn-group btn-group-sm">
@@ -707,10 +782,10 @@ function nextOtherUsersPage() {
                                 @click="openViewModal(user)">
                                 <i class="bi bi-eye"></i>
                               </button>
-                              <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(user)">
+                              <button v-if="user.id !== currentAdminId" class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(user)">
                                 <i class="bi bi-pencil"></i>
                               </button>
-                              <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(user)">
+                              <button v-if="user.id !== currentAdminId" class="btn btn-outline-danger" title="Xóa" @click="handleDelete(user)">
                                 <i class="bi bi-trash"></i>
                               </button>
                             </div>
@@ -760,39 +835,60 @@ function nextOtherUsersPage() {
         <div class="modal-body">
           <form @submit.prevent="handleSave" id="userForm">
             <div class="row">
-              <!-- Cột trái: Avatar (placeholder), Vai trò, Trạng thái -->
+              <!-- Cột trái: Avatar, Vai trò, Trạng thái -->
               <div class="col-md-4 text-center mb-3">
+                <!-- AVATAR UPLOAD -->
                 <div class="mb-3">
                   <img
-                    :src="`https://placehold.co/150x150/EBF4FF/1D62F0?text=${formData.username ? formData.username.charAt(0).toUpperCase() : '?'}`"
-                    class="img-thumbnail rounded-circle" alt="Avatar Placeholder"
-                    style="width: 150px; height: 150px; object-fit: cover;">
+                    :src="previewImage || `https://placehold.co/150x150/EBF4FF/1D62F0?text=${formData.fullname ? formData.fullname.charAt(0).toUpperCase() : '?'}`"
+                    class="img-thumbnail rounded-circle mb-2" alt="Avatar Preview"
+                    style="width: 150px; height: 150px; object-fit: cover; cursor: pointer;"
+                    @click="$refs.fileInputRef.click()"
+                  >
+                  <div>
+                    <input type="file" class="d-none" ref="fileInputRef" accept="image/*" @change="handleFileUpload">
+                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" @click="$refs.fileInputRef.click()">
+                      <i class="bi bi-upload"></i> Chọn ảnh
+                    </button>
+                  </div>
                 </div>
+
                 <div class="mb-3">
                   <label for="role" class="form-label fw-bold required">Vai trò</label>
-                  <select class="form-select" id="role" v-model="formData.role">
-                    <option v-for="role in availableRoles" :key="role.value" :value="role.value">
+                  <select class="form-select" id="role" v-model="formData.role_id"
+                    :disabled="isEditMode && formData.id === currentAdminId">
+                    <option value="" disabled>-- Chọn vai trò --</option>
+                    <option v-for="role in roles" :key="role.id" :value="role.id">
                       {{ role.label }}
                     </option>
                   </select>
+                  <div v-if="isEditMode && formData.id === currentAdminId" class="form-text text-warning">
+                      <i class="bi bi-exclamation-triangle"></i> Không thể tự đổi quyền.
+                  </div>
                 </div>
                 <div class="mb-3" v-if="isEditMode">
                   <label for="status" class="form-label fw-bold">Trạng thái tài khoản</label>
-                  <select class="form-select" id="status" v-model="formData.status">
+                  <select class="form-select" id="status" v-model="formData.status"
+                    :disabled="isEditMode && formData.id === currentAdminId">
                     <option value="active">Đang hoạt động</option>
                     <option value="inactive">Vô hiệu hóa</option>
                   </select>
+                  <div v-if="isEditMode && formData.id === currentAdminId" class="form-text text-warning">
+                      <i class="bi bi-exclamation-triangle"></i> Không thể tự vô hiệu hóa.
+                  </div>
                 </div>
               </div>
 
               <!-- Cột phải: Thông tin -->
               <div class="col-md-8">
+                
                 <div class="mb-3">
-                  <label for="username" class="form-label required">Tên đăng nhập</label>
-                  <input type="text" class="form-control" :class="{ 'is-invalid': errors.username }" id="username"
-                    v-model="formData.username">
-                  <div class="invalid-feedback" v-if="errors.username">{{ errors.username }}</div>
+                  <label for="fullname" class="form-label required">Họ và tên</label>
+                  <input type="text" class="form-control" :class="{ 'is-invalid': errors.fullname }" id="fullname"
+                    v-model="formData.fullname" placeholder="Nhập họ tên đầy đủ">
+                   <div class="invalid-feedback" v-if="errors.fullname">{{ errors.fullname }}</div>
                 </div>
+
                 <div class="mb-3">
                   <label for="email" class="form-label required">Email</label>
                   <input type="email" class="form-control" :class="{ 'is-invalid': errors.email }" id="email"
@@ -869,16 +965,14 @@ function nextOtherUsersPage() {
 
           <div class="text-center mb-4 mt-3">
             <img
-              :src="viewingUser.avatar || `https://placehold.co/120x120/EBF4FF/1D62F0?text=${viewingUser.username ? viewingUser.username.charAt(0).toUpperCase() : 'U'}`"
+              :src="viewingUser.avatar_url || `https://placehold.co/120x120/EBF4FF/1D62F0?text=${viewingUser.fullname ? viewingUser.fullname.charAt(0).toUpperCase() : 'U'}`"
               class="rounded-circle img-thumbnail shadow-sm" alt="Avatar"
               style="width: 120px; height: 120px; object-fit: cover;">
-            <h4 class="mt-3 mb-1">{{ viewingUser.username }}</h4>
+            <h4 class="mt-3 mb-1">{{ viewingUser.fullname }}</h4>
             <p class="text-muted mb-0">ID: {{ viewingUser.id }}</p>
+            <p class="text-muted small">{{ viewingUser.email }}</p>
           </div>
           <div class="list-group list-group-flush">
-            <div class="list-group-item px-0">
-              <i class="bi bi-envelope me-3 text-primary"></i> {{ viewingUser.email }}
-            </div>
             <div class="list-group-item px-0">
               <i class="bi bi-telephone me-3 text-success"></i> {{ viewingUser.phone || '(Chưa có SĐT)' }}
             </div>
@@ -887,8 +981,8 @@ function nextOtherUsersPage() {
             </div>
             <div class="list-group-item px-0">
               <i class="bi bi-person-badge me-3 text-info"></i>
-              <span :class="['badge', getRoleBadge(viewingUser.role)]">
-                {{ getRoleLabel(viewingUser.role) }}
+              <span :class="['badge', getRoleBadge(viewingUser.role_id)]">
+                {{ getRoleLabel(viewingUser.role_id) }}
               </span>
             </div>
             <div class="list-group-item px-0">
@@ -966,6 +1060,7 @@ function nextOtherUsersPage() {
             <table class="table table-bordered table-striped">
               <thead>
                 <tr>
+                  <th>ID</th>
                   <th>Giá trị (Value)</th>
                   <th>Nhãn hiển thị</th>
                   <th>Hành động</th>
@@ -973,9 +1068,10 @@ function nextOtherUsersPage() {
               </thead>
               <tbody>
                 <tr v-if="roles.length === 0">
-                  <td colspan="3" class="text-center">Chưa có vai trò nào được tạo.</td>
+                  <td colspan="4" class="text-center">Chưa có vai trò nào được tạo.</td>
                 </tr>
                 <tr v-for="role in roles" :key="role.id">
+                  <td>{{ role.id }}</td>
                   <td>{{ role.value }}</td>
                   <td><span :class="['badge', role.badgeClass]">{{ role.label }}</span></td>
                   <td>
@@ -1033,5 +1129,15 @@ function nextOtherUsersPage() {
 .inactive-row:hover {
   opacity: 1; /* Hiển thị rõ khi hover */
   background-color: #f1f3f5;
+}
+
+/* Style riêng cho dòng của user hiện tại */
+.current-user-row {
+  background-color: #e8f4ff !important; /* Màu xanh nhạt */
+  border-left: 4px solid #0d6efd; /* Viền trái màu xanh */
+}
+/* Đảm bảo màu nền không bị override bởi table-hover */
+.table-hover .current-user-row:hover {
+    background-color: #d6ebff !important;
 }
 </style>
