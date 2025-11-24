@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import apiService from '../../apiService.js';
 import { useRouter } from 'vue-router';
+// THÊM: Import hàm addToCart từ store (Đường dẫn ./cartStore.js là đúng)
+import { addToCart } from "./cartStore.js"; 
 
 // Khởi tạo router
 const router = useRouter();
@@ -85,7 +87,18 @@ const formatCurrency = (value) => new Intl.NumberFormat('vi-VN', { style: 'curre
 
 // --- ACTIONS ---
 const openQuickView = (product) => { alert(`Xem nhanh: ${product.name}`); };
-const addToCart = (product) => { alert(`Đã thêm vào giỏ: ${product.name}`); };
+
+// SỬA: Cập nhật hàm addToCart để sử dụng cartStore
+const onAddToCart = (product) => {
+    const minPrice = getMinPrice(product.variants);
+    // Chọn phiên bản có giá thấp nhất hoặc tạo phiên bản mặc định
+    const variant = product.variants 
+        ? product.variants.find(v => v.price === minPrice) || product.variants[0]
+        : { id: 'default', name: 'Mặc định', price: minPrice || 0, stock: 999 };
+
+    addToCart(product, variant, 1); // Thêm 1 sản phẩm vào giỏ
+    alert(`Đã thêm vào giỏ: ${product.name}`);
+};
 
 
 // --- LIFECYCLE HOOKS ---
@@ -132,13 +145,7 @@ onBeforeUnmount(stopAutoSlide);
                     </div>
                 </section>
 
-                <!-- <aside class="utility-sidebar">
-                    <div class="user-info-card" v-if="users.length">
-                        <p class="user-name">{{ users[0].username }}</p>
-                        <p class="user-tier">⭐ {{ getUserRoleLabel(users[0].role) }}</p>
-                    </div>
-                </aside> -->
-            </section>
+                </section>
 
             <section class="brand-banner" style="margin-top: 15px;" v-if="brands.length > 0">
                 <a :href="brands[0].linkUrl || '#'">
@@ -181,7 +188,7 @@ onBeforeUnmount(stopAutoSlide);
                                     <i class="fas fa-eye"></i> Xem
                                 </button>
 
-                                <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i>
+                                <button class="btn-add-cart" @click="onAddToCart(product)"><i class="fas fa-plus"></i>
                                     Thêm</button>
                             </div>
                         </div>
@@ -217,7 +224,7 @@ onBeforeUnmount(stopAutoSlide);
                                         @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
                                         <i class="fas fa-eye"></i> Xem
                                     </button>
-                                    <button class="btn-add-cart" @click="addToCart(product)"><i class="fas fa-plus"></i>
+                                    <button class="btn-add-cart" @click="onAddToCart(product)"><i class="fas fa-plus"></i>
                                         Thêm</button>
                                 </div>
                             </div>

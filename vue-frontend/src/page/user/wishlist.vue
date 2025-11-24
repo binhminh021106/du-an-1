@@ -1,54 +1,65 @@
 <script setup>
+import { ref } from 'vue';
+// Import store wishlist
+import { wishlist, removeItemFromWishlist } from "./wishlistStore.js"; 
+// Import store giỏ hàng để thêm từ wishlist
+import { addToCart } from "./cartStore.js"; 
+
+// --- HELPER FUNCTION ---
+const formatCurrency = (value) =>
+  value.toLocaleString("vi-VN") + "\u00A0₫"; 
+
+// --- ACTIONS ---
+
+const removeItem = (itemId) => {
+    removeItemFromWishlist(itemId);
+    alert('Đã xóa sản phẩm khỏi danh sách yêu thích.');
+};
+
+const moveItemToCart = (item) => {
+    // Luôn chọn variant đầu tiên và thêm 1 sản phẩm vào giỏ
+    const variant = item.variants && item.variants.length > 0 
+        ? item.variants[0]
+        : { id: 'default', name: 'Mặc định', price: item.price, stock: item.stock || 999 };
+
+    addToCart(item, variant, 1);
+    
+    // Xóa sản phẩm khỏi wishlist sau khi thêm vào giỏ
+    removeItem(item.id); 
+
+    alert(`Đã thêm ${item.name} vào Giỏ hàng!`);
+};
 </script>
 
 <template>
     <div class="wishlist-page-wrapper">
         <div class="wishlist-container">
-            <h2>Danh sách Yêu thích</h2>
+            <h2>Danh sách Yêu thích ({{ wishlist.length }} sản phẩm)</h2>
 
-            <div class="wishlist-items">
-                <div class="wishlist-item">
-                    <img src="https://placehold.co/150x150/009981/white?text=Product" alt="Hình ảnh sản phẩm" class="item-image">
+            <div v-if="wishlist.length" class="wishlist-items">
+                <div v-for="item in wishlist" :key="item.id" class="wishlist-item">
+                    <img :src="item.image_url" :alt="item.name" class="item-image">
                     
                     <div class="item-info">
-                        <h3 class="item-name">Tên sản phẩm mẫu A (Ví dụ: Laptop XYZ)</h3>
-                        <p class="item-price">25.000.000đ</p>
+                        <h3 class="item-name">{{ item.name }}</h3>
+                        <p class="item-price">{{ formatCurrency(item.price) }}</p>
                     </div>
 
                     <div class="item-actions">
-                        <button class="btn btn-primary">Thêm vào giỏ</button>
-                        <button class="btn btn-secondary">Xóa</button>
-                    </div>
-                </div>
-
-                <div class="wishlist-item">
-                    <img src="https://placehold.co/150x150/009981/white?text=Product" alt="Hình ảnh sản phẩm" class="item-image">
-                    
-                    <div class="item-info">
-                        <h3 class="item-name">Tên sản phẩm mẫu B (Ví dụ: Chuột không dây)</h3>
-                        <p class="item-price">1.200.000đ</p>
-                    </div>
-
-                    <div class="item-actions">
-                        <button class="btn btn-primary">Thêm vào giỏ</button>
-                        <button class="btn btn-secondary">Xóa</button>
-                    </div>
-                </div>
-
-                <div class="wishlist-item">
-                    <img src="https://placehold.co/150x150/009981/white?text=Product" alt="Hình ảnh sản phẩm" class="item-image">
-                    
-                    <div class="item-info">
-                        <h3 class="item-name">Tên sản phẩm mẫu C (Ví dụ: Bàn phím cơ)</h3>
-                        <p class="item-price">3.500.000đ</p>
-                    </div>
-
-                    <div class="item-actions">
-                        <button class="btn btn-primary">Thêm vào giỏ</button>
-                        <button class="btn btn-secondary">Xóa</button>
+                        <button class="btn btn-primary" @click="moveItemToCart(item)">
+                            Thêm vào giỏ
+                        </button>
+                        <button class="btn btn-secondary" @click="removeItem(item.id)">
+                            Xóa
+                        </button>
                     </div>
                 </div>
             </div>
+
+            <div v-else class="empty-wishlist">
+                <p>❤️ Danh sách yêu thích của bạn đang trống.</p>
+            </div>
+
 
             <p class="back-link">
                 <router-link to="/">Tiếp tục mua sắm</router-link>
@@ -66,6 +77,7 @@
     --text-color: #333;
     --border-color: #ddd;
     --bg-light: #f9f9f9;
+    --danger-color: #e74c3c;
 }
 
 /* Wrapper ngoài cùng, tương tự .login-page-wrapper */
@@ -102,6 +114,7 @@
     margin-bottom: 30px;
     padding-bottom: 15px;
     border-bottom: 1px solid var(--border-color);
+    color: var(--primary-color);
 }
 
 .wishlist-items {
@@ -118,6 +131,10 @@
     padding: 20px;
     border: 1px solid var(--border-color);
     border-radius: 8px;
+    transition: box-shadow 0.2s;
+}
+.wishlist-item:hover {
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
 }
 
 .item-image {
@@ -171,18 +188,18 @@
 }
 
 .btn-primary:hover {
-    opacity: 0.9;
+    background-color: #007a68;
 }
 
 /* Nút phụ, tương tự .social-btn */
 .btn-secondary {
     background-color: #fff;
-    color: var(--primary-color);
-    border: 1px solid var(--primary-color);
+    color: var(--danger-color); /* Dùng màu đỏ cho hành động Xóa */
+    border: 1px solid var(--danger-color);
 }
 
 .btn-secondary:hover {
-    background-color: var(--primary-color);
+    background-color: var(--danger-color);
     color: #fff;
 }
 
@@ -201,6 +218,13 @@
 
 .back-link a:hover {
     text-decoration: underline;
+}
+
+.empty-wishlist {
+    text-align: center;
+    padding: 30px;
+    color: #777;
+    font-size: 1.1em;
 }
 
 /* --- Responsive cho điện thoại --- */

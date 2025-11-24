@@ -2,15 +2,12 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import apiService from '../../apiService.js';
+// THÊM: Import hàm addToCart từ store (Đường dẫn ./cartStore.js là đúng)
+import { addToCart } from "./cartStore.js";
 
 // --- CẤU HÌNH & KHỞI TẠO ---
 const route = useRoute()
 const router = useRouter()
-
-// --- THAY ĐỔI: Bỏ các hàm liên quan đến nút tìm kiếm
-// const timKiemSanPham = ... (đã xóa)
-// const apDungLoc = ... (đã xóa)
-// const huyTimKiem = ... (đã xóa)
 
 // THAY ĐỔI: Hàm clearAllFilters cập nhật lại state
 const clearAllFilters = () => {
@@ -23,7 +20,6 @@ const clearAllFilters = () => {
 
 // THAY ĐỔI: searchKeyword (input) và searchTerm (filter)
 const searchKeyword = ref("")  // keyword trong ô input, v-model
-// const isSearching = ref(false) // Đã xóa
 
 // --- STATE ---
 const allProducts = ref([])
@@ -51,9 +47,16 @@ const getMinPrice = (variants) => {
 const formatCurrency = (value) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
 
+// SỬA: Cập nhật hàm addToCart để sử dụng cartStore
+const onAddToCart = (product) => {
+  const minPrice = getMinPrice(product.variants);
+  // Chọn phiên bản có giá thấp nhất hoặc tạo phiên bản mặc định
+  const variant = product.variants 
+      ? product.variants.find(v => v.price === minPrice) || product.variants[0]
+      : { id: 'default', name: 'Mặc định', price: minPrice || 0, stock: 999 };
 
-const addToCart = (product) => {
-  alert(`Đã thêm ${product.name} vào giỏ hàng.`)
+  addToCart(product, variant, 1); // Thêm 1 sản phẩm vào giỏ
+  alert(`Đã thêm ${product.name} vào giỏ hàng.`);
 }
 
 
@@ -228,7 +231,6 @@ watch(route, (newRoute) => {
         <aside class="sidebar">
           <div class="filter-section">
             <h3><i class="fas fa-search"></i> Tìm kiếm sản phẩm</h3>
-            <!-- THAY ĐỔI: Bỏ nút tìm kiếm, chỉ giữ lại input -->
             <input v-model="searchKeyword" type="text" placeholder="Nhập tên sản phẩm..." class="search-box" />
           </div>
           <h2 class="sidebar-title">Danh mục sản phẩm</h2>
@@ -251,7 +253,6 @@ watch(route, (newRoute) => {
             </div>
           </div>
 
-          <!-- THAY ĐỔI: Nút reset được giữ lại với class mới để style -->
           <button @click="clearAllFilters" class="btn-reset-all">
             <i class="fas fa-undo"></i> Reset tất cả bộ lọc
           </button>
@@ -288,7 +289,7 @@ watch(route, (newRoute) => {
                   <p class="product-price">
                     {{ formatCurrency(getMinPrice(product.variants)) }}
                   </p>
-                  <button class="btn-add-cart" @click.stop="addToCart(product)">
+                  <button class="btn-add-cart" @click.stop="onAddToCart(product)">
                     <i class="fas fa-cart-plus"></i> Thêm vào giỏ
                   </button>
                 </div>
@@ -324,7 +325,7 @@ watch(route, (newRoute) => {
                 <button class="btn-love hot-sale-btn">
                   <i class="fas fa-heart"></i>
                 </button>
-                <button class="btn-cart hot-sale-btn" @click.stop="addToCart(product)"> <i class="fas fa-cart-plus"></i>
+                <button class="btn-cart hot-sale-btn" @click.stop="onAddToCart(product)"> <i class="fas fa-cart-plus"></i>
                 </button>
               </div>
             </div>
@@ -963,8 +964,8 @@ watch(route, (newRoute) => {
 .news-card-image img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
   /* Đảm bảo ảnh lấp đầy khung */
+  object-fit: cover;
 }
 
 .news-card-title {

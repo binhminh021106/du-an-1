@@ -2,6 +2,11 @@
 import { ref, watch, onMounted, computed, watchEffect } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import apiService from '../../apiService.js';
+// THÊM: Import hàm addToCart từ store (Đường dẫn ./cartStore.js là đúng)
+import { addToCart } from "./cartStore.js";
+// THÊM: Import Wishlist Store
+import { isInWishlist, toggleWishlist } from "./wishlistStore.js";
+
 
 const route = useRoute();
 const router = useRouter();
@@ -10,6 +15,8 @@ const product = ref(null);
 const reviews = ref([]);
 const quantity = ref(1);
 const loading = ref(true);
+// THÊM: State cục bộ để theo dõi trạng thái yêu thích
+const isFavorite = ref(false);
 
 // 🔹 DỮ LIỆU MUA KÈM (GIẢ)
 const bundleDeals = ref([
@@ -108,6 +115,8 @@ const loadProductById = async (id) => {
       v.stock = Number.isFinite(+v.stock) ? +v.stock : 0;
       v.price = Number.isFinite(+v.price) ? +v.price : 0;
       v.original_price = Number.isFinite(+v.original_price) ? +v.original_price : v.price;
+      // Đảm bảo mỗi variant có ID, nếu không tự tạo
+      v.id = v.id || i;
     });
 
     productRes.data.gallery_images = [
@@ -122,6 +131,9 @@ const loadProductById = async (id) => {
     selectedVariantIndex.value = 0;
     selectedImage.value = product.value.gallery_images[0] || product.value.image_url || '';
     quantity.value = 1;
+
+    // THÊM: Cập nhật trạng thái yêu thích ban đầu từ store
+    isFavorite.value = isInWishlist(product.value.id);
 
     const reviewRes = await apiService.get(`/reviews?productId=${id}`);
     reviews.value = reviewRes.data || [];
@@ -183,14 +195,33 @@ const validateQty = () => {
   quantity.value = Number(quantity.value);
 };
 
-const addToCart = (productItem) => {
-  if (!activeVariant.value) return;
-  alert(`Đã thêm ${quantity.value} x ${productItem.name} (${activeVariant.value.name}) vào giỏ hàng!`);
+// SỬA: Cập nhật hàm addToCart để sử dụng cartStore
+const onAddToCart = (productItem) => {
+  if (!activeVariant.value) {
+    alert("Vui lòng chọn phiên bản sản phẩm.");
+    return;
+  }
+    
+  // GỌI HÀM GLOBAL TỪ STORE
+  addToCart(productItem, activeVariant.value, quantity.value); 
+    
+  alert(`Đã thêm ${quantity.value} x ${productItem.name} (${activeVariant.value.name || 'Phiên bản'}) vào giỏ hàng!`);
+  // Có thể thêm router.push('/cart') nếu muốn chuyển trang giỏ hàng ngay lập tức
 };
 
+// SỬA: Hàm toggleFavorite sử dụng Wishlist Store
 const toggleFavorite = (productItem) => {
-  // nếu chưa có thuộc tính isFavorite thì tạo
-  productItem.isFavorite = !productItem.isFavorite;
+    if (!productItem) return;
+    
+    // Gọi hàm từ store và cập nhật state cục bộ
+    const added = toggleWishlist(productItem);
+    isFavorite.value = added;
+    
+    if (added) {
+        alert(`Đã thêm ${productItem.name} vào Wishlist! ❤️`);
+    } else {
+        alert(`Đã xóa ${productItem.name} khỏi Wishlist!`);
+    }
 };
 
 // --- LIFECYCLE HOOKS ---
@@ -294,11 +325,11 @@ watchEffect(() => {
           </div>
 
           <div class="action-buttons mt-4">
-            <button class="btn btn-primary-green btn-lg me-3" @click="addToCart(product)">
+            <button class="btn btn-primary-green btn-lg me-3" @click="onAddToCart(product)">
               <i class="bi bi-cart-plus"></i> Thêm vào giỏ
             </button>
             <button class="btn btn-outline-danger btn-lg" @click="toggleFavorite(product)">
-              <i :class="['bi', product.isFavorite ? 'bi-heart-fill' : 'bi-heart']"></i>
+              <i :class="['bi', isFavorite ? 'bi-heart-fill' : 'bi-heart']"></i>
             </button>
           </div>
 
@@ -369,31 +400,9 @@ watchEffect(() => {
                   <button class="btn-buy-now">Mua ngay</button>
                 </div>
               </div>
-              <!-- <div class="service-package">
-                <h3>🎯 Chọn gói dịch vụ bảo hành</h3>
-                <div class="package-options">
-                  <div class="package-card" v-for="(pkg, index) in warrantyPackages" :key="index"
-                    :class="{ active: selectedPackage === pkg }" @click="selectedPackage = pkg">
-                    <h4>{{ pkg.name }}</h4>
-                    <p>{{ pkg.desc }}</p>
-                    <span class="price">+{{ pkg.price.toLocaleString() }}₫</span>
-                  </div>
-                </div>
-              </div> -->
-            </section>
+              </section>
           </div>
         </div>
-
-        <!-- ===== PHẦN MÔ TẢ SẢN PHẨM ĐÃ BỊ XÓA TẠI ĐÂY ===== -->
-        <!-- 
-        <section class="mt-4 mb-5 product-description">
-          <h4 class="section-title">📄 Mô tả sản phẩm</h4>
-          <p>
-            {{ product.description || "Sản phẩm chất lượng cao, bảo hành chính hãng 12 tháng." }}
-          </p>
-        </section>
-        -->
-        <!-- ==================================================== -->
 
       </div>
 
@@ -458,16 +467,6 @@ watchEffect(() => {
             </div>
           </div>
         </section>
-
-        <!-- ===== PHẦN MÔ TẢ ĐÃ ĐƯỢC XÓA TẠI ĐÂY ===== -->
-        <!-- 
-        <section class="mb-5 product-description">
-          <h4 class="section-title">📄 Mô tả sản phẩm</h4>
-          <p>
-            {{ product.description || "Sản phẩm chất lượng cao, bảo hành chính hãng 12 tháng." }}
-          </p>
-        </section>
-        -->
 
         <section class="product-reviews">
           <h4 class="section-title">
@@ -697,6 +696,18 @@ watchEffect(() => {
   flex: 1;
   font-size: 0.9rem;
   line-height: 1.4;
+}
+
+.feature-item .icon-wrapper {
+  background-color: var(--trade-in-red);
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+  font-size: 1.6rem;
 }
 
 .feature-item .icon-wrapper {
