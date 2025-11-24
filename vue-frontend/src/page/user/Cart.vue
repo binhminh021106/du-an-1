@@ -1,51 +1,15 @@
 <script setup>
-import { ref, computed, watch } from "vue";
-
-// ✅ Sản phẩm có sẵn
-const cart = ref([
-  {
-    id: "1",
-    image_url: "#",
-    name: "Tay cầm chơi game PS5 DualSense",
-    category: { id: 1, name: "Gaming" },
-    price: 1800000,
-    stock: 80,
-    qty: 2,
-  },
-  {
-    id: "2",
-    image_url: "#",
-    name: "Xiaomi 15 Pro",
-    category: { id: 2, name: "Phone" },
-    price: 14500000,
-    stock: 50,
-    qty: 1,
-  },
-]);
-
-const total = computed(() =>
-  cart.value.reduce((sum, item) => sum + item.qty * item.price, 0)
-);
+import { computed } from "vue";
+// THAY THẾ bằng store
+import { cart, total, removeItem, updateItemQty, saveCart } from "./cartStore.js"; 
 
 // 🛠️ Đã sửa: Sử dụng &nbsp; cho khoảng trắng không ngắt dòng
 const formatPrice = (v) => v.toLocaleString("vi-VN") + "\u00A0₫"; // \u00A0 là ký tự Non-breaking space
 
-const removeItem = (index) => {
-  cart.value.splice(index, 1);
+// SỬA: Hàm removeItem mới sẽ gọi hàm từ store
+const onRemoveItem = (cartId) => {
+  removeItem(cartId);
 };
-
-// ✅ Chặn nhập số lượng âm, 0 hoặc vượt quá tồn kho
-watch(
-  cart,
-  (newCart) => {
-    newCart.forEach((item) => {
-      if (item.qty < 1) item.qty = 1;
-      // Dùng @blur trong template là đủ, watch này có thể gây giật nhẹ khi gõ liên tục
-      // if (item.qty > item.stock) item.qty = item.stock; 
-    });
-  },
-  { deep: true }
-);
 </script>
 
 <template>
@@ -66,14 +30,17 @@ watch(
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(item, index) in cart" :key="item.id">
+            <tr v-for="item in cart" :key="item.cartId"> 
               <td>
                 <div class="product-info">
                   <img :src="item.image_url" alt="" />
-                  <span>{{ item.name }}</span>
+                  <span>
+                    {{ item.name }}
+                    <small v-if="item.variantName && item.variantName !== 'Mặc định'">({{ item.variantName }})</small>
+                  </span>
                 </div>
               </td>
-              <td>{{ item.category.name }}</td>
+              <td>{{ item.category?.name || 'N/A' }}</td>
               <td>{{ formatPrice(item.price) }}</td>
               <td>
                 <input
@@ -81,12 +48,13 @@ watch(
                   min="1"
                   :max="item.stock"
                   v-model.number="item.qty"
-                  @blur="item.qty = Math.max(1, Math.min(item.qty, item.stock))"
+                  @blur="updateItemQty(item.cartId, item.qty)" 
+                  @input="updateItemQty(item.cartId, item.qty)" 
                 />
               </td>
               <td>{{ formatPrice(item.qty * item.price) }}</td>
               <td>
-                <button class="remove-btn" @click="removeItem(index)">
+                <button class="remove-btn" @click="onRemoveItem(item.cartId)">
                   <i class="fa fa-trash"></i>
                 </button>
               </td>
