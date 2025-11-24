@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import apiService from '../../apiService.js';
 import { useRouter } from 'vue-router';
-
+import VueApexCharts from "vue3-apexcharts";
 // Giả định VueApexCharts được đăng ký toàn cục trong main.js
 // import VueApexCharts from 'vue3-apexcharts';
 
@@ -476,6 +476,7 @@ const orderStatusChart = computed(() => {
       </div>
     </div>
   </div>
+  
 </template>
 
 <style scoped>
