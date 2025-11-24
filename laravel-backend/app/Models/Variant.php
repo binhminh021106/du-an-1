@@ -7,9 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 use App\Models\OrderItem;
-// Thêm Model AttributeValue để thiết lập quan hệ
 use App\Models\AttributeValue; 
-use App\Models\Product; // Đảm bảo đã có Product Model
+use App\Models\Product;
 
 class Variant extends Model
 {
@@ -18,20 +17,17 @@ class Variant extends Model
 
     protected $table = 'variants';
 
-
     protected $fillable = [
         'product_id',
         'price',
         'original_price', 
         'stock',
-        // Giả sử 2 cột này được thay thế bằng quan hệ attributes
-        // 'configuration', 
-        // 'color',
+        // 'sku', // Nên thêm mã SKU nếu có để quản lý kho dễ hơn
     ];
 
     /**
-     * Thiết lập quan hệ many-to-many với các giá trị thuộc tính.
-     * Sử dụng bảng trung gian 'variant_attribute_values'.
+     * Quan hệ Many-to-Many với AttributeValue
+     * Bảng trung gian: variant_attribute_values
      */
     public function attributeValues()
     {
@@ -43,9 +39,6 @@ class Variant extends Model
         )->withTimestamps();
     }
     
-    /**
-     * Một Variant thuộc về một Product.
-     */
     public function product()
     {
         return $this->belongsTo(Product::class, 'product_id', 'id');
@@ -57,14 +50,20 @@ class Variant extends Model
     }
     
     /**
-     * Xóa mềm các quan hệ khi xóa mềm Variant
+     * Xử lý sự kiện khi xóa Variant
      */
     protected static function booted()
     {
-        static::deleting(function ($variant) {
-            // Khi xóa mềm Variant, xóa cứng các liên kết trong bảng pivot
-            // Bạn có thể cân nhắc xóa mềm các orderItems nếu OrderItem cũng có SoftDeletes
+        // Sử dụng 'forceDeleting' thay vì 'deleting'
+        // Lý do: Nếu dùng 'deleting', khi bạn xóa mềm (Soft Delete), quan hệ trong bảng pivot sẽ bị xóa luôn (detach).
+        // Khi đó, nếu bạn khôi phục (restore) lại Variant, nó sẽ bị mất thuộc tính (không còn màu/size nữa).
+        
+        static::forceDeleting(function ($variant) {
+            // Chỉ khi xóa vĩnh viễn (Force Delete) thì mới xóa sạch quan hệ trong bảng trung gian
             $variant->attributeValues()->detach(); 
+            
+            // Xử lý logic OrderItems nếu cần (thường thì không nên xóa OrderItem để giữ lịch sử đơn hàng)
+            // $variant->orderItems()->delete(); 
         });
     }
 }

@@ -79,7 +79,7 @@ class AdminCategoryController extends Controller
             'name' => $request->name,
             'description' => $request->description,
             'icon' => $request->icon,
-            'order_number' => $request->order, // Map sang cột DB
+            'order_number' => $request->order,
             'status' => $request->status,
         ]);
 

@@ -347,7 +347,8 @@ function addVariantRow() {
   formData.attribute_definitions.forEach(attrDef => { newAttributes[attrDef.name] = ''; });
   formData.variants.push(reactive({
     variant_id: crypto.randomUUID(), // Dùng variant_id
-    price: 0,
+    original_price: 0, // Giá gốc (mới thêm)
+    price: 0, // Giá bán
     stock: 0,
     attributes: newAttributes
   }));
@@ -440,6 +441,7 @@ function openEditModal(product) {
       return reactive({
         ...v,
         variant_id: v.variant_id || crypto.randomUUID(), // Đảm bảo có variant_id
+        original_price: v.original_price || 0, // Load giá gốc
         attributes: variantAttributes
       });
     })
@@ -482,8 +484,10 @@ function validateForm() {
     errors.variants = 'Sản phẩm phải có ít nhất 1 biến thể (SKU).'; isValid = false;
   } else {
     for (const variant of formData.variants) {
-      if ((variant.price === null || variant.price < 0) || (variant.stock === null || variant.stock < 0)) {
-        errors.variants = 'Giá và Số lượng của biến thể không hợp lệ.'; isValid = false; break;
+      if ((variant.price === null || variant.price < 0) || 
+          (variant.stock === null || variant.stock < 0) ||
+          (variant.original_price === null || variant.original_price < 0)) { // Validate giá gốc
+        errors.variants = 'Giá bán, Giá gốc và Số lượng của biến thể không hợp lệ.'; isValid = false; break;
       }
       if (formData.attribute_definitions.length > 0) {
         for (const attrDef of formData.attribute_definitions) {
@@ -590,6 +594,7 @@ async function handleSave() {
       const variantPayload = {
         // Sử dụng ID nghiệp vụ (businessProductId) đã được xác định/cập nhật
         product_id: businessProductId,
+        original_price: variant.original_price, // Gửi giá gốc
         price: variant.price,
         stock: variant.stock,
         attributes: variant.attributes
@@ -954,14 +959,15 @@ function goToPage(page) {
                     <th v-for="attrDef in formData.attribute_definitions" :key="attrDef.id">
                       {{ attrDef.name }} <span class="text-danger">*</span>
                     </th>
-                    <th style="min-width: 120px;">Giá (VND) <span class="text-danger">*</span></th>
+                    <th style="min-width: 120px;">Giá gốc (VND) <span class="text-danger">*</span></th>
+                    <th style="min-width: 120px;">Giá bán (VND) <span class="text-danger">*</span></th>
                     <th style="min-width: 100px;">Số lượng <span class="text-danger">*</span></th>
                     <th style="width: 50px;">Xóa</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-if="formData.variants.length === 0">
-                      <td :colspan="formData.attribute_definitions.length + 3" class="text-center text-muted p-3">
+                      <td :colspan="formData.attribute_definitions.length + 4" class="text-center text-muted p-3">
                         <span v-if="formData.attribute_definitions.length === 0">Vui lòng thêm thuộc tính...</span>
                         <span v-else>Chưa có biến thể nào.</span>
                       </td>
@@ -973,7 +979,11 @@ function goToPage(page) {
                              v-model="variant.attributes[attrDef.name]">
                     </td>
                     <td>
-                      <input type="number" class="form-control form-control-sm" placeholder="Giá"
+                      <input type="number" class="form-control form-control-sm" placeholder="Giá gốc"
+                             v-model.number="variant.original_price" min="0">
+                    </td>
+                    <td>
+                      <input type="number" class="form-control form-control-sm" placeholder="Giá bán"
                              v-model.number="variant.price" min="0">
                     </td>
                     <td>
@@ -1091,13 +1101,14 @@ function goToPage(page) {
                   <th v-for="attrName in viewingProduct.attributeNames" :key="attrName">
                     {{ attrName }}
                   </th>
-                  <th>Giá</th>
+                  <th>Giá gốc</th>
+                  <th>Giá bán</th>
                   <th>Tồn kho</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-if="!viewingProduct.variants || viewingProduct.variants.length === 0">
-                    <td :colspan="viewingProduct.attributeNames.length + 2" class="text-center text-muted">
+                    <td :colspan="viewingProduct.attributeNames.length + 3" class="text-center text-muted">
                       Không có biến thể
                     </td>
                 </tr>
@@ -1105,6 +1116,7 @@ function goToPage(page) {
                   <td v-for="attrName in viewingProduct.attributeNames" :key="attrName">
                     {{ variant.attributes[attrName] || 'N/A' }}
                   </td>
+                  <td>{{ formatCurrency(variant.original_price || 0) }}</td>
                   <td>{{ formatCurrency(variant.price) }}</td>
                   <td>{{ variant.stock }}</td>
                 </tr>
