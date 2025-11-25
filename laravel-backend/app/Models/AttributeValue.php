@@ -4,32 +4,19 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-// use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AttributeValue extends Model
 {
     use HasFactory;
-    // use SoftDeletes;
 
     protected $table = 'attribute_values';
 
+    // FIX: Thêm 'attribute_id' vào fillable vì bảng trong DB có cột này
     protected $fillable = [
-        'attribute_id',
+        'attribute_id', 
         'value',
     ];
 
-    /**
-     * Một AttributeValue thuộc về một Attribute (ví dụ: Đỏ thuộc về Màu sắc)
-     */
-    public function attribute()
-    {
-        return $this->belongsTo(Attribute::class, 'attribute_id', 'id');
-    }
-
-    /**
-     * Một AttributeValue có thể được liên kết với nhiều Variant.
-     * Sử dụng quan hệ many-to-many thông qua bảng pivot 'variant_attribute_values'.
-     */
     public function variants()
     {
         return $this->belongsToMany(
@@ -37,6 +24,12 @@ class AttributeValue extends Model
             'variant_attribute_values', 
             'attribute_value_id', 
             'variant_id'
-        )->withTimestamps();
+        );
+    }
+    
+    // Thêm quan hệ ngược lại với Attribute nếu cần
+    public function attribute()
+    {
+        return $this->belongsTo(Attribute::class, 'attribute_id', 'id');
     }
 }
