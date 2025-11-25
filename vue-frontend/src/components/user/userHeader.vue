@@ -175,7 +175,7 @@ onUnmounted(() => {
               <ul class="menu-list">
                 <li><router-link :to="{ name: 'profile' }"><i class="fa-solid fa-address-card"></i> Tài khoản của
                     tôi</router-link></li>
-                <li><router-link :to="{ name: 'home' }"><i class="fa-solid fa-box-archive"></i> Đơn hàng</router-link>
+                <li><router-link :to="{ name: 'OrderList' }"><i class="fa-solid fa-box-archive"></i> Đơn hàng</router-link>
                 </li>
                 <li><router-link :to="{ name: 'wishlist' }"><i class="fa-solid fa-heart"></i> Yêu thích</router-link>
                 </li>
