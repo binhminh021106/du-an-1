@@ -8,47 +8,42 @@ use App\Models\Variant;
 
 class AdminVariantController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        $variants = Variant::all();
-
-        return response()->json($variants);
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        //
+        // Validate
+        $request->validate([
+            'product_id' => 'required', // Cần thiết để link với sản phẩm
+            'price' => 'required|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+        ]);
+
+        // Tạo biến thể mới
+        $variant = Variant::create([
+            'product_id' => $request->product_id,
+            'price' => $request->price,
+            'original_price' => $request->original_price ?? 0,
+            'stock' => $request->stock,
+            // Nếu bạn lưu attributes dạng JSON vào cột 'attributes' trong bảng variants
+            'attributes' => $request->attributes 
+        ]);
+
+        return response()->json($variant, 201);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
+    public function update(Request $request, $id)
     {
         $variant = Variant::findOrFail($id);
+        
+        $variant->update($request->only([
+            'price', 'original_price', 'stock', 'attributes'
+        ]));
 
         return response()->json($variant);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
+    public function destroy($id)
     {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
+        Variant::destroy($id);
+        return response()->json(['message' => 'Deleted']);
     }
 }

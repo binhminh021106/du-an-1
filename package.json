@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.1.0",
     "vue3-apexcharts": "^1.10.0"
   }
 }

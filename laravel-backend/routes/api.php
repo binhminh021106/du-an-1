@@ -35,8 +35,9 @@ use App\Http\Controllers\Api\admin\AdminOrderController;
 use App\Http\Controllers\Api\admin\AdminReviewController;
 use App\Http\Controllers\Api\admin\AdminRoleController;
 use App\Http\Controllers\Api\admin\AdminSlideController;
-use App\Http\Controllers\Api\admin\AminAccountController; // Giữ nguyên tên class như bạn khai báo (Amin...)
+use App\Http\Controllers\Api\admin\AminAccountController;
 use App\Http\Controllers\Api\admin\AdminBrandSlideController;
+use App\Http\Controllers\Api\admin\AdminAttributeController; // <--- MỚI
 
 /* API Routes */
 
@@ -48,7 +49,6 @@ Route::post('/admin/register', [AdminAuthController::class, 'register']);
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
 // --- PUBLIC DATA (CLIENT) ---
-// Giữ nguyên phần Client vì thường Client chỉ cần GET hoặc logic đặc thù
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/product/{id}', [ProductController::class, 'show']);
 
@@ -97,27 +97,25 @@ Route::group([
     'prefix' => 'admin',
     'middleware' => ['auth:sanctum', 'admin']
 ], function () {
-
-    // Sử dụng apiResource để tự động tạo đủ 5 route: index, store, show, update, destroy
-    // Cấu trúc URL chuẩn sẽ là số nhiều: /admin/products, /admin/products/{id}
-    
     Route::apiResource('products', AdminProductController::class);
     Route::apiResource('categories', AdminCategoryController::class);
-    Route::apiResource('users', AdminUserController::class); // Thay thế cho 5 dòng thủ công cũ
+    Route::apiResource('users', AdminUserController::class);
     Route::apiResource('variants', AdminVariantController::class);
     Route::apiResource('comments', AdminCommentController::class);
     Route::apiResource('coupons', AdminCouponController::class);
-    Route::apiResource('imageProducts', AdminImageProductController::class); // URL: /admin/imageProducts
-    Route::apiResource('news', AdminNewController::class); // Lưu ý: Laravel có thể hiểu lầm số nhiều của news, nên test kỹ
+    Route::apiResource('imageProducts', AdminImageProductController::class);
+    Route::apiResource('news', AdminNewController::class);
     Route::apiResource('orders', AdminOrderController::class);
     Route::apiResource('reviews', AdminReviewController::class);
     Route::apiResource('roles', AdminRoleController::class);
     Route::apiResource('slides', AdminSlideController::class);
     Route::apiResource('admins', AminAccountController::class);
     Route::apiResource('brands', AdminBrandSlideController::class);
+    
+    // Route cho Attributes (Mới)
+    Route::apiResource('attributes', AdminAttributeController::class);
 });
 
-// Route lấy thông tin user hiện tại
 Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
     return $request->user();
 });
