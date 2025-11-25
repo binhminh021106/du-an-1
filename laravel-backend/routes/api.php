@@ -37,7 +37,7 @@ use App\Http\Controllers\Api\admin\AdminRoleController;
 use App\Http\Controllers\Api\admin\AdminSlideController;
 use App\Http\Controllers\Api\admin\AminAccountController;
 use App\Http\Controllers\Api\admin\AdminBrandSlideController;
-use App\Http\Controllers\Api\admin\AdminAttributeController; // <--- MỚI
+use App\Http\Controllers\Api\admin\AdminAttributeController;
 
 /* API Routes */
 
@@ -47,6 +47,7 @@ Route::post('/login', [AuthController::class, 'login']);
 
 Route::post('/admin/register', [AdminAuthController::class, 'register']);
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
+
 
 // --- PUBLIC DATA (CLIENT) ---
 Route::get('/products', [ProductController::class, 'index']);
@@ -100,7 +101,15 @@ Route::group([
     Route::apiResource('products', AdminProductController::class);
     Route::apiResource('categories', AdminCategoryController::class);
     Route::apiResource('users', AdminUserController::class);
+    
+    // Resource variants chuẩn (CRUD cơ bản)
     Route::apiResource('variants', AdminVariantController::class);
+    
+    // --- KHẮC PHỤC LỖI 404: Thêm Route custom cho Attributes ---
+    // Route này ánh xạ POST /api/admin/variants/{id}/attributes -> hàm updateAttributes
+    Route::post('variants/{id}/attributes', [AdminVariantController::class, 'updateAttributes']);
+    // -----------------------------------------------------------
+
     Route::apiResource('comments', AdminCommentController::class);
     Route::apiResource('coupons', AdminCouponController::class);
     Route::apiResource('imageProducts', AdminImageProductController::class);
@@ -112,7 +121,6 @@ Route::group([
     Route::apiResource('admins', AminAccountController::class);
     Route::apiResource('brands', AdminBrandSlideController::class);
     
-    // Route cho Attributes (Mới)
     Route::apiResource('attributes', AdminAttributeController::class);
 });
 
