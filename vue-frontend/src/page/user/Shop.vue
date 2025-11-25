@@ -412,7 +412,7 @@ watch(route, (newRoute) => {
   --hot-sale-color: #ff4d4d;
 }
 
-/* ---------- CẤU TRÚC CHUNG ---------- */
+
 .shop-wrapper {
   width: 100%;
   min-height: 100vh;
@@ -448,10 +448,10 @@ watch(route, (newRoute) => {
 
 .hot-sale-header span {
   font-size: 1.0em;
-  /* Đã sửa theo code mới */
+
   background: var(--hot-sale-color);
   color: white;
-  /* Đã sửa theo code mới */
+ 
   padding: 3px 8px;
   border-radius: 5px;
 }
@@ -576,7 +576,7 @@ watch(route, (newRoute) => {
 .sidebar {
   position: sticky;
   top: 20px;
-  /* Đã sửa theo code mới */
+
   background: white;
   padding: 20px;
   border-radius: 12px;
@@ -622,12 +622,12 @@ watch(route, (newRoute) => {
 
 .filter-section {
   margin-bottom: 20px;
-  /* Đã sửa từ margin-top */
+
 }
 
 .filter-section h3 {
   font-size: 1.2em;
-  /* THAY ĐỔI: Đồng bộ font size */
+  
   color: #222;
   font-weight: 600;
   margin-bottom: 10px;
@@ -653,12 +653,7 @@ watch(route, (newRoute) => {
   outline: none;
 }
 
-/* THAY ĐỔI: Bỏ filter-buttons, btn-filter, btn-reset */
-/* .filter-buttons { ... } (đã xóa) */
-/* .btn-filter, .btn-reset { ... } (đã xóa) */
 
-
-/* THAY ĐỔI: Thêm style cho btn-reset-all */
 .btn-reset-all {
   width: 100%;
   padding: 11px;
@@ -684,7 +679,6 @@ watch(route, (newRoute) => {
 }
 
 
-/* ---------- MAIN CONTENT ---------- */
 .main-content {
   background: white;
   border-radius: 12px;
@@ -706,7 +700,7 @@ watch(route, (newRoute) => {
   margin-bottom: 20px;
 }
 
-/* ---------- PRODUCT GRID ---------- */
+
 .product-listing {
   margin-top: 10px;
 }
@@ -725,8 +719,7 @@ watch(route, (newRoute) => {
   transition: all 0.25s ease;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
   cursor: pointer;
-  /* ===== THAY ĐỔI: Thêm flex-box
-  để căn chỉnh ===== */
+
   display: flex;
   flex-direction: column;
 }
@@ -751,12 +744,11 @@ watch(route, (newRoute) => {
 
 .product-info {
   padding: 12px 15px 18px;
-  /* ===== THAY ĐỔI: Thêm flex-box
-  để căn chỉnh ===== */
+  
   display: flex;
   flex-direction: column;
   flex-grow: 1;
-  /* Đẩy nội dung chiếm hết không gian */
+ 
 }
 
 .product-name {
@@ -764,10 +756,9 @@ watch(route, (newRoute) => {
   font-weight: 600;
   color: #333;
   margin-bottom: 6px;
-  /* ===== THAY ĐỔI: Thêm min-height
-  cho 2 dòng ===== */
+
   min-height: 2.8em;
-  /* 1em * 1.4 line-height * 2 lines */
+
 }
 
 .product-price {
@@ -787,18 +778,17 @@ watch(route, (newRoute) => {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  /* ===== THAY ĐỔI: Thêm
-  margin-top: auto ===== */
+
   margin-top: auto;
-  /* Đẩy nút xuống dưới cùng */
+
 }
 
 .btn-add-cart:hover {
-  background: var(--primary-hover-color);
+  background-color:#c82333;
 }
 
 
-/* ---------- NO PRODUCTS ---------- */
+
 .no-products {
   text-align: center;
   padding: 40px 0;
@@ -806,7 +796,6 @@ watch(route, (newRoute) => {
   font-size: 1.1em;
 }
 
-/* ---------- RESPONSIVE ---------- */
 @media (max-width: 992px) {
   .shop-layout {
     grid-template-columns: 1fr;
@@ -827,8 +816,6 @@ watch(route, (newRoute) => {
 
 .range-slider {
   width: 100%;
-  /* Sửa lại màu cho nhất quán với
-  thiết kế */
   accent-color: var(--primary-color);
 }
 

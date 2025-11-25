@@ -632,7 +632,7 @@ watchEffect(() => {
 }
 
 .btn-primary-green:hover {
-  background-color: var(--primary-hover);
+  
   border-radius: 8px;
   box-shadow: 0 4px 10px rgba(0, 153, 129, 0.4);
   transform: translateY(-2px);
@@ -1126,7 +1126,8 @@ watchEffect(() => {
 }
 
 .btn-buy-now:hover {
-  background: var(--primary-hover);
+  background: rgb(49, 117, 106);
+
 }
 
 

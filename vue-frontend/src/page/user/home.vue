@@ -145,7 +145,12 @@ onBeforeUnmount(stopAutoSlide);
                     </div>
                 </section>
 
+<<<<<<< Updated upstream
                 </section>
+=======
+              
+            </section>
+>>>>>>> Stashed changes
 
             <section class="brand-banner" style="margin-top: 15px;" v-if="brands.length > 0">
                 <a :href="brands[0].linkUrl || '#'">
@@ -160,62 +165,68 @@ onBeforeUnmount(stopAutoSlide);
                 <div class="trust-item"><span>🔄 Đổi trả 30 ngày</span></div>
                 <div class="trust-item"><span>🏪 Hỗ trợ 24/7</span></div>
             </section>
+<section class="product-section-container">
+    <section class="product-group hot-products">
+        <h2 class="section-title"> Sản phẩm yêu thích</h2>
+        <div class="product-grid">
+            <div class="product-card" v-for="product in topFavoriteProducts" :key="product.id">
 
-            <section class="product-section-container">
+                
+                <img 
+                    :src="product.image_url || '#'" 
+                    :alt="product.name"
+                    @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })"
+                    style="cursor: pointer;"
+                >
 
-                <section class="product-group hot-products">
-                    <h2 class="section-title"> Sản phẩm yêu thích</h2>
-                    <div class="product-grid">
-                        <div class="product-card" v-for="product in topFavoriteProducts" :key="product.id">
-                            <img :src="product.image_url || '#'" :alt="product.name">
-                            <h3 class="product-name">{{ product.name }}</h3>
+                <h3 
+                    class="product-name"
+                    @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })"
+                    style="cursor: pointer;"
+                >
+                    {{ product.name }}
+                </h3>
 
-                            <div class="product-stats">
-                                <span class="rating">
-                                    <i class="fas fa-star text-warning"></i> {{ product.average_rating || 0 }}
-                                </span>
-                                <span class="favorite-count ms-3">
-                                    <i class="fas fa-heart text-danger"></i> {{ product.favorite_count || 0 }}
-                                </span>
-                            </div>
+                <div class="product-stats">
+                    <span class="rating">
+                        <i class="fas fa-star text-warning"></i> {{ product.average_rating || 0 }}
+                    </span>
+                    <span class="favorite-count ms-3">
+                        <i class="fas fa-heart text-danger"></i> {{ product.favorite_count || 0 }}
+                    </span>
+                </div>
 
-                            <div class="product-price">
-                                <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
-                            </div>
-                            <div class="card-actions-small">
-                                <button class="btn-view"
-                                    @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
-                                    <i class="fas fa-eye"></i> Xem
-                                </button>
+                <div class="product-price">
+                    <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
+                </div>
 
+<<<<<<< Updated upstream
                                 <button class="btn-add-cart" @click="onAddToCart(product)"><i class="fas fa-plus"></i>
                                     Thêm</button>
                             </div>
                         </div>
                     </div>
                 </section>
+=======
+                <div class="card-actions-small">
+                    <button class="btn-view"
+                        @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
+                        <i class="fas fa-eye"></i> Xem
+                    </button>
+>>>>>>> Stashed changes
 
-                <template v-for="category in categoriesWithProducts" :key="category.id">
-                    <section class="product-group category-group" :id="'cat-' + category.id">
-                        <h2 class="section-title">
-                            <span v-html="category.icon" style="margin-right: 10px;"></span>
-                            {{ category.name }} nổi bật
-                        </h2>
+                    <button class="btn-add-cart" @click="addToCart(product)">
+                        <i class="fas fa-plus"></i> Thêm
+                    </button>
+                </div>
 
-                        <div class="product-grid">
-                            <div class="product-card" v-for="product in category.products" :key="product.id">
-                                <img :src="product.image_url || '#'" :alt="product.name">
-                                <h3 class="product-name">{{ product.name }}</h3>
+            </div>
+        </div>
+    </section>
+</section>
 
-                                <div class="product-stats">
-                                    <span class="rating">
-                                        <i class="fas fa-star text-warning"></i> {{ product.average_rating || 0 }}
-                                    </span>
-                                    <span class="sold-count ms-2" style="font-size: 0.8em; color: #888;">
-                                        (Đã bán: {{ product.sold_count || 0 }})
-                                    </span>
-                                </div>
 
+<<<<<<< Updated upstream
                                 <div class="product-price">
                                     <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
                                 </div>
@@ -247,6 +258,8 @@ onBeforeUnmount(stopAutoSlide);
                 </section>
 
             </section>
+=======
+>>>>>>> Stashed changes
         </main>
     </div>
 </template>
