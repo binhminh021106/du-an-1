@@ -7,12 +7,13 @@ use Illuminate\Http\Request;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log; // ✅ THÊM DÒNG NÀY
 
 class AdminProductController extends Controller
 {
     public function index()
     {
-        // Lấy kèm variants và images để frontend hiển thị đầy đủ
         $products = Product::with(['category', 'variants', 'images'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -30,7 +31,7 @@ class AdminProductController extends Controller
             'category_id' => 'required|exists:categories,id',
             'description' => 'nullable|string',
             'status' => 'required|in:active,inactive,draft',
-            'thumbnail_url' => 'nullable|string',
+            'thumbnail' => 'nullable|image|max:5120',
         ]);
 
         if ($validator->fails()) {
@@ -44,20 +45,33 @@ class AdminProductController extends Controller
         DB::beginTransaction();
         
         try {
+            $thumbnailUrl = 'https://placehold.co/150x150?text=No+Img';
+            
+            if ($request->hasFile('thumbnail')) {
+                $file = $request->file('thumbnail');
+                $filename = time() . '_' . $file->getClientOriginalName();
+                $path = public_path('thumbnail');
+
+                if (!File::exists($path)) {
+                    File::makeDirectory($path, 0755, true);
+                }
+
+                $file->move($path, $filename);
+                $thumbnailUrl = '/thumbnail/' . $filename;
+            }
+
             $productData = [
                 'name' => $request->name,
                 'category_id' => $request->category_id,
                 'description' => $request->description ?? '',
                 'status' => $request->status,
-                'thumbnail_url' => $request->thumbnail_url,
-                // Mặc định các trường số
+                'thumbnail_url' => $thumbnailUrl,
                 'sold_count' => 0,
                 'favorite_count' => 0,
                 'review_count' => 0,
                 'average_rating' => 0.00,
             ];
 
-            // FIX: Bỏ check product_id vì DB không có cột này
             $product = Product::create($productData);
 
             DB::commit();
@@ -67,7 +81,6 @@ class AdminProductController extends Controller
                 'message' => 'Tạo sản phẩm thành công',
                 'data' => $product,
                 'id' => $product->id, 
-                // Trả về id làm product_id cho frontend dùng tạm
                 'product_id' => $product->id 
             ], 201);
 
@@ -82,24 +95,72 @@ class AdminProductController extends Controller
 
     public function show(string $id)
     {
-        // FIX: Chỉ tìm theo ID chính (id)
-        $product = Product::with(['category', 'variants', 'images', 'comments', 'reviews'])
-            ->findOrFail($id);
+        try {
+            // Load đầy đủ quan hệ
+            $product = Product::with([
+                'category', 
+                'variants' => function($query) {
+                    $query->with(['attributeValues' => function($q) {
+                        $q->with('attribute');
+                    }]);
+                },
+                'images', 
+            ])->findOrFail($id);
             
-        return response()->json([
-            'success' => true,
-            'data' => $product
-        ]);
+            // Format lại variants
+            $formattedVariants = $product->variants->map(function($variant) {
+                $attributes = [];
+                
+                // Kiểm tra tồn tại attributeValues
+                if ($variant->attributeValues && $variant->attributeValues->count() > 0) {
+                    foreach($variant->attributeValues as $av) {
+                        // Kiểm tra null safety
+                        if ($av && $av->attribute && $av->attribute->name) {
+                            $attributes[$av->attribute->name] = $av->value;
+                        }
+                    }
+                }
+                
+                return [
+                    'id' => $variant->id,
+                    'product_id' => $variant->product_id,
+                    'price' => (float) $variant->price,
+                    'original_price' => (float) $variant->original_price,
+                    'stock' => (int) $variant->stock,
+                    'attributes' => $attributes,
+                    'created_at' => $variant->created_at,
+                    'updated_at' => $variant->updated_at,
+                ];
+            });
+            
+            // Gán lại variants đã format
+            $productData = $product->toArray();
+            $productData['variants'] = $formattedVariants;
+            
+            return response()->json([
+                'success' => true,
+                'data' => $productData
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error in AdminProductController@show: ' . $e->getMessage()); // ✅ Bỏ dấu \
+            Log::error($e->getTraceAsString()); // ✅ Bỏ dấu \
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi tải sản phẩm: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function update(Request $request, string $id)
     {
-        // FIX: Chỉ tìm theo ID chính (id)
         $product = Product::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'category_id' => 'sometimes|exists:categories,id',
+            'thumbnail' => 'nullable|image|max:5120',
         ]);
 
         if ($validator->fails()) {
@@ -108,7 +169,26 @@ class AdminProductController extends Controller
 
         DB::beginTransaction();
         try {
-            $product->update($request->only(['name', 'category_id', 'description', 'status', 'thumbnail_url']));
+            $dataToUpdate = $request->only(['name', 'category_id', 'description', 'status']);
+
+            if ($request->hasFile('thumbnail')) {
+                if ($product->thumbnail_url && file_exists(public_path($product->thumbnail_url))) {
+                    // File::delete(public_path($product->thumbnail_url));
+                }
+
+                $file = $request->file('thumbnail');
+                $filename = time() . '_' . $file->getClientOriginalName();
+                $path = public_path('thumbnail');
+
+                if (!File::exists($path)) {
+                    File::makeDirectory($path, 0755, true);
+                }
+
+                $file->move($path, $filename);
+                $dataToUpdate['thumbnail_url'] = '/thumbnail/' . $filename;
+            }
+
+            $product->update($dataToUpdate);
             
             DB::commit();
             return response()->json([
@@ -125,10 +205,12 @@ class AdminProductController extends Controller
     public function destroy(string $id)
     {
         try {
-            // FIX: Chỉ tìm theo ID chính
             $product = Product::findOrFail($id);
             
-            // Xóa variants và images liên quan
+            if ($product->thumbnail_url && File::exists(public_path($product->thumbnail_url))) {
+                File::delete(public_path($product->thumbnail_url));
+            }
+
             $product->variants()->delete();
             $product->images()->delete();
             $product->delete();
