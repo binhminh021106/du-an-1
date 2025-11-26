@@ -1,3 +1,80 @@
+<script setup>
+import { ref, computed, onMounted } from 'vue';
+// Import apiService mà chúng ta đã cấu hình (hoặc import axios trực tiếp nếu muốn)
+import apiService from '../../apiService.js';
+
+// --- CONFIG ---
+const BACKEND_URL = 'http://127.0.0.1:8000'; // Đổi theo port thực tế của bạn
+
+// --- STATE ---
+const posts = ref([]);
+const isLoading = ref(true);
+const searchQuery = ref('');
+
+// --- COMPUTED ---
+// 1. Bài viết nổi bật (Lấy bài đầu tiên trong danh sách)
+const featuredPost = computed(() => {
+  return posts.value.length > 0 ? posts.value[0] : null;
+});
+
+// 2. Danh sách tin tức mới nhất (Lấy từ bài thứ 2 trở đi)
+const latestPosts = computed(() => {
+  return posts.value.slice(1);
+});
+
+// --- METHODS ---
+const getFullImage = (path) => {
+    if (!path) return 'https://placehold.co/600x400?text=No+Image';
+    if (path.startsWith('http')) return path;
+    return `${BACKEND_URL}${path}`;
+};
+
+const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('vi-VN', { 
+        day: '2-digit', month: '2-digit', year: 'numeric' 
+    }).format(date);
+};
+
+const fetchPosts = async () => {
+    isLoading.value = true;
+    try {
+        // --- SỬA Ở ĐÂY ---
+        // Cũ (Sai với ý bạn): const response = await apiService.get('/client/news');
+        
+        // Mới (Đúng ý bạn): Gọi thẳng vào /news
+        const response = await apiService.get('/news'); 
+        
+        // --- XỬ LÝ DỮ LIỆU ---
+        // Tùy vào cách NewController trả về (có bọc 'data' hay không)
+        // Nếu controller trả về: return response()->json($news); -> Thì lấy response.data
+        // Nếu controller trả về: return response()->json(['data' => $news]); -> Thì lấy response.data.data
+        
+        const allPosts = response.data; // Hoặc response.data.data (hãy console.log để xem)
+        
+        posts.value = Array.isArray(allPosts) ? allPosts : [];
+            
+    } catch (error) {
+        console.error("Lỗi tải bài viết:", error);
+    } finally {
+        isLoading.value = false;
+    }
+};
+
+const handleSearch = () => {
+    // Logic tìm kiếm (có thể gọi API search hoặc filter local)
+    console.log("Tìm kiếm:", searchQuery.value);
+    // Demo filter local đơn giản:
+    // posts.value = posts.value.filter(p => p.title.includes(searchQuery.value));
+};
+
+// --- LIFECYCLE ---
+onMounted(() => {
+    fetchPosts();
+});
+</script>
+
 <template>
   <section class="blog-page">
     <header class="blog-hero">
@@ -11,98 +88,103 @@
     </header>
 
     <main class="blog-container">
-      <div class="blog-grid">
+        
+      <div v-if="isLoading" class="text-center py-5">
+         <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+         </div>
+         <p class="mt-2 text-muted">Đang tải tin tức...</p>
+      </div>
+
+      <div v-else class="blog-grid">
         
         <section class="posts-content">
           
-          <article class="featured-post">
-            <div class="featured-image">
-              
+          <article v-if="featuredPost" class="featured-post">
+            <div class="featured-image" 
+                 :style="{ backgroundImage: `url(${getFullImage(featuredPost.image_url)})` }">
             </div>
             <div class="featured-body">
-              <span class="category-tag">ĐÁNH GIÁ SẢN PHẨM</span>
-              <h2>Đánh giá chi tiết Laptop Flagship 2025: Sức mạnh và Thiết kế vượt trội</h2>
+              <span class="category-tag">MỚI NHẤT</span>
+              <h2>
+                  <router-link :to="`/blog/${featuredPost.slug}`" class="text-decoration-none text-reset">
+                      {{ featuredPost.title }}
+                  </router-link>
+              </h2>
               <p class="excerpt">
-                Chúng tôi đã có cơ hội trải nghiệm sớm mẫu laptop cao cấp nhất năm 2025. Từ hiệu năng xử lý, chất lượng màn hình đến thời lượng pin, đây là tất cả những gì bạn cần biết trước khi quyết định nâng cấp...
+                {{ featuredPost.excerpt || 'Đang cập nhật mô tả...' }}
               </p>
               <div class="post-meta">
-                <span><span class="meta-icon">📅</span> 09/11/2025</span>
-                <span><span class="meta-icon">✍️</span> Tác giả: Minh Tuấn</span>
+                <span><span class="meta-icon">📅</span> {{ formatDate(featuredPost.created_at) }}</span>
+                <span><span class="meta-icon">✍️</span> {{ featuredPost.author?.name || 'Admin' }}</span>
               </div>
-              <a href="#featured-post-link" class="read-more-btn">Đọc tiếp <span class="arrow">→</span></a>
+              <router-link :to="`/blog/${featuredPost.slug}`" class="read-more-btn">
+                  Đọc tiếp <span class="arrow">→</span>
+              </router-link>
             </div>
           </article>
 
           <h2 class="section-title">Tin tức mới nhất</h2>
-          <div class="latest-posts-grid">
-
-            <article class="post-card">
-              <div class="post-image-container">
-                
+          
+          <div v-if="latestPosts.length > 0" class="latest-posts-grid">
+            
+            <article v-for="post in latestPosts" :key="post.id" class="post-card">
+              <div class="post-image-container" 
+                   :style="{ backgroundImage: `url(${getFullImage(post.image_url)})` }">
               </div>
               <div class="post-card-body">
                 <span class="category-tag">TIN TỨC</span>
-                <h3>Smartphone màn hình gập mới: Xu hướng thiết kế nửa cuối năm 2025</h3>
-                <p class="excerpt-small">Phân tích những cải tiến đáng chú ý về độ bền và công nghệ bản lề...</p>
-                <a href="#post-1-link" class="read-more-link">Xem chi tiết</a>
-              </div>
-            </article>
-
-            <article class="post-card">
-              <div class="post-image-container">
-                
-              </div>
-              <div class="post-card-body">
-                <span class="category-tag">PHỤ KIỆN</span>
-                <h3>Top 5 tai nghe True Wireless đáng mua nhất tầm giá 3 triệu đồng</h3>
-                <p class="excerpt-small">Đánh giá chất âm, chống ồn và thời lượng pin của các mẫu tai nghe hot...</p>
-                <a href="#post-2-link" class="read-more-link">Xem chi tiết</a>
-              </div>
-            </article>
-
-            <article class="post-card">
-              <div class="post-image-container">
-                
-              </div>
-              <div class="post-card-body">
-                <span class="category-tag">MẸO VẶT</span>
-                <h3>Cách tối ưu hóa pin cho Smartwatch của bạn hoạt động cả tuần</h3>
-                <p class="excerpt-small">Các cài đặt ẩn giúp đồng hồ thông minh của bạn kéo dài thời gian sử dụng...</p>
-                <a href="#post-3-link" class="read-more-link">Xem chi tiết</a>
+                <h3>
+                    <router-link :to="`/blog/${post.slug}`" class="text-decoration-none text-reset">
+                        {{ post.title }}
+                    </router-link>
+                </h3>
+                <p class="excerpt-small">
+                    {{ post.excerpt ? post.excerpt.substring(0, 100) + '...' : '' }}
+                </p>
+                <router-link :to="`/blog/${post.slug}`" class="read-more-link">
+                    Xem chi tiết
+                </router-link>
               </div>
             </article>
 
           </div>
+          <div v-else class="text-center py-4 text-muted">
+              Hiện chưa có thêm tin tức nào.
+          </div>
           
-          </section>
+        </section>
         
         <aside class="blog-sidebar">
           
           <div class="sidebar-widget search-widget">
             <h4><span class="sidebar-icon">🔍</span> Tìm kiếm</h4>
-            <input type="text" placeholder="Nhập từ khóa..." class="search-input">
-            <button class="search-btn">Tìm</button>
+            <input type="text" 
+                   v-model="searchQuery" 
+                   @keyup.enter="handleSearch"
+                   placeholder="Nhập từ khóa..." 
+                   class="search-input">
+            <button class="search-btn" @click="handleSearch">Tìm</button>
           </div>
           
           <div class="sidebar-widget category-widget">
             <h4><span class="sidebar-icon">🏷️</span> Danh mục</h4>
             <ul>
-              <li><a href="#cat-review">Đánh giá sản phẩm (14)</a></li>
-              <li><a href="#cat-news">Tin tức mới (22)</a></li>
-              <li><a href="#cat-tips">Mẹo & Thủ thuật (10)</a></li>
-              <li><a href="#cat-gaming">Gaming Gear (5)</a></li>
-              <li><a href="#cat-accessory">Phụ kiện (8)</a></li>
+              <li><a href="#">Đánh giá sản phẩm</a></li>
+              <li><a href="#">Tin tức công nghệ</a></li>
+              <li><a href="#">Mẹo & Thủ thuật</a></li>
+              <li><a href="#">Khuyến mãi</a></li>
             </ul>
           </div>
 
           <div class="sidebar-widget popular-widget">
             <h4><span class="sidebar-icon">🔥</span> Bài viết phổ biến</h4>
-            <div class="popular-post-item">
-                <p>1. 6 điểm khác biệt giữa OLED và Mini LED</p>
+             <div class="popular-post-item">
+                <p>Top laptop gaming đáng mua 2025</p>
                 <span class="post-meta-small">5,200 lượt xem</span>
             </div>
              <div class="popular-post-item">
-                <p>2. Hướng dẫn backup dữ liệu điện thoại an toàn</p>
+                <p>Hướng dẫn vệ sinh bàn phím cơ</p>
                 <span class="post-meta-small">4,150 lượt xem</span>
             </div>
           </div>
@@ -110,11 +192,16 @@
         </aside>
       </div>
     </main>
-
   </section>
 </template>
 
 <style scoped>
+/* Giữ nguyên CSS của bạn, chỉ thêm 1 chút cho text-reset của router-link */
+.text-decoration-none { text-decoration: none; }
+.text-reset { color: inherit; }
+.text-reset:hover { color: var(--primary); }
+
+/* --- CSS CŨ CỦA BẠN --- */
 :root {
   --primary: #009981;
   --accent: #00483D;
@@ -401,18 +488,6 @@
 .post-meta-small {
     font-size: 0.85rem;
     color: var(--text-subtle);
-}
-
-.blog-footer {
-    margin-top: 50px;
-    padding: 20px 16px;
-    border-top: 1px solid #E0E0E0;
-    background-color: var(--card-bg);
-    text-align: center;
-}
-.blog-footer-inner p {
-    color: var(--text-subtle);
-    font-size: 0.95rem;
 }
 
 @media (max-width: 1100px) {

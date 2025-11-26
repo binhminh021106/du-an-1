@@ -71,7 +71,7 @@ Route::get('/imageProducts', [ImageProductController::class, 'index']);
 Route::get('/imageProduct/{id}', [ImageProductController::class, 'show']);
 
 Route::get('/news', [NewController::class, 'index']);
-Route::get('/new/{id}', [NewController::class, 'show']);
+Route::get('/news/{slug}', [NewController::class, 'show']);
 
 Route::get('/reviews', [ReviewController::class, 'index']);
 Route::get('/review/{id}', [ReviewController::class, 'show']);
