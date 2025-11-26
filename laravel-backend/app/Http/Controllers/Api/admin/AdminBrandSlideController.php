@@ -68,48 +68,48 @@ class AdminBrandSlideController extends Controller
     }
 
     /**
-     * Cập nhật Brand
+     * Cập nhật Brand (Đã sửa lỗi Partial Update)
      */
     public function update(Request $request, string $id)
     {
         $brand = BrandSlide::findOrFail($id);
 
-        if ($request->has('status') && count($request->all()) == 1) {
-            $brand->update(['status' => $request->status]);
-            return response()->json(['message' => 'Cập nhật trạng thái thành công']);
-        }
-
-        // Validate đầy đủ (cho trường hợp sửa trong form)
+        // Validate linh hoạt (sometimes)
         $request->validate([
-            'name'   => 'required|string|max:255',
+            'name'   => 'sometimes|required|string|max:255',
             'image'  => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
             'order'  => 'nullable|integer|min:0',
-            'status' => 'required|in:published,draft',
+            'status' => 'sometimes|required|in:published,draft',
         ]);
 
-        $updateData = [
-            'name'         => $request->name,
-            'link_url'     => $request->linkUrl,
-            'order_number' => $request->order ?? 0,
-            'status'       => $request->status,
-        ];
+        // Chỉ cập nhật các trường có gửi lên
+        if ($request->has('name')) {
+            $brand->name = $request->name;
+        }
+
+        if ($request->has('linkUrl')) {
+            $brand->link_url = $request->linkUrl;
+        }
+
+        if ($request->has('order')) {
+            $brand->order_number = $request->order;
+        }
+
+        if ($request->has('status')) {
+            $brand->status = $request->status;
+        }
 
         // Xử lý ảnh nếu có thay đổi
         if ($request->hasFile('image')) {
-            // Xóa ảnh cũ
-            if ($brand->image_url) {
-                $oldPath = str_replace('/storage/', '', $brand->image_url);
-                if (Storage::disk('public')->exists($oldPath)) {
-                    Storage::disk('public')->delete($oldPath);
-                }
-            }
+            // Xóa ảnh cũ dùng hàm helper
+            $this->deleteImageFromStorage($brand->image_url);
 
             // Upload ảnh mới
             $path = $request->file('image')->store('brands', 'public');
-            $updateData['image_url'] = '/storage/' . $path;
+            $brand->image_url = '/storage/' . $path;
         }
 
-        $brand->update($updateData);
+        $brand->save();
 
         return response()->json([
             'message' => 'Cập nhật thành công',
@@ -125,12 +125,7 @@ class AdminBrandSlideController extends Controller
         $brand = BrandSlide::findOrFail($id);
 
         // Xóa file ảnh
-        if ($brand->image_url) {
-            $oldPath = str_replace('/storage/', '', $brand->image_url);
-            if (Storage::disk('public')->exists($oldPath)) {
-                Storage::disk('public')->delete($oldPath);
-            }
-        }
+        $this->deleteImageFromStorage($brand->image_url);
 
         $brand->delete();
 
@@ -140,5 +135,19 @@ class AdminBrandSlideController extends Controller
     public function show(string $id)
     {
         return response()->json(BrandSlide::findOrFail($id));
+    }
+
+    /**
+     * Hàm phụ: Xóa file ảnh khỏi đĩa cứng
+     */
+    private function deleteImageFromStorage($path)
+    {
+        if ($path) {
+            $relativePath = str_replace('/storage/', '', $path);
+            
+            if (Storage::disk('public')->exists($relativePath)) {
+                Storage::disk('public')->delete($relativePath);
+            }
+        }
     }
 }

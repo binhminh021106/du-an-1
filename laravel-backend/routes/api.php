@@ -105,14 +105,20 @@ Route::group([
     // Resource variants chuẩn (CRUD cơ bản)
     Route::apiResource('variants', AdminVariantController::class);
     
-    // --- KHẮC PHỤC LỖI 404: Thêm Route custom cho Attributes ---
     // Route này ánh xạ POST /api/admin/variants/{id}/attributes -> hàm updateAttributes
     Route::post('variants/{id}/attributes', [AdminVariantController::class, 'updateAttributes']);
-    // -----------------------------------------------------------
 
+    Route::get('coupons/trashed', [AdminCouponController::class, 'trashed']);
+    Route::post('coupons/{id}/restore', [AdminCouponController::class, 'restore']);
+    Route::delete('coupons/{id}/force', [AdminCouponController::class, 'forceDelete']);
     Route::apiResource('comments', AdminCommentController::class);
     Route::apiResource('coupons', AdminCouponController::class);
+    
+
+    // --- XỬ LÝ ẢNH (QUAN TRỌNG: bulk-delete PHẢI nằm trước apiResource) ---
+    Route::post('imageProducts/bulk-delete', [AdminImageProductController::class, 'bulkDestroy']);
     Route::apiResource('imageProducts', AdminImageProductController::class);
+
     Route::apiResource('news', AdminNewController::class);
     Route::apiResource('orders', AdminOrderController::class);
     Route::apiResource('reviews', AdminReviewController::class);

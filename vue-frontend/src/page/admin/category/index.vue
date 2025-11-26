@@ -7,7 +7,8 @@ import { Modal } from 'bootstrap';
 // --- CẤU HÌNH & STATE ---
 const isLoading = ref(true);
 const isEditMode = ref(false);
-const categories = ref([]);
+const categories = ref([]); // Dữ liệu gốc
+const activeTab = ref('active'); // Tab mặc định: Hoạt động
 
 // State cho Modal Thêm/Sửa
 const modalInstance = ref(null);
@@ -18,62 +19,74 @@ const viewModalInstance = ref(null);
 const viewModalRef = ref(null);
 const viewingCategory = ref({});
 
-// State cho Tìm kiếm và Phân trang
+// State Tìm kiếm
 const searchQuery = ref('');
-const currentPage = ref(1);
-const itemsPerPage = ref(10); // Hiển thị 10 mục mỗi trang
+
+// State Phân trang (2 danh sách riêng biệt)
+const pagination = reactive({
+  active: { currentPage: 1, itemsPerPage: 10 },
+  disabled: { currentPage: 1, itemsPerPage: 10 }
+});
 
 // Form data & Validation
 const formData = reactive({ id: null, name: '', description: '', icon: '', order: 1, status: 'active' });
 const errors = reactive({ name: '', description: '', icon: '', order: '' });
 
-// --- LIFECYCLE ---
-onMounted(() => {
-  fetchCategories();
-  if (modalRef.value) {
-    modalInstance.value = new Modal(modalRef.value, { backdrop: 'static' });
-  }
-  // Khởi tạo modal xem
-  if (viewModalRef.value) {
-    viewModalInstance.value = new Modal(viewModalRef.value);
-  }
-});
+// --- COMPUTED: LỌC & CHIA DANH SÁCH ---
 
-// --- COMPUTED ---
-
-// Lọc danh mục dựa trên tìm kiếm
-const filteredCategories = computed(() => {
+// 1. Lọc Search trước trên toàn bộ dữ liệu
+const searchResults = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
-  if (!query) {
-    return categories.value;
-  }
+  if (!query) return categories.value;
+
   return categories.value.filter(category =>
     category.name.toLowerCase().includes(query) ||
     (category.description && category.description.toLowerCase().includes(query))
   );
 });
 
-// Tính tổng số trang
-const totalPages = computed(() => {
-  return Math.ceil(filteredCategories.value.length / itemsPerPage.value);
-});
+// 2. Chia danh sách theo trạng thái
+const activeList = computed(() => searchResults.value.filter(c => c.status === 'active'));
+const disabledList = computed(() => searchResults.value.filter(c => c.status === 'disabled'));
 
-// Lấy danh sách danh mục đã phân trang
-const paginatedCategories = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage.value;
-  const end = start + itemsPerPage.value;
-  return filteredCategories.value.slice(start, end);
-});
+// 3. Helper tính toán phân trang
+function getPaginatedData(list, type) {
+  const pageInfo = pagination[type];
+  const totalPages = Math.max(1, Math.ceil(list.length / pageInfo.itemsPerPage));
+  
+  // Reset về trang 1 nếu trang hiện tại vượt quá tổng số trang
+  if (pageInfo.currentPage > totalPages) pageInfo.currentPage = 1;
+
+  const start = (pageInfo.currentPage - 1) * pageInfo.itemsPerPage;
+  const end = start + pageInfo.itemsPerPage;
+  
+  return {
+    data: list.slice(start, end),
+    totalPages: totalPages,
+    totalItems: list.length
+  };
+}
+
+// 4. Dữ liệu hiển thị cho từng tab (Đã phân trang)
+const pagedActive = computed(() => getPaginatedData(activeList.value, 'active'));
+const pagedDisabled = computed(() => getPaginatedData(disabledList.value, 'disabled'));
 
 // --- WATCHERS ---
-
-// Reset về trang 1 khi tìm kiếm
 watch(searchQuery, () => {
-  currentPage.value = 1;
+  // Reset trang về 1 khi tìm kiếm
+  pagination.active.currentPage = 1;
+  pagination.disabled.currentPage = 1;
 });
 
-
 // --- HELPER FUNCTIONS ---
+
+function changePage(type, page) {
+  pagination[type].currentPage = page;
+}
+
+function setActiveTab(tabName) {
+  activeTab.value = tabName;
+}
 
 // Lấy ngày đã định dạng
 function getFormattedDate(dateString) {
@@ -122,14 +135,12 @@ function validateForm() {
   return isValid;
 }
 
-// Mở modal (Thêm mới)
 function openCreateModal() {
   resetForm();
   isEditMode.value = false;
   modalInstance.value.show();
 }
 
-// Mở modal (Chỉnh sửa)
 function openEditModal(category) {
   Object.assign(formData, {
     id: category.id,
@@ -144,25 +155,37 @@ function openEditModal(category) {
   modalInstance.value.show();
 }
 
-// Mở modal (Xem)
 function openViewModal(category) {
   viewingCategory.value = category;
   viewModalInstance.value.show();
 }
 
+// --- LIFECYCLE ---
+onMounted(() => {
+  fetchCategories();
+  if (modalRef.value) {
+    modalInstance.value = new Modal(modalRef.value, { backdrop: 'static' });
+  }
+  if (viewModalRef.value) {
+    viewModalInstance.value = new Modal(viewModalRef.value);
+  }
+});
 
 // --- API METHODS ---
 
-// Lấy danh sách danh mục (Sắp xếp theo 'order')
+// Lấy danh sách danh mục
 async function fetchCategories() {
-  isLoading.value = true;
+  // Smart Spinner: Chỉ hiện loading lớn nếu chưa có dữ liệu
+  if (categories.value.length === 0) {
+    isLoading.value = true;
+  }
+  
   try {
     const response = await apiService.get(`admin/categories`);
-    // Gán thêm created_at nếu chưa có
     categories.value = response.data.map(cat => ({
       ...cat,
       created_at: cat.created_at || new Date().toISOString()
-    }));
+    })).sort((a, b) => a.order - b.order); // Sắp xếp theo thứ tự
   } catch (error) {
     console.error("Lỗi tải danh mục:", error);
     Swal.fire('Lỗi', 'Không thể tải danh sách danh mục.', 'error');
@@ -179,41 +202,37 @@ async function handleSave() {
   const newNameUpper = formData.name.trim().toUpperCase();
   const newOrderValue = parseInt(formData.order);
 
-  // 1. Kiểm tra trùng SỐ THỨ TỰ
+  // Check trùng thứ tự (chỉ cảnh báo)
   const isOrderDuplicate = categories.value.some(cat =>
     parseInt(cat.order) === newOrderValue && cat.id !== currentId
   );
-
   if (isOrderDuplicate) {
     errors.order = `Số thứ tự (${newOrderValue}) đã bị sử dụng. Vui lòng chọn số khác.`;
     Swal.fire('Lỗi', errors.order, 'error');
     return;
   }
 
-  // 2. Kiểm tra trùng TÊN
+  // Check trùng tên
   const isNameDuplicate = categories.value.some(cat =>
     cat.name.toUpperCase() === newNameUpper && cat.id !== currentId
   );
-
   if (isNameDuplicate) {
     const result = await Swal.fire({
       title: 'Tên Danh mục bị trùng!',
-      text: `Danh mục "${formData.name}" đã tồn tại. Bạn có chắc chắn muốn tạo/cập nhật danh mục trùng tên này không?`,
+      text: `Danh mục "${formData.name}" đã tồn tại. Tiếp tục?`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#3085d6',
       cancelButtonColor: '#d33',
-      confirmButtonText: 'Đồng ý lưu',
-      cancelButtonText: 'Hủy bỏ'
+      confirmButtonText: 'Đồng ý',
+      cancelButtonText: 'Hủy'
     });
-
-    if (!result.isConfirmed) {
-      return;
-    }
+    if (!result.isConfirmed) return;
   }
 
-  isLoading.value = true;
-
+  // Optimistic Update Logic could be complex here due to IDs, 
+  // so we stick to standard flow but manage loading state smartly.
+  
   let payload = {
     name: formData.name,
     description: formData.description,
@@ -227,12 +246,11 @@ async function handleSave() {
       await apiService.put(`admin/categories/${formData.id}`, payload);
       Swal.fire('Thành công', 'Đã cập nhật danh mục!', 'success');
     } else {
-      payload.created_at = new Date().toISOString();
       await apiService.post(`admin/categories`, payload);
       Swal.fire('Thành công', 'Đã tạo danh mục mới!', 'success');
     }
     modalInstance.value.hide();
-    fetchCategories(); // Tải lại danh sách
+    fetchCategories(); // Silent refresh
   } catch (apiError) {
     console.error("Lỗi lưu:", apiError);
     if (apiError.response?.data?.errors?.name) {
@@ -240,19 +258,18 @@ async function handleSave() {
     } else {
       Swal.fire('Thất bại', 'Đã có lỗi xảy ra.', 'error');
     }
-  } finally {
-    isLoading.value = false;
   }
 }
 
-// Xử lý bật/tắt trạng thái
+// Xử lý bật/tắt trạng thái (Optimistic UI)
 async function toggleStatus(category) {
+  const oldStatus = category.status;
   const newStatus = category.status === 'active' ? 'disabled' : 'active';
-  const confirmText = `Bạn có chắc chắn muốn ${newStatus === 'active' ? 'KÍCH HOẠT' : 'VÔ HIỆU HÓA'} danh mục "${category.name}"?`;
+  const confirmText = `Bạn muốn chuyển sang ${newStatus === 'active' ? 'HOẠT ĐỘNG' : 'VÔ HIỆU HÓA'}?`;
 
   const result = await Swal.fire({
     title: 'Thay đổi trạng thái',
-    text: confirmText,
+    text: `Danh mục: "${category.name}"`,
     icon: 'question',
     showCancelButton: true,
     confirmButtonColor: '#3085d6',
@@ -262,19 +279,30 @@ async function toggleStatus(category) {
   });
 
   if (result.isConfirmed) {
+    // 1. Update UI immediately (Item sẽ tự động bay sang tab kia)
     category.status = newStatus;
+
+    // 2. Call API
     try {
       await apiService.patch(`admin/categories/${category.id}`, { status: newStatus });
-      Swal.fire('Thành công', `Đã ${newStatus === 'active' ? 'kích hoạt' : 'vô hiệu hóa'} danh mục.`, 'success');
+      
+      // Toast thông báo nhỏ
+      const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true
+      });
+      Toast.fire({ icon: 'success', title: 'Cập nhật thành công' });
+
     } catch (error) {
-      console.error("Lỗi cập nhật trạng thái:", error);
-      category.status = newStatus === 'active' ? 'disabled' : 'active';
+      // Rollback nếu lỗi
+      category.status = oldStatus;
       Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
-      fetchCategories();
     }
   }
 }
-
 
 // Xóa danh mục
 async function handleDelete(category) {
@@ -292,23 +320,15 @@ async function handleDelete(category) {
   if (result.isConfirmed) {
     try {
       await apiService.delete(`admin/categories/${category.id}`);
+      
+      // Xóa khỏi list local
+      categories.value = categories.value.filter(c => c.id !== category.id);
+      
       Swal.fire('Đã xóa!', 'Danh mục đã bị xóa.', 'success');
-      // Nếu trang hiện tại trống sau khi xóa, lùi về trang trước
-      if (paginatedCategories.value.length === 1 && currentPage.value > 1) {
-        currentPage.value--;
-      }
-      fetchCategories(); // Tải lại danh sách
     } catch (error) {
       console.error("Lỗi xóa:", error);
       Swal.fire('Lỗi', 'Không thể xóa danh mục này.', 'error');
     }
-  }
-}
-
-// --- PAGINATION ---
-function goToPage(page) {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page;
   }
 }
 </script>
@@ -334,126 +354,181 @@ function goToPage(page) {
   <!-- MAIN CONTENT -->
   <div class="app-content">
     <div class="container-fluid">
-      <div class="card mb-4">
-        <!-- Card Header với Tìm kiếm và Nút Thêm -->
-        <div class="card-header">
-          <div class="row align-items-center">
-            <div class="col-md-6 col-12 mb-2 mb-md-0">
-              <div class="input-group">
+      <div class="card shadow-sm">
+        <div class="card-header border-bottom-0 pb-0">
+          <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+            <h3 class="card-title">Danh sách Danh mục</h3>
+            
+            <!-- TOOLBAR -->
+            <div class="d-flex gap-2 flex-grow-1 justify-content-end" style="max-width: 600px;">
+              <div class="input-group" style="min-width: 200px;">
                 <span class="input-group-text bg-white border-end-0">
                   <i class="bi bi-search text-muted"></i>
                 </span>
                 <input type="text" class="form-control border-start-0 ps-0"
-                  placeholder="Tìm kiếm theo tên, mô tả..." v-model="searchQuery">
+                  placeholder="Tìm kiếm theo tên..." v-model="searchQuery">
               </div>
-            </div>
-            <div class="col-md-6 col-12 text-md-end">
-              <button type="button" class="btn btn-primary" @click="openCreateModal">
-                <i class="bi bi-plus-lg"></i> Thêm mới Danh mục
+              <button type="button" class="btn btn-primary text-nowrap" @click="openCreateModal">
+                <i class="bi bi-plus-lg"></i> Thêm mới
               </button>
             </div>
           </div>
+
+          <!-- TABS NAVIGATION -->
+          <ul class="nav nav-tabs card-header-tabs">
+            <li class="nav-item">
+              <a class="nav-link" :class="{ active: activeTab === 'active' }" href="#" @click.prevent="setActiveTab('active')">
+                <i class="bi bi-check-circle me-1 text-success"></i> Hoạt động
+                <span class="badge rounded-pill bg-success ms-1">{{ activeList.length }}</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" :class="{ active: activeTab === 'disabled' }" href="#" @click.prevent="setActiveTab('disabled')">
+                <i class="bi bi-dash-circle me-1 text-secondary"></i> Vô hiệu hóa
+                <span class="badge rounded-pill bg-secondary ms-1">{{ disabledList.length }}</span>
+              </a>
+            </li>
+          </ul>
         </div>
 
-        <!-- Card Body - Bảng Dữ Liệu -->
         <div class="card-body p-0">
-          <div class="table-responsive">
-            <table v-if="!isLoading" class="table table-hover align-middle mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th style="width: 50px;">ID</th>
-                  <th style="width: 80px;" class="text-center">Icon</th>
-                  <th>Tên danh mục</th>
-                  <th class="d-none d-md-table-cell">Mô tả</th>
-                  <th style="width: 80px;">Thứ tự</th>
-                  <th style="width: 120px;">Trạng thái</th>
-                  <th style="width: 150px;" class="text-center">Hành động</th>
-                </tr>
-              </thead>
-              <tbody>
-                <!-- Loading State -->
-                <tr v-if="isLoading">
-                  <td colspan="7" class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status">
-                      <span class="visually-hidden">Loading...</span>
-                    </div>
-                  </td>
-                </tr>
-                <!-- Empty State -->
-                <tr v-else-if="filteredCategories.length === 0">
-                  <td colspan="7" class="text-center py-4 text-muted">
-                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                    {{ searchQuery ? 'Không tìm thấy danh mục nào.' : 'Chưa có danh mục nào.' }}
-                  </td>
-                </tr>
-                <!-- Data Rows -->
-                <tr v-for="category in paginatedCategories" :key="category.id">
-                  <td>{{ category.id }}</td>
-                  <td class="text-center fs-4 text-primary">
-                    <span v-if="category.icon" v-html="category.icon"></span>
-                    <span v-else class="text-muted fs-6 small">(Trống)</span>
-                  </td>
-                  <td class="fw-bold">{{ category.name }}</td>
-                  <td class="d-none d-md-table-cell" style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" :title="category.description">
-                    {{ category.description || '...' }}
-                  </td>
-                  <td class="text-center">{{ category.order }}</td>
-                  <td>
-                    <!-- Đổi thành badge hiển thị trạng thái -->
-                    <span :class="['badge', category.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
-                      {{ category.status === 'active' ? 'Hoạt động' : 'Vô hiệu hóa' }}
-                    </span>
-                  </td>
-                  <td class="text-center">
-                    <!-- Bọc trong d-flex để căn chỉnh -->
-                    <div class="d-flex justify-content-center align-items-center">
-                      <!-- Thêm Toggle Switch vào đây -->
-                      <div class="form-check form-switch d-inline-block align-middle me-3" title="Kích hoạt/Vô hiệu hóa">
-                        <input class="form-check-input" type="checkbox" role="switch"
-                          style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                          :id="'statusSwitch-' + category.id"
-                          :checked="category.status === 'active'"
-                          @click.prevent="toggleStatus(category)">
-                      </div>
-                      <!-- Nhóm nút -->
-                      <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-secondary" title="Xem chi tiết" @click="openViewModal(category)">
-                          <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(category)">
-                          <i class="bi bi-pencil"></i>
-                        </button>
-                        <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(category)">
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      </div>
-                    </div> <!-- <- Thẻ </div> này đã bị thiếu. Thêm nó vào đây -->
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          
+          <!-- Loading Spinner (Chỉ hiện lần đầu) -->
+          <div v-if="isLoading && categories.length === 0" class="text-center p-5">
+            <div class="spinner-border text-primary" role="status"></div>
           </div>
-        </div>
 
-        <!-- Card Footer - Phân Trang -->
-        <div class="card-footer clearfix" v-if="totalPages > 1">
-          <div class="d-flex justify-content-between align-items-center">
-            <small class="text-muted">
-              Hiển thị {{ (currentPage - 1) * itemsPerPage + 1 }} đến
-              {{ Math.min(currentPage * itemsPerPage, filteredCategories.length) }}
-              trong tổng số {{ filteredCategories.length }} danh mục
-            </small>
-            <ul class="pagination pagination-sm m-0">
-              <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                <button class="page-link" @click="goToPage(currentPage - 1)">&laquo;</button>
-              </li>
-              <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
-                <button class="page-link" @click="goToPage(page)">{{ page }}</button>
-              </li>
-              <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                <button class="page-link" @click="goToPage(currentPage + 1)">&raquo;</button>
-              </li>
-            </ul>
+          <div v-else class="tab-content p-0">
+            
+            <!-- TAB: ACTIVE -->
+            <div class="tab-pane fade show active" v-if="activeTab === 'active'">
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width: 50px;">ID</th>
+                      <th style="width: 80px;" class="text-center">Icon</th>
+                      <th>Tên danh mục</th>
+                      <th class="d-none d-md-table-cell">Mô tả</th>
+                      <th style="width: 80px;" class="text-center">Thứ tự</th>
+                      <th style="width: 120px;" class="text-center">Trạng thái</th>
+                      <th style="width: 180px;" class="text-center">Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="pagedActive.data.length === 0">
+                      <td colspan="7" class="text-center py-4 text-muted">Không có danh mục hoạt động nào.</td>
+                    </tr>
+                    <tr v-for="category in pagedActive.data" :key="category.id">
+                      <td>{{ category.id }}</td>
+                      <td class="text-center fs-4 text-primary">
+                        <span v-if="category.icon" v-html="category.icon"></span>
+                        <span v-else class="text-muted fs-6 small">(Trống)</span>
+                      </td>
+                      <td class="fw-bold">{{ category.name }}</td>
+                      <td class="d-none d-md-table-cell text-truncate" style="max-width: 200px;" :title="category.description">
+                        {{ category.description || '...' }}
+                      </td>
+                      <td class="text-center">{{ category.order }}</td>
+                      <td class="text-center">
+                        <div class="form-check form-switch d-inline-block">
+                          <input class="form-check-input" type="checkbox" role="switch"
+                            style="width: 2.5em; height: 1.25em; cursor: pointer;"
+                            :checked="true"
+                            @click.prevent="toggleStatus(category)" title="Nhấn để vô hiệu hóa">
+                        </div>
+                      </td>
+                      <td class="text-center">
+                        <div class="btn-group btn-group-sm">
+                          <button class="btn btn-outline-secondary" title="Xem" @click="openViewModal(category)"><i class="bi bi-eye"></i></button>
+                          <button class="btn btn-outline-primary" title="Sửa" @click="openEditModal(category)"><i class="bi bi-pencil"></i></button>
+                          <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(category)"><i class="bi bi-trash"></i></button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <!-- Pagination Active -->
+              <div v-if="pagedActive.totalPages > 1" class="d-flex justify-content-end p-3">
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item" :class="{ disabled: pagination.active.currentPage === 1 }">
+                    <a class="page-link" href="#" @click.prevent="changePage('active', pagination.active.currentPage - 1)">&laquo;</a>
+                  </li>
+                  <li v-for="p in pagedActive.totalPages" :key="p" class="page-item" :class="{ active: pagination.active.currentPage === p }">
+                    <a class="page-link" href="#" @click.prevent="changePage('active', p)">{{ p }}</a>
+                  </li>
+                  <li class="page-item" :class="{ disabled: pagination.active.currentPage === pagedActive.totalPages }">
+                    <a class="page-link" href="#" @click.prevent="changePage('active', pagination.active.currentPage + 1)">&raquo;</a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- TAB: DISABLED -->
+            <div class="tab-pane fade show active" v-if="activeTab === 'disabled'">
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width: 50px;">ID</th>
+                      <th style="width: 80px;" class="text-center">Icon</th>
+                      <th>Tên danh mục</th>
+                      <th class="d-none d-md-table-cell">Mô tả</th>
+                      <th style="width: 80px;" class="text-center">Thứ tự</th>
+                      <th style="width: 120px;" class="text-center">Trạng thái</th>
+                      <th style="width: 180px;" class="text-center">Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="pagedDisabled.data.length === 0">
+                      <td colspan="7" class="text-center py-4 text-muted">Không có danh mục bị vô hiệu hóa.</td>
+                    </tr>
+                    <tr v-for="category in pagedDisabled.data" :key="category.id" class="text-muted bg-light">
+                      <td>{{ category.id }}</td>
+                      <td class="text-center fs-4 text-secondary grayscale">
+                        <span v-if="category.icon" v-html="category.icon"></span>
+                      </td>
+                      <td class="fw-bold">{{ category.name }}</td>
+                      <td class="d-none d-md-table-cell text-truncate" style="max-width: 200px;">
+                        {{ category.description || '...' }}
+                      </td>
+                      <td class="text-center">{{ category.order }}</td>
+                      <td class="text-center">
+                        <div class="form-check form-switch d-inline-block">
+                          <input class="form-check-input" type="checkbox" role="switch"
+                            style="width: 2.5em; height: 1.25em; cursor: pointer;"
+                            :checked="false"
+                            @click.prevent="toggleStatus(category)" title="Nhấn để kích hoạt lại">
+                        </div>
+                      </td>
+                      <td class="text-center">
+                        <div class="btn-group btn-group-sm">
+                          <button class="btn btn-outline-secondary" title="Xem" @click="openViewModal(category)"><i class="bi bi-eye"></i></button>
+                          <button class="btn btn-outline-primary" title="Sửa" @click="openEditModal(category)"><i class="bi bi-pencil"></i></button>
+                          <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(category)"><i class="bi bi-trash"></i></button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <!-- Pagination Disabled -->
+              <div v-if="pagedDisabled.totalPages > 1" class="d-flex justify-content-end p-3">
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item" :class="{ disabled: pagination.disabled.currentPage === 1 }">
+                    <a class="page-link" href="#" @click.prevent="changePage('disabled', pagination.disabled.currentPage - 1)">&laquo;</a>
+                  </li>
+                  <li v-for="p in pagedDisabled.totalPages" :key="p" class="page-item" :class="{ active: pagination.disabled.currentPage === p }">
+                    <a class="page-link" href="#" @click.prevent="changePage('disabled', p)">{{ p }}</a>
+                  </li>
+                  <li class="page-item" :class="{ disabled: pagination.disabled.currentPage === pagedDisabled.totalPages }">
+                    <a class="page-link" href="#" @click.prevent="changePage('disabled', pagination.disabled.currentPage + 1)">&raquo;</a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -601,19 +676,27 @@ function goToPage(page) {
 </template>
 
 <style scoped>
-.table td .btn {
-  margin: 2px 0;
+.nav-tabs .nav-link {
+  cursor: pointer;
+  color: #6c757d;
+  font-weight: 500;
 }
-/* Xóa style cho form-switch vì đã dùng inline-style để nhất quán */
-/* .form-switch .form-check-input {
-  width: 2.5em;
-  height: 1.5em;
-  margin-right: 0.5em;
-} */
-
-/* Thêm CSS cho label bắt buộc */
+.nav-tabs .nav-link.active {
+  color: #0d6efd;
+  border-bottom-color: #fff;
+}
+.pagination .page-link {
+  cursor: pointer;
+}
+.table td .btn {
+  margin: 2px;
+}
 .required::after {
   content: " *";
   color: red;
+}
+.grayscale {
+  filter: grayscale(100%);
+  opacity: 0.6;
 }
 </style>
