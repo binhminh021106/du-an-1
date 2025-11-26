@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import apiService from '../../apiService.js';
 import { useRouter } from 'vue-router';
 // THÊM: Import hàm addToCart từ store (Đường dẫn ./cartStore.js là đúng)
-import { addToCart } from "./cartStore.js"; 
+import { addToCart } from "./user/cartStore.js"; 
 
 // Khởi tạo router
 const router = useRouter();

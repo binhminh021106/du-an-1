@@ -3,9 +3,9 @@ import { ref, watch, onMounted, computed, watchEffect } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import apiService from '../../apiService.js';
 // THÊM: Import hàm addToCart từ store (Đường dẫn ./cartStore.js là đúng)
-import { addToCart } from "./cartStore.js";
+import { addToCart } from "./user/cartStore.js";
 // THÊM: Import Wishlist Store
-import { isInWishlist, toggleWishlist } from "./wishlistStore.js";
+import { isInWishlist, toggleWishlist } from "./user/wishlistStore.js";
 
 
 const route = useRoute();

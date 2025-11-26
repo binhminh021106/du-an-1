@@ -1,6 +1,8 @@
 <script setup>
 import { ref, reactive, onMounted, watch, computed } from "vue";
-import { cart, total, removeItem, updateItemQty, saveCart } from "./cartStore.js";
+import { cart, total, removeItem, updateItemQty, saveCart } from "./user/cartStore.js";
+// THÊM: Import hàm thêm đơn hàng vào lịch sử
+import { addOrder } from './user/orderStore.js'; 
 
 // Cart
 const cartItems = computed(() => cart.value);
@@ -82,16 +84,51 @@ const validateForm = ()=>{
 // Checkout
 const confirmCheckout = ()=>{
   if(!validateForm()) return;
+
   const total = totalPrice.value;
-  const paymentDetails = paymentMethods.find(p=>p.code===form.paymentMethod)?.name||'Không xác định';
+  const paymentMethodName = paymentMethods.find(p=>p.code===form.paymentMethod)?.name||'Không xác định';
+
+  // 1. TẠO DỮ LIỆU ĐƠN HÀNG MỚI TỪ CART VÀ FORM
+  const newOrderData = {
+    // Lấy các mục trong giỏ hàng và chuyển đổi sang định dạng phù hợp
+    items: cartItems.value.map(item => ({ 
+        id: item.id, 
+        name: item.name, 
+        price: item.price, 
+        qty: item.qty, 
+        image: item.image_url // Giả định có image_url
+    })),
+    
+    // Thông tin khách hàng
+    customer: { 
+        name: form.name, 
+        phone: form.phone, 
+        address: `${form.address.ward}, ${form.address.district}, ${form.address.province}` 
+    },
+    
+    // Chi tiết thanh toán
+    payment: { 
+        subtotal: subtotal.value, 
+        shippingFee: shippingCost.value, 
+        total: total, 
+        method: paymentMethodName 
+    },
+    total: total, // Tổng cộng
+    email: form.email, // Lưu email riêng để tiện hiển thị
+  };
+
+  // 2. THÊM ĐƠN HÀNG VÀO ORDER STORE
+  const placedOrder = addOrder(newOrderData); // Hàm này sẽ gán ID, Date, và Status
+
+  // 3. CẬP NHẬT MODAL CONTENT
   modalContent.value = {
-    title:"✅ Đặt hàng thành công!",
+    title:`✅ Đặt hàng thành công! (Mã: ${placedOrder.id})`, 
     details:[
-      {label:"Người nhận", value:form.name},
-      {label:"SĐT", value:form.phone},
-      {label:"Email", value:form.email},
-      {label:"Địa chỉ", value:`${form.address.ward}, ${form.address.district}, ${form.address.province}`},
-      {label:"Phương thức TT", value:paymentDetails},
+      {label:"Người nhận", value:placedOrder.customer.name},
+      {label:"SĐT", value:placedOrder.customer.phone},
+      {label:"Email", value:newOrderData.email},
+      {label:"Địa chỉ", value:placedOrder.customer.address},
+      {label:"Phương thức TT", value:placedOrder.payment.method},
     ],
     summary:[
       {label:"Tổng sản phẩm", value:subtotal.value.toLocaleString()+" đ"},
@@ -99,8 +136,12 @@ const confirmCheckout = ()=>{
       {label:"Tổng thanh toán", value:total.toLocaleString()+" đ", isTotal:true},
     ]
   };
+  
+  // 4. DỌN DẸP GIỎ HÀNG
   cart.value.length=0;
   saveCart();
+  
+  // 5. HIỂN THỊ MODAL
   showModal.value=true;
 };
 const closeModal = ()=>{ showModal.value=false; };
@@ -110,7 +151,6 @@ const closeModal = ()=>{ showModal.value=false; };
 <div class="checkout-page container">
   <h2 class="checkout-title"><i class="fa-solid fa-wallet"></i> Thanh toán</h2>
   <div class="checkout-content">
-    <!-- Form -->
     <div class="checkout-form card">
       <h3>Thông tin giao hàng</h3>
       <form @submit.prevent="confirmCheckout">
@@ -148,7 +188,6 @@ const closeModal = ()=>{ showModal.value=false; };
           <p v-if="errors.address" class="error">{{ errors.address }}</p>
         </div>
 
-        <!-- Payment -->
         <div class="checkout-form-section">
           <h3>Phương thức thanh toán</h3>
           <div class="payment-methods-grid">
@@ -168,7 +207,6 @@ const closeModal = ()=>{ showModal.value=false; };
       </form>
     </div>
 
-    <!-- Order summary -->
     <div class="checkout-summary card">
       <h3>Đơn hàng của bạn</h3>
       <ul>
@@ -204,7 +242,6 @@ const closeModal = ()=>{ showModal.value=false; };
     </div>
   </div>
 
-  <!-- Modal -->
   <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
     <div class="custom-modal-content">
       <button @click="closeModal" class="modal-close-btn">&times;</button>
@@ -220,6 +257,7 @@ const closeModal = ()=>{ showModal.value=false; };
 </template>
 
 <style scoped>
+/* STYLES GIỮ NGUYÊN */
 .checkout-page { font-family: Arial,sans-serif; padding:40px 20px; background:#f0f2f5; min-height:100vh; }
 .checkout-title { color:#009981; font-weight:700; font-size:26px; display:flex; align-items:center; gap:8px; margin-bottom:25px; }
 .checkout-content { display:flex; gap:30px; flex-wrap:wrap; }
@@ -296,5 +334,4 @@ const closeModal = ()=>{ showModal.value=false; };
   font-weight: 500;
   font-size: 16px;
 }
-
 </style>
