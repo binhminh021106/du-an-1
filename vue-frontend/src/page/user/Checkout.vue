@@ -1,13 +1,8 @@
 <script setup>
-import { ref, reactive, onMounted, watch, computed, nextTick } from "vue";
-// Giả sử cartStore.js nằm cùng cấp hoặc bạn tự điều chỉnh đường dẫn import nhé
-import {
-  cart,
-  total,
-  removeItem,
-  updateItemQty,
-  saveCart,
-} from "./cartStore.js";
+import { ref, reactive, onMounted, watch, computed } from "vue";
+import { cart, total, removeItem, updateItemQty, saveCart } from "./user/cartStore.js";
+// THÊM: Import hàm thêm đơn hàng vào lịch sử
+import { addOrder } from './user/orderStore.js'; 
 
 // Cart
 const cartItems = computed(() => cart.value);
@@ -257,80 +252,86 @@ const validateForm = () => {
 };
 
 // Checkout
-const confirmCheckout = () => {
-  if (!validateForm()) return;
+const confirmCheckout = ()=>{
+  if(!validateForm()) return;
+
   const total = totalPrice.value;
-  const paymentDetails =
-    paymentMethods.find((p) => p.code === form.paymentMethod)?.name ||
-    "Không xác định";
+  const paymentMethodName = paymentMethods.find(p=>p.code===form.paymentMethod)?.name||'Không xác định';
+
+  // 1. TẠO DỮ LIỆU ĐƠN HÀNG MỚI TỪ CART VÀ FORM
+  const newOrderData = {
+    // Lấy các mục trong giỏ hàng và chuyển đổi sang định dạng phù hợp
+    items: cartItems.value.map(item => ({ 
+        id: item.id, 
+        name: item.name, 
+        price: item.price, 
+        qty: item.qty, 
+        image: item.image_url // Giả định có image_url
+    })),
+    
+    // Thông tin khách hàng
+    customer: { 
+        name: form.name, 
+        phone: form.phone, 
+        address: `${form.address.ward}, ${form.address.district}, ${form.address.province}` 
+    },
+    
+    // Chi tiết thanh toán
+    payment: { 
+        subtotal: subtotal.value, 
+        shippingFee: shippingCost.value, 
+        total: total, 
+        method: paymentMethodName 
+    },
+    total: total, // Tổng cộng
+    email: form.email, // Lưu email riêng để tiện hiển thị
+  };
+
+  // 2. THÊM ĐƠN HÀNG VÀO ORDER STORE
+  const placedOrder = addOrder(newOrderData); // Hàm này sẽ gán ID, Date, và Status
+
+  // 3. CẬP NHẬT MODAL CONTENT
   modalContent.value = {
-    title: "✅ Đặt hàng thành công!",
-    details: [
-      { label: "Người nhận", value: form.name },
-      { label: "SĐT", value: form.phone },
-      { label: "Email", value: form.email },
-      {
-        label: "Địa chỉ",
-        value: `${form.address.street}, ${form.address.ward}, ${form.address.district}, ${form.address.province}`,
-      },
-      { label: "Phương thức TT", value: paymentDetails },
-    ],
-    summary: [
-      { label: "Tổng sản phẩm", value: subtotal.value.toLocaleString() + " đ" },
-      {
-        label: "Phí vận chuyển",
-        value: shippingCost.value.toLocaleString() + " đ",
-      },
-      {
-        label: "Giảm giá",
-        value: `-${discountAmount.value.toLocaleString()} đ`,
-      },
-      {
-        label: "Tổng thanh toán",
-        value: total.toLocaleString() + " đ",
-        isTotal: true,
-      },
+    title:`✅ Đặt hàng thành công! (Mã: ${placedOrder.id})`, 
+    details:[
+      {label:"Người nhận", value:placedOrder.customer.name},
+      {label:"SĐT", value:placedOrder.customer.phone},
+      {label:"Email", value:newOrderData.email},
+      {label:"Địa chỉ", value:placedOrder.customer.address},
+      {label:"Phương thức TT", value:placedOrder.payment.method},
     ],
   };
-  cart.value.length = 0;
+  
+  // 4. DỌN DẸP GIỎ HÀNG
+  cart.value.length=0;
   saveCart();
-  showModal.value = true;
-};
-const closeModal = () => {
-  showModal.value = false;
+  
+  // 5. HIỂN THỊ MODAL
+  showModal.value=true;
 };
 </script>
 
 <template>
-  <div class="checkout-page container">
-    <h2 class="checkout-title">
-      <i class="fa-solid fa-wallet"></i> Thanh toán
-    </h2>
-    <div class="checkout-content">
-      <!-- Form -->
-      <div class="checkout-form card">
-        <h3>Thông tin giao hàng</h3>
-
-        <!-- Chọn địa chỉ đã lưu -->
-        <div class="form-group" v-if="savedAddresses.length > 0">
-          <label
-            ><i class="fa-solid fa-address-book"></i> Chọn từ sổ địa chỉ</label
-          >
-          <select
-            v-model="selectedSavedAddressId"
-            @change="fillAddressFromBook"
-            class="saved-addr-select"
-          >
-            <option value="">-- Nhập địa chỉ mới --</option>
-            <option
-              v-for="addr in savedAddresses"
-              :key="addr.id"
-              :value="addr.id"
-            >
-              {{ addr.customer_name }} - {{ addr.shipping_address }},
-              {{ addr.ward }}, {{ addr.district }}, {{ addr.city }}
-            </option>
-          </select>
+<div class="checkout-page container">
+  <h2 class="checkout-title"><i class="fa-solid fa-wallet"></i> Thanh toán</h2>
+  <div class="checkout-content">
+    <div class="checkout-form card">
+      <h3>Thông tin giao hàng</h3>
+      <form @submit.prevent="confirmCheckout">
+        <div class="form-group">
+          <label>Họ và tên</label>
+          <input type="text" v-model="form.name" placeholder="Nhập họ tên"/>
+          <p v-if="errors.name" class="error">{{ errors.name }}</p>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" v-model="form.email" placeholder="Nhập email"/>
+          <p v-if="errors.email" class="error">{{ errors.email }}</p>
+        </div>
+        <div class="form-group">
+          <label>Số điện thoại</label>
+          <input type="text" v-model="form.phone" placeholder="Nhập số điện thoại"/>
+          <p v-if="errors.phone" class="error">{{ errors.phone }}</p>
         </div>
 
         <form @submit.prevent="confirmCheckout">
@@ -385,29 +386,13 @@ const closeModal = () => {
             <p v-if="errors.address" class="error">{{ errors.address }}</p>
           </div>
 
-          <!-- Payment -->
-          <div class="checkout-form-section">
-            <h3>Phương thức thanh toán</h3>
-            <div class="payment-methods-grid">
-              <label
-                v-for="method in paymentMethods"
-                :key="method.code"
-                class="payment-option"
-              >
-                <input
-                  type="radio"
-                  v-model="form.paymentMethod"
-                  :value="method.code"
-                  name="paymentMethod"
-                />
-                <div class="option-content">
-                  <i :class="['fa-solid', method.icon]"></i> {{ method.name }}
-                </div>
-              </label>
-            </div>
-            <p v-if="errors.paymentMethod" class="error">
-              {{ errors.paymentMethod }}
-            </p>
+        <div class="checkout-form-section">
+          <h3>Phương thức thanh toán</h3>
+          <div class="payment-methods-grid">
+            <label v-for="method in paymentMethods" :key="method.code" class="payment-option">
+              <input type="radio" v-model="form.paymentMethod" :value="method.code" name="paymentMethod"/>
+              <div class="option-content"><i :class="['fa-solid',method.icon]"></i> {{ method.name }}</div>
+            </label>
           </div>
 
           <div v-if="selectedProvince" class="shipping-fee">
@@ -477,11 +462,27 @@ const closeModal = () => {
           }}</span>
         </div>
 
-        <!-- Hiển thị dòng giảm giá nếu có -->
-        <div v-if="discountAmount > 0" class="summary-line discount">
-          <strong>Giảm giá ({{ appliedCoupon }}):</strong>
-          <span>-{{ discountAmount.toLocaleString() }} đ</span>
-        </div>
+    <div class="checkout-summary card">
+      <h3>Đơn hàng của bạn</h3>
+      <ul>
+        <li v-for="item in cartItems" :key="item.cartId" class="cart-item-summary">
+          <img :src="item.image_url" alt="item.name" class="item-image-summary"/>
+          <div class="item-details-summary">
+            <div class="item-name">{{item.name}}</div>
+            <div class="item-quantity-controls">
+  <button 
+    @click="decreaseQuantity(item)" 
+    :disabled="item.qty <= 1" 
+    class="qty-btn">
+    −
+  </button>
+  <span class="qty-number">{{ item.qty }}</span>
+  <button 
+    @click="increaseQuantity(item)" 
+    class="qty-btn">
+    +
+  </button>
+</div>
 
         <div class="summary-line total">
           <strong>Tổng cộng:</strong>
@@ -514,140 +515,57 @@ const closeModal = () => {
       </div>
     </div>
 
-    <!-- Modal -->
-    <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
-      <div class="custom-modal-content">
-        <button @click="closeModal" class="modal-close-btn">&times;</button>
-        <div class="modal-header">
-          <h4>{{ modalContent.title }}</h4>
-        </div>
-        <div class="modal-body">
-          <div class="modal-details">
-            <p v-for="d in modalContent.details" :key="d.label">
-              <strong>{{ d.label }}:</strong> {{ d.value }}
-            </p>
-          </div>
-          <div class="modal-summary">
-            <div
-              v-for="sum in modalContent.summary"
-              :key="sum.label"
-              :class="['summary-line-modal', { 'total-modal': sum.isTotal }]"
-            >
-              <strong>{{ sum.label }}:</strong> <span>{{ sum.value }}</span>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button @click="closeModal" class="modal-ok-btn">Hoàn tất</button>
-        </div>
+  <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
+    <div class="custom-modal-content">
+      <button @click="closeModal" class="modal-close-btn">&times;</button>
+      <div class="modal-header"><h4>{{ modalContent.title }}</h4></div>
+      <div class="modal-body">
+        <div class="modal-details"><p v-for="d in modalContent.details" :key="d.label"><strong>{{d.label}}:</strong> {{d.value}}</p></div>
+        <div class="modal-summary"><div v-for="sum in modalContent.summary" :key="sum.label" :class="['summary-line-modal',{ 'total-modal':sum.isTotal }]"><strong>{{sum.label}}:</strong> <span>{{sum.value}}</span></div></div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.checkout-page {
-  font-family: Arial, sans-serif;
-  padding: 40px 20px;
-  background: #f0f2f5;
-  min-height: 100vh;
-}
-.checkout-title {
-  color: #009981;
-  font-weight: 700;
-  font-size: 26px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 25px;
-}
-.checkout-content {
-  display: flex;
-  gap: 30px;
-  flex-wrap: wrap;
-}
-.card {
-  background: #fff;
-  padding: 25px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  flex: 1;
-}
-.checkout-form h3,
-.checkout-summary h3 {
-  color: #333;
-  border-bottom: 2px solid #009981;
-  padding-bottom: 10px;
-  margin-bottom: 20px;
-  font-size: 20px;
-}
-.form-group {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 18px;
-}
-.form-group label {
-  font-weight: bold;
-  margin-bottom: 5px;
-  font-size: 14px;
-  color: #555;
-}
-.form-group input,
-.address-select select,
-.saved-addr-select {
-  padding: 10px 14px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 14px;
-  transition: border-color 0.3s;
-}
-.form-group input:focus,
-.address-select select:focus,
-.saved-addr-select:focus {
-  border-color: #009981;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(0, 153, 129, 0.2);
-}
-.address-select {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.address-select select {
-  flex-grow: 1;
-  min-width: 150px;
-}
-.mt-2 {
-  margin-top: 10px;
-}
-.error {
-  color: #e74c3c;
-  font-size: 13px;
-  margin-top: 4px;
-}
-.payment-methods-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
-}
-.payment-option {
-  display: flex;
-  align-items: center;
-  border: 2px solid #eee;
-  padding: 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  background: #fefefe;
-}
-.payment-option:hover {
-  border-color: #009981;
-}
-.payment-option input[type="radio"] {
-  margin-right: 12px;
-  accent-color: #009981;
-}
-.option-content {
+/* STYLES GIỮ NGUYÊN */
+.checkout-page { font-family: Arial,sans-serif; padding:40px 20px; background:#f0f2f5; min-height:100vh; }
+.checkout-title { color:#009981; font-weight:700; font-size:26px; display:flex; align-items:center; gap:8px; margin-bottom:25px; }
+.checkout-content { display:flex; gap:30px; flex-wrap:wrap; }
+.card { background:#fff; padding:25px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); flex:1; }
+.checkout-form h3, .checkout-summary h3 { color:#333; border-bottom:2px solid #009981; padding-bottom:10px; margin-bottom:20px; font-size:20px; }
+.form-group { display:flex; flex-direction:column; margin-bottom:18px; }
+.form-group label { font-weight:bold; margin-bottom:5px; font-size:14px; color:#555; }
+.form-group input, .address-select select { padding:10px 14px; border:1px solid #ddd; border-radius:8px; font-size:14px; transition:border-color 0.3s; }
+.form-group input:focus, .address-select select:focus { border-color:#009981; outline:none; box-shadow:0 0 0 2px rgba(0,153,129,0.2); }
+.address-select { display:flex; gap:10px; flex-wrap:wrap; }
+.address-select select { flex-grow:1; min-width:150px; }
+.error { color:#e74c3c; font-size:13px; margin-top:4px; }
+.payment-methods-grid { display:flex; flex-direction:column; gap:10px; margin-top:10px; }
+.payment-option { display:flex; align-items:center; border:2px solid #eee; padding:12px; border-radius:8px; cursor:pointer; background:#fefefe; }
+.payment-option:hover { border-color:#009981; }
+.payment-option input[type=radio] { margin-right:12px; accent-color:#009981; }
+.option-content { display:flex; align-items:center; gap:8px; font-size:15px; color:#333; }
+.shipping-fee { display:flex; justify-content:space-between; font-weight:bold; margin-top:15px; }
+.checkout-btn { margin-top:25px; padding:12px; width:100%; border:none; border-radius:8px; background:#009981; color:#fff; font-weight:bold; cursor:pointer; font-size:16px; transition:background 0.3s; }
+.checkout-btn:hover { background:#006e61; }
+.cart-item-summary { display:flex; align-items:center; gap:15px; border-bottom:1px solid #eee; padding:10px 0; }
+.item-image-summary { width:60px; height:60px; border-radius:8px; object-fit:cover; border:1px solid #eee; }
+.item-details-summary { flex-grow:1; }
+.item-name { font-weight:500; margin-bottom:6px; }
+.item-quantity-controls { display:flex; align-items:center; gap:6px; }
+.item-quantity-controls button { width:24px; height:24px; cursor:pointer; }
+.item-info-right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+.item-price { font-weight:600; }
+.remove-item-btn { border:none; background:none; color:#e74c3c; font-size:16px; cursor:pointer; }
+.summary-line { display:flex; justify-content:space-between; font-weight:bold; margin-top:10px; }
+.summary-line.total { font-size:16px; color:#13493f; }
+.custom-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); display:flex; justify-content:center; align-items:center; z-index:9999; }
+.custom-modal-content { background:#fff; padding:20px; border-radius:10px; width:100%; max-width:480px; position:relative; box-shadow:0 12px 28px rgba(0,0,0,0.14); }
+.modal-close-btn { position:absolute; top:8px; right:12px; font-size:22px; border:none; background:none; cursor:pointer; }
+.modal-ok-btn { margin-top:12px; width:100%; padding:12px; border:none; border-radius:8px; background:#009981; color:#fff; font-weight:bold; cursor:pointer; }
+.modal-ok-btn:hover { background:#006e61; }
+.item-quantity-controls {
   display: flex;
   align-items: center;
   gap: 8px;

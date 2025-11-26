@@ -1,9 +1,9 @@
 <script setup>
 import { ref } from 'vue';
 // Import store wishlist
-import { wishlist, removeItemFromWishlist } from "./wishlistStore.js"; 
+import { wishlist, removeItemFromWishlist } from "./user/wishlistStore.js"; 
 // Import store giỏ hàng để thêm từ wishlist
-import { addToCart } from "./cartStore.js"; 
+import { addToCart } from "./user/cartStore.js"; 
 
 // --- HELPER FUNCTION ---
 const formatCurrency = (value) =>

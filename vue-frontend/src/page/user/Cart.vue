@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from "vue";
 // THAY THẾ bằng store
-import { cart, total, removeItem, updateItemQty, saveCart } from "./cartStore.js"; 
+import { cart, total, removeItem, updateItemQty, saveCart } from "./user/cartStore.js"; 
 
 // 🛠️ Đã sửa: Sử dụng &nbsp; cho khoảng trắng không ngắt dòng
 const formatPrice = (v) => v.toLocaleString("vi-VN") + "\u00A0₫"; // \u00A0 là ký tự Non-breaking space
