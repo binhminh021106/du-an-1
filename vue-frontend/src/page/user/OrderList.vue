@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
+// THAY THẾ: Import orders và hàm xử lý từ Store
+import { orders, updateOrderStatus, saveOrders } from './user/orderStore.js'; 
 
 // Giả định useRouter và useRoute cho code chạy độc lập
 const useRouterMock = () => ({
@@ -15,162 +17,20 @@ const isReviewing = ref(false);
 const reviewText = ref('');
 const reviewRating = ref(0);
 
-// --- TÍNH NĂNG MỚI: Biến cho Tìm kiếm và Phân trang ---
+// --- TÍNH NĂNG: Biến cho Tìm kiếm và Phân trang ---
 const searchQuery = ref('');
 const currentPage = ref(1);
 const itemsPerPage = 5;
 
-// 🧾 Dữ liệu giả định cho danh sách đơn hàng (10 ĐƠN HÀNG)
-const orders = ref([
-    {
-        id: 'DH1001',
-        date: '2025-11-10',
-        // Thay thế: Chuột Logitech G102 (350k) + Lót chuột Razer (200k)
-        // Mới: Gaming G2 - Chuột Razer Viper V2 Pro (2.200.000 ₫) + Headphone H5 - Tai nghe không dây Marshall (4.500.000 ₫)
-        total: 6700000, // 2.200.000 + 4.500.000
-        status: 'Đang giao hàng',
-        customer: { name: 'Nguyễn Văn An', phone: '0901 234 567', address: 'Số 123, đường A, Phường B, Quận C, TP. HCM' },
-        payment: { subtotal: 6700000, shippingFee: 0, total: 6700000, method: 'Chuyển khoản' },
-        items: [
-            { id: 1, name: 'Chuột Razer Viper V2 Pro (Gaming G2)', price: 2200000, qty: 1, image: 'https://via.placeholder.com/100x100/CD5C5C/FFFFFF?text=Gaming+G2' },
-            { id: 2, name: 'Tai nghe không dây Marshall (H5)', price: 4500000, qty: 1, image: 'https://via.placeholder.com/100x100/A9A9A9/000000?text=Headphone+H5' },
-        ],
-        canCancel: true, canRepurchase: true, canReview: false, canReturn: true, isReviewed: false,
-    },
-    {
-        id: 'DH1002',
-        date: '2025-11-05',
-        // Thay thế: Bàn phím cơ Akko 3087 (280k)
-        // Mới: Laptop L5 - HP Spectre x360 14 (31.600.000 ₫)
-        total: 31600000,
-        status: 'Đã giao thành công',
-        customer: { name: 'Trần Thị B', phone: '0902 876 543', address: 'Đường Nguyễn Huệ, Quận 1, TP. HCM' },
-        payment: { subtotal: 31600000, shippingFee: 0, total: 31600000, method: 'Thanh toán khi nhận hàng (COD)' },
-        items: [
-            { id: 3, name: 'HP Spectre x360 14 (Laptop L5)', price: 31600000, qty: 1, image: 'https://via.placeholder.com/100x100/F08080/FFFFFF?text=Laptop+L5' },
-        ],
-        canCancel: false, canRepurchase: true, canReview: true, canReturn: true, isReviewed: false,
-    },
-    {
-        id: 'DH1003',
-        date: '2025-10-28',
-        // Thay thế: Tai nghe Razer Kraken (1.200.000 ₫)
-        // Mới: Phone X1 - Samsung Galaxy Ultra S23 (27.990.000 ₫)
-        total: 27990000,
-        status: 'Đã hủy',
-        customer: { name: 'Lê Văn C', phone: '0903 123 987', address: 'Quận Bình Thạnh, TP. HCM' },
-        payment: { subtotal: 27990000, shippingFee: 0, total: 27990000, method: 'Thẻ tín dụng' },
-        items: [
-            { id: 4, name: 'Samsung Galaxy Ultra S23 (Phone X1)', price: 27990000, qty: 1, image: 'https://via.placeholder.com/100x100/B0E0E6/000000?text=Phone+X1' },
-        ],
-        canCancel: false, canRepurchase: true, canReview: false, canReturn: false, isReviewed: false,
-    },
-    {
-        id: 'DH1004',
-        date: '2025-10-15',
-        // Thay thế: Tấm lót bàn RGB (350k)
-        // Mới: Laptop L2 - Dell XPS 13 Plus (38.600.000 ₫)
-        total: 38600000,
-        status: 'Đã đặt hàng',
-        customer: { name: 'Phạm Thu D', phone: '0904 456 123', address: 'Quận Tân Bình, TP. HCM' },
-        payment: { subtotal: 38600000, shippingFee: 0, total: 38600000, method: 'Momo' },
-        items: [
-            { id: 5, name: 'Dell XPS 13 Plus (Laptop L2)', price: 38600000, qty: 1, image: 'https://via.placeholder.com/100x100/BDB76B/000000?text=Laptop+L2' },
-        ],
-        canCancel: false, canRepurchase: true, canReview: true, canReturn: true, isReviewed: false,
-    },
-    {
-        id: 'DH1005',
-        date: '2025-11-12', 
-        // Thay thế: Tấm lót bàn RGB (350k)
-        // Mới: Gaming G1 - Ghế Gaming Secretlab Titan (8.900.000 ₫)
-        total: 8900000,
-        status: 'Đã giao thành công',
-        customer: { name: 'Phạm Thu D', phone: '0904 456 123', address: 'Quận Tân Bình, TP. HCM' },
-        payment: { subtotal: 8900000, shippingFee: 0, total: 8900000, method: 'Momo' },
-        items: [
-            { id: 5, name: 'Ghế Gaming Secretlab Titan (Gaming G1)', price: 8900000, qty: 1, image: 'https://via.placeholder.com/100x100/CD5C5C/FFFFFF?text=Gaming+G1' },
-        ],
-        canCancel: false, canRepurchase: true, canReview: true, canReturn: true, isReviewed: false,
-    },
-    {
-        id: 'DH1006',
-        date: '2025-11-11',
-        // Thay thế: Chuột Logitech G102 (350k)
-        // Mới: Phone X2 - iPhone 17 (26.990.000 ₫)
-        total: 26990000,
-        status: 'Đã hủy',
-        customer: { name: 'Nguyễn Văn An', phone: '0901 234 567', address: 'Số 123, đường A, Phường B, Quận C, TP. HCM' },
-        payment: { subtotal: 26990000, shippingFee: 0, total: 26990000, method: 'Chuyển khoản' },
-        items: [
-            { id: 1, name: 'iPhone 17 (Phone X2)', price: 26990000, qty: 1, image: 'https://via.placeholder.com/100x100/B0E0E6/000000?text=Phone+X2' },
-        ],
-        canCancel: false, canRepurchase: true, canReview: false, canReturn: false, isReviewed: false,
-    },
-    {
-        id: 'DH1007',
-        date: '2025-11-01',
-        // Thay thế: Bàn phím cơ Akko 3087 (280k)
-        // Mới: Gaming G3 - Bàn phím cơ Logitech G Pro X (4.600.000 ₫)
-        total: 4600000,
-        status: 'Đang giao hàng',
-        customer: { name: 'Trần Thị B', phone: '0902 876 543', address: 'Đường Nguyễn Huệ, Quận 1, TP. HCM' },
-        payment: { subtotal: 4600000, shippingFee: 0, total: 4600000, method: 'Thanh toán khi nhận hàng (COD)' },
-        items: [
-            { id: 3, name: 'Bàn phím cơ Logitech G Pro X (Gaming G3)', price: 4600000, qty: 1, image: 'https://via.placeholder.com/100x100/87CEEB/FFFFFF?text=Gaming+G3' },
-        ],
-        canCancel: true, canRepurchase: true, canReview: false, canReturn: true, isReviewed: false,
-    },
-    {
-        id: 'DH1008',
-        date: '2025-11-15', // Mới nhất
-        // Thay thế: Chuột Logitech G102 (350k) + Tai nghe Razer Kraken (1.200.000 ₫)
-        // Mới: Laptop L1 - Macbook Pro M4 14 inch (42.000.000 ₫) + Headphone H1 - Bose QC Ultra (9.600.000 ₫)
-        total: 51600000, // 42.000.000 + 9.600.000
-        status: 'Đã đặt hàng',
-        customer: { name: 'Hoàng Văn E', phone: '0905 555 123', address: 'Quận 10, TP. HCM' },
-        payment: { subtotal: 51600000, shippingFee: 0, total: 51600000, method: 'Thẻ tín dụng' },
-        items: [
-            { id: 1, name: 'Macbook Pro M4 14 inch (Laptop L1)', price: 42000000, qty: 1, image: 'https://via.placeholder.com/100x100/ADD8E6/000000?text=Laptop+L1' },
-            { id: 4, name: 'Tai nghe chống ồn Bose QC Ultra (H1)', price: 9600000, qty: 1, image: 'https://via.placeholder.com/100x100/CD5C5C/FFFFFF?text=Headphone+H1' },
-        ],
-        canCancel: false, canRepurchase: true, canReview: false, canReturn: false, isReviewed: false,
-    },
-    {
-        id: 'DH1009',
-        date: '2025-11-14',
-        // Thay thế: Lót chuột Razer (200k)
-        // Mới: Gaming G4 - Tay cầm chơi game PS5 DualSense (1.800.000 ₫)
-        total: 1800000,
-        status: 'Đã giao thành công',
-        customer: { name: 'Nguyễn Văn An', phone: '0901 234 567', address: 'Số 123, đường A, Phường B, Quận C, TP. HCM' },
-        payment: { subtotal: 1800000, shippingFee: 0, total: 1800000, method: 'Momo' },
-        items: [
-            { id: 2, name: 'Tay cầm chơi game PS5 DualSense (G4)', price: 1800000, qty: 1, image: 'https://via.placeholder.com/100x100/F4A460/000000?text=Gaming+G4' },
-        ],
-        canCancel: false, canRepurchase: true, canReview: true, canReturn: true, isReviewed: false,
-    },
-    {
-        id: 'DH1010',
-        date: '2025-11-13',
-        // Thay thế: Bàn phím cơ Akko 3087 (280k)
-        // Mới: Laptop L4 - Lenovo Legion 5 Pro (24.000.000 ₫)
-        total: 24000000,
-        status: 'Đang giao hàng',
-        customer: { name: 'Lê Văn C', phone: '0903 123 987', address: 'Quận Bình Thạnh, TP. HCM' },
-        payment: { subtotal: 24000000, shippingFee: 0, total: 24000000, method: 'Thanh toán khi nhận hàng (COD)' },
-        items: [
-            { id: 3, name: 'Lenovo Legion 5 Pro (Laptop L4)', price: 24000000, qty: 1, image: 'https://via.placeholder.com/100x100/90EE90/000000?text=Laptop+L4' },
-        ],
-        canCancel: true, canRepurchase: true, canReview: false, canReturn: true, isReviewed: false,
-    },
-]);
+// Dữ liệu đơn hàng hiện tại là từ orderStore
+// const orders = ref([...]) <--- ĐÃ BỊ XÓA
 
-// --- TÍNH NĂNG MỚI: Sắp xếp, Lọc, và Phân trang ---
+// --- TÍNH NĂNG: Sắp xếp, Lọc, và Phân trang ---
 
-// 1. Sắp xếp đơn hàng (mới nhất lên đầu)
+// 1. Sắp xếp đơn hàng (đã được sắp xếp trong loadOrders, nhưng vẫn nên dùng sorted cho các thao tác tiếp theo)
 const sortedOrders = computed(() => {
-  return [...orders.value].sort((a, b) => b.date.localeCompare(a.date));
+    // orders.value đã được sắp xếp trong orderStore, chỉ cần trả về.
+    return orders.value;
 });
 
 // 2. Lọc đơn hàng theo tìm kiếm
@@ -205,7 +65,7 @@ const paginatedOrders = computed(() => {
   return filteredOrders.value.slice(start, end);
 });
 
-// --- TÍNH NĂNG MỚI: Hàm điều khiển phân trang ---
+// --- TÍNH NĂNG: Hàm điều khiển phân trang ---
 const setPage = (page) => {
   if (page >= 1 && page <= totalPages.value) {
     currentPage.value = page;
@@ -224,24 +84,22 @@ const nextPage = () => {
   }
 };
 
-// --- TÍNH NĂNG MỚI: Watcher để reset về trang 1 khi tìm kiếm ---
+// --- Watcher để reset về trang 1 khi tìm kiếm ---
 watch(searchQuery, () => {
   currentPage.value = 1;
 });
 
 // --- Logic Tính Toán cho Popup (Dựa trên selectedOrder) ---
-// (Giữ nguyên)
-const isCancellable = computed(() => selectedOrder.value?.canCancel && selectedOrder.value?.status === 'Đang giao hàng');
+const isCancellable = computed(() => selectedOrder.value?.canCancel && selectedOrder.value?.status === 'Đã đặt hàng'); // Đơn hàng mới đặt có thể hủy
 const isRepurchasable = computed(() => selectedOrder.value?.canRepurchase);
 const isReturnable = computed(() => selectedOrder.value?.canReturn && (selectedOrder.value?.status === 'Đã giao thành công' || selectedOrder.value?.status === 'Hoàn thành, có thể đánh giá'));
 const isReviewAvailable = computed(() => selectedOrder.value?.canReview && !selectedOrder.value?.isReviewed && (selectedOrder.value?.status === 'Đã giao thành công' || selectedOrder.value?.status === 'Hoàn thành, có thể đánh giá'));
 
 // --- Logic cho Thanh Tiến Trình ---
-// (Giữ nguyên)
 const orderSteps = [
   { key: 'placed', label: 'Đã đặt hàng', statusMatch: ['Đã đặt hàng', 'Chờ chuyển phát', 'Đang giao hàng', 'Đã giao thành công', 'Hoàn thành, có thể đánh giá'] },
   { key: 'shipping_prep', label: 'Chờ chuyển phát', statusMatch: ['Chờ chuyển phát', 'Đang giao hàng', 'Đã giao thành công', 'Hoàn thành, có thể đánh giá'] },
-  { key: 'in_transit', label: 'Đang trung chuyển', statusMatch: ['Đang giao hàng', 'Đã giao thành công', 'Hoàn thành, có thể đánh giá'] },
+  { key: 'in_transit', label: 'Đang giao hàng', statusMatch: ['Đang giao hàng', 'Đã giao thành công', 'Hoàn thành, có thể đánh giá'] },
   { key: 'delivered', label: 'Đã giao đơn hàng', statusMatch: ['Đã giao thành công', 'Hoàn thành, có thể đánh giá'] },
 ];
 
@@ -253,38 +111,44 @@ const getActiveStepIndex = computed(() => {
   let activeIndex = -1;
   const currentStatus = selectedOrder.value.status;
   for (let i = orderSteps.length - 1; i >= 0; i--) {
-    if (orderSteps[i].statusMatch.includes(currentStatus)) {
-      activeIndex = i;
-      break;
+    // Sửa lại logic so khớp trạng thái: lấy trạng thái tương đương với step đang hiển thị
+    if (orderSteps[i].label === currentStatus || orderSteps[i].statusMatch.includes(currentStatus)) {
+        activeIndex = i;
+        break;
     }
   }
+  
+  // Xử lý trường hợp đặc biệt: 'Đang giao hàng' tương đương với bước 2 (index 2)
+  if (currentStatus === 'Đang giao hàng') return 2;
+  // Xử lý trường hợp đặc biệt: 'Đã đặt hàng' tương đương với bước 0 (index 0)
+  if (currentStatus === 'Đã đặt hàng') return 0;
+  
+  // Trả về chỉ số cuối cùng
   return activeIndex;
 });
 
 
 // --- Hàm Định Dạng và Class ---
-// (Giữ nguyên)
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 };
 
 const getStatusClass = (status) => {
-  return 'status-' + status.toLowerCase().replace(/ /g, '-').replace(/,/g, '');
+  // Sửa lỗi chính tả trạng thái: "dang giao hang"
+  return 'status-' + status.toLowerCase().replace(/ /g, '-').replace(/,/g, '').replace('đang-trung-chuyển', 'dang-giao-hang');
 };
 
-// ** THÊM HÀM FORMAT NGÀY **
 const formatDate = (isoDate) => {
   if (!isoDate) return '';
-  const parts = isoDate.split('-'); // Tách [YYYY, MM, DD]
+  const parts = isoDate.split('-'); // Dạng YYYY-MM-DD
   if (parts.length === 3) {
     return `${parts[2]}-${parts[1]}-${parts[0]}`; // Trả về DD-MM-YYYY
   }
-  return isoDate; // Trả về như cũ nếu không đúng định dạng
+  return isoDate;
 };
 
 
 // --- Logic Popup ---
-// (Giữ nguyên)
 const openDetailPopup = (order, startReview = false) => {
   selectedOrder.value = order;
   isReviewing.value = startReview;
@@ -299,60 +163,32 @@ const closeDetailPopup = () => {
   isReviewing.value = false;
 };
 
-// --- Các hàm xử lý hành động (cho POPUP) ---
-// (Giữ nguyên)
-const handleCancel = () => {
-  handleCancelList(selectedOrder.value);
-};
-const handleRepurchase = () => {
-  handleRepurchaseList(selectedOrder.value);
-};
-const handleStartReview = () => {
-  isReviewing.value = true;
-};
-const handleSubmitReview = () => {
-  if (reviewRating.value === 0) {
-    alert('Vui lòng chọn số sao để đánh giá!');
-    return;
-  }
-  alert(`Cảm ơn bạn đã đánh giá ${reviewRating.value} sao cho đơn hàng #${selectedOrder.value.id}!`);
-  const orderToUpdate = orders.value.find(o => o.id === selectedOrder.value.id);
-  if (orderToUpdate) {
-    orderToUpdate.isReviewed = true;
-    selectedOrder.value.isReviewed = true;
-  }
-  isReviewing.value = false;
-};
-const handleReturn = () => {
-  handleReturnList(selectedOrder.value);
-};
-
-// --- CÁC HÀM XỬ LÝ HÀNH ĐỘNG MỚI (CHO DANH SÁCH) ---
-// (Giữ nguyên)
+// --- CÁC HÀM XỬ LÝ HÀNH ĐỘNG (CẬP NHẬT STORE) ---
 const handleCancelList = (order) => {
   if (confirm(`Bạn có chắc muốn hủy đơn hàng #${order.id} không?`)) {
     alert(`Đã gửi yêu cầu hủy đơn hàng #${order.id}`);
-    const orderToUpdate = orders.value.find(o => o.id === order.id);
-    if (orderToUpdate) {
-      orderToUpdate.status = 'Đã hủy';
-      orderToUpdate.canCancel = false;
-    }
+    updateOrderStatus(order.id, 'Đã hủy'); 
+    
+    // Cập nhật lại selectedOrder nếu đang mở popup
     if (selectedOrder.value && selectedOrder.value.id === order.id) {
-      selectedOrder.value.status = 'Đã hủy';
-      selectedOrder.value.canCancel = false;
+        selectedOrder.value.status = 'Đã hủy';
+        selectedOrder.value.canCancel = false;
     }
   }
 };
 const handleRepurchaseList = (order) => {
   alert(`Đã thêm các sản phẩm của đơn hàng #${order.id} vào giỏ hàng!`);
+  // Thực tế sẽ cần logic thêm item vào cartStore
   // router.push('/cart');
 };
 const handleReturnList = (order) => {
   if (confirm(`Bạn có chắc muốn yêu cầu hoàn hàng cho đơn hàng #${order.id} không?`)) {
     alert(`Đã gửi yêu cầu hoàn hàng cho đơn hàng #${order.id}.`);
+    // Cập nhật cờ canReturn
     const orderToUpdate = orders.value.find(o => o.id === order.id);
     if (orderToUpdate) {
       orderToUpdate.canReturn = false;
+      saveOrders(); // Lưu lại thay đổi cờ
     }
     if (selectedOrder.value && selectedOrder.value.id === order.id) {
       selectedOrder.value.canReturn = false;
@@ -361,6 +197,28 @@ const handleReturnList = (order) => {
 };
 const handleStartReviewFromList = (order) => {
   openDetailPopup(order, true);
+};
+
+const handleCancel = () => { handleCancelList(selectedOrder.value); };
+const handleRepurchase = () => { handleRepurchaseList(selectedOrder.value); };
+const handleStartReview = () => { isReviewing.value = true; };
+const handleReturn = () => { handleReturnList(selectedOrder.value); };
+
+const handleSubmitReview = () => {
+  if (reviewRating.value === 0) {
+    alert('Vui lòng chọn số sao để đánh giá!');
+    return;
+  }
+  alert(`Cảm ơn bạn đã đánh giá ${reviewRating.value} sao cho đơn hàng #${selectedOrder.value.id}!`);
+  
+  // Cập nhật cờ đánh giá trong Store
+  const orderToUpdate = orders.value.find(o => o.id === selectedOrder.value.id);
+  if (orderToUpdate) {
+    orderToUpdate.isReviewed = true;
+    saveOrders(); // Lưu lại thay đổi
+    selectedOrder.value.isReviewed = true;
+  }
+  isReviewing.value = false;
 };
 
 </script>
@@ -419,7 +277,7 @@ const handleStartReviewFromList = (order) => {
                 <i class="fas fa-eye"></i> Xem Chi Tiết
               </button>
               <button
-                v-if="order.canCancel && order.status === 'Đang giao hàng'"
+                v-if="order.canCancel && (order.status === 'Đã đặt hàng' || order.status === 'Đang giao hàng')"
                 class="action-btn-list danger-btn-list"
                 @click.stop="handleCancelList(order)">
                 <i class="fas fa-times-circle"></i> Hủy Đơn
@@ -501,7 +359,7 @@ const handleStartReviewFromList = (order) => {
             </div>
             <div class="progress-line">
               <div class="progress-fill"
-                :style="{ width: getActiveStepIndex === -1 ? '0%' : (getActiveStepIndex / (orderSteps.length - 1)) * 100 + '%' }">
+                :style="{ width: getActiveStepIndex < 0 ? '0%' : (getActiveStepIndex / (orderSteps.length - 1)) * 100 + '%' }">
               </div>
             </div>
           </div>
@@ -606,6 +464,7 @@ const handleStartReviewFromList = (order) => {
 </template>
 
 <style scoped>
+/* STYLES GIỮ NGUYÊN */
 /* Định nghĩa màu sắc (ĐÃ BỔ SUNG WARNING-COLOR) */
 :root {
   --primary-color: #009981;

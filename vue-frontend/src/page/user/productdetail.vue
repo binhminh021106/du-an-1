@@ -3,9 +3,9 @@ import { ref, watch, onMounted, computed, watchEffect } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import apiService from '../../apiService.js';
 // THÊM: Import hàm addToCart từ store (Đường dẫn ./cartStore.js là đúng)
-import { addToCart } from "./cartStore.js";
+import { addToCart } from "./user/cartStore.js";
 // THÊM: Import Wishlist Store
-import { isInWishlist, toggleWishlist } from "./wishlistStore.js";
+import { isInWishlist, toggleWishlist } from "./user/wishlistStore.js";
 
 
 const route = useRoute();
@@ -632,7 +632,7 @@ watchEffect(() => {
 }
 
 .btn-primary-green:hover {
-  background-color: var(--primary-hover);
+  
   border-radius: 8px;
   box-shadow: 0 4px 10px rgba(0, 153, 129, 0.4);
   transform: translateY(-2px);
@@ -1126,7 +1126,8 @@ watchEffect(() => {
 }
 
 .btn-buy-now:hover {
-  background: var(--primary-hover);
+  background: rgb(49, 117, 106);
+
 }
 
 

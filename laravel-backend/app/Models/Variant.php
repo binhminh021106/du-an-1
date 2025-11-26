@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 use App\Models\OrderItem;
-use App\Models\AttributeValue; 
+use App\Models\AttributeValue;
 use App\Models\Product;
 
 class Variant extends Model
@@ -20,9 +20,8 @@ class Variant extends Model
     protected $fillable = [
         'product_id',
         'price',
-        'original_price', 
-        'stock',
-        // 'sku', // Nên thêm mã SKU nếu có để quản lý kho dễ hơn
+        'original_price',
+        'stock'
     ];
 
     /**
@@ -38,7 +37,7 @@ class Variant extends Model
             'attribute_value_id'
         )->withTimestamps();
     }
-    
+
     public function product()
     {
         return $this->belongsTo(Product::class, 'product_id', 'id');
@@ -48,7 +47,7 @@ class Variant extends Model
     {
         return $this->hasMany(OrderItem::class, 'variant_id', 'id');
     }
-    
+
     /**
      * Xử lý sự kiện khi xóa Variant
      */
@@ -57,11 +56,11 @@ class Variant extends Model
         // Sử dụng 'forceDeleting' thay vì 'deleting'
         // Lý do: Nếu dùng 'deleting', khi bạn xóa mềm (Soft Delete), quan hệ trong bảng pivot sẽ bị xóa luôn (detach).
         // Khi đó, nếu bạn khôi phục (restore) lại Variant, nó sẽ bị mất thuộc tính (không còn màu/size nữa).
-        
+
         static::forceDeleting(function ($variant) {
             // Chỉ khi xóa vĩnh viễn (Force Delete) thì mới xóa sạch quan hệ trong bảng trung gian
-            $variant->attributeValues()->detach(); 
-            
+            $variant->attributeValues()->detach();
+
             // Xử lý logic OrderItems nếu cần (thường thì không nên xóa OrderItem để giữ lịch sử đơn hàng)
             // $variant->orderItems()->delete(); 
         });
