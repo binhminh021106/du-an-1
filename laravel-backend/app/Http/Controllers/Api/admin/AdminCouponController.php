@@ -5,19 +5,18 @@ namespace App\Http\Controllers\Api\admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Coupon;
-use Illuminate\Validation\Rule; // Cần import để validate unique khi update
+use Illuminate\Validation\Rule;
 
 class AdminCouponController extends Controller
 {
     /**
-     * Lấy danh sách coupon
-     * Hỗ trợ sắp xếp từ Vue: ?_sort=id&_order=desc
+     * Lấy danh sách coupon (Chưa xóa)
      */
     public function index(Request $request)
     {
+        // Mặc định chỉ lấy các bản ghi chưa bị xóa (Soft Delete)
         $query = Coupon::query();
 
-        // Xử lý sắp xếp nếu Frontend có gửi params
         if ($request->has('_sort') && $request->has('_order')) {
             $query->orderBy($request->_sort, $request->_order);
         } else {
@@ -25,17 +24,17 @@ class AdminCouponController extends Controller
         }
 
         $coupons = $query->get();
+        return response()->json($coupons);
+    }
 
-        // Map lại dữ liệu trả về cho khớp với Frontend (nếu cần thiết)
-        // Tuy nhiên, ở Vue bạn đang dùng trực tiếp snake_case từ Model trả về hoặc 
-        // camelCase từ form. Để tiện nhất, tôi sẽ trả về raw model, 
-        // nhưng ở hàm store/update tôi sẽ hứng đúng tên biến Vue gửi lên.
-        
-        // Lưu ý: Vue đang gọi coupon.usageLimit, coupon.limitPerUser ở hàm openEditModal
-        // Laravel Model trả về usage_limit, usage_limit_per_user.
-        // Để khớp 100%, ta dùng transform hoặc Vue phải tự map. 
-        // Cách nhanh nhất: Laravel trả về JSON gốc, Vue map lúc openModal (Bạn đã làm đúng ở Vue).
-
+    /**
+     * Lấy danh sách coupon ĐÃ XÓA (Thùng rác)
+     * API: GET /admin/coupons/trashed
+     */
+    public function trashed(Request $request)
+    {
+        // onlyTrashed() chỉ lấy các bản ghi đã bị soft delete
+        $coupons = Coupon::onlyTrashed()->orderBy('deleted_at', 'desc')->get();
         return response()->json($coupons);
     }
 
@@ -47,28 +46,27 @@ class AdminCouponController extends Controller
         // 1. Validate dữ liệu
         $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'required|string|unique:coupons,code|max:50', // Code không được trùng
+            'code' => 'required|string|unique:coupons,code|max:50',
             'type' => 'required|in:percent,fixed',
             'value' => 'required|numeric|min:0',
-            'expiresAt' => 'nullable|date', // Vue gửi lên là expiresAt
-            'usageLimit' => 'nullable|integer|min:0', // Vue gửi lên là usageLimit
-            'limitPerUser' => 'required|integer|min:1', // Vue gửi lên là limitPerUser
+            'expiresAt' => 'nullable|date',
+            'usageLimit' => 'nullable|integer|min:0',
+            'limitPerUser' => 'nullable|integer|min:1', // Chấp nhận null (không giới hạn)
         ], [
             'code.unique' => 'Mã giảm giá này đã tồn tại.',
-            'limitPerUser.required' => 'Giới hạn lượt dùng mỗi người là bắt buộc.'
         ]);
 
-        // 2. Map dữ liệu từ Frontend (camelCase) sang Database (snake_case)
+        // 2. Map dữ liệu
         $data = [
             'name' => $request->name,
-            'code' => strtoupper($request->code), // Luôn viết hoa Code
+            'code' => strtoupper($request->code),
             'type' => $request->type,
             'value' => $request->value,
-            'usage_count' => 0, // Mặc định ban đầu là 0
-            'expires_at' => $request->expiresAt, // Map: expiresAt -> expires_at
-            'usage_limit' => $request->usageLimit, // Map: usageLimit -> usage_limit
-            'usage_limit_per_user' => $request->limitPerUser, // Map: limitPerUser -> usage_limit_per_user
-            'min_spend' => $request->min_spend ?? 0, // Nếu có thêm trường này
+            'usage_count' => 0,
+            'expires_at' => $request->expiresAt,
+            'usage_limit' => $request->usageLimit,
+            'usage_limit_per_user' => $request->limitPerUser,
+            'min_spend' => $request->min_spend ?? 0,
         ];
 
         // 3. Lưu vào DB
@@ -99,14 +97,21 @@ class AdminCouponController extends Controller
         // 1. Validate
         $request->validate([
             'name' => 'required|string|max:255',
-            // Code unique nhưng phải trừ ID hiện tại ra (Rule::unique(...)->ignore(...))
-            'code' => ['required', 'string', 'max:50', Rule::unique('coupons')->ignore($coupon->id)],
+            // Code unique nhưng ignore ID hiện tại
+            'code' => [
+                'required', 
+                'string', 
+                'max:50', 
+                Rule::unique('coupons', 'code')->ignore($coupon->id)
+            ],
             'type' => 'required|in:percent,fixed',
             'value' => 'required|numeric|min:0',
             'expiresAt' => 'nullable|date',
             'usageLimit' => 'nullable|integer|min:0',
-            'limitPerUser' => 'required|integer|min:1',
-            'usageCount' => 'nullable|integer|min:0', // Cho phép sửa số lần đã dùng nếu cần
+            'limitPerUser' => 'nullable|integer|min:1', // Chấp nhận null
+            'usageCount' => 'nullable|integer|min:0',
+        ], [
+            'code.unique' => 'Mã giảm giá này đã tồn tại.',
         ]);
 
         // 2. Map dữ liệu Update
@@ -120,7 +125,7 @@ class AdminCouponController extends Controller
             'usage_limit_per_user' => $request->limitPerUser,
         ];
 
-        // Nếu có gửi usageCount (số lần đã dùng) thì cập nhật luôn (Admin quyền lực)
+        // Nếu có gửi usageCount thì cập nhật
         if ($request->has('usageCount')) {
             $data['usage_count'] = $request->usageCount;
         }
@@ -135,15 +140,44 @@ class AdminCouponController extends Controller
     }
 
     /**
-     * Xóa Coupon (Soft Delete)
+     * Xóa mềm (Soft Delete) -> Đưa vào thùng rác
      */
     public function destroy(string $id)
     {
         $coupon = Coupon::findOrFail($id);
-        $coupon->delete();
+        $coupon->delete(); // Yêu cầu Model dùng SoftDeletes
 
         return response()->json([
-            'message' => 'Đã xóa mã giảm giá thành công'
+            'message' => 'Đã chuyển mã giảm giá vào thùng rác'
+        ]);
+    }
+
+    /**
+     * Khôi phục từ thùng rác
+     * API: POST /admin/coupons/{id}/restore
+     */
+    public function restore(string $id)
+    {
+        // withTrashed() để tìm cả trong thùng rác
+        $coupon = Coupon::withTrashed()->findOrFail($id);
+        $coupon->restore();
+
+        return response()->json([
+            'message' => 'Khôi phục mã giảm giá thành công'
+        ]);
+    }
+
+    /**
+     * Xóa vĩnh viễn (Force Delete)
+     * API: DELETE /admin/coupons/{id}/force
+     */
+    public function forceDelete(string $id)
+    {
+        $coupon = Coupon::withTrashed()->findOrFail($id);
+        $coupon->forceDelete();
+
+        return response()->json([
+            'message' => 'Đã xóa vĩnh viễn mã giảm giá'
         ]);
     }
 }

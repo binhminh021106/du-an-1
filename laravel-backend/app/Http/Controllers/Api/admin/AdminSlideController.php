@@ -86,7 +86,7 @@ class AdminSlideController extends Controller
     }
 
     /**
-     * Cập nhật Slide (Có thay đổi ảnh hoặc không)
+     * Cập nhật Slide (SỬA LỖI 500 KHI PARTIAL UPDATE)
      */
     public function update(Request $request, string $id)
     {
@@ -101,14 +101,23 @@ class AdminSlideController extends Controller
             'status' => 'required|in:published,draft',
         ]);
 
-        // 2. Chuẩn bị dữ liệu update
-        $updateData = [
-            'title'        => $request->title,
-            'description'  => $request->description,
-            'link_url'     => $request->linkUrl,    // Map: linkUrl -> link_url
-            'order_number' => $request->order ?? 0, // Map: order -> order_number
-            'status'       => $request->status,
-        ];
+        // 2. Cập nhật thông tin (Chỉ cập nhật nếu có gửi lên)
+        // Việc này giúp tránh lỗi khi chỉ gửi Title & Order mà mất Description/Link
+        
+        $slide->title = $request->title; // Title là bắt buộc nên luôn gán
+        $slide->status = $request->status; // Status bắt buộc
+
+        if ($request->has('description')) {
+            $slide->description = $request->description;
+        }
+
+        if ($request->has('linkUrl')) {
+            $slide->link_url = $request->linkUrl;
+        }
+
+        if ($request->has('order')) {
+            $slide->order_number = $request->order;
+        }
 
         // 3. Kiểm tra nếu có gửi ảnh mới lên
         if ($request->hasFile('image')) {
@@ -117,11 +126,11 @@ class AdminSlideController extends Controller
 
             // Upload ảnh mới
             $path = $request->file('image')->store('slides', 'public');
-            $updateData['image_url'] = '/storage/' . $path;
+            $slide->image_url = '/storage/' . $path;
         }
 
         // 4. Thực hiện update
-        $slide->update($updateData);
+        $slide->save();
 
         return response()->json([
             'message' => 'Cập nhật thành công',
@@ -137,7 +146,6 @@ class AdminSlideController extends Controller
         $slide = Slide::findOrFail($id);
 
         // Xóa file ảnh trong storage luôn (nếu muốn xóa sạch)
-        // Nếu dùng SoftDeletes thì có thể cân nhắc không xóa file ngay
         $this->deleteImageFromStorage($slide->image_url);
 
         $slide->delete();

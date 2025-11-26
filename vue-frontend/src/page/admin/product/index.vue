@@ -5,7 +5,9 @@ import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
 // --- CẤU HÌNH URL BACKEND ---
-const API_BASE_URL = 'http://127.0.0.1:8000';
+// Lấy từ .env (VITE_API_BASE_URL). Nếu có đuôi '/api' thì cắt bỏ để lấy root domain phục vụ load ảnh
+const rawApiUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API_BASE_URL = rawApiUrl.replace(/\/api\/?$/, '');
 
 // --- STATE QUẢN LÝ ---
 const products = ref([]);
@@ -20,6 +22,10 @@ const isCreatingAttr = ref(false); // State loading cho tạo thuộc tính nhan
 const deletingImageIds = ref([]);  // State mảng chứa ID các ảnh đang xóa
 const processingStatusIds = ref([]); // State mảng chứa ID sản phẩm đang đổi trạng thái (Toggle Switch)
 
+// State Xóa nhiều ảnh (Bulk Delete)
+const selectedImageIds = ref([]);
+const isBulkDeleting = ref(false);
+
 // State Modal
 const modalInstance = ref(null);
 const modalRef = ref(null);
@@ -29,7 +35,7 @@ const attrModalRef = ref(null);
 // State Form phụ 
 const newQuickAttrName = ref('');
 const selectedAttributeId = ref('');
-const defaultAttributeValue = ref('');
+// Đã xóa defaultAttributeValue theo yêu cầu
 
 // --- STATE UPLOAD ẢNH ---
 const thumbnailFile = ref(null);
@@ -141,6 +147,20 @@ const totalPages = computed(() => Math.ceil(filteredProducts.value.length / item
 const paginatedProducts = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage.value;
   return filteredProducts.value.slice(start, start + itemsPerPage.value);
+});
+
+// Computed cho Select All
+const isAllImagesSelected = computed({
+  get() {
+    return formData.existing_images.length > 0 && selectedImageIds.value.length === formData.existing_images.length;
+  },
+  set(val) {
+    if (val) {
+      selectedImageIds.value = formData.existing_images.map(img => img.id);
+    } else {
+      selectedImageIds.value = [];
+    }
+  }
 });
 
 watch([searchQuery, sortCriteria], () => { currentPage.value = 1; });
@@ -281,29 +301,29 @@ function removeNewGalleryImage(index) {
 
 // --- UPDATED: XÓA ẢNH VỚI SWEETALERT2 + SPINNER ---
 async function deleteExistingImage(imgId, index) {
-  // Ngăn click nếu đang xóa chính ảnh này
   if (deletingImageIds.value.includes(imgId)) return;
 
-  // Thay thế confirm mặc định bằng SweetAlert2
   const result = await Swal.fire({
-    title: 'Bạn có chắc không?',
+    title: 'Xóa ảnh này?',
     text: "Hành động này sẽ xóa ảnh vĩnh viễn!",
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#d33',
     cancelButtonColor: '#3085d6',
-    confirmButtonText: 'Xóa ngay',
-    cancelButtonText: 'Hủy bỏ'
+    confirmButtonText: 'Xóa',
+    cancelButtonText: 'Hủy'
   });
 
   if (!result.isConfirmed) return;
 
-  deletingImageIds.value.push(imgId); // Thêm ID vào danh sách đang xóa
+  deletingImageIds.value.push(imgId);
   try {
     await apiService.delete(`/admin/imageProducts/${imgId}`);
     formData.existing_images.splice(index, 1);
 
-    // Thông báo nhỏ góc màn hình (Toast) thay vì popup lớn
+    // Nếu ảnh này đang được chọn trong bulk select thì bỏ chọn nó
+    selectedImageIds.value = selectedImageIds.value.filter(id => id !== imgId);
+
     Swal.fire({
       icon: 'success',
       title: 'Đã xóa ảnh',
@@ -316,8 +336,49 @@ async function deleteExistingImage(imgId, index) {
     console.error(e);
     Swal.fire('Lỗi', 'Không thể xóa ảnh', 'error');
   } finally {
-    // Xóa ID khỏi danh sách sau khi xong
     deletingImageIds.value = deletingImageIds.value.filter(id => id !== imgId);
+  }
+}
+
+// --- MỚI: XỬ LÝ XÓA NHIỀU ẢNH (BULK DELETE) ---
+async function handleBulkDeleteImages() {
+  if (selectedImageIds.value.length === 0) return;
+
+  const result = await Swal.fire({
+    title: 'Xóa nhiều ảnh?',
+    text: `Bạn có chắc muốn xóa ${selectedImageIds.value.length} ảnh đã chọn?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    confirmButtonText: 'Xóa ngay',
+    cancelButtonText: 'Hủy'
+  });
+
+  if (!result.isConfirmed) return;
+
+  isBulkDeleting.value = true;
+  try {
+    // Gọi API xóa nhiều: POST /admin/imageProducts/bulk-delete với body { ids: [...] }
+    await apiService.post('/admin/imageProducts/bulk-delete', { ids: selectedImageIds.value });
+
+    // Cập nhật UI: Lọc bỏ các ảnh đã xóa khỏi danh sách hiển thị
+    formData.existing_images = formData.existing_images.filter(img => !selectedImageIds.value.includes(img.id));
+
+    selectedImageIds.value = []; // Reset danh sách chọn
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Đã xóa các ảnh đã chọn',
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+      timer: 3000
+    });
+  } catch (e) {
+    console.error(e);
+    Swal.fire('Lỗi', 'Không thể xóa các ảnh đã chọn', 'error');
+  } finally {
+    isBulkDeleting.value = false;
   }
 }
 
@@ -342,8 +403,6 @@ async function handleQuickStatusToggle(product) {
   });
 
   if (!result.isConfirmed) {
-    // Nếu hủy, force update lại UI để switch quay về vị trí cũ (nếu v-model đã lỡ đổi)
-    // Tuy nhiên ở template ta dùng @click.prevent nên UI chưa đổi, không cần làm gì.
     return;
   }
 
@@ -351,16 +410,12 @@ async function handleQuickStatusToggle(product) {
   processingStatusIds.value.push(product.id);
 
   try {
-    // Gọi API cập nhật (Dùng FormData method PATCH hoặc JSON tùy backend)
     const payload = new FormData();
     payload.append('_method', 'PATCH');
     payload.append('status', newStatus);
 
-    // Lưu ý: Nếu backend yêu cầu gửi full field (name, category_id...), code này có thể cần sửa.
-    // Ở đây giả định backend cho phép patch riêng status hoặc không validate chặt các field khác khi update.
     await apiService.post(`/admin/products/${product.id}`, payload);
 
-    // Cập nhật UI Frontend
     product.status = newStatus;
 
     Swal.fire({
@@ -375,7 +430,6 @@ async function handleQuickStatusToggle(product) {
     console.error("Lỗi đổi trạng thái:", e);
     Swal.fire('Lỗi', 'Không thể cập nhật trạng thái. Vui lòng thử lại.', 'error');
   } finally {
-    // 4. Kết thúc Spinner: Xóa ID khỏi mảng
     processingStatusIds.value = processingStatusIds.value.filter(id => id !== product.id);
   }
 }
@@ -383,8 +437,6 @@ async function handleQuickStatusToggle(product) {
 // --- FORM LOGIC ---
 function addSelectedAttributeToForm() {
   if (!selectedAttributeId.value) { errors.attributes = 'Vui lòng chọn một thuộc tính.'; return; }
-  const val = defaultAttributeValue.value.trim();
-  if (!val) { Swal.fire({ icon: 'warning', title: 'Thiếu giá trị', text: 'Vui lòng nhập giá trị.' }); return; }
 
   const attrObj = attributesList.value.find(a => a.id == selectedAttributeId.value);
   if (!attrObj) return;
@@ -397,10 +449,11 @@ function addSelectedAttributeToForm() {
 
   formData.variants.forEach(v => {
     if (!v.attributes) v.attributes = {};
-    v.attributes[attrObj.name] = val;
+    // Gán giá trị rỗng cho thuộc tính mới
+    v.attributes[attrObj.name] = '';
   });
 
-  selectedAttributeId.value = ''; defaultAttributeValue.value = '';
+  selectedAttributeId.value = '';
 }
 
 function removeAttributeDefinition(attrToRemove) {
@@ -434,7 +487,8 @@ function resetForm() {
   galleryPreviews.value.forEach(url => URL.revokeObjectURL(url));
   galleryPreviews.value = [];
 
-  selectedAttributeId.value = ''; defaultAttributeValue.value = '';
+  selectedAttributeId.value = '';
+  selectedImageIds.value = []; // Reset selected images
   Object.keys(errors).forEach(k => errors[k] = '');
 }
 
@@ -710,7 +764,7 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
                 <th>Giá</th>
                 <th>Kho</th>
                 <th>Trạng thái</th>
-                <th>Thao tác</th>
+                <th class="text-center">Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -737,9 +791,9 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
                   </span>
                 </td>
 
-                <!-- CỘT THAO TÁC: Bao gồm Switch và các nút hành động -->
-                <td>
-                  <div class="d-flex align-items-center">
+                <!-- CỘT THAO TÁC -->
+                <td class="text-center">
+                  <div class="d-flex justify-content-center align-items-center">
                     <!-- Toggle Switch -->
                     <div class="form-check form-switch me-3 mb-0" style="min-height: 1.5em;" title="Bật/Tắt trạng thái">
                       <div v-if="processingStatusIds.includes(p.id)"
@@ -751,13 +805,18 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
                         style="transform: scale(1.3);">
                     </div>
 
-                    <!-- Action Buttons -->
-                    <button class="btn btn-sm btn-outline-info me-1" @click="openViewModal(p)" title="Xem"><i
-                        class="bi bi-eye"></i></button>
-                    <button class="btn btn-sm btn-warning me-1" @click="openVariantConfigModal(p)" title="Sửa"><i
-                        class="bi bi-gear-fill"></i></button>
-                    <button class="btn btn-sm btn-outline-danger" @click="handleDelete(p)" title="Xóa"><i
-                        class="bi bi-trash"></i></button>
+                    <!-- Action Buttons Group -->
+                    <div class="btn-group btn-group-sm">
+                      <button class="btn btn-outline-secondary" @click="openViewModal(p)" title="Xem">
+                        <i class="bi bi-eye"></i>
+                      </button>
+                      <button class="btn btn-outline-primary" @click="openVariantConfigModal(p)" title="Sửa">
+                        <i class="bi bi-pencil"></i>
+                      </button>
+                      <button class="btn btn-outline-danger" @click="handleDelete(p)" title="Xóa">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </div>
                   </div>
                 </td>
               </tr>
@@ -787,60 +846,12 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
         </div>
         <div class="modal-body">
           <div class="row">
-            <div class="col-md-7">
+            <div class="col-md-6">
               <div class="mb-3">
-                <label class="form-label">Tên SP</label>
+                <label class="form-label">Tên sản phẩm</label>
                 <input type="text" class="form-control" v-model="formData.name" :class="{ 'is-invalid': errors.name }">
                 <div class="invalid-feedback">{{ errors.name }}</div>
               </div>
-              <div class="mb-3">
-                <label class="form-label">Mô tả</label>
-                <textarea class="form-control" rows="3" v-model="formData.description"></textarea>
-              </div>
-
-              <div class="mb-3 p-3 border rounded bg-light">
-                <label class="form-label fw-bold">Ảnh đại diện (Thumbnail)</label>
-                <input type="file" class="form-control" accept="image/*" @change="handleThumbnailChange">
-                <div v-if="thumbnailPreview" class="mt-2 text-center">
-                  <img :src="thumbnailPreview" class="img-thumbnail" style="height: 120px;">
-                  <div class="small text-muted mt-1">Xem trước</div>
-                </div>
-              </div>
-
-              <div class="mb-3 p-3 border rounded bg-light" v-if="isEditMode">
-                <label class="form-label fw-bold">Thư viện ảnh chi tiết (Gallery)</label>
-                <input type="file" class="form-control" multiple accept="image/*" @change="handleGalleryChange">
-
-                <div class="d-flex flex-wrap gap-2 mt-3">
-                  <div v-for="(img, idx) in formData.existing_images" :key="img.id" class="position-relative">
-                    <img :src="img.url" class="img-thumbnail" style="width: 90px; height: 90px; object-fit: cover;">
-                    <!-- UPDATED: BUTTON XÓA ẢNH CÓ SPINNER + SWEETALERT (Logic trong hàm js) -->
-                    <button
-                      class="position-absolute top-0 start-100 translate-middle btn btn-sm btn-danger rounded-circle p-0"
-                      style="width: 20px; height: 20px; line-height: 1;" :disabled="deletingImageIds.includes(img.id)"
-                      @click="deleteExistingImage(img.id, idx)">
-                      <span v-if="deletingImageIds.includes(img.id)" class="spinner-border spinner-border-sm"
-                        style="width: 12px; height: 12px; border-width: 1px;"></span>
-                      <span v-else>&times;</span>
-                    </button>
-                  </div>
-
-                  <div v-for="(url, idx) in galleryPreviews" :key="'new-' + idx" class="position-relative">
-                    <img :src="url" class="img-thumbnail border-success"
-                      style="width: 90px; height: 90px; object-fit: cover;">
-                    <button
-                      class="position-absolute top-0 start-100 translate-middle btn btn-sm btn-secondary rounded-circle p-0"
-                      style="width: 20px; height: 20px; line-height: 1;"
-                      @click="removeNewGalleryImage(idx)">&times;</button>
-                  </div>
-                </div>
-                <div class="form-text small" v-if="galleryPreviews.length > 0">
-                  Các ảnh viền xanh là ảnh mới sẽ được upload khi bạn bấm Lưu.
-                </div>
-              </div>
-
-            </div>
-            <div class="col-md-5">
               <div class="mb-3">
                 <label class="form-label">Danh mục</label>
                 <select class="form-select" v-model="formData.category_id"
@@ -849,6 +860,24 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
                   <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
                 <div class="invalid-feedback">{{ errors.category_id }}</div>
+              </div>
+
+              <div class="mb-3 p-3 border rounded bg-light">
+                <label class="form-label fw-bold">Ảnh đại diện (Thumbnail)</label>
+                <input type="file" class="form-control" accept="image/*" @change="handleThumbnailChange">
+                <div v-if="thumbnailPreview" class="mt-2 text-center">
+                  <img :src="thumbnailPreview" class="img-thumbnail" style="height: 290px;">
+                </div>
+              </div>
+
+
+
+            </div>
+            <div class="col-md-6">
+
+              <div class="mb-3">
+                <label class="form-label">Mô tả</label>
+                <textarea class="form-control" rows="3" v-model="formData.description"></textarea>
               </div>
               <div class="mb-3" v-if="isEditMode">
                 <label class="form-label">Trạng thái</label>
@@ -860,6 +889,70 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
               <div class="mb-3" v-else>
                 <div class="alert alert-warning py-2 small"><i class="bi bi-info-circle"></i> Sản phẩm mới sẽ mặc định ở
                   trạng thái <b>Ẩn</b>. Hãy lưu lại rồi thêm ảnh Gallery và biến thể sau.</div>
+              </div>
+              <div class="mb-3 p-3 border rounded bg-light" v-if="isEditMode">
+                <label class="form-label fw-bold">Thư viện ảnh chi tiết (Gallery)</label>
+                <input type="file" class="form-control" multiple accept="image/*" @change="handleGalleryChange">
+
+                <!-- HIỂN THỊ ẢNH & CHỨC NĂNG XÓA NHIỀU -->
+                <div class="mt-3">
+                  <!-- Toolbar: Select All + Bulk Delete -->
+                  <div v-if="formData.existing_images.length > 0"
+                    class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="form-check">
+                      <input class="form-check-input cursor-pointer" type="checkbox" id="selectAllImages"
+                        v-model="isAllImagesSelected">
+                      <label class="form-check-label user-select-none cursor-pointer" for="selectAllImages">Chọn tất cả
+                        ({{ formData.existing_images.length }})</label>
+                    </div>
+                    <button v-if="selectedImageIds.length > 0" class="btn btn-sm btn-danger"
+                      @click="handleBulkDeleteImages" :disabled="isBulkDeleting">
+                      <span v-if="isBulkDeleting" class="spinner-border spinner-border-sm me-1"></span>
+                      <span v-else><i class="bi bi-trash"></i></span> Xóa đã chọn ({{ selectedImageIds.length }})
+                    </button>
+                  </div>
+
+                  <div class="d-flex flex-wrap gap-2">
+                    <!-- Loop existing images with Checkbox -->
+                    <div v-for="(img, idx) in formData.existing_images" :key="img.id" class="position-relative">
+                      <!-- Ảnh có border khi được chọn -->
+                      <img :src="img.url" class="img-thumbnail"
+                        :class="{ 'border-primary shadow-sm': selectedImageIds.includes(img.id) }"
+                        style="width: 90px; height: 90px; object-fit: cover; cursor: pointer;"
+                        @click="selectedImageIds.includes(img.id) ? selectedImageIds = selectedImageIds.filter(id => id !== img.id) : selectedImageIds.push(img.id)">
+
+                      <!-- Checkbox overlay -->
+                      <div class="position-absolute top-0 start-0 m-1">
+                        <input type="checkbox" class="form-check-input" :value="img.id" v-model="selectedImageIds"
+                          @click.stop>
+                      </div>
+
+                      <!-- Nút xóa lẻ (giữ lại nếu cần xóa nhanh 1 ảnh) -->
+                      <button
+                        class="position-absolute top-0 start-100 translate-middle btn btn-sm btn-danger rounded-circle p-0"
+                        style="width: 20px; height: 20px; line-height: 1;" :disabled="deletingImageIds.includes(img.id)"
+                        @click.stop="deleteExistingImage(img.id, idx)">
+                        <span v-if="deletingImageIds.includes(img.id)" class="spinner-border spinner-border-sm"
+                          style="width: 12px; height: 12px; border-width: 1px;"></span>
+                        <span v-else>&times;</span>
+                      </button>
+                    </div>
+
+                    <!-- New images preview (ko có checkbox xóa nhiều vì chưa upload) -->
+                    <div v-for="(url, idx) in galleryPreviews" :key="'new-' + idx" class="position-relative">
+                      <img :src="url" class="img-thumbnail border-success"
+                        style="width: 90px; height: 90px; object-fit: cover;">
+                      <button
+                        class="position-absolute top-0 start-100 translate-middle btn btn-sm btn-secondary rounded-circle p-0"
+                        style="width: 20px; height: 20px; line-height: 1;"
+                        @click="removeNewGalleryImage(idx)">&times;</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-text small" v-if="galleryPreviews.length > 0">
+                  Các ảnh viền xanh là ảnh mới sẽ được upload khi bạn bấm Lưu.
+                </div>
               </div>
             </div>
           </div>
@@ -873,8 +966,7 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
                     <option value="">-- Chọn thuộc tính --</option>
                     <option v-for="a in attributesList" :key="a.id" :value="a.id">{{ a.name }}</option>
                   </select></div>
-                <div class="col-auto"><input type="text" class="form-control" v-model="defaultAttributeValue"
-                    placeholder="Nhập giá trị (VD: Đỏ)"></div>
+                <!-- ĐÃ BỎ Ô INPUT NHẬP GIÁ TRỊ MẶC ĐỊNH TẠI ĐÂY -->
                 <div class="col-auto"><button class="btn btn-primary" @click="addSelectedAttributeToForm">Thêm
                     cột</button></div>
                 <div class="col-auto ms-auto"><button class="btn btn-outline-success" @click="openCreateAttrModal">Tạo
@@ -1041,5 +1133,9 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
 
 .border-dashed {
   border-style: dashed !important;
+}
+
+.table td .btn-group {
+  min-width: 95px;
 }
 </style>

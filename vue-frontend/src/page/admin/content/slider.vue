@@ -80,11 +80,15 @@ watch(searchQuery, () => {
 });
 const filteredSlides = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
-  if (!query) return allSlides.value;
-  return allSlides.value.filter(s =>
-    s.title.toLowerCase().includes(query) ||
-    s.description.toLowerCase().includes(query)
-  );
+  let slides = allSlides.value;
+  if (query) {
+    slides = slides.filter(s =>
+      s.title.toLowerCase().includes(query) ||
+      s.description.toLowerCase().includes(query)
+    );
+  }
+  // Sắp xếp theo order tăng dần để hiển thị đúng thứ tự
+  return slides.sort((a, b) => a.order - b.order);
 });
 const totalSlidePages = computed(() => Math.max(1, Math.ceil(filteredSlides.value.length / slidePagination.itemsPerPage)));
 const paginatedSlides = computed(() => {
@@ -104,8 +108,11 @@ watch(brandSearchQuery, () => {
 });
 const filteredBrands = computed(() => {
   const query = brandSearchQuery.value.toLowerCase().trim();
-  if (!query) return allBrands.value;
-  return allBrands.value.filter(b => b.name.toLowerCase().includes(query));
+  let brands = allBrands.value;
+  if (query) {
+    brands = brands.filter(b => b.name.toLowerCase().includes(query));
+  }
+  return brands.sort((a, b) => a.order - b.order);
 });
 const totalBrandPages = computed(() => Math.max(1, Math.ceil(filteredBrands.value.length / brandPagination.itemsPerPage)));
 const paginatedBrands = computed(() => {
@@ -154,39 +161,21 @@ function getFormattedDate(dateString) {
   return new Date(dateString).toLocaleDateString('vi-VN');
 }
 
-// --- HÀM UPLOAD FILE (QUAN TRỌNG) ---
-async function uploadFileToServer(file) {
-  const formData = new FormData();
-  formData.append('file', file); // 'file' là tên trường mà Server mong đợi
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // Giả sử server trả về đường dẫn ảnh
-      console.log("Giả lập upload file:", file.name);
-      // Trả về URL tạm thời để demo (trong thực tế đây sẽ là URL từ server trả về)
-      resolve(`https://placehold.co/600x400?text=${encodeURIComponent(file.name)}`);
-    }, 1000);
-  });
-}
-
-// --- XỬ LÝ ẢNH SLIDE ---
+// --- HÀM XỬ LÝ URL ẢNH ---
 function onSlideFileChange(event) {
   const file = event.target.files[0];
   if (file) {
-    // Kiểm tra định dạng
     if (!file.type.startsWith('image/')) {
       Swal.fire('Lỗi', 'Vui lòng chọn file hình ảnh.', 'error');
       return;
     }
-    // Kiểm tra kích thước (ví dụ 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      Swal.fire('Lỗi', 'Kích thước ảnh không được quá 2MB.', 'error');
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      Swal.fire('Lỗi', 'Kích thước ảnh không được quá 5MB.', 'error');
       return;
     }
-
     slideFile.value = file;
-    // Tạo URL preview local
     slidePreviewImage.value = URL.createObjectURL(file);
-    slideErrors.imageUrl = ''; // Xóa lỗi nếu có
+    slideErrors.imageUrl = '';
   }
 }
 
@@ -197,12 +186,16 @@ function resetSlideForm() {
   });
   slideFile.value = null;
   slidePreviewImage.value = '';
-  if (slideFileInputRef.value) slideFileInputRef.value.value = ''; // Reset input file
+  if (slideFileInputRef.value) slideFileInputRef.value.value = '';
   Object.keys(slideErrors).forEach(key => slideErrors[key] = '');
 }
 
 function openCreateSlideModal() {
   resetSlideForm();
+  // Tự động set order = max + 1
+  const maxOrder = allSlides.value.length > 0 ? Math.max(...allSlides.value.map(s => s.order)) : -1;
+  slideFormData.order = maxOrder + 1;
+  
   isEditMode.value = false;
   slideModalInstance.value.show();
 }
@@ -218,9 +211,8 @@ function openEditSlideModal(slide) {
     status: slide.status,
     order: slide.order
   });
-  // Khi edit, preview ban đầu là ảnh cũ từ server
   slidePreviewImage.value = slide.imageUrl;
-  slideFile.value = null; // Chưa chọn file mới
+  slideFile.value = null;
   if (slideFileInputRef.value) slideFileInputRef.value.value = '';
 
   Object.keys(slideErrors).forEach(key => slideErrors[key] = '');
@@ -241,9 +233,6 @@ function validateSlideForm() {
     isValid = false;
   }
 
-  // Logic validate ảnh:
-  // Nếu tạo mới: Phải chọn file (slideFile khác null)
-  // Nếu sửa: Nếu không chọn file mới (slideFile null) thì phải có ảnh cũ (imageUrl)
   if (!isEditMode.value && !slideFile.value) {
     slideErrors.imageUrl = 'Vui lòng chọn hình ảnh.';
     isValid = false;
@@ -262,55 +251,42 @@ function validateSlideForm() {
 async function handleSaveSlide() {
   if (!validateSlideForm()) return;
   isLoading.value = true;
-  isUploading.value = true; // Hiển thị loading ảnh
+  isUploading.value = true;
 
   try {
-    // 1. Tạo đối tượng FormData
     const formData = new FormData();
-
-    // 2. Đưa dữ liệu text vào
     formData.append('title', slideFormData.title);
     formData.append('description', slideFormData.description || '');
     formData.append('linkUrl', slideFormData.linkUrl || '');
     formData.append('order', slideFormData.order);
     formData.append('status', slideFormData.status);
 
-    // 3. QUAN TRỌNG: Đưa file ảnh vào (nếu có chọn)
-    // Key 'image' phải trùng với $request->validate(['image' => ...]) bên Laravel
     if (slideFile.value) {
       formData.append('image', slideFile.value);
     }
 
-    // 4. Gửi API
     if (isEditMode.value) {
-      // MẸO: Laravel Put không nhận file trực tiếp, phải dùng POST + _method: 'PUT'
       formData.append('_method', 'PUT');
-
       await apiService.post(`admin/slides/${slideFormData.id}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-
       Swal.fire('Thành công', 'Đã cập nhật slide!', 'success');
     } else {
-      // Thêm mới dùng POST bình thường
       await apiService.post(`admin/slides`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-
       Swal.fire('Thành công', 'Đã tạo slide mới!', 'success');
     }
 
     slideModalInstance.value.hide();
-    fetchAllSlides(); // Tải lại danh sách
+    fetchAllSlides();
 
   } catch (error) {
     console.error("Lỗi khi lưu slide:", error);
-
-    // Hiển thị lỗi chi tiết từ Laravel trả về
     if (error.response && error.response.data && error.response.data.errors) {
       const errs = error.response.data.errors;
       if (errs.title) slideErrors.title = errs.title[0];
-      if (errs.image) slideErrors.imageUrl = errs.image[0]; // Hiển thị lỗi ảnh (ví dụ: file quá lớn)
+      if (errs.image) slideErrors.imageUrl = errs.image[0];
       Swal.fire('Lỗi nhập liệu', 'Vui lòng kiểm tra lại thông tin.', 'warning');
     } else {
       Swal.fire('Thất bại', 'Đã có lỗi xảy ra phía Server.', 'error');
@@ -318,6 +294,31 @@ async function handleSaveSlide() {
   } finally {
     isLoading.value = false;
     isUploading.value = false;
+  }
+}
+
+async function handleSlideToggleStatus(slide) {
+  const newStatus = slide.status === 'published' ? 'draft' : 'published';
+  const actionText = newStatus === 'published' ? 'hiển thị' : 'ẩn';
+  try {
+    // Optimistic Update
+    const oldStatus = slide.status;
+    slide.status = newStatus;
+
+    // Sử dụng FormData để gửi PUT request (Laravel sometimes prefers POST with _method for updates)
+    const formData = new FormData();
+    formData.append('title', slide.title); // API require title
+    formData.append('status', newStatus);
+    formData.append('_method', 'PUT');
+
+    await apiService.post(`admin/slides/${slide.id}`, formData);
+    
+    // Thông báo lớn ở giữa màn hình thay vì toast
+    Swal.fire('Thành công', `Đã ${actionText} slide "${slide.title}"`, 'success');
+  } catch (error) {
+    slide.status = slide.status === 'published' ? 'draft' : 'published'; // Revert
+    console.error("Lỗi cập nhật trạng thái slide:", error);
+    Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
   }
 }
 
@@ -343,6 +344,75 @@ async function handleDeleteSlide(slide) {
     }
   }
 }
+
+// --- LOGIC SẮP XẾP NHANH (REORDERING) ---
+async function moveItem(item, direction, list, type) {
+  // type: 'slide' | 'brand'
+  const sortedList = [...list].sort((a, b) => a.order - b.order);
+  const currentIndex = sortedList.findIndex(i => i.id === item.id);
+  
+  if (currentIndex === -1) return;
+
+  let targetItem = null;
+  let newOrder = item.order;
+
+  // Xác định item mục tiêu để hoán đổi hoặc giá trị order mới
+  if (direction === 'up') {
+    if (currentIndex > 0) targetItem = sortedList[currentIndex - 1];
+  } else if (direction === 'down') {
+    if (currentIndex < sortedList.length - 1) targetItem = sortedList[currentIndex + 1];
+  } else if (direction === 'top') {
+    if (currentIndex > 0) targetItem = sortedList[0];
+  } else if (direction === 'bottom') {
+    if (currentIndex < sortedList.length - 1) targetItem = sortedList[sortedList.length - 1];
+  }
+
+  if (!targetItem) return; // Không thể di chuyển
+
+  try {
+    const endpoint = type === 'slide' ? 'admin/slides' : 'admin/brands';
+    
+    // Hoán đổi giá trị Order
+    const tempOrder = item.order;
+    const targetOrder = targetItem.order;
+
+    // Update Item hiện tại
+    const form1 = new FormData();
+    form1.append('order', targetOrder);
+    if(type === 'slide') form1.append('title', item.title); // required field
+    if(type === 'brand') form1.append('name', item.name); // required field
+    form1.append('status', item.status);
+    form1.append('_method', 'PUT');
+
+    // Update Item mục tiêu
+    const form2 = new FormData();
+    form2.append('order', tempOrder);
+    if(type === 'slide') form2.append('title', targetItem.title);
+    if(type === 'brand') form2.append('name', targetItem.name);
+    form2.append('status', targetItem.status);
+    form2.append('_method', 'PUT');
+
+    if(type === 'slide') isLoading.value = true;
+    else isLoadingBrands.value = true;
+
+    await Promise.all([
+      apiService.post(`${endpoint}/${item.id}`, form1),
+      apiService.post(`${endpoint}/${targetItem.id}`, form2)
+    ]);
+
+    // Tải lại dữ liệu
+    if (type === 'slide') await fetchAllSlides();
+    else await fetchAllBrands();
+
+  } catch (error) {
+    console.error(`Lỗi sắp xếp ${type}:`, error);
+    Swal.fire('Lỗi', 'Không thể thay đổi thứ tự.', 'error');
+  } finally {
+    if(type === 'slide') isLoading.value = false;
+    else isLoadingBrands.value = false;
+  }
+}
+
 
 // --- XỬ LÝ ẢNH BRAND ---
 function onBrandFileChange(event) {
@@ -371,6 +441,8 @@ function resetBrandForm() {
 
 function openCreateBrandModal() {
   resetBrandForm();
+  const maxOrder = allBrands.value.length > 0 ? Math.max(...allBrands.value.map(b => b.order)) : -1;
+  brandFormData.order = maxOrder + 1;
   isBrandEditMode.value = false;
   brandModalInstance.value.show();
 }
@@ -401,7 +473,6 @@ function validateBrandForm() {
     isValid = false;
   }
 
-  // Logic validate ảnh Brand
   if (!isBrandEditMode.value && !brandFile.value) {
     brandErrors.imageUrl = 'Vui lòng chọn hình ảnh.';
     isValid = false;
@@ -428,7 +499,6 @@ async function handleSaveBrand() {
     formData.append('order', brandFormData.order);
     formData.append('status', brandFormData.status);
 
-    // Key 'image' phải khớp với Controller Brand
     if (brandFile.value) {
       formData.append('image', brandFile.value);
     }
@@ -440,7 +510,6 @@ async function handleSaveBrand() {
       });
       Swal.fire('Thành công', 'Đã cập nhật brand!', 'success');
     } else {
-      // SỬA LỖI 405: Thêm admin/ vào trước
       await apiService.post(`admin/brands`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
@@ -463,15 +532,17 @@ async function handleBrandToggleStatus(brand) {
   const actionText = newStatus === 'published' ? 'hiển thị' : 'ẩn';
   try {
     brand.status = newStatus;
-    await apiService.patch(`admin/brands/${brand.id}`, { status: newStatus });
-    Swal.fire({
-      toast: true,
-      position: 'top-end',
-      icon: 'success',
-      title: `Đã ${actionText} brand!`,
-      showConfirmButton: false,
-      timer: 2000
-    });
+    
+    // Sửa: Thêm name bắt buộc nếu API yêu cầu
+    const formData = new FormData();
+    formData.append('name', brand.name); 
+    formData.append('status', newStatus);
+    formData.append('_method', 'PUT');
+
+    await apiService.post(`admin/brands/${brand.id}`, formData);
+    
+    // Thông báo lớn
+    Swal.fire('Thành công', `Đã ${actionText} brand "${brand.name}"!`, 'success');
   } catch (error) {
     console.error("Lỗi cập nhật trạng thái brand:", error);
     brand.status = newStatus === 'published' ? 'draft' : 'published';
@@ -524,6 +595,7 @@ async function handleDeleteBrand(brand) {
 
   <div class="app-content">
     <div class="container-fluid">
+      <!-- SLIDE SECTION -->
       <div class="row">
         <div class="col-12">
           <div class="card">
@@ -557,7 +629,7 @@ async function handleDeleteBrand(brand) {
                 <table class="table table-hover table-striped align-middle">
                   <thead>
                     <tr>
-                      <th style="width: 100px">Thứ tự</th>
+                      <th style="width: 200px" class="text-center">Sắp xếp</th>
                       <th style="width: 250px">Ảnh</th>
                       <th>Tiêu đề</th>
                       <th>Link liên kết</th>
@@ -571,9 +643,30 @@ async function handleDeleteBrand(brand) {
                         {{ searchQuery ? 'Không tìm thấy slide nào.' : 'Không có slide nào.' }}
                       </td>
                     </tr>
-                    <tr v-for="slide in paginatedSlides" :key="slide.id">
-                      <td>
-                        <span class="badge text-bg-dark" style="font-size: 0.9rem;">{{ slide.order }}</span>
+                    <tr v-for="(slide, index) in paginatedSlides" :key="slide.id">
+                      <td class="text-center">
+                        <!-- ORDER CONTROLS -->
+                        <div class="btn-group btn-group-sm" role="group">
+                          <button type="button" class="btn btn-outline-secondary" title="Lên đầu" 
+                            @click="moveItem(slide, 'top', allSlides, 'slide')">
+                            <i class="bi bi-chevron-double-up"></i>
+                          </button>
+                          <button type="button" class="btn btn-outline-secondary" title="Lên"
+                            @click="moveItem(slide, 'up', allSlides, 'slide')">
+                            <i class="bi bi-chevron-up"></i>
+                          </button>
+                          <button type="button" class="btn btn-light disabled border-secondary" style="width: 40px; font-weight: bold; color: #333">
+                            {{ slide.order }}
+                          </button>
+                          <button type="button" class="btn btn-outline-secondary" title="Xuống"
+                            @click="moveItem(slide, 'down', allSlides, 'slide')">
+                            <i class="bi bi-chevron-down"></i>
+                          </button>
+                          <button type="button" class="btn btn-outline-secondary" title="Xuống cuối"
+                            @click="moveItem(slide, 'bottom', allSlides, 'slide')">
+                            <i class="bi bi-chevron-double-down"></i>
+                          </button>
+                        </div>
                       </td>
                       <td>
                         <img :src="slide.imageUrl || 'https://placehold.co/100x50?text=N/A'" alt="Ảnh slide"
@@ -592,17 +685,28 @@ async function handleDeleteBrand(brand) {
                           {{ getStatusBadge(slide.status).text }}
                         </span>
                       </td>
-                      <td class="text-center gap-2">
-                        <button class="btn btn-outline-info btn-sm me-1" @click="openViewSlideModal(slide)"
-                          title="Xem chi tiết">
-                          <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="btn btn-outline-warning btn-sm me-1" @click="openEditSlideModal(slide)">
-                          <i class="bi bi-pencil"></i>
-                        </button>
-                        <button class="btn btn-outline-danger btn-sm" @click="handleDeleteSlide(slide)">
-                          <i class="bi bi-trash"></i>
-                        </button>
+                      <td class="text-center">
+                        <div class="d-flex justify-content-center align-items-center">
+                          <!-- TOGGLE SWITCH CHO SLIDE -->
+                          <div class="form-check form-switch d-inline-block align-middle me-3" title="Kích hoạt/Vô hiệu hóa">
+                            <input class="form-check-input" type="checkbox" role="switch"
+                              style="width: 2.5em; height: 1.25em; cursor: pointer;"
+                              :checked="slide.status === 'published'"
+                              @change="handleSlideToggleStatus(slide)">
+                          </div>
+
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-info" @click="openViewSlideModal(slide)" title="Xem chi tiết">
+                              <i class="bi bi-eye"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" @click="openEditSlideModal(slide)" title="Sửa">
+                              <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-outline-danger" @click="handleDeleteSlide(slide)" title="Xóa">
+                              <i class="bi bi-trash"></i>
+                            </button>
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   </tbody>
@@ -612,16 +716,14 @@ async function handleDeleteBrand(brand) {
             <div class="card-footer clearfix" v-if="!isLoading && totalSlidePages > 1">
               <ul class="pagination pagination-sm m-0 float-end">
                 <li class="page-item" :class="{ disabled: slidePagination.currentPage === 1 }">
-                  <a class="page-link" href="#"
-                    @click.prevent="goToSlidePage(slidePagination.currentPage - 1)">&laquo;</a>
+                  <a class="page-link" href="#" @click.prevent="goToSlidePage(slidePagination.currentPage - 1)">&laquo;</a>
                 </li>
                 <li v-for="page in totalSlidePages" :key="page" class="page-item"
                   :class="{ active: slidePagination.currentPage === page }">
                   <a class="page-link" href="#" @click.prevent="goToSlidePage(page)">{{ page }}</a>
                 </li>
                 <li class="page-item" :class="{ disabled: slidePagination.currentPage === totalSlidePages }">
-                  <a class="page-link" href="#"
-                    @click.prevent="goToSlidePage(slidePagination.currentPage + 1)">&raquo;</a>
+                  <a class="page-link" href="#" @click.prevent="goToSlidePage(slidePagination.currentPage + 1)">&raquo;</a>
                 </li>
               </ul>
             </div>
@@ -629,6 +731,7 @@ async function handleDeleteBrand(brand) {
         </div>
       </div>
 
+      <!-- BRAND SECTION -->
       <div class="row mt-4">
         <div class="col-12">
           <div class="card">
@@ -662,7 +765,7 @@ async function handleDeleteBrand(brand) {
                 <table class="table table-hover table-striped align-middle">
                   <thead>
                     <tr>
-                      <th style="width: 100px">Thứ tự</th>
+                      <th style="width: 200px" class="text-center">Sắp xếp</th>
                       <th style="width: 250px">Ảnh</th>
                       <th>Tên Brand</th>
                       <th>Link liên kết</th>
@@ -677,8 +780,29 @@ async function handleDeleteBrand(brand) {
                       </td>
                     </tr>
                     <tr v-for="brand in paginatedBrands" :key="brand.id">
-                      <td>
-                        <span class="badge text-bg-dark" style="font-size: 0.9rem;">{{ brand.order }}</span>
+                      <td class="text-center">
+                         <!-- ORDER CONTROLS FOR BRAND -->
+                         <div class="btn-group btn-group-sm" role="group">
+                          <button type="button" class="btn btn-outline-secondary" title="Lên đầu" 
+                            @click="moveItem(brand, 'top', allBrands, 'brand')">
+                            <i class="bi bi-chevron-double-up"></i>
+                          </button>
+                          <button type="button" class="btn btn-outline-secondary" title="Lên"
+                            @click="moveItem(brand, 'up', allBrands, 'brand')">
+                            <i class="bi bi-chevron-up"></i>
+                          </button>
+                          <button type="button" class="btn btn-light disabled border-secondary" style="width: 40px; font-weight: bold; color: #333">
+                            {{ brand.order }}
+                          </button>
+                          <button type="button" class="btn btn-outline-secondary" title="Xuống"
+                            @click="moveItem(brand, 'down', allBrands, 'brand')">
+                            <i class="bi bi-chevron-down"></i>
+                          </button>
+                          <button type="button" class="btn btn-outline-secondary" title="Xuống cuối"
+                            @click="moveItem(brand, 'bottom', allBrands, 'brand')">
+                            <i class="bi bi-chevron-double-down"></i>
+                          </button>
+                        </div>
                       </td>
                       <td>
                         <img :src="brand.imageUrl || 'https://placehold.co/100x50?text=N/A'" alt="Ảnh brand"
@@ -741,6 +865,7 @@ async function handleDeleteBrand(brand) {
     </div>
   </div>
 
+  <!-- MODALS (Giữ nguyên như cũ, chỉ hiển thị lại để đảm bảo tính toàn vẹn) -->
   <div class="modal fade" id="slideModal" ref="slideModalRef" tabindex="-1" aria-labelledby="slideModalLabel"
     aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
