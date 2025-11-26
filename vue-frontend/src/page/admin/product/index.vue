@@ -4,12 +4,21 @@ import apiService from '../../../apiService';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
+// --- CẤU HÌNH URL BACKEND ---
+const API_BASE_URL = 'http://127.0.0.1:8000';
+
 // --- STATE QUẢN LÝ ---
 const products = ref([]);
 const categories = ref([]);
 const attributesList = ref([]);
 const isLoading = ref(true);
-const isEditMode = ref(false); // false: Tạo mới (Basic Info), true: Cấu hình biến thể (Full)
+const isSaving = ref(false); // State cho nút Lưu chính
+const isEditMode = ref(false);
+
+// --- STATE SPINNER & XỬ LÝ MỚI ---
+const isCreatingAttr = ref(false); // State loading cho tạo thuộc tính nhanh
+const deletingImageIds = ref([]);  // State mảng chứa ID các ảnh đang xóa
+const processingStatusIds = ref([]); // State mảng chứa ID sản phẩm đang đổi trạng thái (Toggle Switch)
 
 // State Modal
 const modalInstance = ref(null);
@@ -17,22 +26,31 @@ const modalRef = ref(null);
 const attrModalInstance = ref(null);
 const attrModalRef = ref(null);
 
-// State Form phụ (QUAN TRỌNG: Thêm biến defaultAttributeValue)
+// State Form phụ 
 const newQuickAttrName = ref('');
 const selectedAttributeId = ref('');
-const defaultAttributeValue = ref(''); // <--- Biến lưu giá trị nhập ngay lúc thêm thuộc tính
+const defaultAttributeValue = ref('');
+
+// --- STATE UPLOAD ẢNH ---
+const thumbnailFile = ref(null);
+const thumbnailPreview = ref(null);
+const galleryFiles = ref([]);
+const galleryPreviews = ref([]);
 
 // State Modal Xem
 const viewModalInstance = ref(null);
 const viewModalRef = ref(null);
 const viewingProduct = ref({
+  name: '',
+  description: '',
+  categoryName: '',
+  status: '',
+  thumbnail_url: '',
+  images: [],
   variants: [],
   attributeNames: [],
-  images: [],
-  sold_count: 0,
-  favorite_count: 0,
-  review_count: 0,
-  average_rating: 0.0
+  priceRange: '',
+  totalStock: 0
 });
 
 // State Tìm kiếm & Phân trang
@@ -51,22 +69,43 @@ const formData = reactive({
   attribute_definitions: reactive([]),
   variants: reactive([]),
   existing_images: reactive([]),
-  new_images: [],
-  images_to_delete: []
 });
-
-const newImagePreviews = ref([]);
 
 const errors = reactive({
   name: '',
   category_id: '',
-  images: '',
   variants: '',
   attributes: ''
 });
 
 function generateShortId() {
   return Math.random().toString(36).substring(2, 8);
+}
+
+// --- HÀM XỬ LÝ URL ẢNH ---
+function getImageUrl(path) {
+  if (!path) return 'https://placehold.co/150x150?text=No+Img';
+  if (path.startsWith('blob:') || path.startsWith('http')) {
+    return path;
+  }
+  const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  const cleanPath = path.startsWith('/') ? path : '/' + path;
+  return `${baseUrl}${cleanPath}`;
+}
+
+// --- HÀM HỖ TRỢ: CHUYỂN ĐỔI DỮ LIỆU THUỘC TÍNH ---
+function flattenVariantAttributes(variant) {
+  const attrs = {};
+  if (Array.isArray(variant.attribute_values)) {
+    variant.attribute_values.forEach(av => {
+      if (av.attribute && av.attribute.name) {
+        attrs[av.attribute.name] = av.value;
+      }
+    });
+  } else if (variant.attributes) {
+    return variant.attributes;
+  }
+  return attrs;
 }
 
 // --- COMPUTED ---
@@ -87,28 +126,12 @@ const filteredProducts = computed(() => {
   sorted.sort((a, b) => {
     let valA, valB;
     switch (key) {
-      case 'name':
-        valA = a.name.toLowerCase();
-        valB = b.name.toLowerCase();
-        break;
-      case 'price':
-        valA = getMinPrice(a.variants);
-        valB = getMinPrice(b.variants);
-        break;
-      case 'created_at':
-        valA = new Date(a.created_at);
-        valB = new Date(b.created_at);
-        break;
-      case 'product_id':
-      default:
-        valA = a.product_id;
-        valB = b.product_id;
-        break;
+      case 'name': valA = a.name.toLowerCase(); valB = b.name.toLowerCase(); break;
+      case 'price': valA = getMinPrice(a.variants); valB = getMinPrice(b.variants); break;
+      case 'created_at': valA = new Date(a.created_at); valB = new Date(b.created_at); break;
+      case 'product_id': default: valA = a.product_id; valB = b.product_id; break;
     }
-    let comparison = 0;
-    if (valA > valB) comparison = 1;
-    else if (valA < valB) comparison = -1;
-    return order === 'asc' ? comparison : -comparison;
+    return order === 'asc' ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
   });
 
   return sorted;
@@ -136,16 +159,14 @@ async function fetchAttributes() {
   try {
     const response = await apiService.get('/admin/attributes');
     attributesList.value = Array.isArray(response.data) ? response.data : (response.data.data || []);
-  } catch (error) {
-    console.error("Lỗi tải attributes:", error);
-  }
+  } catch (error) { console.error("Lỗi tải attributes:", error); }
 }
 
+// --- UPDATED: HÀM TẠO THUỘC TÍNH NHANH (CÓ SPINNER) ---
 async function handleCreateQuickAttribute() {
-  if (!newQuickAttrName.value.trim()) {
-    Swal.fire('Lỗi', 'Vui lòng nhập tên thuộc tính', 'warning');
-    return;
-  }
+  if (!newQuickAttrName.value.trim()) { Swal.fire('Lỗi', 'Vui lòng nhập tên thuộc tính', 'warning'); return; }
+
+  isCreatingAttr.value = true; // Bật spinner
   try {
     const res = await apiService.post('/admin/attributes', { name: newQuickAttrName.value });
     Swal.fire('Thành công', 'Đã tạo thuộc tính mới!', 'success');
@@ -157,6 +178,8 @@ async function handleCreateQuickAttribute() {
   } catch (error) {
     const msg = error.response?.data?.message || 'Không thể tạo thuộc tính.';
     Swal.fire('Lỗi', msg, 'error');
+  } finally {
+    isCreatingAttr.value = false; // Tắt spinner
   }
 }
 
@@ -176,8 +199,13 @@ async function fetchProducts() {
 
     products.value = rawProducts.map(p => {
       const category = allCategories.find(c => c.id === p.category_id);
-      const productVariants = allVariants.filter(v => v.product_id == p.product_id);
-      const productImages = allImages.filter(img => img.product_id == p.product_id);
+      const productVariants = allVariants.filter(v => v.product_id == p.product_id || p.id == v.product_id);
+      const productImages = allImages.filter(img => img.product_id == p.product_id || p.id == img.product_id);
+
+      let thumbPath = p.thumbnail_url;
+      if (!thumbPath && productImages.length > 0) {
+        thumbPath = productImages[0].image_url;
+      }
 
       return {
         sold_count: 0, favorite_count: 0, review_count: 0, average_rating: 0.0,
@@ -187,7 +215,7 @@ async function fetchProducts() {
         category: category || null,
         variants: productVariants,
         images: productImages,
-        thumbnail_url: p.thumbnail_url || (productImages.length > 0 ? productImages[0].image_url : 'https://placehold.co/150x150?text=No+Img')
+        thumbnail_url: getImageUrl(thumbPath)
       };
     });
   } catch (error) {
@@ -203,9 +231,7 @@ async function fetchCategories() {
     const response = await apiService.get(`/categories?status=active&_sort=order&_order=asc`);
     const data = Array.isArray(response.data) ? response.data : (response.data.data || []);
     categories.value = data.map(c => ({ ...c, id: c.id }));
-  } catch (error) {
-    console.error("Lỗi tải danh mục:", error);
-  }
+  } catch (error) { console.error("Lỗi tải danh mục:", error); }
 }
 
 // --- HELPERS ---
@@ -230,49 +256,151 @@ function getPriceRange(variants) {
   return min === max ? formatCurrency(min) : `${formatCurrency(min)} - ${formatCurrency(max)}`;
 }
 
-// --- FORM LOGIC (ĐÃ SỬA ĐỔI: BẮT BUỘC NHẬP GIÁ TRỊ) ---
-function addSelectedAttributeToForm() {
-  // 1. Kiểm tra đã chọn thuộc tính chưa
-  if (!selectedAttributeId.value) {
-    errors.attributes = 'Vui lòng chọn một thuộc tính.';
+// --- XỬ LÝ ẢNH ---
+function handleThumbnailChange(event) {
+  const file = event.target.files[0];
+  if (file) {
+    thumbnailFile.value = file;
+    thumbnailPreview.value = URL.createObjectURL(file);
+  }
+}
+
+function handleGalleryChange(event) {
+  const files = Array.from(event.target.files);
+  files.forEach(file => {
+    galleryFiles.value.push(file);
+    galleryPreviews.value.push(URL.createObjectURL(file));
+  });
+}
+
+function removeNewGalleryImage(index) {
+  URL.revokeObjectURL(galleryPreviews.value[index]);
+  galleryPreviews.value.splice(index, 1);
+  galleryFiles.value.splice(index, 1);
+}
+
+// --- UPDATED: XÓA ẢNH VỚI SWEETALERT2 + SPINNER ---
+async function deleteExistingImage(imgId, index) {
+  // Ngăn click nếu đang xóa chính ảnh này
+  if (deletingImageIds.value.includes(imgId)) return;
+
+  // Thay thế confirm mặc định bằng SweetAlert2
+  const result = await Swal.fire({
+    title: 'Bạn có chắc không?',
+    text: "Hành động này sẽ xóa ảnh vĩnh viễn!",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#3085d6',
+    confirmButtonText: 'Xóa ngay',
+    cancelButtonText: 'Hủy bỏ'
+  });
+
+  if (!result.isConfirmed) return;
+
+  deletingImageIds.value.push(imgId); // Thêm ID vào danh sách đang xóa
+  try {
+    await apiService.delete(`/admin/imageProducts/${imgId}`);
+    formData.existing_images.splice(index, 1);
+
+    // Thông báo nhỏ góc màn hình (Toast) thay vì popup lớn
+    Swal.fire({
+      icon: 'success',
+      title: 'Đã xóa ảnh',
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+      timer: 3000
+    });
+  } catch (e) {
+    console.error(e);
+    Swal.fire('Lỗi', 'Không thể xóa ảnh', 'error');
+  } finally {
+    // Xóa ID khỏi danh sách sau khi xong
+    deletingImageIds.value = deletingImageIds.value.filter(id => id !== imgId);
+  }
+}
+
+// --- MỚI: XỬ LÝ TOGGLE SWITCH TRẠNG THÁI (Giao diện như hình) ---
+async function handleQuickStatusToggle(product) {
+  // 1. Chặn Double Click: Nếu sản phẩm này đang xử lý thì return
+  if (processingStatusIds.value.includes(product.id)) return;
+
+  const newStatus = product.status === 'active' ? 'inactive' : 'active';
+  const actionText = newStatus === 'active' ? 'Hiện (Active)' : 'Ẩn (Inactive)';
+  const confirmBtnColor = newStatus === 'active' ? '#198754' : '#6c757d';
+
+  // 2. SweetAlert2 xác nhận
+  const result = await Swal.fire({
+    title: `Xác nhận ${actionText}?`,
+    text: `Bạn có muốn thay đổi trạng thái sản phẩm "${product.name}"?`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: confirmBtnColor,
+    confirmButtonText: 'Đồng ý',
+    cancelButtonText: 'Hủy'
+  });
+
+  if (!result.isConfirmed) {
+    // Nếu hủy, force update lại UI để switch quay về vị trí cũ (nếu v-model đã lỡ đổi)
+    // Tuy nhiên ở template ta dùng @click.prevent nên UI chưa đổi, không cần làm gì.
     return;
   }
 
-  // 2. Kiểm tra ĐÃ NHẬP GIÁ TRỊ chưa (Yêu cầu mới)
-  const val = defaultAttributeValue.value.trim();
-  if (!val) {
+  // 3. Bắt đầu Spinner: Thêm ID vào mảng xử lý
+  processingStatusIds.value.push(product.id);
+
+  try {
+    // Gọi API cập nhật (Dùng FormData method PATCH hoặc JSON tùy backend)
+    const payload = new FormData();
+    payload.append('_method', 'PATCH');
+    payload.append('status', newStatus);
+
+    // Lưu ý: Nếu backend yêu cầu gửi full field (name, category_id...), code này có thể cần sửa.
+    // Ở đây giả định backend cho phép patch riêng status hoặc không validate chặt các field khác khi update.
+    await apiService.post(`/admin/products/${product.id}`, payload);
+
+    // Cập nhật UI Frontend
+    product.status = newStatus;
+
     Swal.fire({
-      icon: 'warning',
-      title: 'Thiếu giá trị',
-      text: 'Vui lòng nhập giá trị cho thuộc tính (Ví dụ: 16GB, Đỏ, XL...) để hệ thống có thể lưu vào CSDL.',
+      icon: 'success',
+      title: 'Cập nhật thành công!',
+      text: `Sản phẩm đã chuyển sang trạng thái: ${actionText}`,
+      timer: 2000,
+      showConfirmButton: false
     });
-    return;
+
+  } catch (e) {
+    console.error("Lỗi đổi trạng thái:", e);
+    Swal.fire('Lỗi', 'Không thể cập nhật trạng thái. Vui lòng thử lại.', 'error');
+  } finally {
+    // 4. Kết thúc Spinner: Xóa ID khỏi mảng
+    processingStatusIds.value = processingStatusIds.value.filter(id => id !== product.id);
   }
+}
+
+// --- FORM LOGIC ---
+function addSelectedAttributeToForm() {
+  if (!selectedAttributeId.value) { errors.attributes = 'Vui lòng chọn một thuộc tính.'; return; }
+  const val = defaultAttributeValue.value.trim();
+  if (!val) { Swal.fire({ icon: 'warning', title: 'Thiếu giá trị', text: 'Vui lòng nhập giá trị.' }); return; }
 
   const attrObj = attributesList.value.find(a => a.id == selectedAttributeId.value);
   if (!attrObj) return;
 
-  // 3. Kiểm tra trùng
   const exists = formData.attribute_definitions.find(a => a.id == attrObj.id || a.name === attrObj.name);
-  if (exists) {
-    errors.attributes = `Thuộc tính "${attrObj.name}" đã có trong bảng.`;
-    return;
-  }
-  errors.attributes = '';
+  if (exists) { errors.attributes = `Thuộc tính "${attrObj.name}" đã có.`; return; }
 
-  // 4. Thêm định nghĩa cột
+  errors.attributes = '';
   formData.attribute_definitions.push({ id: attrObj.id, name: attrObj.name });
 
-  // 5. Điền giá trị này vào TẤT CẢ các dòng biến thể hiện có
-  // Việc này đảm bảo khi bấm Save, dữ liệu { "Ram": "16GB" } sẽ được gửi đi
   formData.variants.forEach(v => {
     if (!v.attributes) v.attributes = {};
     v.attributes[attrObj.name] = val;
   });
 
-  // 6. Reset form thêm thuộc tính
-  selectedAttributeId.value = '';
-  defaultAttributeValue.value = '';
+  selectedAttributeId.value = ''; defaultAttributeValue.value = '';
 }
 
 function removeAttributeDefinition(attrToRemove) {
@@ -285,103 +413,146 @@ function removeAttributeDefinition(attrToRemove) {
 
 function addVariantRow() {
   const newAttributes = reactive({});
-  // Khi thêm dòng mới, khởi tạo với giá trị rỗng cho các cột hiện có
   formData.attribute_definitions.forEach(def => { newAttributes[def.name] = ''; });
-
   formData.variants.push(reactive({
     variant_id: generateShortId(),
     original_price: 0, price: 0, stock: 0,
     attributes: newAttributes
   }));
 }
+function removeVariantRow(index) { formData.variants.splice(index, 1); }
 
-function removeVariantRow(index) {
-  formData.variants.splice(index, 1);
-}
-
-// --- MODAL HANDLERS ---
 function resetForm() {
   formData.id = null;
   formData.name = ''; formData.description = ''; formData.category_id = null; formData.status = 'inactive';
   formData.attribute_definitions = reactive([]); formData.variants = reactive([]);
-  formData.existing_images = reactive([]); formData.new_images = []; formData.images_to_delete = [];
+  formData.existing_images = reactive([]);
 
-  selectedAttributeId.value = '';
-  defaultAttributeValue.value = ''; // Reset ô giá trị mặc định
+  thumbnailFile.value = null;
+  thumbnailPreview.value = null;
+  galleryFiles.value = [];
+  galleryPreviews.value.forEach(url => URL.revokeObjectURL(url));
+  galleryPreviews.value = [];
 
-  newImagePreviews.value.forEach(url => URL.revokeObjectURL(url));
-  newImagePreviews.value = [];
+  selectedAttributeId.value = ''; defaultAttributeValue.value = '';
   Object.keys(errors).forEach(k => errors[k] = '');
 }
 
-function openCreateModal() {
-  resetForm();
-  isEditMode.value = false;
-  // Không tự động thêm dòng variant khi tạo mới info
-  modalInstance.value.show();
-}
+function openCreateModal() { resetForm(); isEditMode.value = false; modalInstance.value.show(); }
 
-function openVariantConfigModal(product) {
+// --- MODAL CẤU HÌNH BIẾN THỂ & SỬA ---
+async function openVariantConfigModal(productItem) {
   resetForm();
   isEditMode.value = true;
 
-  formData.id = product.id;
-  formData.name = product.name;
-  formData.description = product.description;
-  formData.category_id = product.category_id || product.category?.id;
-  formData.status = product.status;
-
-  formData.existing_images = reactive((product.images || []).map(img => ({
-    id: img.img_id || img.id,
-    url: img.image_url || img.url
-  })));
-
-  const allKeys = new Set();
-  (product.variants || []).forEach(v => {
-    if (v.attributes) Object.keys(v.attributes).forEach(k => allKeys.add(k));
-  });
-
-  formData.attribute_definitions = reactive(Array.from(allKeys).map(name => {
-    const found = attributesList.value.find(a => a.name === name);
-    return { id: found ? found.id : generateShortId(), name: name };
-  }));
-
-  formData.variants = reactive((product.variants || []).map(v => {
-    const attrs = reactive({});
-    allKeys.forEach(k => { attrs[k] = v.attributes?.[k] || ''; });
-    return reactive({
-      ...v,
-      variant_id: v.id,
-      attributes: attrs
-    });
-  }));
-
-  if (!formData.variants.length) addVariantRow();
   modalInstance.value.show();
+
+  try {
+    const res = await apiService.get(`/admin/products/${productItem.id}`);
+    const product = res.data.data || res.data;
+
+    formData.id = product.id;
+    formData.name = product.name;
+    formData.description = product.description;
+    formData.category_id = product.category_id || product.category?.id;
+    formData.status = product.status;
+    thumbnailPreview.value = getImageUrl(product.thumbnail_url);
+
+    formData.existing_images = reactive((product.images || []).map(img => ({
+      id: img.id,
+      url: getImageUrl(img.image_url)
+    })));
+
+    const variants = product.variants || [];
+
+    if (variants.length > 0) {
+      const allAttributeNames = new Set();
+      variants.forEach(v => {
+        if (v.attributes && typeof v.attributes === 'object') {
+          Object.keys(v.attributes).forEach(key => allAttributeNames.add(key));
+        }
+      });
+
+      formData.attribute_definitions = reactive(
+        Array.from(allAttributeNames).map(name => {
+          const found = attributesList.value.find(a => a.name === name);
+          return {
+            id: found ? found.id : generateShortId(),
+            name: name
+          };
+        })
+      );
+
+      formData.variants = reactive(variants.map(v => {
+        const variantAttributes = reactive({});
+        formData.attribute_definitions.forEach(def => {
+          variantAttributes[def.name] = '';
+        });
+
+        if (v.attributes && typeof v.attributes === 'object') {
+          Object.entries(v.attributes).forEach(([key, value]) => {
+            variantAttributes[key] = value;
+          });
+        }
+
+        return {
+          variant_id: v.id,
+          original_price: v.original_price || 0,
+          price: v.price || 0,
+          stock: v.stock || 0,
+          attributes: variantAttributes
+        };
+      }));
+    } else {
+      addVariantRow();
+    }
+
+  } catch (e) {
+    console.error("❌ Lỗi tải chi tiết:", e);
+    Swal.fire('Lỗi', 'Không thể tải chi tiết sản phẩm từ server', 'error');
+  }
 }
 
-function openCreateAttrModal() {
-  newQuickAttrName.value = '';
-  errors.attributes = '';
-  attrModalInstance.value.show();
-}
+function openCreateAttrModal() { newQuickAttrName.value = ''; errors.attributes = ''; attrModalInstance.value.show(); }
 
-function openViewModal(product) {
-  const keys = (product.variants?.[0]?.attributes) ? Object.keys(product.variants[0].attributes) : [];
-  viewingProduct.value = {
-    ...product,
-    categoryName: product.category?.name || 'N/A',
-    attributeNames: keys,
-    images: product.images || []
-  };
-  viewModalInstance.value.show();
+// --- HÀM XEM CHI TIẾT ---
+async function openViewModal(productItem) {
+  try {
+    const res = await apiService.get(`/admin/products/${productItem.id}`);
+    const product = res.data.data || res.data;
+
+    const processedVariants = (product.variants || []).map(v => ({
+      ...v,
+      attributes: flattenVariantAttributes(v)
+    }));
+
+    const keys = new Set();
+    processedVariants.forEach(v => Object.keys(v.attributes).forEach(k => keys.add(k)));
+
+    const fullUrlImages = (product.images || []).map(img => getImageUrl(img.image_url));
+
+    viewingProduct.value = {
+      ...product,
+      categoryName: product.category?.name || 'N/A',
+      attributeNames: Array.from(keys),
+      images: fullUrlImages,
+      thumbnail_url: getImageUrl(product.thumbnail_url),
+      priceRange: getPriceRange(product.variants),
+      totalStock: calculateTotalStock(product.variants),
+      variants: processedVariants
+    };
+
+    viewModalInstance.value.show();
+  } catch (e) {
+    console.error(e);
+    Swal.fire('Lỗi', 'Không thể tải chi tiết sản phẩm', 'error');
+  }
 }
 
 // --- VALIDATION ---
 function validateForm() {
   Object.keys(errors).forEach(k => errors[k] = '');
   let isValid = true;
-
   if (!formData.name.trim()) { errors.name = 'Nhập tên SP'; isValid = false; }
   if (!formData.category_id) { errors.category_id = 'Chọn danh mục'; isValid = false; }
 
@@ -389,13 +560,9 @@ function validateForm() {
     if (!formData.variants.length) { errors.variants = 'Thêm ít nhất 1 biến thể'; isValid = false; }
     else {
       for (const v of formData.variants) {
-        if (v.price < 0 || v.stock < 0) {
-          errors.variants = 'Giá/Kho không hợp lệ'; isValid = false; break;
-        }
+        if (v.price < 0 || v.stock < 0) { errors.variants = 'Giá/Kho không hợp lệ'; isValid = false; break; }
         for (const def of formData.attribute_definitions) {
-          if (!v.attributes[def.name]?.trim()) {
-            errors.variants = `Điền giá trị "${def.name}"`; isValid = false; break;
-          }
+          if (!v.attributes[def.name]?.trim()) { errors.variants = `Điền giá trị "${def.name}"`; isValid = false; break; }
         }
         if (!isValid) break;
       }
@@ -404,85 +571,85 @@ function validateForm() {
   return isValid;
 }
 
-// --- SAVE LOGIC (CẬP NHẬT: Tách Attribute gửi riêng) ---
+// --- SAVE LOGIC ---
 async function handleSave() {
   if (!validateForm()) return;
-  isLoading.value = true;
+  isSaving.value = true; // Đã có sẵn spinner cho nút này
 
   try {
-    // TRƯỜNG HỢP 1: TẠO MỚI (Chỉ lưu Product Info)
-    if (!isEditMode.value) {
-      // ... (Giữ nguyên logic tạo product mới)
-      const productPayload = {
-        name: formData.name,
-        description: formData.description,
-        category_id: formData.category_id,
-        status: 'inactive',
-        thumbnail_url: 'https://placehold.co/150x150?text=No+Img'
-      };
-      await apiService.post('/admin/products', productPayload);
-      Swal.fire('Thành công', 'Đã tạo sản phẩm nháp. Vui lòng bấm vào nút "Cấu hình biến thể" để thêm giá và kho!', 'success');
+    let savedProductId = formData.id;
+
+    const productData = new FormData();
+    productData.append('name', formData.name);
+    productData.append('description', formData.description || '');
+    productData.append('category_id', formData.category_id);
+    productData.append('status', isEditMode.value ? formData.status : 'inactive');
+
+    if (thumbnailFile.value) {
+      productData.append('thumbnail', thumbnailFile.value);
     }
 
-    // TRƯỜNG HỢP 2: UPDATE / CẤU HÌNH BIẾN THỂ
-    else {
-      const productDbId = formData.id;
-
-      // 1. Update Product Info
-      await apiService.patch(`/admin/products/${productDbId}`, {
-        name: formData.name,
-        description: formData.description,
-        category_id: formData.category_id,
-        status: formData.status
+    if (!isEditMode.value) {
+      const res = await apiService.post('/admin/products', productData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
+      Swal.fire('Thành công', 'Đã tạo sản phẩm nháp. Hãy thêm ảnh gallery và biến thể!', 'success');
+      savedProductId = res.data.id || res.data.product_id;
+    } else {
+      productData.append('_method', 'PATCH');
+      await apiService.post(`/admin/products/${savedProductId}`, productData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+    }
 
-      // 2. Update Variants & Attributes
-      // Vòng lặp qua từng dòng biến thể trên giao diện
+    if (savedProductId && galleryFiles.value.length > 0) {
+      const uploadPromises = galleryFiles.value.map(file => {
+        const imgData = new FormData();
+        imgData.append('product_id', savedProductId);
+        imgData.append('image', file);
+        return apiService.post('/admin/imageProducts', imgData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      });
+      await Promise.all(uploadPromises);
+    }
+
+    if (isEditMode.value) {
       for (const variant of formData.variants) {
-
-        // A. Chuẩn bị payload cơ bản (CHỈ CÓ: Giá, Kho, ProductID)
-        // Không gửi attributes vào đây nữa để tránh bị mất dữ liệu
         const variantPayload = {
-          product_id: productDbId,
+          product_id: savedProductId,
           original_price: variant.original_price,
           price: variant.price,
           stock: variant.stock
         };
-
         let savedVariantId = variant.variant_id;
-        const isNewVariant = isNaN(Number(savedVariantId)); // Check xem là ID tạm (string) hay ID thật (số)
+        const isNewVariant = isNaN(Number(savedVariantId));
 
-        // B. Lưu thông tin cơ bản trước
         if (isNewVariant) {
-          // Nếu là mới -> Gọi POST -> Lấy ID thật trả về
           const res = await apiService.post('/admin/variants', variantPayload);
-          savedVariantId = res.data.id; 
+          savedVariantId = res.data.id;
         } else {
-          // Nếu là cũ -> Gọi PATCH
           await apiService.patch(`/admin/variants/${savedVariantId}`, variantPayload);
         }
 
-        // C. GỬI RIÊNG ATTRIBUTES (Bước quan trọng)
-        // Chỉ gửi nếu có attributes và đã có ID thật
-        const attributesPayload = { ...variant.attributes }; // Clone ra object thuần
-        
+        const attributesPayload = { ...variant.attributes };
         if (savedVariantId && Object.keys(attributesPayload).length > 0) {
-            // Gọi API chuyên biệt để lưu thuộc tính
-            await apiService.post(`/admin/variants/${savedVariantId}/attributes`, {
-                attributes: attributesPayload
-            });
+          await apiService.post(`/admin/variants/${savedVariantId}/attributes`, {
+            attributes: attributesPayload
+          });
         }
       }
-      Swal.fire('Thành công', 'Đã cập nhật sản phẩm và biến thể!', 'success');
+      Swal.fire('Thành công', 'Đã cập nhật đầy đủ thông tin!', 'success');
     }
 
     modalInstance.value.hide();
     fetchProducts();
   } catch (e) {
-    console.error("Lỗi lưu:", e); 
-    Swal.fire('Lỗi', 'Có lỗi xảy ra khi lưu dữ liệu.', 'error');
+    console.error("Lỗi lưu:", e);
+    const msg = e.response?.data?.message || 'Có lỗi xảy ra khi lưu dữ liệu.';
+    Swal.fire('Lỗi', msg, 'error');
   } finally {
-    isLoading.value = false;
+    isSaving.value = false;
   }
 }
 
@@ -528,10 +695,8 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
                 <option value="price-asc">Giá tăng dần</option>
               </select>
             </div>
-            <div class="col-md-3 text-end">
-              <button class="btn btn-primary" @click="openCreateModal"><i class="bi bi-plus-lg"></i> Thêm SP
-                Mới</button>
-            </div>
+            <div class="col-md-3 text-end"><button class="btn btn-primary" @click="openCreateModal"><i
+                  class="bi bi-plus-lg"></i> Thêm SP Mới</button></div>
           </div>
         </div>
         <div class="card-body p-0">
@@ -556,21 +721,44 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
               </tr>
               <tr v-else v-for="p in paginatedProducts" :key="p.id">
                 <td>{{ p.product_id }}</td>
-                <td><img :src="p.thumbnail_url" class="img-thumbnail" style="width:50px;height:50px;object-fit:cover">
+                <td>
+                  <img :src="p.thumbnail_url" class="img-thumbnail" style="width:50px;height:50px;object-fit:cover"
+                    onerror="this.src='https://placehold.co/50?text=Err'">
                 </td>
                 <td>{{ p.name }}</td>
                 <td>{{ p.category?.name }}</td>
                 <td>{{ getPriceRange(p.variants) }}</td>
                 <td>{{ calculateTotalStock(p.variants) }}</td>
-                <td><span :class="['badge', p.status === 'active' ? 'bg-success' : 'bg-secondary']">{{ p.status ===
-                  'active' ? 'Đang bán' : 'Ẩn/Nháp' }}</span></td>
+
+                <!-- CỘT TRẠNG THÁI: Chỉ hiển thị Text/Badge -->
                 <td>
-                  <button class="btn btn-sm btn-outline-info me-1" @click="openViewModal(p)" title="Xem chi tiết"><i
-                      class="bi bi-eye"></i></button>
-                  <button class="btn btn-sm btn-warning me-1" @click="openVariantConfigModal(p)"
-                    title="Cấu hình biến thể & Sửa"><i class="bi bi-gear-fill"></i></button>
-                  <button class="btn btn-sm btn-outline-danger" @click="handleDelete(p)" title="Xóa"><i
-                      class="bi bi-trash"></i></button>
+                  <span :class="['badge', p.status === 'active' ? 'bg-success' : 'bg-secondary']">
+                    {{ p.status === 'active' ? 'Đang bán' : 'Ẩn/Nháp' }}
+                  </span>
+                </td>
+
+                <!-- CỘT THAO TÁC: Bao gồm Switch và các nút hành động -->
+                <td>
+                  <div class="d-flex align-items-center">
+                    <!-- Toggle Switch -->
+                    <div class="form-check form-switch me-3 mb-0" style="min-height: 1.5em;" title="Bật/Tắt trạng thái">
+                      <div v-if="processingStatusIds.includes(p.id)"
+                        class="spinner-border spinner-border-sm text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                      </div>
+                      <input v-else class="form-check-input cursor-pointer shadow-none" type="checkbox" role="switch"
+                        :checked="p.status === 'active'" @click.prevent="handleQuickStatusToggle(p)"
+                        style="transform: scale(1.3);">
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <button class="btn btn-sm btn-outline-info me-1" @click="openViewModal(p)" title="Xem"><i
+                        class="bi bi-eye"></i></button>
+                    <button class="btn btn-sm btn-warning me-1" @click="openVariantConfigModal(p)" title="Sửa"><i
+                        class="bi bi-gear-fill"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" @click="handleDelete(p)" title="Xóa"><i
+                        class="bi bi-trash"></i></button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -600,12 +788,57 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
         <div class="modal-body">
           <div class="row">
             <div class="col-md-7">
-              <div class="mb-3"><label class="form-label">Tên SP</label><input type="text" class="form-control"
-                  v-model="formData.name" :class="{ 'is-invalid': errors.name }">
+              <div class="mb-3">
+                <label class="form-label">Tên SP</label>
+                <input type="text" class="form-control" v-model="formData.name" :class="{ 'is-invalid': errors.name }">
                 <div class="invalid-feedback">{{ errors.name }}</div>
               </div>
-              <div class="mb-3"><label class="form-label">Mô tả</label><textarea class="form-control" rows="3"
-                  v-model="formData.description"></textarea></div>
+              <div class="mb-3">
+                <label class="form-label">Mô tả</label>
+                <textarea class="form-control" rows="3" v-model="formData.description"></textarea>
+              </div>
+
+              <div class="mb-3 p-3 border rounded bg-light">
+                <label class="form-label fw-bold">Ảnh đại diện (Thumbnail)</label>
+                <input type="file" class="form-control" accept="image/*" @change="handleThumbnailChange">
+                <div v-if="thumbnailPreview" class="mt-2 text-center">
+                  <img :src="thumbnailPreview" class="img-thumbnail" style="height: 120px;">
+                  <div class="small text-muted mt-1">Xem trước</div>
+                </div>
+              </div>
+
+              <div class="mb-3 p-3 border rounded bg-light" v-if="isEditMode">
+                <label class="form-label fw-bold">Thư viện ảnh chi tiết (Gallery)</label>
+                <input type="file" class="form-control" multiple accept="image/*" @change="handleGalleryChange">
+
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                  <div v-for="(img, idx) in formData.existing_images" :key="img.id" class="position-relative">
+                    <img :src="img.url" class="img-thumbnail" style="width: 90px; height: 90px; object-fit: cover;">
+                    <!-- UPDATED: BUTTON XÓA ẢNH CÓ SPINNER + SWEETALERT (Logic trong hàm js) -->
+                    <button
+                      class="position-absolute top-0 start-100 translate-middle btn btn-sm btn-danger rounded-circle p-0"
+                      style="width: 20px; height: 20px; line-height: 1;" :disabled="deletingImageIds.includes(img.id)"
+                      @click="deleteExistingImage(img.id, idx)">
+                      <span v-if="deletingImageIds.includes(img.id)" class="spinner-border spinner-border-sm"
+                        style="width: 12px; height: 12px; border-width: 1px;"></span>
+                      <span v-else>&times;</span>
+                    </button>
+                  </div>
+
+                  <div v-for="(url, idx) in galleryPreviews" :key="'new-' + idx" class="position-relative">
+                    <img :src="url" class="img-thumbnail border-success"
+                      style="width: 90px; height: 90px; object-fit: cover;">
+                    <button
+                      class="position-absolute top-0 start-100 translate-middle btn btn-sm btn-secondary rounded-circle p-0"
+                      style="width: 20px; height: 20px; line-height: 1;"
+                      @click="removeNewGalleryImage(idx)">&times;</button>
+                  </div>
+                </div>
+                <div class="form-text small" v-if="galleryPreviews.length > 0">
+                  Các ảnh viền xanh là ảnh mới sẽ được upload khi bạn bấm Lưu.
+                </div>
+              </div>
+
             </div>
             <div class="col-md-5">
               <div class="mb-3">
@@ -626,48 +859,33 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
               </div>
               <div class="mb-3" v-else>
                 <div class="alert alert-warning py-2 small"><i class="bi bi-info-circle"></i> Sản phẩm mới sẽ mặc định ở
-                  trạng thái <b>Ẩn</b>. Hãy lưu lại rồi cấu hình biến thể sau.</div>
+                  trạng thái <b>Ẩn</b>. Hãy lưu lại rồi thêm ảnh Gallery và biến thể sau.</div>
               </div>
             </div>
           </div>
           <hr>
 
-          <!-- PHẦN BIẾN THỂ (CẬP NHẬT UI) -->
           <div v-if="isEditMode">
             <h5>Cấu hình Biến thể</h5>
             <div class="card bg-light p-3 mb-3">
               <div class="row g-2 align-items-center">
-                <!-- 1. Chọn thuộc tính -->
-                <div class="col-auto">
-                  <select class="form-select" v-model="selectedAttributeId">
+                <div class="col-auto"><select class="form-select" v-model="selectedAttributeId">
                     <option value="">-- Chọn thuộc tính --</option>
                     <option v-for="a in attributesList" :key="a.id" :value="a.id">{{ a.name }}</option>
-                  </select>
-                </div>
-                <!-- 2. Ô NHẬP GIÁ TRỊ (THÊM MỚI) -->
-                <div class="col-auto">
-                  <input type="text" class="form-control" v-model="defaultAttributeValue"
-                    placeholder="Nhập giá trị (VD: Đỏ)">
-                </div>
-                <!-- 3. Nút thêm -->
-                <div class="col-auto">
-                  <button class="btn btn-primary" @click="addSelectedAttributeToForm">Thêm cột</button>
-                </div>
-                <!-- 4. Tạo thuộc tính master -->
-                <div class="col-auto ms-auto">
-                  <button class="btn btn-outline-success" @click="openCreateAttrModal">Tạo thuộc tính mới</button>
-                </div>
+                  </select></div>
+                <div class="col-auto"><input type="text" class="form-control" v-model="defaultAttributeValue"
+                    placeholder="Nhập giá trị (VD: Đỏ)"></div>
+                <div class="col-auto"><button class="btn btn-primary" @click="addSelectedAttributeToForm">Thêm
+                    cột</button></div>
+                <div class="col-auto ms-auto"><button class="btn btn-outline-success" @click="openCreateAttrModal">Tạo
+                    thuộc tính mới</button></div>
               </div>
               <div class="mt-2 text-danger small" v-if="errors.attributes">{{ errors.attributes }}</div>
-
-              <!-- Hiển thị các cột đã thêm -->
               <div class="mt-2" v-if="formData.attribute_definitions.length > 0">
                 <span class="text-muted me-2">Các cột đã chọn:</span>
                 <span v-for="attr in formData.attribute_definitions" :key="attr.id"
-                  class="badge bg-white text-dark border me-1">
-                  {{ attr.name }} <i class="bi bi-x text-danger cursor-pointer ms-1"
-                    @click="removeAttributeDefinition(attr)"></i>
-                </span>
+                  class="badge bg-white text-dark border me-1">{{ attr.name }} <i
+                    class="bi bi-x text-danger cursor-pointer ms-1" @click="removeAttributeDefinition(attr)"></i></span>
               </div>
             </div>
 
@@ -684,9 +902,8 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
                 </thead>
                 <tbody>
                   <tr v-for="(v, i) in formData.variants" :key="i">
-                    <td v-for="d in formData.attribute_definitions" :key="d.id">
-                      <input type="text" class="form-control form-control-sm" v-model="v.attributes[d.name]">
-                    </td>
+                    <td v-for="d in formData.attribute_definitions" :key="d.id"><input type="text"
+                        class="form-control form-control-sm" v-model="v.attributes[d.name]"></td>
                     <td><input type="number" class="form-control form-control-sm" v-model="v.original_price"></td>
                     <td><input type="number" class="form-control form-control-sm" v-model="v.price"></td>
                     <td><input type="number" class="form-control form-control-sm" v-model="v.stock"></td>
@@ -699,16 +916,20 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
               <div class="text-danger small mt-1" v-if="errors.variants">{{ errors.variants }}</div>
             </div>
           </div>
-
           <div v-else class="text-center py-5 bg-light border border-dashed rounded">
             <i class="bi bi-arrow-down-circle fs-1 text-muted"></i>
             <h5 class="mt-2 text-muted">Lưu thông tin cơ bản trước</h5>
-            <p class="text-muted small">Sau khi lưu, bạn có thể thêm màu sắc, kích thước và giá bán ở màn hình danh
-              sách.</p>
+            <p class="text-muted small">Sau khi lưu, bạn có thể thêm ảnh gallery, màu sắc, kích thước và giá bán.</p>
           </div>
         </div>
-        <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button><button
-            class="btn btn-primary" @click="handleSave">Lưu</button></div>
+        <!-- FOOTER MODAL: Nút Lưu có SPINNER và DISABLED -->
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal" :disabled="isSaving">Đóng</button>
+          <button class="btn btn-primary" @click="handleSave" :disabled="isSaving">
+            <span v-if="isSaving" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+            {{ isSaving ? 'Đang lưu...' : 'Lưu' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -723,19 +944,90 @@ function goToPage(p) { if (p >= 1 && p <= totalPages.value) currentPage.value = 
         </div>
         <div class="modal-body"><input type="text" class="form-control" v-model="newQuickAttrName"
             placeholder="Tên thuộc tính..."></div>
-        <div class="modal-footer p-1"><button class="btn btn-sm btn-success w-100"
-            @click="handleCreateQuickAttribute">Lưu</button></div>
+        <div class="modal-footer p-1">
+          <!-- UPDATED: BUTTON LƯU THUỘC TÍNH CÓ SPINNER -->
+          <button class="btn btn-sm btn-success w-100" @click="handleCreateQuickAttribute" :disabled="isCreatingAttr">
+            <span v-if="isCreatingAttr" class="spinner-border spinner-border-sm me-1"></span>
+            {{ isCreatingAttr ? 'Đang tạo...' : 'Lưu' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Modal View -->
+  <!-- Modal View (HIỂN THỊ CHI TIẾT SẢN PHẨM ĐẦY ĐỦ) -->
   <div class="modal fade" id="viewModal" ref="viewModalRef" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
       <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Chi tiết sản phẩm</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
         <div class="modal-body">
-          <h5>{{ viewingProduct.name }}</h5>
-          <pre>{{ viewingProduct }}</pre>
+          <!-- Phần Header & Ảnh -->
+          <div class="row">
+            <div class="col-md-4 text-center">
+              <img :src="viewingProduct.thumbnail_url" class="img-thumbnail shadow-sm"
+                style="width: 100%; max-height: 300px; object-fit: contain;">
+            </div>
+            <div class="col-md-8">
+              <h4 class="mb-2">{{ viewingProduct.name }}</h4>
+              <p class="text-muted mb-2"><span class="badge bg-info me-2">{{ viewingProduct.categoryName }}</span>
+                <span :class="['badge', viewingProduct.status === 'active' ? 'bg-success' : 'bg-secondary']">{{
+                  viewingProduct.status === 'active' ? 'Đang bán' : 'Ẩn/Nháp' }}</span>
+              </p>
+
+              <div class="mb-2"><strong>Giá bán:</strong> <span class="text-danger fw-bold fs-5">{{
+                viewingProduct.priceRange }}</span></div>
+              <div class="mb-2"><strong>Tổng kho:</strong> {{ viewingProduct.totalStock }} sản phẩm</div>
+
+              <div class="p-2 bg-light rounded border mt-3">
+                <strong>Mô tả:</strong>
+                <p class="mb-0 small mt-1" style="white-space: pre-line;">{{ viewingProduct.description || 'Chưa có mô tả' }}</p>
+              </div>
+            </div>
+          </div>
+
+          <hr>
+
+          <!-- Phần Gallery -->
+          <div v-if="viewingProduct.images && viewingProduct.images.length > 0" class="mb-4">
+            <h6 class="fw-bold">Thư viện ảnh ({{ viewingProduct.images.length }})</h6>
+            <div class="d-flex flex-wrap gap-2">
+              <img v-for="(imgUrl, idx) in viewingProduct.images" :key="idx" :src="imgUrl" class="img-thumbnail"
+                style="width: 80px; height: 80px; object-fit: cover; cursor: pointer;">
+            </div>
+          </div>
+
+          <!-- Phần Variants -->
+          <div v-if="viewingProduct.variants && viewingProduct.variants.length > 0">
+            <h6 class="fw-bold">Danh sách biến thể</h6>
+            <div class="table-responsive">
+              <table class="table table-bordered table-sm text-center align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th v-for="attr in viewingProduct.attributeNames" :key="attr">{{ attr }}</th>
+                    <th>Giá gốc</th>
+                    <th>Giá bán</th>
+                    <th>Kho</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="v in viewingProduct.variants" :key="v.id">
+                    <td v-for="attr in viewingProduct.attributeNames" :key="attr">{{ v.attributes[attr] }}</td>
+                    <td>{{ formatCurrency(v.original_price) }}</td>
+                    <td class="text-danger fw-bold">{{ formatCurrency(v.price) }}</td>
+                    <td>{{ v.stock }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div v-else class="alert alert-warning py-2 small text-center">Sản phẩm này chưa có biến thể nào.</div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
         </div>
       </div>
     </div>

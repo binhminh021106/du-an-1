@@ -28,20 +28,37 @@ class Variant extends Model
      * Quan hệ Many-to-Many với AttributeValue
      * Bảng trung gian: variant_attribute_values
      */
+    public function product()
+    {
+        return $this->belongsTo(Product::class, 'product_id');
+    }
+
+    // Quan hệ với AttributeValues (Many-to-Many)
     public function attributeValues()
     {
         return $this->belongsToMany(
             AttributeValue::class,
-            'variant_attribute_values',
+            'variant_attribute_values', // Bảng pivot
             'variant_id',
             'attribute_value_id'
-        )->withTimestamps();
+        );
     }
 
-    public function product()
-    {
-        return $this->belongsTo(Product::class, 'product_id', 'id');
-    }
+
+    // public function attributeValues()
+    // {
+    //     return $this->belongsToMany(
+    //         AttributeValue::class,
+    //         'variant_attribute_values',
+    //         'variant_id',
+    //         'attribute_value_id'
+    //     )->withTimestamps();
+    // }
+
+    // public function product()
+    // {
+    //     return $this->belongsTo(Product::class, 'product_id', 'id');
+    // }
 
     public function orderItems()
     {

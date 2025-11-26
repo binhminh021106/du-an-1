@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\ImageProduct;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File; // Thêm thư viện File
 use Illuminate\Support\Facades\Validator;
 
 class AdminImageProductController extends Controller
@@ -17,9 +17,10 @@ class AdminImageProductController extends Controller
 
     public function store(Request $request)
     {
+        // Validate file thay vì string url
         $validator = Validator::make($request->all(), [
             'product_id' => 'required|exists:product,id',
-            'image_url' => 'required|string',
+            'image' => 'required|image|max:5120', // Bắt buộc là file ảnh
         ]);
 
         if ($validator->fails()) {
@@ -29,13 +30,42 @@ class AdminImageProductController extends Controller
             ], 422);
         }
 
-        $imageProduct = ImageProduct::create($request->all());
+        try {
+            $imageUrl = '';
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Image product created successfully',
-            'data' => $imageProduct
-        ], 201);
+            // Xử lý lưu ảnh vào public/product
+            if ($request->hasFile('image')) {
+                $file = $request->file('image');
+                $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                
+                $path = public_path('product'); // Đường dẫn: public/product
+
+                // Tạo thư mục nếu chưa có
+                if (!File::exists($path)) {
+                    File::makeDirectory($path, 0755, true);
+                }
+
+                $file->move($path, $filename);
+                $imageUrl = '/product/' . $filename;
+            }
+
+            $imageProduct = ImageProduct::create([
+                'product_id' => $request->product_id,
+                'image_url' => $imageUrl
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Upload ảnh thành công',
+                'data' => $imageProduct
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi upload ảnh: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function show(string $id)
@@ -46,47 +76,24 @@ class AdminImageProductController extends Controller
 
     public function update(Request $request, string $id)
     {
-        $validator = Validator::make($request->all(), [
-            'image_url' => 'sometimes|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $imageProduct = ImageProduct::findOrFail($id);
-        
-        // Xóa ảnh cũ nếu có
-        if ($request->has('image_url') && $imageProduct->image_url) {
-            Storage::delete($imageProduct->image_url);
-        }
-
-        $imageProduct->update($request->all());
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Image product updated successfully',
-            'data' => $imageProduct
-        ]);
+        // Logic update ảnh nếu cần (thường ít dùng, hay xóa đi up lại)
+        return response()->json(['message' => 'Feature not implemented yet']);
     }
 
     public function destroy(string $id)
     {
         $imageProduct = ImageProduct::findOrFail($id);
         
-        // Xóa file ảnh
-        if ($imageProduct->image_url) {
-            Storage::delete($imageProduct->image_url);
+        // Xóa file ảnh vật lý
+        if ($imageProduct->image_url && File::exists(public_path($imageProduct->image_url))) {
+            File::delete(public_path($imageProduct->image_url));
         }
         
         $imageProduct->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Image product deleted successfully'
+            'message' => 'Đã xóa ảnh thành công'
         ]);
     }
 }
