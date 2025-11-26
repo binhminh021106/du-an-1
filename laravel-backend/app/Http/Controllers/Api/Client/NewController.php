@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api\Client;
+namespace App\Http\Controllers\Api\Client; // <--- CHỮ C VIẾT HOA
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -8,47 +8,25 @@ use App\Models\News;
 
 class NewController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
-        $news = News::all();
+        // Lấy tin tức published, mới nhất lên đầu
+        $data = News::with('author:id,fullName,avatar_url')
+            ->where('status', 'published')
+            ->orderBy('created_at', 'desc')
+            ->get();
 
-        return response()->json($news);
+        // Trả về đúng format mà Frontend đang chờ
+        return response()->json($data); 
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    public function show($slug)
     {
-        //
-    }
+        $post = News::with('author:id,fullName,avatar_url')
+            ->where('slug', $slug)
+            ->where('status', 'published')
+            ->firstOrFail();
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        $new = News::findOrFail($id);
-        
-        return response()->json($new);
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
+        return response()->json($post);
     }
 }
