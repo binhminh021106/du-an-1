@@ -5,17 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-// Nhớ use cả model User
 use App\Models\User; 
 
 class News extends Model
 {
-    /** @use HasFactory<\Database\Factories\NewsFactory> */ // <-- Đã sửa
-    use HasFactory;
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
 
     protected $table = 'news';
 
+    // Chỉ cho phép fill các trường dữ liệu, KHÔNG bao gồm timestamp
     protected $fillable = [
         'title',
         'excerpt', 
@@ -27,11 +25,10 @@ class News extends Model
     ];
 
     /**
-     * Lấy thông tin tác giả (author) của bài viết.
+     * Relationship: Một tin tức thuộc về một tác giả (User)
      */
     public function author()
     {
-        // Giả sử cột 'author_id' liên kết với 'id' trên bảng 'users'
         return $this->belongsTo(User::class, 'author_id', 'id');
     }
 }
