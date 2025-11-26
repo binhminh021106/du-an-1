@@ -381,22 +381,7 @@ watch(route, (newRoute) => {
           </div>
         </section>
 
-        <section class="news-section-wrapper">
-          <div class="news-header">
-            <h2>TIN TỨC</h2>
-            <a href="#" class="view-all-link">
-              Xem tất cả <i class="fas fa-chevron-right"></i>
-            </a>
-          </div>
-          <div class="news-scroll-container">
-            <a href="#" class="news-card" v-for="item in news" :key="item.id">
-              <div class="news-card-image">
-                <img :src="item.image || 'https://placehold.co/300x170?text=News'" :alt="item.title">
-              </div>
-              <h4 class="news-card-title">{{ item.title }}</h4>
-            </a>
-          </div>
-        </section>
+       
       </div>
     </div>
 
