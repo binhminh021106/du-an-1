@@ -2,8 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import apiService from '../../apiService.js';
 import { useRouter } from 'vue-router';
-// THÊM: Import hàm addToCart từ store (Đường dẫn ./cartStore.js là đúng)
-import { addToCart } from "./user/cartStore.js"; 
+import { addToCart } from "./cartStore.js"; 
 
 // Khởi tạo router
 const router = useRouter();
@@ -18,6 +17,16 @@ const newsList = ref([]);
 const activeCategoryId = ref(null);
 const currentSlide = ref(0);
 let interval = null;
+
+// Ref cho carousel sản phẩm mới
+const productContainer = ref(null);
+
+// Fake dữ liệu Voucher
+const vouchers = ref([
+    { id: 1, code: 'GIAM10K', desc: 'Giảm 10k đơn 0đ', percent: 10 },
+    { id: 2, code: 'FREESHIP', desc: 'Miễn phí vận chuyển', percent: 100 },
+    { id: 3, code: 'SALE50', desc: 'Giảm 50% tối đa 50k', percent: 50 },
+]);
 
 // --- FETCH DATA ---
 const fetchData = async () => {
@@ -44,10 +53,9 @@ const fetchData = async () => {
 };
 
 // --- COMPUTED PROPERTIES ---
-const topFavoriteProducts = computed(() => {
-    return [...products.value]
-        .sort((a, b) => (b.favorite_count || 0) - (a.favorite_count || 0))
-        .slice(0, 8);
+const newProducts = computed(() => {
+    // Lấy 15 sản phẩm để slide cho thoải mái
+    return [...products.value].slice(0, 15);
 });
 
 const categoriesWithProducts = computed(() => {
@@ -76,6 +84,22 @@ const prevSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.va
 const goToSlide = (index) => { stopAutoSlide(); currentSlide.value = index; };
 
 
+// --- PRODUCT CAROUSEL LOGIC ---
+const scrollProducts = (direction) => {
+    if (!productContainer.value) return;
+    // Tính toán scroll 1 lần 5 sản phẩm (khoảng 20% width container * 5)
+    // Hoặc scroll khoảng 80% container width để người dùng thấy sản phẩm tiếp theo
+    const containerWidth = productContainer.value.clientWidth;
+    const scrollAmount = containerWidth * 0.8; 
+    
+    if (direction === 'left') {
+        productContainer.value.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+    } else {
+        productContainer.value.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+};
+
+
 // --- HELPER FUNCTIONS ---
 const setActiveCategory = (id) => { activeCategoryId.value = String(id); };
 
@@ -86,19 +110,13 @@ const getMinPrice = (variants) => {
 const formatCurrency = (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 
 // --- ACTIONS ---
-const openQuickView = (product) => { alert(`Xem nhanh: ${product.name}`); };
-
-// SỬA: Cập nhật hàm addToCart để sử dụng cartStore
-const onAddToCart = (product) => {
-    const minPrice = getMinPrice(product.variants);
-    // Chọn phiên bản có giá thấp nhất hoặc tạo phiên bản mặc định
-    const variant = product.variants 
-        ? product.variants.find(v => v.price === minPrice) || product.variants[0]
-        : { id: 'default', name: 'Mặc định', price: minPrice || 0, stock: 999 };
-
-    addToCart(product, variant, 1); // Thêm 1 sản phẩm vào giỏ
-    alert(`Đã thêm vào giỏ: ${product.name}`);
+const onAddToWishlist = (product) => {
+    alert(`Đã thêm ${product.name} vào danh sách yêu thích! ❤️`);
 };
+
+const saveVoucher = (code) => {
+    alert(`Đã lưu mã giảm giá: ${code}`);
+}
 
 
 // --- LIFECYCLE HOOKS ---
@@ -112,136 +130,160 @@ onBeforeUnmount(stopAutoSlide);
 
 <template>
     <div id="app">
+        <!-- Import Font Montserrat -->
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        
         <main class="container">
 
+            <!-- TOP SECTION: Sidebar - Slider - Voucher -->
             <section class="top-section-layout">
+                
+                <!-- 1. Categories -->
                 <nav class="categories-sidebar">
-                    <h3 class="sidebar-title">Danh mục</h3>
-                    <router-link v-for="category in categories" :key="category.id"
-                        :to="{ path: '/Shop', query: { categoryId: category.id } }" class="category-item-sodo"
-                        :class="{ active: String(category.id) === String(activeCategoryId) }"
-                        @click="setActiveCategory(category.id)">
-                        <span v-html="category.icon" class="icon"></span>
-                        <span>{{ category.name }}</span>
-                    </router-link>
+                    <h3 class="sidebar-title">DANH MỤC</h3>
+                    <div class="category-list">
+                        <router-link v-for="category in categories" :key="category.id"
+                            :to="{ path: '/Shop', query: { categoryId: category.id } }" 
+                            class="category-item-clean"
+                            :class="{ active: String(category.id) === String(activeCategoryId) }"
+                            @click="setActiveCategory(category.id)">
+                            <span>{{ category.name }}</span>
+                        </router-link>
+                    </div>
                 </nav>
 
+                <!-- 2. Slider (FIXED: Overflow hidden + Width 100%) -->
                 <section class="slider" @mouseenter="stopAutoSlide" @mouseleave="startAutoSlide">
                     <div class="slider-wrapper" :style="{ transform: 'translateX(-' + currentSlide * 100 + '%)' }">
                         <div class="slide" v-for="slide in slides" :key="slide.id">
-                            <img :src="slide.imageUrl || slide.image_url" alt="Slide"
-                                style="width: 100%; height: 100%; object-fit: cover;">
-
-                            <a :href="slide.linkUrl || '#'" class="slide-link"></a>
+                            <img :src="slide.imageUrl || slide.image_url" alt="Slide">
+                            <a :href="slide.linkUrl || '#'" class="slide-link-overlay"></a>
                         </div>
                     </div>
-
                     <button class="slider-control prev" @click="prevSlide"><i class="fas fa-chevron-left"></i></button>
                     <button class="slider-control next" @click="nextSlide"><i class="fas fa-chevron-right"></i></button>
-
                     <div class="slider-nav">
                         <span v-for="(slide, index) in slides" :key="slide.id" class="slider-nav-dot"
                             :class="{ active: index === currentSlide }" @click="goToSlide(index)"></span>
                     </div>
                 </section>
 
+                <!-- 3. Voucher Storage -->
+                <section class="voucher-sidebar">
+                    <h3 class="sidebar-title">MÃ GIẢM GIÁ</h3>
+                    <div class="voucher-list">
+                        <div class="voucher-card" v-for="v in vouchers" :key="v.id">
+                            <div class="voucher-info">
+                                <span class="voucher-code">{{ v.code }}</span>
+                                <span class="voucher-desc">{{ v.desc }}</span>
+                            </div>
+                            <button class="btn-save" @click="saveVoucher(v.code)">Lưu</button>
+                        </div>
+                    </div>
                 </section>
 
-            <section class="brand-banner" style="margin-top: 15px;" v-if="brands.length > 0">
+            </section>
+
+            <!-- Brand Banner (FIXED: Height Reduced) -->
+            <section class="brand-banner" v-if="brands.length > 0">
                 <a :href="brands[0].linkUrl || '#'">
-                    <img :src="brands[0].imageUrl" alt="Brand Banner"
-                        style="width: 100%; height: 200px; object-fit: cover; border-radius: 8px;">
+                    <img :src="brands[0].imageUrl" alt="Brand Banner">
                 </a>
             </section>
 
+            <!-- Trust Block -->
             <section class="trust-block">
-                <div class="trust-item"><span>✔️ Bảo hành chính hãng</span></div>
-                <div class="trust-item"><span>🚚 Giao hàng miễn phí</span></div>
-                <div class="trust-item"><span>🔄 Đổi trả 30 ngày</span></div>
-                <div class="trust-item"><span>🏪 Hỗ trợ 24/7</span></div>
+                <div class="trust-item"><i class="fas fa-check-circle"></i> Chính hãng</div>
+                <div class="trust-item"><i class="fas fa-truck"></i> FreeShip</div>
+                <div class="trust-item"><i class="fas fa-sync-alt"></i> Đổi trả 30d</div>
+                <div class="trust-item"><i class="fas fa-headset"></i> Hỗ trợ 24/7</div>
             </section>
 
             <section class="product-section-container">
 
+                <!-- SẢN PHẨM MỚI (CAROUSEL 5 ITEM) -->
                 <section class="product-group hot-products">
-                    <h2 class="section-title"> Sản phẩm yêu thích</h2>
-                    <div class="product-grid">
-                        <div class="product-card" v-for="product in topFavoriteProducts" :key="product.id">
-                            <img :src="product.image_url || '#'" :alt="product.name">
-                            <h3 class="product-name">{{ product.name }}</h3>
-
-                            <div class="product-stats">
-                                <span class="rating">
-                                    <i class="fas fa-star text-warning"></i> {{ product.average_rating || 0 }}
-                                </span>
-                                <span class="favorite-count ms-3">
-                                    <i class="fas fa-heart text-danger"></i> {{ product.favorite_count || 0 }}
-                                </span>
+                    <div class="section-header">
+                        <h2 class="section-title">SẢN PHẨM MỚI</h2>
+                        <div class="carousel-nav">
+                            <button @click="scrollProducts('left')"><i class="fas fa-chevron-left"></i></button>
+                            <button @click="scrollProducts('right')"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    
+                    <div class="product-carousel-wrapper" ref="productContainer">
+                        <!-- QUAY LẠI THẺ BASIC -->
+                        <div class="product-card-basic" v-for="product in newProducts" :key="product.id">
+                            <div class="image-wrapper">
+                                <img :src="product.image_url || '#'" :alt="product.name">
+                                <!-- Hover Actions -->
+                                <div class="hover-overlay">
+                                    <button class="action-btn view" title="Xem chi tiết" 
+                                        @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="action-btn heart" title="Yêu thích" 
+                                        @click="onAddToWishlist(product)">
+                                        <i class="fas fa-heart"></i>
+                                    </button>
+                                </div>
+                                <div class="badge-new">New</div>
                             </div>
-
-                            <div class="product-price">
-                                <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
-                            </div>
-                            <div class="card-actions-small">
-                                <button class="btn-view"
-                                    @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
-                                    <i class="fas fa-eye"></i> Xem
-                                </button>
-
-                                <button class="btn-add-cart" @click="onAddToCart(product)"><i class="fas fa-plus"></i>
-                                    Thêm</button>
+                            
+                            <div class="product-info">
+                                <h3 class="product-name">{{ product.name }}</h3>
+                                <div class="price-row">
+                                    <span class="price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
+                                    <span class="sold">Đã bán {{ product.sold_count || 0 }}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </section>
 
+                <!-- Category Products (Grid Layout) -->
                 <template v-for="category in categoriesWithProducts" :key="category.id">
-                    <section class="product-group category-group" :id="'cat-' + category.id">
-                        <h2 class="section-title">
-                            <span v-html="category.icon" style="margin-right: 10px;"></span>
-                            {{ category.name }} nổi bật
-                        </h2>
-
+                    <section class="product-group" :id="'cat-' + category.id">
+                        <h2 class="section-title text-uppercase">{{ category.name }}</h2>
                         <div class="product-grid">
-                            <div class="product-card" v-for="product in category.products" :key="product.id">
-                                <img :src="product.image_url || '#'" :alt="product.name">
-                                <h3 class="product-name">{{ product.name }}</h3>
-
-                                <div class="product-stats">
-                                    <span class="rating">
-                                        <i class="fas fa-star text-warning"></i> {{ product.average_rating || 0 }}
-                                    </span>
-                                    <span class="sold-count ms-2" style="font-size: 0.8em; color: #888;">
-                                        (Đã bán: {{ product.sold_count || 0 }})
-                                    </span>
+                            <!-- QUAY LẠI THẺ BASIC -->
+                            <div class="product-card-basic" v-for="product in category.products" :key="product.id">
+                                <div class="image-wrapper">
+                                    <img :src="product.image_url || '#'" :alt="product.name">
+                                    <div class="hover-overlay">
+                                        <button class="action-btn view" 
+                                            @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="action-btn heart" 
+                                            @click="onAddToWishlist(product)">
+                                            <i class="fas fa-heart"></i>
+                                        </button>
+                                    </div>
                                 </div>
-
-                                <div class="product-price">
-                                    <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
-                                </div>
-                                <div class="card-actions-small">
-                                    <button class="btn-view"
-                                        @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">
-                                        <i class="fas fa-eye"></i> Xem
-                                    </button>
-                                    <button class="btn-add-cart" @click="onAddToCart(product)"><i class="fas fa-plus"></i>
-                                        Thêm</button>
+                                <div class="product-info">
+                                    <h3 class="product-name">{{ product.name }}</h3>
+                                    <div class="price-row">
+                                        <span class="price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </section>
                 </template>
 
-                <section class="product-group news-group" style="margin-top: 60px;">
-                    <h2 class="section-title">📰 Tin tức công nghệ</h2>
+                <!-- News -->
+                <section class="product-group news-group">
+                    <h2 class="section-title">TIN TỨC CÔNG NGHỆ</h2>
                     <div class="news-grid">
-                        <div class="news-card" v-for="news in newsList" :key="news.id">
-                            <img :src="news.image_url || news.image || '#'" :alt="news.title">
-                            <h3 class="news-title">{{ news.title }}</h3>
-                            <p class="news-excerpt">
-                                {{ (news.content || news.excerpt || '').substring(0, 120) + '...' }}
-                            </p>
-                            <router-link to="/tin-tuc" class="read-more">Đọc thêm</router-link>
+                        <div class="news-card-basic" v-for="news in newsList" :key="news.id">
+                            <div class="news-img-wrap">
+                                <img :src="news.image_url || news.image || '#'" :alt="news.title">
+                            </div>
+                            <div class="news-content">
+                                <h3 class="news-title">{{ news.title }}</h3>
+                                <router-link to="/tin-tuc" class="read-more-link">Xem thêm &rarr;</router-link>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -253,384 +295,454 @@ onBeforeUnmount(stopAutoSlide);
 
 <style scoped>
 :root {
-    --primary-color: #dc3545;
-    --secondary-color: #f8f9fa;
+    --primary-color: #d70018; 
     --text-color: #333;
-    --border-radius: 8px;
-    --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    --transition-speed: 0.3s;
+    --border-color: #e5e7eb;
 }
 
 * {
-    margin: 0;
-    padding: 0;
     box-sizing: border-box;
-    font-family: Arial, sans-serif;
+    font-family: 'Montserrat', sans-serif;
 }
 
-body {
-    background-color: var(--secondary-color);
-    color: var(--text-color);
-    line-height: 1.6;
-}
-
-a {
-    text-decoration: none;
-    color: var(--text-color);
-}
+.text-uppercase { text-transform: uppercase; }
+.text-warning { color: #f59e0b; }
 
 .container {
     max-width: 1280px;
     margin: 20px auto;
-    padding: 0 20px;
+    padding: 0 15px;
 }
 
+/* --- TOP LAYOUT --- */
 .top-section-layout {
     display: grid;
-    grid-template-columns: 250px 1fr 280px;
-    gap: 20px;
-    align-items: start;
+    grid-template-columns: 240px 1fr 260px; 
+    gap: 15px;
+    align-items: stretch;
+    margin-bottom: 20px;
 }
 
-/* Sidebar */
+/* Sidebar Danh mục */
 .categories-sidebar {
     background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    padding: 10px;
-    max-height: 450px;
-    overflow-y: auto;
-}
-
-.category-item-sodo {
-    display: flex;
-    align-items: center;
-    padding: 10px 15px;
-    cursor: pointer;
     border-radius: 8px;
-    transition: all 0.2s;
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,.1), 0 2px 6px 2px rgba(60,64,67,.15);
+    padding: 10px;
+    height: 100%; 
+}
+
+.sidebar-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    padding-left: 10px;
+    color: #444;
+}
+
+.category-item-clean {
+    display: block;
+    padding: 8px 12px;
+    color: #333;
+    font-size: 13px;
     font-weight: 500;
-    color: #555;
+    border-radius: 5px;
+    transition: 0.2s;
 }
 
-.category-item-sodo:hover,
-.category-item-sodo.active {
-    background-color: #ffebeb;
-    color: var(--primary-color);
+.category-item-clean:hover {
+    background: #f3f4f6;
+    font-weight: 600;
 }
 
-.category-item-sodo .icon {
-    width: 30px;
-    text-align: center;
-    margin-right: 10px;
-    color: #999;
-}
-
-.category-item-sodo:hover .icon,
-.category-item-sodo.active .icon {
-    color: var(--primary-color);
-}
-
-/* Slider & Utility */
+/* --- FIX: SLIDER (QUAN TRỌNG) --- */
 .slider {
     position: relative;
-    overflow: hidden;
-    border-radius: 12px;
-    height: 100%;
-    min-height: 350px;
+    overflow: hidden; /* Che phần hình ảnh thừa */
+    border-radius: 8px;
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,.1);
+    /* Set width 100% để chắc chắn nó ko bị co */
+    width: 100%;
+    /* Min height để tránh giật layout */
+    min-height: 300px;
 }
 
 .slider-wrapper {
     display: flex;
     height: 100%;
     transition: transform 0.5s ease-in-out;
+    width: 100%; /* Wrapper full width */
 }
 
 .slide {
-    min-width: 100%;
-    background-size: cover;
-    background-position: center;
+    /* FIX: Bắt buộc mỗi slide phải rộng 100% container */
+    min-width: 100%; 
+    width: 100%;
+    flex: 0 0 100%;
+    position: relative;
+}
+
+.slide img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Đảm bảo ảnh full khung */
+    display: block;
+}
+
+.slide-link-overlay {
+    position: absolute;
+    top:0; left:0; width:100%; height:100%;
+    z-index: 2;
 }
 
 .slider-control {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(255,255,255,0.3);
     color: #fff;
     border: none;
-    padding: 10px 15px;
-    cursor: pointer;
-    font-size: 20px;
+    width: 40px; height: 40px;
     border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    cursor: pointer;
+    transition: 0.3s;
+    z-index: 3;
+    display: flex; align-items: center; justify-content: center;
 }
-
-.slider-control:hover {
-    background: rgba(0, 0, 0, 0.6);
-}
-
-.slider-control.prev {
-    left: 15px;
-}
-
-.slider-control.next {
-    right: 15px;
-}
+.slider-control:hover { background: rgba(0,0,0,0.4); }
+.prev { left: 10px; }
+.next { right: 10px; }
 
 .slider-nav {
     position: absolute;
-    bottom: 15px;
+    bottom: 10px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
     gap: 8px;
+    z-index: 3;
 }
-
 .slider-nav-dot {
-    width: 10px;
-    height: 10px;
+    width: 8px; height: 8px;
+    background: rgba(255,255,255,0.5);
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.5);
     cursor: pointer;
-    transition: all 0.3s;
 }
+.slider-nav-dot.active { background: #fff; }
 
-.slider-nav-dot.active {
-    background: var(--primary-color);
-    width: 30px;
-    border-radius: 5px;
-}
-
-.utility-sidebar {
+/* Voucher Sidebar */
+.voucher-sidebar {
     background: #fff;
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    text-align: center;
-}
-
-.user-name {
-    font-weight: bold;
-    color: var(--primary-color);
-    font-size: 1.2em;
-}
-
-/* Trust block & Banner */
-.trust-block {
-    display: flex;
-    justify-content: space-around;
-    background: #fff;
-    padding: 20px;
-    margin: 30px 0;
-    border-radius: 12px;
-    box-shadow: var(--box-shadow);
-    font-weight: 600;
-    color: #555;
-}
-
-/* Products Section Container */
-.product-section-container {
-    margin-top: 40px;
-}
-
-.product-group {
-    margin-bottom: 50px;
-}
-
-.section-title {
-    font-size: 1.6em;
-    color: #333;
-    font-weight: 700;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-}
-
-.product-grid,
-.news-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 20px;
-}
-
-/* Product Card */
-.product-card,
-.news-card {
-    background: #fff;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
-    transition: all 0.3s ease;
     padding: 15px;
-    text-align: left;
-    position: relative;
-}
-
-.product-card:hover,
-.news-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.12);
-}
-
-.product-card img {
-    width: 100%;
-    height: 200px;
-    object-fit: contain;
-    margin-bottom: 15px;
-}
-
-.product-name {
-    font-size: 1em;
-    min-height: 45px;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,.1);
+    height: 100%;
     overflow: hidden;
-    margin-bottom: 10px;
-    color: #333;
 }
 
-.product-price {
+.voucher-list {
     display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
+    flex-direction: column;
+    gap: 10px;
 }
 
-.product-price .new-price {
-    color: var(--primary-color);
-    font-size: 1.2em;
-    font-weight: bold;
-}
-
-.product-stats {
+.voucher-card {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 10px;
-    font-size: 0.9em;
-    color: #777;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-}
-
-.product-stats .rating,
-.product-stats .favorite-count,
-.product-stats .sold-count {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.card-actions-small {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    margin-top: 15px;
-
-}
-
-.card-actions-small button {
-    border: none;
-    width: 100%;
-    padding: 8px 15px;
+    background: #fff;
+    border: 1px dashed var(--primary-color);
+    padding: 10px;
     border-radius: 6px;
-    font-weight: 600;
-    font-size: 0.9em;
-    cursor: pointer;
+}
+
+.voucher-code {
+    font-weight: 700;
+    color: var(--primary-color);
+    font-size: 12px;
+}
+.voucher-desc { font-size: 10px; color: #666; display: block; }
+.btn-save {
+    background: var(--primary-color);
     color: #fff;
+    border: none;
+    padding: 4px 10px;
+    font-size: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* --- FIX: BRAND BANNER HEIGHT (Giảm chiều cao) --- */
+.brand-banner {
+    margin-bottom: 20px;
+}
+.brand-banner img {
+    width: 100%;
+    height: 120px; /* Đã giảm từ 200px xuống 120px cho gọn */
+    object-fit: cover;
+    border-radius: 10px;
+    display: block;
+}
+
+/* Trust Block */
+.trust-block {
+    display: flex;
+    justify-content: space-between;
+    padding: 15px 30px;
+    margin-bottom: 30px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.trust-item { font-size: 12px; font-weight: 600; color: #555; display: flex; align-items: center; gap: 5px; }
+
+
+/* --- PRODUCT SECTION --- */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #333;
+    text-transform: uppercase;
+}
+
+/* Carousel Buttons */
+.carousel-nav button {
+    background: #fff;
+    border: 1px solid #ddd;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    margin-left: 5px;
+    color: #555;
     transition: 0.2s;
+}
+.carousel-nav button:hover { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+
+/* CAROUSEL CONTAINER (5 ITEMS) */
+.product-carousel-wrapper {
+    display: flex;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    gap: 15px; /* Khoảng cách giữa các thẻ */
+    padding-bottom: 10px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.product-carousel-wrapper::-webkit-scrollbar { display: none; }
+
+
+/* --- THẺ SẢN PHẨM BASIC (KHÔI PHỤC LẠI) --- */
+.product-card-basic {
+    background: transparent;
+    transition: 0.3s ease;
+    
+    /* Config cho Carousel (5 Items) */
+    /* 100% / 5 = 20%, trừ đi gap */
+    flex: 0 0 calc(20% - 12px); 
+    min-width: 200px;
+}
+
+/* Config cho Grid (Ghi đè lại flex của Carousel) */
+.product-grid .product-card-basic {
+    flex: unset;
+    min-width: unset;
+    width: 100%;
+}
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.image-wrapper {
+    position: relative;
+    width: 100%;
+    padding-top: 100%; /* Vuông */
+    background: #fff;
+    overflow: hidden;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    border: 1px solid #eee;
+}
+
+.image-wrapper img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* Contain để thấy hết sp */
+    padding: 10px;
+    transition: transform 0.5s ease;
+}
+
+.product-card-basic:hover .image-wrapper img {
+    transform: scale(1.05); 
+}
+
+/* Badge New */
+.badge-new {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: var(--primary-color);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 2px;
+    text-transform: uppercase;
+}
+
+/* HOVER OVERLAY */
+.hover-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 15px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    opacity: 0; 
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+    background: linear-gradient(to top, rgba(0,0,0,0.05), transparent);
+}
+
+.product-card-basic:hover .hover-overlay {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.action-btn {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    border: none;
+    background: #fff;
+    color: #333;
     display: flex;
     align-items: center;
-    gap: 5px;
-}
-
-.btn-view {
-    background: #6c757d;
     justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    transition: 0.2s;
+    font-size: 14px;
 }
 
-.btn-view:hover {
-    background: #5a6268;
-}
-
-.btn-add-cart {
+.action-btn:hover {
     background: var(--primary-color);
+    color: #fff;
+}
+
+/* INFO */
+.product-info {
+    text-align: center;
+}
+
+.product-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 8px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.price-row {
+    display: flex;
     justify-content: center;
+    align-items: baseline;
+    gap: 10px;
 }
 
-.btn-add-cart:hover {
-    background: #c82333;
+.price {
+    color: var(--primary-color);
+    font-weight: 700;
+    font-size: 15px;
 }
 
-.news-card img {
-    height: 160px;
+.sold {
+    font-size: 11px;
+    color: #999;
+}
+
+
+/* --- NEWS --- */
+/* Cập nhật phần này để tạo khoảng cách */
+.news-group {
+    margin-top: 80px; /* Tạo khoảng cách xa với sản phẩm bên trên */
+    padding-top: 40px; /* Thêm đệm bên trong */
+    border-top: 1px solid #e5e7eb; /* Thêm đường kẻ mờ để phân tách */
+}
+
+.news-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 25px;
+}
+
+.news-card-basic {
+    display: flex;
+    flex-direction: column;
+}
+
+.news-img-wrap {
+    width: 100%;
+    height: 180px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+.news-img-wrap img {
+    width: 100%;
+    height: 100%;
     object-fit: cover;
-    border-radius: 8px;
+    transition: 0.3s;
 }
+.news-card-basic:hover .news-img-wrap img { transform: scale(1.05); }
 
 .news-title {
-    font-size: 1.1em;
-    margin: 15px 0 10px;
-    text-align: left;
-    min-height: auto;
-}
-
-.news-excerpt {
-    color: #666;
-    font-size: 0.9em;
-    text-align: left;
-    margin-bottom: 15px;
-    min-height: 65px;
-}
-
-.read-more {
-    display: block;
-    text-align: right;
-    color: var(--primary-color);
+    font-size: 15px;
     font-weight: 600;
+    line-height: 1.4;
+    margin-bottom: 8px;
 }
 
-/* Responsive */
-@media (max-width: 1200px) {
-    .top-section-layout {
-        grid-template-columns: 220px 1fr;
-    }
+.read-more-link {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--primary-color);
+}
 
-    .utility-sidebar {
-        display: none;
-    }
+
+/* RESPONSIVE */
+@media (max-width: 1024px) {
+    .top-section-layout { grid-template-columns: 200px 1fr; }
+    .voucher-sidebar { display: none; }
+    /* Tablet: hiện 3 hoặc 4 sản phẩm */
+    .product-card-basic { flex: 0 0 calc(33.333% - 10px); } 
 }
 
 @media (max-width: 768px) {
-    .top-section-layout {
-        display: block;
-    }
-
-    .categories-sidebar {
-        display: none;
-    }
-
-    .slider {
-        height: 250px;
-        min-height: auto;
-        margin-bottom: 20px;
-    }
-
-    .trust-block {
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-
-    .trust-item {
-        width: 45%;
-        font-size: 0.9em;
+    .top-section-layout { display: block; }
+    .categories-sidebar { display: none; }
+    .slider { height: 200px; margin-bottom: 15px;}
+    /* Mobile: hiện 2 sản phẩm */
+    .product-card-basic { flex: 0 0 calc(50% - 10px); } 
+    
+    .news-grid {
+        grid-template-columns: 1fr; /* News trên mobile thành 1 cột */
     }
 }
 </style>
