@@ -15,7 +15,7 @@ class AdminCategoryController extends Controller
         // Sắp xếp theo thứ tự nhỏ -> lớn
         $categories = Category::orderBy('order_number', 'asc')->get();
 
-        // Map dữ liệu để trả về format Vue cần (đổi order_number thành order)
+        // Map dữ liệu để trả về format Vue cần
         $data = $categories->map(function ($cat) {
             return [
                 'id' => $cat->id,
@@ -37,7 +37,7 @@ class AdminCategoryController extends Controller
         $request->validate([
             'name' => 'required|string|max:100|unique:categories,name',
             'icon' => 'required|string',
-            'order' => 'required|integer|min:1', // Vue gửi lên là 'order'
+            'order' => 'required|integer|min:1',
             'status' => 'required|in:active,disabled',
         ], [
             'name.required' => 'Tên danh mục không được để trống',
@@ -49,7 +49,7 @@ class AdminCategoryController extends Controller
             'name' => $request->name,
             'description' => $request->description,
             'icon' => $request->icon,
-            'order_number' => $request->order, // Map sang cột DB
+            'order_number' => $request->order,
             'status' => $request->status,
         ]);
 
@@ -61,12 +61,27 @@ class AdminCategoryController extends Controller
     {
         $category = Category::findOrFail($id);
 
-        // Xử lý trường hợp chỉ update status (Toggle Switch ở Vue)
+        // 1. Xử lý update STATUS (Toggle Switch)
+        // Điều kiện: Request có 'status' và tổng số trường gửi lên là 1
         if ($request->has('status') && count($request->all()) == 1) {
+            // Validate dữ liệu status
+            $request->validate(['status' => 'required|in:active,disabled']);
+            
             $category->update(['status' => $request->status]);
             return response()->json(['message' => 'Cập nhật trạng thái thành công']);
         }
 
+        // 2. Xử lý update ORDER (Sắp xếp)
+        // Điều kiện: Request có 'order' và KHÔNG có 'name' (tránh nhầm với form edit full)
+        if ($request->has('order') && !$request->has('name')) {
+            // Validate dữ liệu order
+            $request->validate(['order' => 'required|integer|min:0']);
+
+            $category->update(['order_number' => $request->order]);
+            return response()->json(['message' => 'Cập nhật thứ tự thành công']);
+        }
+
+        // 3. Xử lý update FULL (Form chỉnh sửa)
         $request->validate([
             'name' => ['required', 'string', 'max:100', Rule::unique('categories')->ignore($category->id)],
             'icon' => 'required|string',
@@ -90,7 +105,7 @@ class AdminCategoryController extends Controller
     public function destroy(string $id)
     {
         $category = Category::findOrFail($id);
-        $category->delete(); // Soft delete vì Model có use SoftDeletes
+        $category->delete(); 
 
         return response()->json(['message' => 'Đã xóa thành công']);
     }
