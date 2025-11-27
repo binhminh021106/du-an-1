@@ -2,60 +2,74 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import apiService from '../../apiService.js';
-// THÊM: Import hàm addToCart từ store (Đường dẫn ./cartStore.js là đúng)
 import { addToCart } from "./user/cartStore.js";
 
 // --- CẤU HÌNH & KHỞI TẠO ---
 const route = useRoute()
 const router = useRouter()
 
-// THAY ĐỔI: Hàm clearAllFilters cập nhật lại state
+// --- 1. CẤU HÌNH XỬ LÝ ẢNH (Đồng bộ với Cart.vue) ---
+const SERVER_URL = 'http://127.0.0.1:8000';   
+const USE_STORAGE = false; 
+
+const getImageUrl = (path) => {
+  if (!path) return 'https://placehold.co/300x300?text=No+Img';
+  
+  // Nếu là link tuyệt đối (http...) thì giữ nguyên
+  if (path.startsWith('http')) return path;
+
+  // Xóa dấu / ở đầu nếu có
+  const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  
+  if (USE_STORAGE) {
+    return `${SERVER_URL}/storage/${cleanPath}`; 
+  } else {
+    return `${SERVER_URL}/${cleanPath}`;         
+  }
+};
+
 const clearAllFilters = () => {
   searchKeyword.value = "";
   searchTerm.value = "";
   priceMax.value = 100000000;
-  // Thay vì resetFilters(), chúng ta push về query rỗng
   router.push({ query: {} });
 };
 
-// THAY ĐỔI: searchKeyword (input) và searchTerm (filter)
-const searchKeyword = ref("")  // keyword trong ô input, v-model
+const searchKeyword = ref("")  
+const searchTerm = ref(route.query.search || '')
 
 // --- STATE ---
 const allProducts = ref([])
 const categories = ref([])
 const news = ref([])
-const searchTerm = ref(route.query.search || '') // State dùng để lọc
 
-// SỬA ĐỔI STATE GIÁ
-const priceMin = ref(0); // giá thấp nhất (luôn là 0)
-const priceMax = ref(100000000); // giá cao nhất (mặc định 100 triệu)
+const priceMin = ref(0); 
+const priceMax = ref(100000000); 
 
 const hotSaleProducts = ref([])
 
 // Countdown State
 const saleEndTime = new Date();
-saleEndTime.setDate(saleEndTime.getDate() + 1); // Kết thúc sau 1 ngày
+saleEndTime.setDate(saleEndTime.getDate() + 1); 
 const countdownInterval = ref(null);
 const countdownDisplay = ref('00 : 00 : 00 : 00');
 
 
 const getMinPrice = (variants) => {
   if (!variants || !variants.length) return 0
-  return Math.min(...variants.map(v => v.price))
+  // Chuyển về Number để tránh lỗi so sánh chuỗi
+  return Math.min(...variants.map(v => Number(v.price)))
 }
 const formatCurrency = (value) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
 
-// SỬA: Cập nhật hàm addToCart để sử dụng cartStore
 const onAddToCart = (product) => {
   const minPrice = getMinPrice(product.variants);
-  // Chọn phiên bản có giá thấp nhất hoặc tạo phiên bản mặc định
-  const variant = product.variants 
-      ? product.variants.find(v => v.price === minPrice) || product.variants[0]
-      : { id: 'default', name: 'Mặc định', price: minPrice || 0, stock: 999 };
+  const variant = (product.variants && product.variants.length) 
+      ? (product.variants.find(v => Number(v.price) === minPrice) || product.variants[0])
+      : { id: 'default', name: 'Mặc định', price: minPrice || product.price || 0, stock: 999 };
 
-  addToCart(product, variant, 1); // Thêm 1 sản phẩm vào giỏ
+  addToCart(product, variant, 1); 
   alert(`Đã thêm ${product.name} vào giỏ hàng.`);
 }
 
@@ -87,15 +101,16 @@ const fetchData = async () => {
     const [prodRes, catRes, newsRes] = await Promise.all([
       apiService.get(`/products`),
       apiService.get(`/categories?status=active`),
-
-      // === SỬA TỪ 4 SANG 5 ===
       apiService.get(`/news?_limit=5`)
     ])
-    allProducts.value = prodRes.data
-    categories.value = catRes.data
-    news.value = newsRes.data
+    
+    const productsData = prodRes.data.data || prodRes.data || [];
+    allProducts.value = productsData;
+    
+    categories.value = catRes.data.data || catRes.data || [];
+    news.value = newsRes.data.data || newsRes.data || [];
 
-    hotSaleProducts.value = prodRes.data.slice(0, 5).map(p => {
+    hotSaleProducts.value = productsData.slice(0, 5).map(p => {
       const minPrice = getMinPrice(p.variants);
       return {
         ...p,
@@ -119,67 +134,52 @@ const currentCategoryName = computed(() => {
 })
 
 const selectCategory = (id) => {
-
   const query = { ...route.query, categoryId: id || undefined };
   if (!id) delete query.categoryId;
   router.push({ query });
 }
 
-// THAY ĐỔI: Bỏ hàm setSearchTerm
-// const setSearchTerm = ... (đã xóa)
-
 
 const applyFilters = () => {
   const query = { ...route.query };
-
-  // THAY ĐỔI: Luôn đọc từ searchTerm (sẽ được cập nhật bởi watch)
   if (searchTerm.value) {
     query.search = searchTerm.value;
   } else {
     delete query.search;
   }
-
-
   delete query.price_min;
-
-
   if (priceMax.value > 0 && priceMax.value < 100000000) {
     query.price_max = priceMax.value;
   } else {
     delete query.price_max;
   }
-
   router.push({ query });
 }
 
-// THAY ĐỔI: Bỏ hàm resetFilters
-// const resetFilters = () => { ... } (đã xóa)
-
-// ===== HÀM MỚI ĐỂ CHUYỂN TRANG =====
 const goToProduct = (productId) => {
   if (!productId) return;
   router.push(`/products/${productId}`);
 }
-// ===================================
 
-// Bộ lọc sản phẩm chính (Computed property)
+// Bộ lọc sản phẩm chính
 const filteredProducts = computed(() => {
+  if (!Array.isArray(allProducts.value)) return [];
+  
   let products = [...allProducts.value]
 
   // Lọc theo Danh mục
   if (currentCategoryId.value)
     products = products.filter(p => String(p.category?.id) === currentCategoryId.value)
 
-  // Lọc theo Tìm kiếm (Tên sản phẩm)
-  if (searchTerm.value.trim()) {
+  // Lọc theo Tìm kiếm
+  if (searchTerm.value && searchTerm.value.trim()) {
     const term = searchTerm.value.toLowerCase()
     products = products.filter(p => p.name.toLowerCase().includes(term))
   }
 
-  // Lọc theo Khoảng giá (priceMin luôn là 0)
+  // Lọc theo Khoảng giá
   products = products.filter(p => {
     const price = getMinPrice(p.variants)
-    // if (priceMin.value && price < priceMin.value) return false // Bỏ vì priceMin luôn là 0
     if (priceMax.value && price > priceMax.value) return false
     return true
   })
@@ -192,35 +192,27 @@ onMounted(() => {
   countdownInterval.value = setInterval(updateCountdown, 1000);
 });
 
-// --- THAY ĐỔI: Thêm Debounce cho tìm kiếm ---
 let debounceTimer = null;
 const debouncedApplyFilters = () => {
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     applyFilters();
-  }, 500); // Chờ 500ms sau khi người dùng ngừng gõ
+  }, 500); 
 };
 
-// --- THAY ĐỔI: Watch searchKeyword (ô input) ---
 watch(searchKeyword, (newVal) => {
-  searchTerm.value = newVal; // Cập nhật state lọc
-  debouncedApplyFilters(); // Gọi hàm lọc đã debounce
+  searchTerm.value = newVal; 
+  debouncedApplyFilters(); 
 });
 
 
-// Watch URL changes (search/price) để đồng bộ lại input form
-// SỬA ĐỔI HÀM NÀY
 watch(route, (newRoute) => {
   searchTerm.value = newRoute.query.search || '';
-  // priceMin.value = Number(newRoute.query.price_min) || 0; // Bỏ vì min luôn là 0
-  priceMax.value = Number(newRoute.query.price_max) || 100000000; // Đặt mặc định là 100 triệu
-
-  // Cập nhật lại ô input nếu URL thay đổi (ví dụ: nhấn reset)
-  searchKeyword.value = searchTerm.value;
-
-  // THAY ĐỔI: Bỏ isSearching
-  // isSearching.value = !!newRoute.query.search;
-}, { deep: true, immediate: true }); // Thêm immediate để chạy ngay khi load
+  priceMax.value = Number(newRoute.query.price_max) || 100000000; 
+  if (!searchKeyword.value) {
+      searchKeyword.value = searchTerm.value;
+  }
+}, { deep: true, immediate: true }); 
 </script>
 
 <template>
@@ -238,7 +230,7 @@ watch(route, (newRoute) => {
             <li :class="{ active: !currentCategoryId }" @click="selectCategory(null)">
               Tất cả sản phẩm
             </li>
-            <li v-for="cat in categories" :key="cat.id" :class="{ active: currentCategoryId == cat.id }"
+            <li v-for="cat in categories" :key="cat.id" :class="{ active: currentCategoryId == String(cat.id) }"
               @click="selectCategory(cat.id)">
               {{ cat.name }}
             </li>
@@ -280,9 +272,12 @@ watch(route, (newRoute) => {
               <div class="product-card" v-for="product in filteredProducts" :key="product.id"
                 @click="goToProduct(product.id)">
                 <div class="product-image">
-                  <img :src="product.image_url ||
-                    'https://placehold.co/300x300?text=Product'
-                    " :alt="product.name" />
+                  <!-- CẬP NHẬT: Thêm fallback thumbnail_url -->
+                  <img 
+                    :src="getImageUrl(product.thumbnail_url || product.image_url)" 
+                    :alt="product.name" 
+                    @error="$event.target.src='https://placehold.co/300x300?text=Product'"
+                  />
                 </div>
                 <div class="product-info">
                   <h3 class="product-name">{{ product.name }}</h3>
@@ -300,7 +295,7 @@ watch(route, (newRoute) => {
         </main>
       </div>
       <div>
-        <section class="hot-sale-section">
+        <section class="hot-sale-section" v-if="hotSaleProducts.length > 0">
           <div class="hot-sale-header">
             <h2><i class="fas fa-fire"></i> HOT SALE <span>Cuối tuần</span></h2>
             <div class="countdown">
@@ -313,8 +308,12 @@ watch(route, (newRoute) => {
             <div class="hot-sale-card" v-for="product in hotSaleProducts" :key="product.id">
               <div class="discount-badge">Giảm {{ product.discount || 10 }}%</div>
               <div class="hot-sale-image">
-                <img :src="product.image_url || 'https://placehold.co/250x250?text=Sale+Item'
-                  " :alt="product.name" />
+                <!-- CẬP NHẬT: Thêm fallback thumbnail_url -->
+                <img 
+                    :src="getImageUrl(product.thumbnail_url || product.image_url)" 
+                    :alt="product.name" 
+                    @error="$event.target.src='https://placehold.co/250x250?text=Sale+Item'"
+                />
               </div>
               <h3 class="hot-sale-name">{{ product.name }}</h3>
               <p class="hot-sale-price">{{ formatCurrency(product.sale_price) }}</p>
@@ -380,13 +379,9 @@ watch(route, (newRoute) => {
 
           </div>
         </section>
-
-       
       </div>
     </div>
-
   </div>
-
 </template>
 
 <style scoped>
@@ -843,121 +838,6 @@ watch(route, (newRoute) => {
   color: rgb(255, 255, 255);
 }
 
-/* === XÓA CSS TIN TỨC CŨ === */
-/* (Toàn bộ .news-section, .news-list, .news-item... đã bị xóa) */
-
-
-/* === THÊM CSS TIN TỨC MỚI === */
-.news-section-wrapper {
-  background: white;
-  border-radius: 12px;
-  padding: 25px;
-  margin-bottom: 30px;
-  border: 1px solid #e3e3e3;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
-}
-
-.news-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.news-header h2 {
-  font-size: 1.6em;
-  font-weight: 800;
-  color: #111;
-  text-transform: uppercase;
-}
-
-.view-all-link {
-  text-decoration: none;
-  color: var(--primary-color);
-  font-weight: 600;
-  font-size: 0.95em;
-  transition: color 0.2s;
-}
-
-.view-all-link:hover {
-  color: var(--primary-hover-color);
-}
-
-.view-all-link i {
-  font-size: 0.8em;
-  margin-left: 4px;
-}
-
-.news-scroll-container {
-  display: flex;
-  overflow-x: auto;
-  gap: 16px;
-  padding-bottom: 10px;
-  /* Thêm padding để thanh cuộn không quá sát */
-  scrollbar-width: thin;
-  /* Cho Firefox */
-}
-
-.news-scroll-container::-webkit-scrollbar {
-  height: 8px;
-}
-
-.news-scroll-container::-webkit-scrollbar-thumb {
-  background-color: #ddd;
-  border-radius: 4px;
-}
-
-.news-card {
-  flex: 0 0 260px;
-  /* Cho card có chiều rộng cố định 260px */
-  min-width: 260px;
-  border: 1px solid #eee;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #fdfdfd;
-  transition: all 0.25s ease;
-  text-decoration: none;
-  color: #333;
-}
-
-.news-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.08);
-}
-
-.news-card-image {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  /* Giữ tỉ lệ 16:9 cho ảnh */
-  overflow: hidden;
-  background: #f5f5f5;
-}
-
-.news-card-image img {
-  width: 100%;
-  height: 100%;
-  /* Đảm bảo ảnh lấp đầy khung */
-  object-fit: cover;
-}
-
-.news-card-title {
-  font-size: 1em;
-  font-weight: 600;
-  padding: 12px 15px;
-  line-height: 1.4;
-
-  /* Giới hạn 2 dòng cho tiêu đề */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  height: 56px;
-  /* (line-height * font-size * 2 lines) + ~padding */
-}
-
-
-/* === CSS PROMO BANNER (Giữ nguyên) === */
 .promo-section-wrapper {
   background: white;
   border-radius: 12px;
