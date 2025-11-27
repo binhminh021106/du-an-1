@@ -47,6 +47,14 @@ const newsList = ref([]);
 const activeCategoryId = ref(null);
 const currentSlide = ref(0);
 let interval = null;
+const productContainer = ref(null);
+
+// Fake Voucher
+const vouchers = ref([
+    { id: 1, code: 'GIAM10K', desc: 'Giảm 10k đơn 0đ', percent: 10 },
+    { id: 2, code: 'FREESHIP', desc: 'Miễn phí vận chuyển', percent: 100 },
+    { id: 3, code: 'SALE50', desc: 'Giảm 50% tối đa 50k', percent: 50 },
+]);
 
 // --- FETCH DATA ---
 const fetchData = async () => {
@@ -87,10 +95,7 @@ const categoriesWithProducts = computed(() => {
         const categoryProducts = products.value.filter(p =>
             String(p.category?.id) === String(category.id)
         );
-        return {
-            ...category,
-            products: categoryProducts.slice(0, 8)
-        };
+        return { ...category, products: categoryProducts.slice(0, 8) };
     }).filter(category => category.products.length > 0);
 });
 
@@ -107,6 +112,14 @@ const nextSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.va
 const prevSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.value - 1 + slides.value.length) % slides.value.length; };
 const goToSlide = (index) => { stopAutoSlide(); currentSlide.value = index; };
 
+const scrollProducts = (direction) => {
+    if (!productContainer.value) return;
+    const containerWidth = productContainer.value.clientWidth;
+    const scrollAmount = containerWidth * 0.8; 
+    direction === 'left' 
+        ? productContainer.value.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
+        : productContainer.value.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+};
 
 // --- HELPER FUNCTIONS ---
 const setActiveCategory = (id) => { activeCategoryId.value = String(id); };
@@ -127,8 +140,10 @@ const onAddToCart = (product) => {
     alert(`Đã thêm vào giỏ: ${product.name}`);
 };
 
+const onAddToWishlist = (product) => alert(`Đã thêm vào yêu thích: ${product.name}`);
+const saveVoucher = (code) => alert(`Đã lưu mã giảm giá: ${code}`);
 
-// --- LIFECYCLE HOOKS ---
+// --- LIFECYCLE ---
 onMounted(async () => {
     await fetchData();
     startAutoSlide();
@@ -138,8 +153,9 @@ onBeforeUnmount(stopAutoSlide);
 
 <template>
     <div id="app">
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        
         <main class="container">
-
             <section class="top-section-layout">
                 <nav class="categories-sidebar">
                     <h3 class="sidebar-title">

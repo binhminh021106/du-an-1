@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, watch, computed, nextTick } from "vue";
+// Giả định các store này tồn tại trong dự án của bạn như code gốc
 import { cart, total, removeItem, updateItemQty, saveCart } from "./user/cartStore.js";
 import { addOrder } from './user/orderStore.js';
 
@@ -62,6 +63,19 @@ const discountAmount = ref(0);
 const appliedCoupon = ref("");
 const couponMessage = ref("");
 
+// --- NEW: DANH SÁCH MÃ GIẢM GIÁ CÓ SẴN ---
+const availableCoupons = [
+  { code: "GIAM10", label: "Giảm 10%", desc: "Cho mọi đơn hàng" },
+  { code: "GIAM20", label: "Giảm 20%", desc: "Đơn từ 500k" },
+  { code: "FREESHIP", label: "FreeShip", desc: "Miễn phí vận chuyển" },
+];
+
+const quickApplyCoupon = (code) => {
+  couponCode.value = code;
+  applyCoupon(); // Tái sử dụng hàm logic cũ
+};
+// ------------------------------------------
+
 // Modal
 const showModal = ref(false);
 const modalContent = ref({});
@@ -78,7 +92,7 @@ onMounted(async () => {
       const parsed = JSON.parse(userDataString);
       const userData = parsed.user || parsed.data || parsed;
 
-      console.log("User Data for Checkout:", userData);
+      // console.log("User Data for Checkout:", userData);
 
       form.name = userData.fullName || userData.name || "";
       form.email = userData.email || "";
@@ -143,6 +157,9 @@ watch(selectedProvince, (val) => {
     selectedWard.value = "";
   }
   shippingCost.value = shippingFees[val] ?? 30000;
+  
+  // Re-check coupon if freeship depends on location change
+  if(appliedCoupon.value === 'FREESHIP') applyCoupon();
 });
 
 watch(selectedDistrict, (val) => {
@@ -177,9 +194,14 @@ const applyCoupon = () => {
     appliedCoupon.value = "GIAM10";
     couponMessage.value = "Đã áp dụng mã giảm 10%!";
   } else if (code === "GIAM20") {
-    discountAmount.value = subtotal.value * 0.2;
-    appliedCoupon.value = "GIAM20";
-    couponMessage.value = "Đã áp dụng mã giảm 20%!";
+    // Ví dụ logic check điều kiện
+    if(subtotal.value >= 500000) {
+        discountAmount.value = subtotal.value * 0.2;
+        appliedCoupon.value = "GIAM20";
+        couponMessage.value = "Đã áp dụng mã giảm 20%!";
+    } else {
+        couponMessage.value = "Đơn hàng chưa đủ 500k để dùng mã này.";
+    }
   } else if (code === "FREESHIP") {
     if (shippingCost.value > 0) {
       discountAmount.value = shippingCost.value;
@@ -187,6 +209,7 @@ const applyCoupon = () => {
       couponMessage.value = "Đã miễn phí vận chuyển!";
     } else {
       couponMessage.value = "Đơn này đã được freeship sẵn!";
+      appliedCoupon.value = "FREESHIP"; // Vẫn tính là đã apply
     }
   } else {
     couponMessage.value = "Mã giảm giá không hợp lệ.";
@@ -428,7 +451,7 @@ const confirmCheckout = () => {
           <span>{{ totalPrice.toLocaleString() }} đ</span>
         </div>
 
-        <!-- MÃ GIẢM GIÁ -->
+        <!-- KHU VỰC NHẬP MÃ GIẢM GIÁ CŨ -->
         <div class="coupon-section">
           <label>Mã giảm giá</label>
           <div class="coupon-input-group">
@@ -439,6 +462,36 @@ const confirmCheckout = () => {
             {{ couponMessage }}
           </p>
         </div>
+
+        <!-- NEW: KHU VỰC DANH SÁCH VOUCHER CÓ SẴN -->
+        <div class="available-vouchers-container">
+            <div class="voucher-header">
+                <i class="fa-solid fa-ticket"></i> Mã ưu đãi dành cho bạn
+            </div>
+            <div class="voucher-list">
+                <div 
+                    v-for="cp in availableCoupons" 
+                    :key="cp.code" 
+                    class="voucher-ticket"
+                    :class="{ 'active': appliedCoupon === cp.code }"
+                    @click="quickApplyCoupon(cp.code)"
+                >
+                    <div class="voucher-left">
+                        <div class="voucher-code">{{ cp.code }}</div>
+                        <div class="voucher-label">{{ cp.label }}</div>
+                    </div>
+                    <div class="voucher-right">
+                        <div class="voucher-desc">{{ cp.desc }}</div>
+                        <span class="apply-tag" v-if="appliedCoupon !== cp.code">Dùng ngay</span>
+                        <span class="apply-tag used" v-else><i class="fa-solid fa-check"></i> Đã dùng</span>
+                    </div>
+                    <!-- Họa tiết răng cưa trang trí -->
+                    <div class="circle-notch top"></div>
+                    <div class="circle-notch bottom"></div>
+                </div>
+            </div>
+        </div>
+        <!-- END NEW -->
 
         <button type="button" @click="confirmCheckout" class="checkout-btn">Xác nhận thanh toán</button>
       </div>
@@ -472,6 +525,7 @@ const confirmCheckout = () => {
 </template>
 
 <style scoped>
+/* GIỮ NGUYÊN CSS CŨ */
 .checkout-page {
   font-family: Arial, sans-serif;
   padding: 40px 20px;
@@ -793,6 +847,7 @@ const confirmCheckout = () => {
   font-weight: 500;
 }
 
+/* --- CSS CHO MODAL --- */
 .custom-modal-overlay {
   position: fixed;
   inset: 0;
@@ -880,5 +935,128 @@ const confirmCheckout = () => {
 
 .modal-ok-btn:hover {
   background: #006e61;
+}
+
+/* --- NEW CSS: AVAILABLE VOUCHERS --- */
+.available-vouchers-container {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px dashed #ccc;
+}
+
+.voucher-header {
+    font-size: 15px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.voucher-header i {
+    color: #e67e22; /* Màu cam vé */
+}
+
+.voucher-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.voucher-ticket {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fdfdfd;
+    border: 1px solid #ddd;
+    border-left: 5px solid #009981; /* Màu xanh chủ đạo */
+    border-radius: 6px;
+    padding: 10px 15px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+    overflow: hidden;
+}
+
+.voucher-ticket:hover {
+    background-color: #f0fdfa;
+    border-color: #009981;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+.voucher-ticket.active {
+    background-color: #e6fffa;
+    border-color: #009981;
+    border-left: 5px solid #e67e22; /* Active đổi màu cam cho nổi */
+}
+
+.voucher-left {
+    display: flex;
+    flex-direction: column;
+}
+
+.voucher-code {
+    font-weight: bold;
+    color: #009981;
+    font-size: 14px;
+}
+
+.voucher-label {
+    font-weight: bold;
+    font-size: 16px;
+    color: #333;
+}
+
+.voucher-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.voucher-desc {
+    font-size: 12px;
+    color: #777;
+}
+
+.apply-tag {
+    font-size: 12px;
+    padding: 4px 8px;
+    background: #009981;
+    color: white;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+.apply-tag.used {
+    background: #e67e22;
+}
+
+/* Tạo hiệu ứng khuyết tròn 2 bên (vé rách) */
+.circle-notch {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    background-color: #fff; /* Trùng màu nền cha */
+    border-radius: 50%;
+    border: 1px solid #ddd;
+    right: 80px; /* Vị trí vết cắt */
+}
+
+.voucher-ticket:hover .circle-notch {
+    border-color: #009981;
+    background-color: #f0fdfa; /* Trùng màu nền hover */
+}
+
+.circle-notch.top {
+    top: -9px;
+    border-bottom-color: transparent; /* Che viền dưới để giống rách */
+}
+
+.circle-notch.bottom {
+    bottom: -9px;
+    border-top-color: transparent;
 }
 </style>
