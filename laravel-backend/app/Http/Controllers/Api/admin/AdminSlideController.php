@@ -85,9 +85,6 @@ class AdminSlideController extends Controller
         return response()->json($slide);
     }
 
-    /**
-     * Cập nhật Slide (SỬA LỖI 500 KHI PARTIAL UPDATE)
-     */
     public function update(Request $request, string $id)
     {
         $slide = Slide::findOrFail($id);

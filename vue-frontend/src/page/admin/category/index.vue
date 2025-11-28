@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-import apiService from '../../../apiService.js';
+import apiService from '../../../apiService.js'; // Đảm bảo đường dẫn đúng
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
@@ -9,6 +9,10 @@ const isLoading = ref(true);
 const isEditMode = ref(false);
 const categories = ref([]); // Dữ liệu gốc
 const activeTab = ref('active'); // Tab mặc định: Hoạt động
+
+// State theo dõi hành động sắp xếp đang xử lý { id: number, direction: string }
+// Để hiển thị spinner và disable nút
+const processingAction = ref({ id: null, direction: null });
 
 // State cho Modal Thêm/Sửa
 const modalInstance = ref(null);
@@ -37,12 +41,16 @@ const errors = reactive({ name: '', description: '', icon: '', order: '' });
 // 1. Lọc Search trước trên toàn bộ dữ liệu
 const searchResults = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
-  if (!query) return categories.value;
+  let list = categories.value;
 
-  return categories.value.filter(category =>
-    category.name.toLowerCase().includes(query) ||
-    (category.description && category.description.toLowerCase().includes(query))
-  );
+  if (query) {
+    list = list.filter(category =>
+      category.name.toLowerCase().includes(query) ||
+      (category.description && category.description.toLowerCase().includes(query))
+    );
+  }
+  // Luôn sắp xếp theo order để hiển thị đúng vị trí
+  return list.sort((a, b) => a.order - b.order);
 });
 
 // 2. Chia danh sách theo trạng thái
@@ -53,13 +61,13 @@ const disabledList = computed(() => searchResults.value.filter(c => c.status ===
 function getPaginatedData(list, type) {
   const pageInfo = pagination[type];
   const totalPages = Math.max(1, Math.ceil(list.length / pageInfo.itemsPerPage));
-  
+
   // Reset về trang 1 nếu trang hiện tại vượt quá tổng số trang
   if (pageInfo.currentPage > totalPages) pageInfo.currentPage = 1;
 
   const start = (pageInfo.currentPage - 1) * pageInfo.itemsPerPage;
   const end = start + pageInfo.itemsPerPage;
-  
+
   return {
     data: list.slice(start, end),
     totalPages: totalPages,
@@ -160,6 +168,72 @@ function openViewModal(category) {
   viewModalInstance.value.show();
 }
 
+// --- LOGIC SẮP XẾP (MOVE ITEM) ---
+async function moveCategory(item, direction) {
+  // Chặn nếu đang có tiến trình xử lý khác
+  if (processingAction.value.id) return;
+
+  // Set trạng thái đang xử lý để hiện spinner và disable nút
+  processingAction.value = { id: item.id, direction: direction };
+
+  const listContext = item.status === 'active' ? activeList.value : disabledList.value;
+  const sortedList = [...listContext].sort((a, b) => a.order - b.order);
+  const currentIndex = sortedList.findIndex(i => i.id === item.id);
+
+  if (currentIndex === -1) {
+    processingAction.value = { id: null, direction: null };
+    return;
+  }
+
+  let targetItem = null;
+  if (direction === 'up' && currentIndex > 0) targetItem = sortedList[currentIndex - 1];
+  else if (direction === 'down' && currentIndex < sortedList.length - 1) targetItem = sortedList[currentIndex + 1];
+  else if (direction === 'top' && currentIndex > 0) targetItem = sortedList[0];
+  else if (direction === 'bottom' && currentIndex < sortedList.length - 1) targetItem = sortedList[sortedList.length - 1];
+
+  if (!targetItem) {
+    processingAction.value = { id: null, direction: null };
+    return;
+  }
+
+  const tempOrder = item.order;
+  const targetOrder = targetItem.order;
+
+  // SỬ DỤNG FORMDATA VÀ POST (_method: PUT) ĐỂ TRÁNH LỖI 422
+  const formDataItem = new FormData();
+  formDataItem.append('order', targetOrder);
+  formDataItem.append('_method', 'PUT');
+
+  const formDataTarget = new FormData();
+  formDataTarget.append('order', tempOrder);
+  formDataTarget.append('_method', 'PUT');
+
+  // Không set isLoading toàn trang (biến isLoading) để tránh reload lại cả bảng
+  // Chúng ta chỉ dùng spinner cục bộ tại nút bấm
+  try {
+    await Promise.all([
+      // Dùng POST thay vì PUT để PHP dễ dàng đọc được FormData
+      apiService.post(`admin/categories/${item.id}`, formDataItem),
+      apiService.post(`admin/categories/${targetItem.id}`, formDataTarget)
+    ]);
+
+    await fetchCategories();
+
+    const Toast = Swal.mixin({
+      toast: true, position: 'top-end', showConfirmButton: false, timer: 1500
+    });
+    Toast.fire({ icon: 'success', title: 'Đã sắp xếp lại' });
+
+  } catch (error) {
+    console.error("Lỗi sắp xếp category:", error);
+    Swal.fire('Lỗi', 'Không thể thay đổi thứ tự.', 'error');
+  } finally {
+    // Reset trạng thái xử lý
+    processingAction.value = { id: null, direction: null };
+  }
+}
+
+
 // --- LIFECYCLE ---
 onMounted(() => {
   fetchCategories();
@@ -175,17 +249,17 @@ onMounted(() => {
 
 // Lấy danh sách danh mục
 async function fetchCategories() {
-  // Smart Spinner: Chỉ hiện loading lớn nếu chưa có dữ liệu
   if (categories.value.length === 0) {
     isLoading.value = true;
   }
-  
+
   try {
     const response = await apiService.get(`admin/categories`);
+    // Backend đã sort, nhưng client sort thêm lần nữa để chắc chắn
     categories.value = response.data.map(cat => ({
       ...cat,
       created_at: cat.created_at || new Date().toISOString()
-    })).sort((a, b) => a.order - b.order); // Sắp xếp theo thứ tự
+    })).sort((a, b) => a.order - b.order);
   } catch (error) {
     console.error("Lỗi tải danh mục:", error);
     Swal.fire('Lỗi', 'Không thể tải danh sách danh mục.', 'error');
@@ -230,9 +304,6 @@ async function handleSave() {
     if (!result.isConfirmed) return;
   }
 
-  // Optimistic Update Logic could be complex here due to IDs, 
-  // so we stick to standard flow but manage loading state smartly.
-  
   let payload = {
     name: formData.name,
     description: formData.description,
@@ -250,7 +321,7 @@ async function handleSave() {
       Swal.fire('Thành công', 'Đã tạo danh mục mới!', 'success');
     }
     modalInstance.value.hide();
-    fetchCategories(); // Silent refresh
+    fetchCategories();
   } catch (apiError) {
     console.error("Lỗi lưu:", apiError);
     if (apiError.response?.data?.errors?.name) {
@@ -279,25 +350,20 @@ async function toggleStatus(category) {
   });
 
   if (result.isConfirmed) {
-    // 1. Update UI immediately (Item sẽ tự động bay sang tab kia)
     category.status = newStatus;
-
-    // 2. Call API
     try {
-      await apiService.patch(`admin/categories/${category.id}`, { status: newStatus });
-      
-      // Toast thông báo nhỏ
+      // Backend controller hỗ trợ update status riêng lẻ
+      await apiService.put(`admin/categories/${category.id}`, { status: newStatus });
+
       const Toast = Swal.mixin({
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 2000,
-        timerProgressBar: true
+        toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, timerProgressBar: true
       });
       Toast.fire({ icon: 'success', title: 'Cập nhật thành công' });
 
+      // Gọi lại fetch để list tự động chuyển item sang tab khác
+      fetchCategories();
+
     } catch (error) {
-      // Rollback nếu lỗi
       category.status = oldStatus;
       Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
     }
@@ -312,7 +378,7 @@ async function handleDelete(category) {
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#d33',
-    cancelButtonColor: '#3085d6',
+    cancelButtonColor: '#d33',
     confirmButtonText: 'Xóa',
     cancelButtonText: 'Hủy'
   });
@@ -320,10 +386,7 @@ async function handleDelete(category) {
   if (result.isConfirmed) {
     try {
       await apiService.delete(`admin/categories/${category.id}`);
-      
-      // Xóa khỏi list local
       categories.value = categories.value.filter(c => c.id !== category.id);
-      
       Swal.fire('Đã xóa!', 'Danh mục đã bị xóa.', 'success');
     } catch (error) {
       console.error("Lỗi xóa:", error);
@@ -358,15 +421,15 @@ async function handleDelete(category) {
         <div class="card-header border-bottom-0 pb-0">
           <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
             <h3 class="card-title">Danh sách Danh mục</h3>
-            
+
             <!-- TOOLBAR -->
             <div class="d-flex gap-2 flex-grow-1 justify-content-end" style="max-width: 600px;">
               <div class="input-group" style="min-width: 200px;">
                 <span class="input-group-text bg-white border-end-0">
                   <i class="bi bi-search text-muted"></i>
                 </span>
-                <input type="text" class="form-control border-start-0 ps-0"
-                  placeholder="Tìm kiếm theo tên..." v-model="searchQuery">
+                <input type="text" class="form-control border-start-0 ps-0" placeholder="Tìm kiếm theo tên..."
+                  v-model="searchQuery">
               </div>
               <button type="button" class="btn btn-primary text-nowrap" @click="openCreateModal">
                 <i class="bi bi-plus-lg"></i> Thêm mới
@@ -377,13 +440,15 @@ async function handleDelete(category) {
           <!-- TABS NAVIGATION -->
           <ul class="nav nav-tabs card-header-tabs">
             <li class="nav-item">
-              <a class="nav-link" :class="{ active: activeTab === 'active' }" href="#" @click.prevent="setActiveTab('active')">
+              <a class="nav-link" :class="{ active: activeTab === 'active' }" href="#"
+                @click.prevent="setActiveTab('active')">
                 <i class="bi bi-check-circle me-1 text-success"></i> Hoạt động
                 <span class="badge rounded-pill bg-success ms-1">{{ activeList.length }}</span>
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" :class="{ active: activeTab === 'disabled' }" href="#" @click.prevent="setActiveTab('disabled')">
+              <a class="nav-link" :class="{ active: activeTab === 'disabled' }" href="#"
+                @click.prevent="setActiveTab('disabled')">
                 <i class="bi bi-dash-circle me-1 text-secondary"></i> Vô hiệu hóa
                 <span class="badge rounded-pill bg-secondary ms-1">{{ disabledList.length }}</span>
               </a>
@@ -392,20 +457,21 @@ async function handleDelete(category) {
         </div>
 
         <div class="card-body p-0">
-          
+
           <!-- Loading Spinner (Chỉ hiện lần đầu) -->
           <div v-if="isLoading && categories.length === 0" class="text-center p-5">
             <div class="spinner-border text-primary" role="status"></div>
           </div>
 
           <div v-else class="tab-content p-0">
-            
+
             <!-- TAB: ACTIVE -->
             <div class="tab-pane fade show active" v-if="activeTab === 'active'">
               <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                   <thead class="table-light">
                     <tr>
+                      <th style="width: 160px" class="text-center">Sắp xếp</th>
                       <th style="width: 50px;">ID</th>
                       <th style="width: 80px;" class="text-center">Icon</th>
                       <th>Tên danh mục</th>
@@ -417,32 +483,71 @@ async function handleDelete(category) {
                   </thead>
                   <tbody>
                     <tr v-if="pagedActive.data.length === 0">
-                      <td colspan="7" class="text-center py-4 text-muted">Không có danh mục hoạt động nào.</td>
+                      <td colspan="8" class="text-center py-4 text-muted">Không có danh mục hoạt động nào.</td>
                     </tr>
                     <tr v-for="category in pagedActive.data" :key="category.id">
+                      <!-- SORT CONTROLS -->
+                      <td class="text-center">
+                        <div class="btn-group btn-group-sm" role="group">
+                          <!-- Nút Lên đầu -->
+                          <button type="button" class="btn btn-outline-secondary" title="Lên đầu"
+                            :disabled="processingAction.id !== null" @click="moveCategory(category, 'top')">
+                            <span v-if="processingAction.id === category.id && processingAction.direction === 'top'"
+                              class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <i v-else class="bi bi-chevron-double-up"></i>
+                          </button>
+                          <!-- Nút Lên -->
+                          <button type="button" class="btn btn-outline-secondary" title="Lên"
+                            :disabled="processingAction.id !== null" @click="moveCategory(category, 'up')">
+                            <span v-if="processingAction.id === category.id && processingAction.direction === 'up'"
+                              class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <i v-else class="bi bi-chevron-up"></i>
+                          </button>
+                          <!-- Nút Xuống -->
+                          <button type="button" class="btn btn-outline-secondary" title="Xuống"
+                            :disabled="processingAction.id !== null" @click="moveCategory(category, 'down')">
+                            <span v-if="processingAction.id === category.id && processingAction.direction === 'down'"
+                              class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <i v-else class="bi bi-chevron-down"></i>
+                          </button>
+                          <!-- Nút Xuống cuối -->
+                          <button type="button" class="btn btn-outline-secondary" title="Xuống cuối"
+                            :disabled="processingAction.id !== null" @click="moveCategory(category, 'bottom')">
+                            <span v-if="processingAction.id === category.id && processingAction.direction === 'bottom'"
+                              class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <i v-else class="bi bi-chevron-double-down"></i>
+                          </button>
+                        </div>
+                      </td>
+
                       <td>{{ category.id }}</td>
                       <td class="text-center fs-4 text-primary">
                         <span v-if="category.icon" v-html="category.icon"></span>
                         <span v-else class="text-muted fs-6 small">(Trống)</span>
                       </td>
                       <td class="fw-bold">{{ category.name }}</td>
-                      <td class="d-none d-md-table-cell text-truncate" style="max-width: 200px;" :title="category.description">
+                      <td class="d-none d-md-table-cell text-truncate" style="max-width: 200px;"
+                        :title="category.description">
                         {{ category.description || '...' }}
                       </td>
-                      <td class="text-center">{{ category.order }}</td>
+                      <td class="text-center">
+                        <span class="badge bg-light text-dark border">{{ category.order }}</span>
+                      </td>
                       <td class="text-center">
                         <div class="form-check form-switch d-inline-block">
                           <input class="form-check-input" type="checkbox" role="switch"
-                            style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                            :checked="true"
+                            style="width: 2.5em; height: 1.25em; cursor: pointer;" :checked="true"
                             @click.prevent="toggleStatus(category)" title="Nhấn để vô hiệu hóa">
                         </div>
                       </td>
                       <td class="text-center">
                         <div class="btn-group btn-group-sm">
-                          <button class="btn btn-outline-secondary" title="Xem" @click="openViewModal(category)"><i class="bi bi-eye"></i></button>
-                          <button class="btn btn-outline-primary" title="Sửa" @click="openEditModal(category)"><i class="bi bi-pencil"></i></button>
-                          <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(category)"><i class="bi bi-trash"></i></button>
+                          <button class="btn btn-outline-secondary" title="Xem" @click="openViewModal(category)"><i
+                              class="bi bi-eye"></i></button>
+                          <button class="btn btn-outline-primary" title="Sửa" @click="openEditModal(category)"><i
+                              class="bi bi-pencil"></i></button>
+                          <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(category)"><i
+                              class="bi bi-trash"></i></button>
                         </div>
                       </td>
                     </tr>
@@ -453,13 +558,16 @@ async function handleDelete(category) {
               <div v-if="pagedActive.totalPages > 1" class="d-flex justify-content-end p-3">
                 <ul class="pagination pagination-sm mb-0">
                   <li class="page-item" :class="{ disabled: pagination.active.currentPage === 1 }">
-                    <a class="page-link" href="#" @click.prevent="changePage('active', pagination.active.currentPage - 1)">&laquo;</a>
+                    <a class="page-link" href="#"
+                      @click.prevent="changePage('active', pagination.active.currentPage - 1)">&laquo;</a>
                   </li>
-                  <li v-for="p in pagedActive.totalPages" :key="p" class="page-item" :class="{ active: pagination.active.currentPage === p }">
+                  <li v-for="p in pagedActive.totalPages" :key="p" class="page-item"
+                    :class="{ active: pagination.active.currentPage === p }">
                     <a class="page-link" href="#" @click.prevent="changePage('active', p)">{{ p }}</a>
                   </li>
                   <li class="page-item" :class="{ disabled: pagination.active.currentPage === pagedActive.totalPages }">
-                    <a class="page-link" href="#" @click.prevent="changePage('active', pagination.active.currentPage + 1)">&raquo;</a>
+                    <a class="page-link" href="#"
+                      @click.prevent="changePage('active', pagination.active.currentPage + 1)">&raquo;</a>
                   </li>
                 </ul>
               </div>
@@ -471,6 +579,7 @@ async function handleDelete(category) {
                 <table class="table table-hover align-middle mb-0">
                   <thead class="table-light">
                     <tr>
+                      <th style="width: 160px" class="text-center">Sắp xếp</th>
                       <th style="width: 50px;">ID</th>
                       <th style="width: 80px;" class="text-center">Icon</th>
                       <th>Tên danh mục</th>
@@ -482,9 +591,44 @@ async function handleDelete(category) {
                   </thead>
                   <tbody>
                     <tr v-if="pagedDisabled.data.length === 0">
-                      <td colspan="7" class="text-center py-4 text-muted">Không có danh mục bị vô hiệu hóa.</td>
+                      <td colspan="8" class="text-center py-4 text-muted">Không có danh mục bị vô hiệu hóa.</td>
                     </tr>
                     <tr v-for="category in pagedDisabled.data" :key="category.id" class="text-muted bg-light">
+
+                      <!-- SORT CONTROLS -->
+                      <td class="text-center">
+                        <div class="btn-group btn-group-sm" role="group">
+                          <!-- Nút Lên đầu -->
+                          <button type="button" class="btn btn-outline-secondary" title="Lên đầu"
+                            :disabled="processingAction.id !== null" @click="moveCategory(category, 'top')">
+                            <span v-if="processingAction.id === category.id && processingAction.direction === 'top'"
+                              class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <i v-else class="bi bi-chevron-double-up"></i>
+                          </button>
+                          <!-- Nút Lên -->
+                          <button type="button" class="btn btn-outline-secondary" title="Lên"
+                            :disabled="processingAction.id !== null" @click="moveCategory(category, 'up')">
+                            <span v-if="processingAction.id === category.id && processingAction.direction === 'up'"
+                              class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <i v-else class="bi bi-chevron-up"></i>
+                          </button>
+                          <!-- Nút Xuống -->
+                          <button type="button" class="btn btn-outline-secondary" title="Xuống"
+                            :disabled="processingAction.id !== null" @click="moveCategory(category, 'down')">
+                            <span v-if="processingAction.id === category.id && processingAction.direction === 'down'"
+                              class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <i v-else class="bi bi-chevron-down"></i>
+                          </button>
+                          <!-- Nút Xuống cuối -->
+                          <button type="button" class="btn btn-outline-secondary" title="Xuống cuối"
+                            :disabled="processingAction.id !== null" @click="moveCategory(category, 'bottom')">
+                            <span v-if="processingAction.id === category.id && processingAction.direction === 'bottom'"
+                              class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <i v-else class="bi bi-chevron-double-down"></i>
+                          </button>
+                        </div>
+                      </td>
+
                       <td>{{ category.id }}</td>
                       <td class="text-center fs-4 text-secondary grayscale">
                         <span v-if="category.icon" v-html="category.icon"></span>
@@ -497,16 +641,18 @@ async function handleDelete(category) {
                       <td class="text-center">
                         <div class="form-check form-switch d-inline-block">
                           <input class="form-check-input" type="checkbox" role="switch"
-                            style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                            :checked="false"
+                            style="width: 2.5em; height: 1.25em; cursor: pointer;" :checked="false"
                             @click.prevent="toggleStatus(category)" title="Nhấn để kích hoạt lại">
                         </div>
                       </td>
                       <td class="text-center">
                         <div class="btn-group btn-group-sm">
-                          <button class="btn btn-outline-secondary" title="Xem" @click="openViewModal(category)"><i class="bi bi-eye"></i></button>
-                          <button class="btn btn-outline-primary" title="Sửa" @click="openEditModal(category)"><i class="bi bi-pencil"></i></button>
-                          <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(category)"><i class="bi bi-trash"></i></button>
+                          <button class="btn btn-outline-secondary" title="Xem" @click="openViewModal(category)"><i
+                              class="bi bi-eye"></i></button>
+                          <button class="btn btn-outline-primary" title="Sửa" @click="openEditModal(category)"><i
+                              class="bi bi-pencil"></i></button>
+                          <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(category)"><i
+                              class="bi bi-trash"></i></button>
                         </div>
                       </td>
                     </tr>
@@ -517,13 +663,17 @@ async function handleDelete(category) {
               <div v-if="pagedDisabled.totalPages > 1" class="d-flex justify-content-end p-3">
                 <ul class="pagination pagination-sm mb-0">
                   <li class="page-item" :class="{ disabled: pagination.disabled.currentPage === 1 }">
-                    <a class="page-link" href="#" @click.prevent="changePage('disabled', pagination.disabled.currentPage - 1)">&laquo;</a>
+                    <a class="page-link" href="#"
+                      @click.prevent="changePage('disabled', pagination.disabled.currentPage - 1)">&laquo;</a>
                   </li>
-                  <li v-for="p in pagedDisabled.totalPages" :key="p" class="page-item" :class="{ active: pagination.disabled.currentPage === p }">
+                  <li v-for="p in pagedDisabled.totalPages" :key="p" class="page-item"
+                    :class="{ active: pagination.disabled.currentPage === p }">
                     <a class="page-link" href="#" @click.prevent="changePage('disabled', p)">{{ p }}</a>
                   </li>
-                  <li class="page-item" :class="{ disabled: pagination.disabled.currentPage === pagedDisabled.totalPages }">
-                    <a class="page-link" href="#" @click.prevent="changePage('disabled', pagination.disabled.currentPage + 1)">&raquo;</a>
+                  <li class="page-item"
+                    :class="{ disabled: pagination.disabled.currentPage === pagedDisabled.totalPages }">
+                    <a class="page-link" href="#"
+                      @click.prevent="changePage('disabled', pagination.disabled.currentPage + 1)">&raquo;</a>
                   </li>
                 </ul>
               </div>
@@ -649,17 +799,17 @@ async function handleDelete(category) {
                 <span class="badge bg-primary rounded-pill">{{ viewingCategory.order }}</span>
               </div>
             </div>
-             <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-card-text me-3 text-muted"></i>Mô tả</h6>
-               <p class="mb-1 text-muted small">{{ viewingCategory.description || 'Không có mô tả.' }}</p>
+            <div class="list-group-item px-0">
+              <h6 class="mb-2"><i class="bi bi-card-text me-3 text-muted"></i>Mô tả</h6>
+              <p class="mb-1 text-muted small">{{ viewingCategory.description || 'Không có mô tả.' }}</p>
             </div>
             <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-code-slash me-3 text-info"></i>Mã Icon</h6>
-               <code class="mb-1 text-dark small">{{ viewingCategory.icon || 'Chưa có icon.' }}</code>
+              <h6 class="mb-2"><i class="bi bi-code-slash me-3 text-info"></i>Mã Icon</h6>
+              <code class="mb-1 text-dark small">{{ viewingCategory.icon || 'Chưa có icon.' }}</code>
             </div>
             <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-calendar-event me-3 text-muted"></i>Ngày tạo</h6>
-               <p class="mb-1 text-muted small">{{ getFormattedDate(viewingCategory.created_at) }}</p>
+              <h6 class="mb-2"><i class="bi bi-calendar-event me-3 text-muted"></i>Ngày tạo</h6>
+              <p class="mb-1 text-muted small">{{ getFormattedDate(viewingCategory.created_at) }}</p>
             </div>
           </div>
         </div>
@@ -681,22 +831,33 @@ async function handleDelete(category) {
   color: #6c757d;
   font-weight: 500;
 }
+
 .nav-tabs .nav-link.active {
   color: #0d6efd;
   border-bottom-color: #fff;
 }
+
 .pagination .page-link {
   cursor: pointer;
 }
+
 .table td .btn {
   margin: 2px;
 }
+
 .required::after {
   content: " *";
   color: red;
 }
+
 .grayscale {
   filter: grayscale(100%);
   opacity: 0.6;
+}
+
+/* Thêm style cho các nút sắp xếp nhỏ gọn */
+.table td .btn-group button {
+  padding: 0.25rem 0.4rem;
+  font-size: 0.75rem;
 }
 </style>

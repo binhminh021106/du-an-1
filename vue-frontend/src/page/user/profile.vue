@@ -25,8 +25,8 @@ const editUser = reactive({
   avatar: "https://via.placeholder.com/150",
   name: "",
   email: "",
-  birthday: "", // Thay thế age bằng birthday
-  sex: "Nam",   // Thay gender bằng sex cho khớp DB
+  birthday: "",
+  sex: "Nam",
   phone: "",
   addresses: [],
 });
@@ -261,13 +261,13 @@ const saveProfile = () => {
   }
 
   Swal.fire({
-  icon: 'success',
-  title: 'Cập nhật hồ sơ thành công!',
-  showConfirmButton: false,
-  timer: 1500,
-  background: '#f0fff4',
-  color: '#009981',
-});
+    icon: 'success',
+    title: 'Cập nhật hồ sơ thành công!',
+    showConfirmButton: false,
+    timer: 1500,
+    background: '#f0fff4',
+    color: '#009981',
+  });
 
 };
 </script>
@@ -429,8 +429,8 @@ const saveProfile = () => {
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="showModal = false">Hủy</button>
-          <button class="btn-primary" @click="saveAddressFromModal">Lưu</button>
+          <button class="btn btn-danger" @click="showModal = false">Hủy</button>
+          <button class="btn btn-primary" @click="saveAddressFromModal">Lưu</button>
         </div>
       </div>
     </div>
@@ -586,8 +586,7 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 5px;
-  position: absolute;
-  right: 0;
+  margin-left: auto;
 }
 
 .address-item {
@@ -660,24 +659,6 @@ textarea:focus {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-}
-
-.btn-primary {
-  background: #009981;
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.btn-secondary {
-  background: #eb5353;
-  color: #fff;
-  border: 1px solid #ddd;
-  padding: 10px 20px;
-  border-radius: 4px;
-  cursor: pointer;
 }
 
 .save-btn {
