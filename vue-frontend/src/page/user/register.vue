@@ -14,6 +14,10 @@ const formData = reactive({
     confirmPassword: '',
 });
 
+const loginWithGoogle = () => {
+    window.location.href = 'http://127.0.0.1:8000/api/auth/google';
+};
+
 const error = reactive({
     fullName: '',
     email: '',
@@ -239,7 +243,7 @@ const handleRegister = async () => {
 
                 <div class="separator">Hoặc đăng ký bằng</div>
                 <div class="social-login">
-                    <button class="social-btn">
+                    <button @click="loginWithGoogle" class="social-btn">
                         <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg"
                             alt="Google">
                         Google

@@ -45,6 +45,9 @@ use App\Http\Controllers\Api\admin\AdminAttributeController;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
+Route::get('auth/google', [AuthController::class, 'redirectToGoogle']);
+Route::get('auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
+
 Route::post('/admin/register', [AdminAuthController::class, 'register']);
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
@@ -101,10 +104,10 @@ Route::group([
     Route::apiResource('products', AdminProductController::class);
     Route::apiResource('categories', AdminCategoryController::class);
     Route::apiResource('users', AdminUserController::class);
-    
+
     // Resource variants chuẩn (CRUD cơ bản)
     Route::apiResource('variants', AdminVariantController::class);
-    
+
     // Route này ánh xạ POST /api/admin/variants/{id}/attributes -> hàm updateAttributes
     Route::post('variants/{id}/attributes', [AdminVariantController::class, 'updateAttributes']);
 
@@ -113,7 +116,7 @@ Route::group([
     Route::delete('coupons/{id}/force', [AdminCouponController::class, 'forceDelete']);
     Route::apiResource('comments', AdminCommentController::class);
     Route::apiResource('coupons', AdminCouponController::class);
-    
+
 
     // --- XỬ LÝ ẢNH (QUAN TRỌNG: bulk-delete PHẢI nằm trước apiResource) ---
     Route::post('imageProducts/bulk-delete', [AdminImageProductController::class, 'bulkDestroy']);
@@ -126,7 +129,7 @@ Route::group([
     Route::apiResource('slides', AdminSlideController::class);
     Route::apiResource('admins', AminAccountController::class);
     Route::apiResource('brands', AdminBrandSlideController::class);
-    
+
     Route::apiResource('attributes', AdminAttributeController::class);
 });
 

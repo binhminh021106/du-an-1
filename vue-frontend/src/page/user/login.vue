@@ -2,7 +2,7 @@
 import { ref, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import Swal from 'sweetalert2';
-import apiService from '../../apiService'; // Đảm bảo đường dẫn đúng
+import apiService from '../../apiService';
 
 const router = useRouter();
 
@@ -19,6 +19,10 @@ const error = reactive({
 
 const isLoading = ref(false);
 const passwordFieldType = ref('password');
+
+const loginWithGoogle = () => {
+    window.location.href = 'http://127.0.0.1:8000/api/auth/google';
+};
 
 // Hàm xử lý đăng nhập chuẩn Backend
 const handleLogin = async () => {
@@ -76,7 +80,7 @@ const handleLogin = async () => {
 
     } catch (apiError) {
         // 5. Xử lý nếu Server báo lỗi (401, 422...)
-        console.log(apiError); 
+        console.log(apiError);
 
         const response = apiError.response;
         let msg = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
@@ -166,12 +170,14 @@ const togglePasswordVisibility = () => {
                 <div class="separator">Hoặc đăng nhập bằng</div>
 
                 <div class="social-login">
-                    <button class="social-btn">
+                    <!-- NÚT GOOGLE ĐÃ GẮN SỰ KIỆN -->
+                    <button class="social-btn" @click="loginWithGoogle" type="button">
                         <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg"
                             alt="Google">
                         Google
                     </button>
-                    <button class="social-btn">
+                    
+                    <button class="social-btn" type="button">
                         <img src="../../assets/facebook-svgrepo-com.svg" width="500px">
                         Facebook
                     </button>
