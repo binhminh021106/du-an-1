@@ -1,13 +1,13 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
+import { useStore } from 'vuex'; // Import Vuex
 import apiService from '../../apiService.js';
-// SỬA: Import đúng đường dẫn (cùng cấp thư mục)
-import { addToCart } from "./user/cartStore.js"; 
 
 const router = useRouter();
+const store = useStore(); // Khởi tạo store
 
-// --- 1. CẤU HÌNH HIỂN THỊ ẢNH (Đồng bộ với Cart/Shop) ---
+// --- 1. CẤU HÌNH HIỂN THỊ ẢNH ---
 const SERVER_URL = 'http://127.0.0.1:8000';   
 const USE_STORAGE = false; 
 
@@ -18,7 +18,7 @@ const getImageUrl = (path) => {
   return USE_STORAGE ? `${SERVER_URL}/storage/${cleanPath}` : `${SERVER_URL}/${cleanPath}`;
 };
 
-// --- 2. HÀM TẠO ICON ĐẸP CHO DANH MỤC ---
+// --- 2. ICON DANH MỤC ---
 const getCategoryIcon = (name) => {
     const n = name.toLowerCase();
     if (n.includes('điện thoại') || n.includes('iphone')) return '<i class="fas fa-mobile-alt" style="color: #3498db;"></i>';
@@ -30,8 +30,6 @@ const getCategoryIcon = (name) => {
     if (n.includes('phụ kiện')) return '<i class="fas fa-plug" style="color: #34495e;"></i>';
     if (n.includes('màn hình')) return '<i class="fas fa-desktop" style="color: #1abc9c;"></i>';
     if (n.includes('chuột') || n.includes('phím')) return '<i class="fas fa-keyboard" style="color: #7f8c8d;"></i>';
-    
-    // Icon mặc định nếu không tìm thấy từ khóa
     return '<i class="fas fa-box-open" style="color: #bdc3c7;"></i>';
 };
 
@@ -80,7 +78,7 @@ const fetchData = async () => {
     }
 };
 
-// --- COMPUTED PROPERTIES ---
+// --- COMPUTED ---
 const topFavoriteProducts = computed(() => {
     if (!Array.isArray(products.value)) return [];
     return [...products.value]
@@ -112,16 +110,6 @@ const nextSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.va
 const prevSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.value - 1 + slides.value.length) % slides.value.length; };
 const goToSlide = (index) => { stopAutoSlide(); currentSlide.value = index; };
 
-const scrollProducts = (direction) => {
-    if (!productContainer.value) return;
-    const containerWidth = productContainer.value.clientWidth;
-    const scrollAmount = containerWidth * 0.8; 
-    direction === 'left' 
-        ? productContainer.value.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
-        : productContainer.value.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-};
-
-// --- HELPER FUNCTIONS ---
 const setActiveCategory = (id) => { activeCategoryId.value = String(id); };
 
 const getMinPrice = (variants) => {
@@ -129,19 +117,22 @@ const getMinPrice = (variants) => {
     return Math.min(...variants.map(v => Number(v.price)));
 };
 
-// --- ACTIONS ---
+// --- ACTIONS (VUEX) ---
 const onAddToCart = (product) => {
     const minPrice = getMinPrice(product.variants);
     const variant = (product.variants && product.variants.length > 0)
         ? (product.variants.find(v => Number(v.price) === minPrice) || product.variants[0])
-        : { id: 'default', name: 'Mặc định', price: minPrice || product.price || 0, stock: 999 };
+        : null; // Nếu null thì Vuex sẽ tự xử lý lấy giá gốc
 
-    addToCart(product, variant, 1);
+    // Gọi Action từ Store
+    store.dispatch('addToCart', { 
+        product: product, 
+        quantity: 1, 
+        variant: variant 
+    });
+    
     alert(`Đã thêm vào giỏ: ${product.name}`);
 };
-
-const onAddToWishlist = (product) => alert(`Đã thêm vào yêu thích: ${product.name}`);
-const saveVoucher = (code) => alert(`Đã lưu mã giảm giá: ${code}`);
 
 // --- LIFECYCLE ---
 onMounted(async () => {
@@ -170,9 +161,7 @@ onBeforeUnmount(stopAutoSlide);
                         :class="{ active: String(category.id) === String(activeCategoryId) }"
                         @click="setActiveCategory(category.id)">
                         
-                        <!-- FIX: Hiển thị icon đẹp dựa trên tên danh mục -->
                         <span class="icon" v-html="getCategoryIcon(category.name)"></span>
-                        
                         <span class="cat-name">{{ category.name }}</span>
                         <i class="fas fa-chevron-right arrow-icon"></i>
                     </router-link>
@@ -181,7 +170,6 @@ onBeforeUnmount(stopAutoSlide);
                 <section class="slider" @mouseenter="stopAutoSlide" @mouseleave="startAutoSlide">
                     <div class="slider-wrapper" :style="{ transform: 'translateX(-' + currentSlide * 100 + '%)' }">
                         <div class="slide" v-for="slide in slides" :key="slide.id">
-                            <!-- FIX: Dùng getImageUrl cho Slider -->
                             <img :src="getImageUrl(slide.imageUrl || slide.image_url)" alt="Slide"
                                 style="width: 100%; height: 100%; object-fit: cover;"
                                 @error="$event.target.src='https://placehold.co/800x400?text=Slide+Image'">
@@ -203,7 +191,6 @@ onBeforeUnmount(stopAutoSlide);
 
             <section class="brand-banner" style="margin-top: 20px;" v-if="brands.length > 0">
                 <a :href="brands[0].linkUrl || '#'">
-                    <!-- FIX: Dùng getImageUrl cho Banner -->
                     <img :src="getImageUrl(brands[0].imageUrl)" alt="Brand Banner"
                         style="width: 100%; height: 200px; object-fit: cover; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);"
                          @error="$event.target.style.display='none'">
@@ -235,7 +222,6 @@ onBeforeUnmount(stopAutoSlide);
                     <h2 class="section-title"><i class="fas fa-heart text-danger me-2"></i> Sản phẩm yêu thích</h2>
                     <div class="product-grid">
                         <div class="product-card" v-for="product in topFavoriteProducts" :key="product.id">
-                            <!-- FIX: Dùng getImageUrl cho Sản phẩm -->
                             <img :src="getImageUrl(product.thumbnail_url || product.image_url)" :alt="product.name" 
                                 @error="$event.target.src='https://placehold.co/300x300?text=Product'">
                             
@@ -270,7 +256,6 @@ onBeforeUnmount(stopAutoSlide);
                 <template v-for="category in categoriesWithProducts" :key="category.id">
                     <section class="product-group category-group" :id="'cat-' + category.id">
                         <h2 class="section-title">
-                            <!-- Icon cho tiêu đề Section -->
                             <span class="me-2" v-html="getCategoryIcon(category.name)"></span>
                             {{ category.name }} nổi bật
                         </h2>
@@ -311,7 +296,6 @@ onBeforeUnmount(stopAutoSlide);
                     <h2 class="section-title"><i class="far fa-newspaper me-2"></i> Tin tức công nghệ</h2>
                     <div class="news-grid">
                         <div class="news-card" v-for="news in newsList" :key="news.id">
-                            <!-- FIX: Dùng getImageUrl cho Tin tức -->
                             <img :src="getImageUrl(news.image_url || news.image)" :alt="news.title" @error="$event.target.src='https://placehold.co/300x200?text=News'">
                             <h3 class="news-title">{{ news.title }}</h3>
                             <p class="news-excerpt">
@@ -342,7 +326,7 @@ onBeforeUnmount(stopAutoSlide);
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Roboto', Arial, sans-serif; /* Thêm font Roboto nếu có */
+    font-family: 'Roboto', Arial, sans-serif; 
 }
 
 body {
@@ -364,19 +348,19 @@ a {
 
 .top-section-layout {
     display: grid;
-    grid-template-columns: 260px 1fr; /* Bỏ cột phải thừa */
+    grid-template-columns: 260px 1fr;
     gap: 25px;
-    align-items: stretch; /* Kéo dãn chiều cao bằng nhau */
+    align-items: stretch;
 }
 
-/* === SIDEBAR DANH MỤC (ĐÃ NÂNG CẤP) === */
+/* === SIDEBAR DANH MỤC === */
 .categories-sidebar {
     background: #fff;
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
     padding: 15px 10px;
     height: 100%;
-    max-height: 480px; /* Giới hạn chiều cao */
+    max-height: 480px;
     overflow-y: auto;
 }
 
@@ -403,13 +387,13 @@ a {
 
 .category-item-sodo:hover,
 .category-item-sodo.active {
-    background-color: #f0f9ff; /* Màu nền hover nhẹ nhàng hơn */
+    background-color: #f0f9ff;
     color: #009981;
-    transform: translateX(5px); /* Hiệu ứng trượt nhẹ */
+    transform: translateX(5px);
 }
 
 .category-item-sodo .icon {
-    width: 35px; /* Tăng kích thước vùng icon */
+    width: 35px;
     text-align: center;
     margin-right: 12px;
     font-size: 1.1em;
@@ -439,7 +423,7 @@ a {
     overflow: hidden;
     border-radius: 12px;
     height: 100%;
-    min-height: 380px; /* Tăng chiều cao tối thiểu */
+    min-height: 380px;
     box-shadow: var(--box-shadow);
 }
 
@@ -459,7 +443,7 @@ a {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    background: rgba(255, 255, 255, 0.8); /* Nền trắng mờ đẹp hơn */
+    background: rgba(255, 255, 255, 0.8);
     color: #333;
     border: none;
     cursor: pointer;
@@ -472,11 +456,11 @@ a {
     justify-content: center;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     transition: all 0.2s;
-    opacity: 0; /* Ẩn mặc định */
+    opacity: 0;
 }
 
 .slider:hover .slider-control {
-    opacity: 1; /* Hiện khi hover slider */
+    opacity: 1;
 }
 
 .slider-control:hover {
@@ -585,7 +569,7 @@ a {
 .product-card img {
     width: 100%;
     height: 180px;
-    object-fit: contain; /* Giữ tỉ lệ ảnh sản phẩm */
+    object-fit: contain;
     margin-bottom: 15px;
     transition: transform 0.3s;
 }
@@ -596,7 +580,7 @@ a {
 
 .product-name {
     font-size: 1em;
-    min-height: 44px; /* Đủ cho 2 dòng text */
+    min-height: 44px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -616,7 +600,7 @@ a {
 }
 
 .product-price .new-price {
-    color: #d70018; /* Màu đỏ giá */
+    color: #d70018;
     font-size: 1.2em;
     font-weight: 800;
 }
@@ -634,7 +618,7 @@ a {
 .card-actions-small {
     display: flex;
     gap: 8px;
-    margin-top: auto; /* Đẩy nút xuống đáy */
+    margin-top: auto;
 }
 
 .card-actions-small button {
@@ -663,7 +647,7 @@ a {
 }
 
 .btn-add-cart {
-    background: #009981; /* Màu xanh chủ đạo */
+    background: #009981;
 }
 
 .btn-add-cart:hover {
@@ -721,10 +705,10 @@ a {
 
 @media (max-width: 992px) {
     .top-section-layout {
-        grid-template-columns: 1fr; /* Dạng cột trên tablet dọc */
+        grid-template-columns: 1fr;
     }
     .categories-sidebar {
-        display: none; /* Ẩn danh mục trên mobile/tablet nhỏ */
+        display: none;
     }
     .slider {
         min-height: auto;

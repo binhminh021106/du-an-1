@@ -1,13 +1,14 @@
 <script setup>
 import { ref, watch, onMounted, computed, watchEffect } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useStore } from "vuex"; // 1. Import Vuex
 import apiService from '../../apiService.js';
-// SỬA: Import đúng cấp file
-import { addToCart } from "./user/cartStore.js";
+
 import { isInWishlist, toggleWishlist } from "./user/wishlistStore.js";
 
 const route = useRoute();
 const router = useRouter();
+const store = useStore(); // 2. Khởi tạo store
 
 // --- CẤU HÌNH ẢNH ---
 const SERVER_URL = 'http://127.0.0.1:8000';   
@@ -27,7 +28,6 @@ const quantity = ref(1);
 const loading = ref(true);
 const isFavorite = ref(false);
 
-// 🔹 DỮ LIỆU MUA KÈM (Định nghĩa rõ ràng để tránh lỗi undefined)
 const bundleDeals = ref([
   { id: 101, name: "Sạc dự phòng 10000mAh", image: "https://placehold.co/150x150/f0f0f0/333?text=Sac+Du+Phong", newPrice: 350000, oldPrice: 500000 },
   { id: 102, name: "Tai nghe True Wireless", image: "https://placehold.co/150x150/f0f0f0/333?text=Tai+Nghe", newPrice: 590000, oldPrice: 890000 },
@@ -116,23 +116,18 @@ const loadProductById = async (id) => {
       v.id = v.id || i;
     });
 
-    // --- SỬA LỖI KHÔNG HIỆN ẢNH NHỎ ---
-    // Lấy danh sách ảnh phụ, kiểm tra nhiều tên trường khác nhau (url, image, path,...)
     const extraImages = (data.images || []).map(img => {
-       if (typeof img === 'string') return img; // Nếu API trả về mảng string
+       if (typeof img === 'string') return img;
        return img.url || img.image_url || img.path || img.image || img.image_path;
     }).filter(Boolean);
 
-    // Gộp ảnh chính và ảnh phụ
     data.gallery_images = [
       data.image_url || data.thumbnail_url,
       ...extraImages
-    ].filter(Boolean); // Lọc bỏ null/undefined
+    ].filter(Boolean);
 
-    // Loại bỏ ảnh trùng lặp (nếu có)
     data.gallery_images = [...new Set(data.gallery_images)];
 
-    // Fallback nếu không có ảnh nào
     if (data.gallery_images.length === 0) {
        data.gallery_images = ['https://placehold.co/500x500/009981/white?text=No+Image'];
     }
@@ -152,7 +147,6 @@ const loadProductById = async (id) => {
 
   } catch (error) {
     console.error("Lỗi tải sản phẩm:", error);
-    // router.replace("/not-found"); // Tạm tắt để debug
   } finally {
     loading.value = false;
   }
@@ -199,13 +193,19 @@ const validateQty = () => {
   quantity.value = Number(quantity.value);
 };
 
+// --- 3. ACTION THÊM GIỎ HÀNG (Sử dụng VUEX Store) ---
 const onAddToCart = (productItem) => {
   if (!activeVariant.value) {
     alert("Vui lòng chọn phiên bản sản phẩm.");
     return;
   }
     
-  addToCart(productItem, activeVariant.value, quantity.value); 
+  // Gọi Action 'addToCart' trong store/index.js
+  store.dispatch('addToCart', { 
+    product: productItem, 
+    variant: activeVariant.value, 
+    quantity: quantity.value 
+  });
     
   alert(`Đã thêm ${quantity.value} x ${productItem.name} vào giỏ hàng!`);
 };
@@ -250,15 +250,14 @@ watchEffect(() => {
   <div class="container py-5 product-detail-page">
     <div v-if="!loading && product" class="row g-4">
 
+      <!-- Cột Trái: Hình ảnh -->
       <div class="col-lg-5">
         <div class="main-image-wrapper mb-3">
-          <!-- FIX: Sử dụng getImageUrl cho ảnh chính -->
           <img :src="getImageUrl(selectedImage)" :alt="product.name" class="img-fluid rounded main-product-image" 
            @error="$event.target.src='https://placehold.co/500x500?text=No+Image'"/>
         </div>
 
         <div class="thumbnail-gallery" v-if="product.gallery_images && product.gallery_images.length > 1">
-          <!-- FIX: Sử dụng getImageUrl cho thumbnail -->
           <img v-for="(image, index) in product.gallery_images" :key="index" 
             :src="getImageUrl(image)"
             :alt="`Thumbnail ${index + 1}`" class="thumbnail-item" :class="{ active: selectedImage === image }"
@@ -272,9 +271,9 @@ watchEffect(() => {
             {{ product.description || "Sản phẩm chất lượng cao, bảo hành chính hãng 12 tháng." }}
           </p>
         </section>
-
       </div>
 
+      <!-- Cột Phải: Thông tin & Nút Mua -->
       <div class="col-lg-7">
         <div class="product-info-box">
 
@@ -328,6 +327,7 @@ watchEffect(() => {
           </div>
 
           <div class="action-buttons mt-4">
+            <!-- Nút thêm giỏ hàng đã gắn sự kiện onAddToCart dùng Vuex -->
             <button class="btn btn-primary-green btn-lg me-3" @click="onAddToCart(product)" :disabled="!activeVariant || activeVariant.stock <= 0">
               <i class="bi bi-cart-plus"></i> Thêm vào giỏ
             </button>
@@ -338,6 +338,8 @@ watchEffect(() => {
 
         </div>
         <br>
+        
+        <!-- Ưu đãi thanh toán -->
         <div class="payment-offers-section mb-4">
           <h5 class="fw-semibold fs-6 mb-3 d-flex align-items-center">
             <i class="bi bi-credit-card-2-front-fill text-primary-green me-2"></i>
@@ -356,7 +358,7 @@ watchEffect(() => {
           </div>
         </div>
 
-
+        <!-- Khuyến mãi -->
         <div class="promotion-section-box mb-4">
           <h2><i class="fas fa-gift"></i> Khuyến mãi hấp dẫn</h2>
             
@@ -371,7 +373,6 @@ watchEffect(() => {
                 </div>
             </div>
 
-            <!-- FIX: Thêm lại phần Mua Kèm Giá Sốc (Bundle Deals) -->
             <section class="bundle-deal-section" v-if="bundleDeals && bundleDeals.length">
               <div class="bundle-header">
                 <h2><i class="fas fa-bolt"></i> Mua kèm giá sốc</h2>
@@ -379,7 +380,6 @@ watchEffect(() => {
 
               <div class="bundle-products">
                 <div v-for="item in bundleDeals" :key="item.id" class="bundle-item">
-                  <!-- Dùng getImageUrl cho bundle -->
                   <img :src="getImageUrl(item.image)" :alt="item.name" />
                   <h3>{{ item.name }}</h3>
                   <div class="price">
@@ -393,12 +393,13 @@ watchEffect(() => {
         </div>
 
       </div>
-
     </div>
 
+    <!-- Phần mở rộng: Trade-in, Sản phẩm liên quan, Đánh giá -->
     <div v-if="!loading && product" class="row mt-5">
       <div class="col-12">
-        <!-- Trade In Section -->
+        
+         <!-- Trade In Section -->
          <section class="trade-in-section mb-5">
           <h3 class="fw-bold">Iphone - Giảm giá tới 50% </h3>
           <p class="subtitle">(Giá độc quyền )</p>
@@ -428,7 +429,6 @@ watchEffect(() => {
             <div class="trade-in-results" v-if="tradeInResultsVisible && tradeInSearchResults.length > 0">
               <ul>
                 <li v-for="item in tradeInSearchResults" :key="item.id" @click="navigateToProduct(item.id)">
-                  <!-- FIX: Dùng getImageUrl cho kết quả tìm kiếm -->
                   <img :src="getImageUrl(item.image_url)" :alt="item.name" class="result-img">
                   <span class="result-name">{{ item.name }}</span>
                 </li>
@@ -437,12 +437,12 @@ watchEffect(() => {
           </div>
         </section>
 
+        <!-- Related Products -->
         <section class="related-products-section mb-5" v-if="relatedProducts.length > 0">
           <h4 class="section-title">Sản phẩm liên quan</h4>
           <div class="horizontal-scroll-container">
             <div v-for="relatedProduct in relatedProducts" :key="relatedProduct.id" class="product-card-simple"
               @click="navigateToProduct(relatedProduct.id)">
-              <!-- FIX: Dùng getImageUrl cho sản phẩm liên quan -->
               <img :src="getImageUrl(relatedProduct.image_url)" :alt="relatedProduct.name" class="card-img" @error="$event.target.src='https://placehold.co/150x150?text=Product'"/>
               <h5 class="card-name">{{ relatedProduct.name }}</h5>
               <p class="card-price">{{ formatCurrency(relatedProduct.price) }}</p>
@@ -450,6 +450,7 @@ watchEffect(() => {
           </div>
         </section>
 
+        <!-- Reviews -->
         <section class="product-reviews">
           <h4 class="section-title">
             💬 Đánh giá ({{ reviews.length }})
@@ -479,13 +480,11 @@ watchEffect(() => {
 </template>
 
 <style scoped>
-/* Định nghĩa màu chủ đạo */
 :root {
   --primary-color: rgb(0, 153, 129);
   --primary-hover: rgb(0, 117, 99);
   --primary-light: rgba(0, 153, 129, 0.1);
   --trade-in-red: #d70018;
-  /* Màu đỏ cho mục thu cũ */
 }
 
 .product-detail-page {
@@ -573,7 +572,6 @@ watchEffect(() => {
   display: flex;
   flex-direction: column;
   padding: 5px 15px;
-  /* Giảm padding */
   text-align: left;
   font-weight: 500;
   transition: all 0.2s ease;
@@ -614,7 +612,6 @@ watchEffect(() => {
 }
 
 .btn-primary-green:hover {
-  
   border-radius: 8px;
   box-shadow: 0 4px 10px rgba(0, 153, 129, 0.4);
   transform: translateY(-2px);
@@ -685,18 +682,6 @@ watchEffect(() => {
   flex: 1;
   font-size: 0.9rem;
   line-height: 1.4;
-}
-
-.feature-item .icon-wrapper {
-  background-color: var(--trade-in-red);
-  width: 50px;
-  height: 50px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 12px;
-  font-size: 1.6rem;
 }
 
 .feature-item .icon-wrapper {
@@ -915,9 +900,7 @@ watchEffect(() => {
 /* ==== 🔽 ĐÂY LÀ CSS MỚI ĐƯỢC THÊM VÀO 🔽 ==== */
 .promotion-section-box {
   background-color: #f3f9ff;
-  /* Màu nền xanh nhạt */
   border: 1px solid #d0e6ff;
-  /* Viền xanh */
   border-radius: 10px;
   padding: 20px 25px;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
@@ -947,7 +930,6 @@ watchEffect(() => {
   width: 20px;
   height: 20px;
   background-color: #007bff;
-  /* Màu xanh dương cho số */
   color: white;
   border-radius: 50%;
   display: flex;
@@ -956,7 +938,6 @@ watchEffect(() => {
   font-size: 0.8rem;
   font-weight: bold;
   margin-top: 3px;
-  /* Căn chỉnh cho thẳng hàng */
 }
 
 .promo-text {
@@ -978,50 +959,6 @@ watchEffect(() => {
   text-decoration: underline;
 }
 
-.promo-item-sub {
-  display: flex;
-  align-items: flex-start;
-  gap: 5px;
-  margin-left: 30px;
-  /* Thụt vào so với mục 2 */
-  position: relative;
-  /* Dùng để định vị nhãn */
-}
-
-.promo-item-sub .bi-dot {
-  line-height: 1.2;
-  margin-top: -3px;
-  /* Kéo dấu chấm lên */
-  color: var(--primary-color);
-}
-
-.promo-badge-text {
-  position: absolute;
-  top: 0;
-  right: 0;
-  background-color: #e0f2ef;
-  color: var(--primary-color);
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.view-all {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--primary-color);
-  text-decoration: none;
-  display: inline-block;
-  margin-top: 10px;
-  margin-left: 30px;
-}
-
-.view-all:hover {
-  text-decoration: underline;
-}
-
-
 /* ====== PHẦN MUA KÈM GIÁ SỐC ====== */
 .bundle-deal-section {
   background: #fff8f8;
@@ -1041,7 +978,6 @@ watchEffect(() => {
 .bundle-header h2 {
   font-size: 1.25rem;
   color: #d70018;
-  /* Màu đỏ */
   font-weight: 700;
 }
 
@@ -1117,71 +1053,5 @@ watchEffect(() => {
 .btn-buy-now:hover {
   background: rgb(49, 117, 106);
 
-}
-
-
-/* ====== GÓI BẢO HÀNH ====== */
-.service-package {
-  background: #f3f9ff;
-  border: 1px solid #d0e6ff;
-  border-radius: 10px;
-  padding: 20px;
-  margin-top: 20px;
-}
-
-.service-package h3 {
-  font-size: 1.25rem;
-  color: #0056b3;
-  font-weight: 700;
-  margin-bottom: 15px;
-}
-
-.package-options {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.package-card {
-  background: #fff;
-  border: 2px solid #ddd;
-  border-radius: 10px;
-  padding: 15px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.package-card:hover {
-  border-color: var(--primary-color);
-  background: #f9fdfc;
-}
-
-.package-card.active {
-  border-color: var(--primary-color);
-  background: var(--primary-light);
-  box-shadow: 0 0 0 2px var(--primary-color);
-}
-
-.package-card h4 {
-  margin: 0;
-  color: #222;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.package-card p {
-  margin: 5px 0 0;
-  font-size: 0.9rem;
-  color: #555;
-}
-
-.package-card .price {
-  color: var(--primary-color);
-  font-weight: 700;
-  display: block;
-  margin-top: 5px;
-  font-size: 1rem;
 }
 </style>
