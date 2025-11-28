@@ -12,7 +12,12 @@ const formData = reactive({
     password: '',
     phone: '',
     confirmPassword: '',
+    sex: ''
 });
+
+const loginWithGoogle = () => {
+    window.location.href = 'http://127.0.0.1:8000/api/auth/google';
+};
 
 const error = reactive({
     fullName: '',
@@ -20,9 +25,11 @@ const error = reactive({
     phone: '',
     password: '',
     confirmPassword: '',
+    sex: '',
     general: '',
     terms: ''
 });
+
 
 const isLoading = ref(false);
 const agreedToTerms = ref(false);
@@ -75,6 +82,12 @@ const validateForm = () => {
         isValid = false;
     }
 
+    if (!formData.sex) {
+        error.sex = 'Vui lòng chọn giới tính';
+        isValid = false;
+    }
+
+
     if (!formData.confirmPassword) {
         error.confirmPassword = 'Vui lòng xác nhận mật khẩu.';
         isValid = false;
@@ -100,7 +113,9 @@ const handleRegister = async () => {
         email: formData.email,
         phone: formData.phone,
         password: formData.password,
+        sex: formData.sex
     };
+
 
     try {
         const res = await apiService.post(`/register`, payload);
@@ -144,6 +159,9 @@ const handleRegister = async () => {
         <div class="login-container">
 
             <div class="promo-section">
+                <router-link to="/" class="thinkhub-logo">
+                    <img src="/src/components/img/LogoThinkHub.png" alt="ThinkHub Logo" />
+                </router-link>
                 <h2>Chào mừng bạn mới!</h2>
                 <p>Tạo tài khoản để quản lý đơn hàng và nhận ưu đãi độc quyền.</p>
 
@@ -188,6 +206,18 @@ const handleRegister = async () => {
                             :class="['form-control', error.phone ? 'is-invalid' : '']">
                         <div v-if="error.phone" class="invalid-feedback d-block">{{ error.phone }}</div>
                     </div>
+
+                    <div class="form-group">
+                        <label for="sex">Giới tính</label>
+                        <select v-model="formData.sex" :class="['form-control', error.sex ? 'is-invalid' : '']">
+                            <option value="">-- Chọn giới tính --</option>
+                            <option value="male">Nam</option>
+                            <option value="female">Nữ</option>
+                            <option value="other">Khác</option>
+                        </select>
+                        <div v-if="error.sex" class="invalid-feedback d-block">{{ error.sex }}</div>
+                    </div>
+
 
                     <div class="form-group">
                         <label for="password">Mật khẩu</label>
@@ -239,7 +269,7 @@ const handleRegister = async () => {
 
                 <div class="separator">Hoặc đăng ký bằng</div>
                 <div class="social-login">
-                    <button class="social-btn">
+                    <button @click="loginWithGoogle" class="social-btn">
                         <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg"
                             alt="Google">
                         Google
@@ -395,6 +425,15 @@ const handleRegister = async () => {
 
 
 .login-form input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid black;
+    border-radius: 8px;
+    font-size: 1rem;
+    box-sizing: border-box;
+}
+
+.login-form select {
     width: 100%;
     padding: 12px 15px;
     border: 1px solid black;
@@ -568,4 +607,21 @@ const handleRegister = async () => {
         border-left: none;
     }
 }
+
+.thinkhub-logo {
+    display: inline-block;
+    margin-bottom: 16px;
+}
+
+.thinkhub-logo img {
+    max-width: 200px;
+    height: auto;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.thinkhub-logo img:hover {
+    transform: scale(1.05);
+}
+
 </style>
