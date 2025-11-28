@@ -22,9 +22,11 @@ class AuthController extends Controller
             'email'    => 'required|string|email|max:255|unique:users',
             'phone'    => 'required|string|max:15|unique:users',
             'password' => 'required|string|min:8',
+            'sex'      => 'required|in:male,female,other',
         ], [
             'email.unique' => 'Email này đã được sử dụng.',
             'phone.unique' => 'Số điện thoại này đã được sử dụng.',
+            'sex.required' => 'Vui lòng chọn giới tính.',
         ]);
 
         if ($validator->fails()) {
@@ -35,6 +37,7 @@ class AuthController extends Controller
             'fullName' => $request->name,
             'email'    => $request->email,
             'phone'    => $request->phone,
+            'sex' => $request->sex,
             'password' => Hash::make($request->password),
             'status'   => 'active',
             'avatar_url' => null,
@@ -50,7 +53,7 @@ class AuthController extends Controller
     {
         // 1. Validate dữ liệu gửi lên
         $validator = Validator::make($request->all(), [
-            'login_id' => 'required|string', 
+            'login_id' => 'required|string',
             'password' => 'required|string',
         ]);
 
