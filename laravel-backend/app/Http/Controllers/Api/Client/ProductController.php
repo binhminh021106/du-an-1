@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\Client;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Product;
+use App\Models\Product; // Đảm bảo Model Product đã được import
 
 class ProductController extends Controller
 {
@@ -13,8 +13,11 @@ class ProductController extends Controller
      */
     public function index()
     {
-        $products = Product::latest()->get();
-        return response()->json($products);
+        // Thêm 'category' vào đây nếu muốn hiển thị danh mục trên trang danh sách
+        $products = Product::with(['variants', 'category'])->latest()->get();
+        return response()->json([
+            'data' => $products
+        ]);
     }
 
     /**
@@ -30,13 +33,17 @@ class ProductController extends Controller
      */
     public function show(string $id)
     {
-        $product = Product::with('variants')->find($id);
+       
+        $product = Product::with(['variants', 'images', 'category'])->find($id);
 
         if (!$product) {
             return response()->json(['message' => 'Không tìm thấy sản phẩm'], 404);
         }
 
-        return response()->json($product);
+        // Trả về sản phẩm (bao gồm mảng 'variants' và mảng 'images' lồng nhau)
+        return response()->json([
+            'data' => $product
+        ]);
     }
 
     /**

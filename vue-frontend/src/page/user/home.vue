@@ -2,12 +2,11 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import apiService from '../../apiService.js';
-// SỬA: Import đúng đường dẫn (cùng cấp thư mục)
 import { addToCart } from "./user/cartStore.js"; 
 
 const router = useRouter();
 
-// --- 1. CẤU HÌNH HIỂN THỊ ẢNH (Đồng bộ với Cart/Shop) ---
+// --- 1. CẤU HÌNH HIỂN THỊ ẢNH ---
 const SERVER_URL = 'http://127.0.0.1:8000';   
 const USE_STORAGE = false; 
 
@@ -20,19 +19,17 @@ const getImageUrl = (path) => {
 
 // --- 2. HÀM TẠO ICON ĐẸP CHO DANH MỤC ---
 const getCategoryIcon = (name) => {
-    const n = name.toLowerCase();
-    if (n.includes('điện thoại') || n.includes('iphone')) return '<i class="fas fa-mobile-alt" style="color: #3498db;"></i>';
-    if (n.includes('laptop') || n.includes('macbook')) return '<i class="fas fa-laptop" style="color: #e74c3c;"></i>';
-    if (n.includes('tablet') || n.includes('ipad')) return '<i class="fas fa-tablet-alt" style="color: #f39c12;"></i>';
-    if (n.includes('âm thanh') || n.includes('loa') || n.includes('tai nghe')) return '<i class="fas fa-headphones-alt" style="color: #9b59b6;"></i>';
-    if (n.includes('đồng hồ')) return '<i class="fas fa-clock" style="color: #2ecc71;"></i>';
-    if (n.includes('camera') || n.includes('chụp')) return '<i class="fas fa-camera" style="color: #e67e22;"></i>';
-    if (n.includes('phụ kiện')) return '<i class="fas fa-plug" style="color: #34495e;"></i>';
-    if (n.includes('màn hình')) return '<i class="fas fa-desktop" style="color: #1abc9c;"></i>';
-    if (n.includes('chuột') || n.includes('phím')) return '<i class="fas fa-keyboard" style="color: #7f8c8d;"></i>';
-    
-    // Icon mặc định nếu không tìm thấy từ khóa
-    return '<i class="fas fa-box-open" style="color: #bdc3c7;"></i>';
+  const n = name.toLowerCase();
+  if (n.includes('điện thoại') || n.includes('iphone')) return '<i class="fas fa-mobile-alt" style="color: #3498db;"></i>';
+  if (n.includes('laptop') || n.includes('macbook')) return '<i class="fas fa-laptop" style="color: #e74c3c;"></i>';
+  if (n.includes('tablet') || n.includes('ipad')) return '<i class="fas fa-tablet-alt" style="color: #f39c12;"></i>';
+  if (n.includes('âm thanh') || n.includes('loa') || n.includes('tai nghe')) return '<i class="fas fa-headphones-alt" style="color: #9b59b6;"></i>';
+  if (n.includes('đồng hồ')) return '<i class="fas fa-clock" style="color: #2ecc71;"></i>';
+  if (n.includes('camera') || n.includes('chụp')) return '<i class="fas fa-camera" style="color: #e67e22;"></i>';
+  if (n.includes('phụ kiện')) return '<i class="fas fa-plug" style="color: #34495e;"></i>';
+  if (n.includes('màn hình')) return '<i class="fas fa-desktop" style="color: #1abc9c;"></i>';
+  if (n.includes('chuột') || n.includes('phím')) return '<i class="fas fa-keyboard" style="color: #7f8c8d;"></i>';
+  return '<i class="fas fa-box-open" style="color: #bdc3c7;"></i>';
 };
 
 const formatCurrency = (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -51,61 +48,58 @@ const productContainer = ref(null);
 
 // Fake Voucher
 const vouchers = ref([
-    { id: 1, code: 'GIAM10K', desc: 'Giảm 10k đơn 0đ', percent: 10 },
-    { id: 2, code: 'FREESHIP', desc: 'Miễn phí vận chuyển', percent: 100 },
-    { id: 3, code: 'SALE50', desc: 'Giảm 50% tối đa 50k', percent: 50 },
+  { id: 1, code: 'GIAM10K', desc: 'Giảm 10k đơn 0đ', percent: 10 },
+  { id: 2, code: 'FREESHIP', desc: 'Miễn phí vận chuyển', percent: 100 },
+  { id: 3, code: 'SALE50', desc: 'Giảm 50% tối đa 50k', percent: 50 },
 ]);
 
 // --- FETCH DATA ---
 const fetchData = async () => {
-    try {
-        const [catRes, slideRes, prodRes, userRes, newsRes, brandRes] = await Promise.all([
-            apiService.get(`/categories`),
-            apiService.get(`/slides`),
-            apiService.get(`/products`),
-            apiService.get(`/users`),
-            apiService.get(`/news`),
-            apiService.get(`/brands`),
-        ]);
+  try {
+    const [catRes, slideRes, prodRes, userRes, newsRes, brandRes] = await Promise.all([
+      apiService.get(`/categories`),
+      apiService.get(`/slides`),
+      apiService.get(`/products?include=category,variants`),
+      apiService.get(`/users`),
+      apiService.get(`/news`),
+      apiService.get(`/brands`),
+    ]);
 
-        categories.value = catRes.data.data || catRes.data || [];
-        slides.value = slideRes.data.data || slideRes.data || [];
-        products.value = prodRes.data.data || prodRes.data || [];
-        users.value = userRes.data.data || userRes.data || [];
-        newsList.value = newsRes.data.data || newsRes.data || [];
-        brands.value = brandRes.data.data || brandRes.data || [];
+    categories.value = catRes.data.data || catRes.data || [];
+    slides.value = slideRes.data.data || slideRes.data || [];
+    products.value = prodRes.data.data || prodRes.data || [];
+    users.value = userRes.data.data || userRes.data || [];
+    newsList.value = newsRes.data.data || newsRes.data || [];
+    brands.value = brandRes.data.data || brandRes.data || [];
 
-    } catch (err) {
-        console.error("Lỗi tải dữ liệu:", err);
-    }
+  } catch (err) {
+    console.error("Lỗi tải dữ liệu:", err);
+  }
 };
 
 // --- COMPUTED PROPERTIES ---
 const topFavoriteProducts = computed(() => {
-    if (!Array.isArray(products.value)) return [];
-    return [...products.value]
-        .sort((a, b) => (b.favorite_count || 0) - (a.favorite_count || 0))
-        .slice(0, 8);
+  if (!Array.isArray(products.value)) return [];
+  return [...products.value]
+    .sort((a, b) => (b.favorite_count || 0) - (a.favorite_count || 0))
+    .slice(0, 8);
 });
 
 const categoriesWithProducts = computed(() => {
-    if (!Array.isArray(categories.value) || !Array.isArray(products.value)) return [];
-    
-    return categories.value.map(category => {
-        const categoryProducts = products.value.filter(p =>
-            String(p.category?.id) === String(category.id)
-        );
-        return { ...category, products: categoryProducts.slice(0, 8) };
-    }).filter(category => category.products.length > 0);
+  if (!Array.isArray(categories.value) || !Array.isArray(products.value)) return [];
+  return categories.value.map(category => {
+    const categoryProducts = products.value.filter(p => String(p.category?.id) === String(category.id));
+    return { ...category, products: categoryProducts.slice(0, 8) };
+  }).filter(category => category.products.length > 0);
 });
 
 // --- SLIDER LOGIC ---
 const startAutoSlide = () => {
-    if (!slides.value.length) return;
-    clearInterval(interval);
-    interval = setInterval(() => {
-        currentSlide.value = (currentSlide.value + 1) % slides.value.length;
-    }, 4000);
+  if (!slides.value.length) return;
+  clearInterval(interval);
+  interval = setInterval(() => {
+    currentSlide.value = (currentSlide.value + 1) % slides.value.length;
+  }, 4000);
 };
 const stopAutoSlide = () => clearInterval(interval);
 const nextSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.value + 1) % slides.value.length; };
@@ -113,31 +107,48 @@ const prevSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.va
 const goToSlide = (index) => { stopAutoSlide(); currentSlide.value = index; };
 
 const scrollProducts = (direction) => {
-    if (!productContainer.value) return;
-    const containerWidth = productContainer.value.clientWidth;
-    const scrollAmount = containerWidth * 0.8; 
-    direction === 'left' 
-        ? productContainer.value.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
-        : productContainer.value.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+  if (!productContainer.value) return;
+  const containerWidth = productContainer.value.clientWidth;
+  const scrollAmount = containerWidth * 0.8; 
+  direction === 'left'
+    ? productContainer.value.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
+    : productContainer.value.scrollBy({ left: scrollAmount, behavior: 'smooth' });
 };
 
 // --- HELPER FUNCTIONS ---
 const setActiveCategory = (id) => { activeCategoryId.value = String(id); };
 
-const getMinPrice = (variants) => {
-    if (!variants || !variants.length) return 0;
-    return Math.min(...variants.map(v => Number(v.price)));
+const getDisplayPrice = (product) => {
+  if (product.variants && product.variants.length > 0) {
+    const minPrice = Math.min(...product.variants.map(v => Number(v.price || 0)));
+    return minPrice;
+  }
+  return Number(product.price || 0); 
 };
+
+const getMinPrice = (variants) => {
+  if (!variants || variants.length === 0) return 0;
+  return Math.min(...variants.map(v => Number(v.price || 0)));
+}
 
 // --- ACTIONS ---
 const onAddToCart = (product) => {
-    const minPrice = getMinPrice(product.variants);
-    const variant = (product.variants && product.variants.length > 0)
-        ? (product.variants.find(v => Number(v.price) === minPrice) || product.variants[0])
-        : { id: 'default', name: 'Mặc định', price: minPrice || product.price || 0, stock: 999 };
+  let variant = null;
+  let priceToUse = getDisplayPrice(product);
 
-    addToCart(product, variant, 1);
-    alert(`Đã thêm vào giỏ: ${product.name}`);
+  if (product.variants && product.variants.length > 0) {
+    variant = product.variants.find(v => Number(v.price) === priceToUse);
+    if (!variant) {
+      variant = product.variants[0];
+      priceToUse = Number(variant.price);
+    }
+  } else {
+    variant = { id: 'default', name: 'Mặc định', price: priceToUse, stock: 999 };
+  }
+
+  if (!variant) return alert('Lỗi: Không tìm thấy biến thể sản phẩm.');
+  addToCart(product, variant, 1);
+  alert(`Đã thêm vào giỏ: ${product.name} (Giá: ${formatCurrency(priceToUse)})`);
 };
 
 const onAddToWishlist = (product) => alert(`Đã thêm vào yêu thích: ${product.name}`);
@@ -145,11 +156,12 @@ const saveVoucher = (code) => alert(`Đã lưu mã giảm giá: ${code}`);
 
 // --- LIFECYCLE ---
 onMounted(async () => {
-    await fetchData();
-    startAutoSlide();
+  await fetchData();
+  startAutoSlide();
 });
 onBeforeUnmount(stopAutoSlide);
 </script>
+
 
 <template>
     <div id="app">
@@ -251,8 +263,8 @@ onBeforeUnmount(stopAutoSlide);
                             </div>
 
                             <div class="product-price">
-                                <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
-                            </div>
+    <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>
+</div>
                             <div class="card-actions-small">
                                 <button class="btn-view"
                                     @click="$router.push({ path: `/products/${product.id}` })">

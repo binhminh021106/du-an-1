@@ -1,0 +1,154 @@
+[1mdiff --cc vue-frontend/src/page/user/home.vue[m
+[1mindex b3d203c,37e1084..0000000[m
+[1m--- a/vue-frontend/src/page/user/home.vue[m
+[1m+++ b/vue-frontend/src/page/user/home.vue[m
+[36m@@@ -19,6 -17,6 +19,23 @@@[m [mconst activeCategoryId = ref(null)[m
+  const currentSlide = ref(0);[m
+  let interval = null;[m
+  [m
+[32m++const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;[m
+[32m++[m
+[32m++// 2. Hàm xử lý đường dẫn ảnh[m
+[32m++const getImageUrl = (path) => {[m
+[32m++    // Nếu không có dữ liệu ảnh, trả về ảnh giữ chỗ[m
+[32m++    if (!path) return 'https://via.placeholder.com/300x300?text=No+Image';[m
+[32m++[m
+[32m++[m
+[32m++    if (path.startsWith('http')) return path;[m
+[32m++[m
+[32m++  [m
+[32m++    const cleanPath = path.startsWith('/') ? path.substring(1) : path;[m
+[32m++    [m
+[32m++[m
+[32m++    return `${API_BASE_URL}/${cleanPath}`; [m
+[32m++};[m
+[32m++[m
+  // --- FETCH DATA ---[m
+  const fetchData = async () => {[m
+      try {[m
+[36m@@@ -43,6 -41,6 +60,7 @@@[m
+      }[m
+  };[m
+  [m
+[32m++[m
+  // --- COMPUTED PROPERTIES ---[m
+  const topFavoriteProducts = computed(() => {[m
+      return [...products.value][m
+[36m@@@ -160,93 -148,58 +179,58 @@@[m [monBeforeUnmount(stopAutoSlide)[m
+                  <div class="trust-item"><span>🔄 Đổi trả 30 ngày</span></div>[m
+                  <div class="trust-item"><span>🏪 Hỗ trợ 24/7</span></div>[m
+              </section>[m
+[32m+ <section class="product-section-container">[m
+[32m+     <section class="product-group hot-products">[m
+[32m+         <h2 class="section-title"> Sản phẩm yêu thích</h2>[m
+[32m+         <div class="product-grid">[m
+[32m+             <div class="product-card" v-for="product in topFavoriteProducts" :key="product.id">[m
+[32m+ [m
+[32m+                 [m
+[31m -                <img [m
+[31m -                    :src="product.image_url || '#'" [m
+[31m -                    :alt="product.name"[m
+[31m -                    @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })"[m
+[31m -                    style="cursor: pointer;"[m
+[31m -                >[m
+[32m++               <img [m
+[32m++        :src="getImageUrl(product.thumbnail_url)" [m
+[32m++        :alt="product.name"[m
+[32m++        @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })"[m
+[32m++        style="cursor: pointer;"[m
+[32m++    >[m
+[32m+ [m
+[32m+                 <h3 [m
+[32m+                     class="product-name"[m
+[32m+                     @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })"[m
+[32m+                     style="cursor: pointer;"[m
+[32m+                 >[m
+[32m+                     {{ product.name }}[m
+[32m+                 </h3>[m
+[32m+ [m
+[32m+                 <div class="product-stats">[m
+[32m+                     <span class="rating">[m
+[32m+                         <i class="fas fa-star text-warning"></i> {{ product.average_rating || 0 }}[m
+[32m+                     </span>[m
+[32m+                     <span class="favorite-count ms-3">[m
+[32m+                         <i class="fas fa-heart text-danger"></i> {{ product.favorite_count || 0 }}[m
+[32m+                     </span>[m
+[32m+                 </div>[m
+[32m+ [m
+[32m+                 <div class="product-price">[m
+[32m+                     <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>[m
+[32m+                 </div>[m
+[32m+ [m
+[32m+                 <div class="card-actions-small">[m
+[32m+                     <button class="btn-view"[m
+[32m+                         @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">[m
+[32m+                         <i class="fas fa-eye"></i> Xem[m
+[32m+                     </button>[m
+[32m+ [m
+[32m+                     <button class="btn-add-cart" @click="addToCart(product)">[m
+[32m+                         <i class="fas fa-plus"></i> Thêm[m
+[32m+                     </button>[m
+[32m+                 </div>[m
+[32m+ [m
+[32m+             </div>[m
+[32m+         </div>[m
+[32m+     </section>[m
+[32m+ </section>[m
+  [m
+[31m-             <section class="product-section-container">[m
+[31m- [m
+[31m-                 <section class="product-group hot-products">[m
+[31m-                     <h2 class="section-title"> Sản phẩm yêu thích</h2>[m
+[31m-                     <div class="product-grid">[m
+[31m-                         <div class="product-card" v-for="product in topFavoriteProducts" :key="product.id">[m
+[31m-                             <img :src="product.image_url || '#'" :alt="product.name">[m
+[31m-                             <h3 class="product-name">{{ product.name }}</h3>[m
+[31m- [m
+[31m-                             <div class="product-stats">[m
+[31m-                                 <span class="rating">[m
+[31m-                                     <i class="fas fa-star text-warning"></i> {{ product.average_rating || 0 }}[m
+[31m-                                 </span>[m
+[31m-                                 <span class="favorite-count ms-3">[m
+[31m-                                     <i class="fas fa-heart text-danger"></i> {{ product.favorite_count || 0 }}[m
+[31m-                                 </span>[m
+[31m-                             </div>[m
+[31m- [m
+[31m-                             <div class="product-price">[m
+[31m-                                 <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</span>[m
+[31m-                             </div>[m
+[31m-                             <div class="card-actions-small">[m
+[31m-                                 <button class="btn-view"[m
+[31m-                                     @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })">[m
+[31m-                                     <i class="fas fa-eye"></i> Xem[m
+[31m-                                 </button>[m
+[31m- [m
+[31m-                                 <button class="btn-add-cart" @click="onAddToCart(product)"><i class="fas fa-plus"></i>[m
+[31m-                                     Thêm</button>[m
+[31m-                             </div>[m
+[31m-                         </div>[m
+[31m-                     </div>[m
+[31m-                 </section>[m
+  [m
+[31m-                 <template v-for="category in categoriesWithProducts" :key="category.id">[m
+[31m-                     <section class="product-group category-group" :id="'cat-' + category.id">[m
+[31m-                         <h2 class="section-title">[m
+[31m-                             <span v-html="category.icon" style="margin-right: 10px;"></span>[m
+[31m-                             {{ category.name }} nổi bật[m
+[31m-                         </h2>[m
+[31m- [m
+[31m-                         <div class="product-grid">[m
+[31m-                             <div class="product-card" v-for="product in category.products" :key="product.id">[m
+[31m-                                 <img :src="product.image_url || '#'" :alt="product.name">[m
+[31m-                                 <h3 class="product-name">{{ product.name }}</h3>[m
+[31m- [m
+[31m-                                 <div class="product-stats">[m
+[31m-                                     <span class="rating">[m
+[31m-                                         <i class="fas fa-star text-warning"></i> {{ product.average_rating || 0 }}[m
+[31m-                                     </span>[m
+[31m-                                     <span class="sold-count ms-2" style="font-size: 0.8em; color: #888;">[m
+[31m-                                         (Đã bán: {{ product.sold_count || 0 }})[m
+[31m-                                     </span>[m
+[31m-                                 </div>[m
+[31m- [m
+[31m-                                 <div class="product-price">[m
+[31m-                                     <span class="new-price">{{ formatCurrency(getMinPrice(product.variants)) }}</s

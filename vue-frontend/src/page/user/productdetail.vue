@@ -251,11 +251,10 @@ watchEffect(() => {
     <div v-if="!loading && product" class="row g-4">
 
       <div class="col-lg-5">
-        <div class="main-image-wrapper mb-3">
-          <!-- FIX: Sử dụng getImageUrl cho ảnh chính -->
-          <img :src="getImageUrl(selectedImage)" :alt="product.name" class="img-fluid rounded main-product-image" 
-           @error="$event.target.src='https://placehold.co/500x500?text=No+Image'"/>
-        </div>
+        <<div class="main-image-wrapper mb-3">
+    <img :src="getImageUrl(selectedImage)" :alt="product.name" class="img-fluid rounded main-product-image" 
+        @error="$event.target.src='https://placehold.co/500x500?text=No+Image'"/>
+</div>
 
         <div class="thumbnail-gallery" v-if="product.gallery_images && product.gallery_images.length > 1">
           <!-- FIX: Sử dụng getImageUrl cho thumbnail -->
