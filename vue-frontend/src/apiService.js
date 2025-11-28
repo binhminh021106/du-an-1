@@ -4,26 +4,34 @@ const baseURL = import.meta.env.VITE_API_BASE_URL;
 
 const apiService = axios.create({
   baseURL: baseURL,
+  withCredentials: false,
   headers: {
-    // XÓA DÒNG Content-Type Ở ĐÂY ĐI
-    // Để Axios tự động quyết định (JSON hay File)
-    'Accept': 'application/json',
+    // Để Axios tự động quyết định Content-Type
+    Accept: "application/json",
   },
 });
 
 apiService.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('adminToken'); 
-        
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        
-        return config;
-    },
-    (error) => {
-        return Promise.reject(error);
+  (config) => {
+    // Logic: Nếu URL có chữ 'admin' thì dùng Token Admin, còn lại dùng Token User
+    // Dùng config.url.includes để check
+    const isApiAdmin = config.url && config.url.toString().includes("admin");
+
+    if (isApiAdmin) {
+      const adminToken = localStorage.getItem("adminToken");
+      if (adminToken) {
+        config.headers.Authorization = `Bearer ${adminToken}`;
+      }
+    } else {
+      const userToken = localStorage.getItem("authToken");
+      if (userToken) {
+        config.headers.Authorization = `Bearer ${userToken}`;
+      }
     }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
 );
 
 export default apiService;
