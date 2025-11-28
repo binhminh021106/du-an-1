@@ -74,14 +74,14 @@ onMounted(async () => {
 
     // Ưu tiên lấy trường 'sex', nếu không có thì tìm 'gender' để fallback
     const sexVal = coreData.sex !== undefined ? coreData.sex : coreData.gender;
-    
+
     if (sexVal !== undefined) {
       // Xử lý các trường hợp lưu 1/0 hoặc chuỗi
-      if (sexVal === 1 || sexVal === "1" || sexVal === "Nam" || sexVal === "Male") 
+      if (sexVal === 1 || sexVal === "1" || sexVal === "Nam" || sexVal === "Male")
         editUser.sex = "Nam";
-      else if (sexVal === 0 || sexVal === "0" || sexVal === "Nữ" || sexVal === "Female") 
+      else if (sexVal === 0 || sexVal === "0" || sexVal === "Nữ" || sexVal === "Female")
         editUser.sex = "Nữ";
-      else 
+      else
         editUser.sex = "Khác";
     }
 
@@ -158,10 +158,27 @@ const openEditModal = (index) => {
 };
 
 const deleteAddress = (index) => {
-  if (confirm("Bạn có chắc muốn xóa địa chỉ này?")) {
-    editUser.addresses.splice(index, 1);
-  }
+  Swal.fire({
+    title: 'Bạn có chắc muốn xóa?',
+    text: "Địa chỉ sẽ bị xóa vĩnh viễn!",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#009981',
+    cancelButtonColor: '#eb5353',
+    confirmButtonText: 'Đồng ý',
+    cancelButtonText: 'Hủy'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      editUser.addresses.splice(index, 1);
+      Swal.fire(
+        'Đã xóa!',
+        'Địa chỉ đã được xóa.',
+        'success'
+      );
+    }
+  });
 };
+
 
 const validateModal = () => {
   errors.modal = {};
@@ -243,7 +260,15 @@ const saveProfile = () => {
     }
   }
 
-  alert("Cập nhật hồ sơ thành công!");
+  Swal.fire({
+    icon: 'success',
+    title: 'Cập nhật hồ sơ thành công!',
+    showConfirmButton: false,
+    timer: 1500,
+    background: '#f0fff4',
+    color: '#009981',
+  });
+
 };
 </script>
 
@@ -257,13 +282,7 @@ const saveProfile = () => {
             <div class="avatar" @click="triggerImageUpload">
               <img :src="editUser.avatar" alt="User Avatar" />
               <div class="overlay"><i class="fas fa-camera"></i></div>
-              <input
-                type="file"
-                ref="fileInput"
-                accept="image/*"
-                @change="handleImageChange"
-                style="display: none"
-              />
+              <input type="file" ref="fileInput" accept="image/*" @change="handleImageChange" style="display: none" />
             </div>
             <h3>{{ editUser.name }}</h3>
             <p class="text-muted">{{ editUser.email }}</p>
@@ -282,16 +301,13 @@ const saveProfile = () => {
               <div class="form-group half">
                 <!-- Hiển thị tuổi tự động tính -->
                 <label>
-                  Ngày sinh 
+                  Ngày sinh
                   <span v-if="calculatedAge !== null" style="color: #009981; font-weight: bold;">
                     ({{ calculatedAge }} tuổi)
                   </span>
                 </label>
                 <!-- Input Date -->
-                <input
-                  type="date"
-                  v-model="editUser.birthday"
-                />
+                <input type="date" v-model="editUser.birthday" />
               </div>
               <div class="form-group half">
                 <label>Giới tính</label>
@@ -321,25 +337,16 @@ const saveProfile = () => {
           </div>
 
           <div class="address-list">
-            <div
-              v-if="!editUser.addresses || editUser.addresses.length === 0"
-              class="empty-address"
-            >
+            <div v-if="!editUser.addresses || editUser.addresses.length === 0" class="empty-address">
               <p>Chưa có địa chỉ nào được lưu.</p>
             </div>
 
-            <div
-              v-for="(addr, index) in editUser.addresses"
-              :key="index"
-              class="address-item"
-            >
+            <div v-for="(addr, index) in editUser.addresses" :key="index" class="address-item">
               <div class="addr-info">
                 <div class="addr-header">
                   <span class="addr-name">{{ addr.customer_name }}</span>
                   <span class="addr-phone">| {{ addr.customer_phone }}</span>
-                  <span v-if="addr.is_default" class="badge-default"
-                    >Mặc định</span
-                  >
+                  <span v-if="addr.is_default" class="badge-default">Mặc định</span>
                 </div>
                 <div class="addr-detail">
                   {{ addr.shipping_address }}
@@ -349,19 +356,10 @@ const saveProfile = () => {
                 </div>
               </div>
               <div class="addr-actions">
-                <button
-                  type="button"
-                  class="text-blue"
-                  @click="openEditModal(index)"
-                >
+                <button type="button" class="btn btn-warning" style="margin-right: 5px;" @click="openEditModal(index)">
                   Sửa
                 </button>
-                <button
-                  type="button"
-                  class="text-red"
-                  @click="deleteAddress(index)"
-                  :disabled="addr.is_default"
-                >
+                <button type="button" class="btn btn-danger" @click="deleteAddress(index)" :disabled="addr.is_default">
                   Xóa
                 </button>
               </div>
@@ -376,7 +374,6 @@ const saveProfile = () => {
       <div class="modal-content">
         <div class="modal-header">
           <h3>{{ isEditingIndex === -1 ? "Thêm địa chỉ" : "Sửa địa chỉ" }}</h3>
-          <button @click="showModal = false">&times;</button>
         </div>
         <div class="modal-body">
           <div class="form-row">
@@ -395,11 +392,7 @@ const saveProfile = () => {
             <label>Tỉnh/Thành</label>
             <select v-model="tempAddress.city">
               <option value="">Chọn Tỉnh/Thành</option>
-              <option
-                v-for="p in locationData.provinces"
-                :key="p.code"
-                :value="p.name"
-              >
+              <option v-for="p in locationData.provinces" :key="p.code" :value="p.name">
                 {{ p.name }}
               </option>
             </select>
@@ -407,32 +400,18 @@ const saveProfile = () => {
           <div class="form-row">
             <div class="form-group half">
               <label>Quận/Huyện</label>
-              <select
-                v-model="tempAddress.district"
-                :disabled="!tempAddress.city"
-              >
+              <select v-model="tempAddress.district" :disabled="!tempAddress.city">
                 <option value="">Chọn Quận/Huyện</option>
-                <option
-                  v-for="d in locationData.districts"
-                  :key="d.code"
-                  :value="d.name"
-                >
+                <option v-for="d in locationData.districts" :key="d.code" :value="d.name">
                   {{ d.name }}
                 </option>
               </select>
             </div>
             <div class="form-group half">
               <label>Phường/Xã</label>
-              <select
-                v-model="tempAddress.ward"
-                :disabled="!tempAddress.district"
-              >
+              <select v-model="tempAddress.ward" :disabled="!tempAddress.district">
                 <option value="">Chọn Phường/Xã</option>
-                <option
-                  v-for="w in locationData.wards"
-                  :key="w.code"
-                  :value="w.name"
-                >
+                <option v-for="w in locationData.wards" :key="w.code" :value="w.name">
                   {{ w.name }}
                 </option>
               </select>
@@ -441,24 +420,17 @@ const saveProfile = () => {
           <span class="error-msg">{{ errors.modal.location }}</span>
           <div class="form-group mt-2">
             <label>Địa chỉ chi tiết</label>
-            <textarea
-              v-model="tempAddress.shipping_address"
-              rows="2"
-            ></textarea>
+            <textarea v-model="tempAddress.shipping_address" rows="2"></textarea>
             <span class="error-msg">{{ errors.modal.address }}</span>
           </div>
           <div class="form-group checkbox-group">
-            <input
-              type="checkbox"
-              id="defaultAddr"
-              v-model="tempAddress.is_default"
-            />
+            <input type="checkbox" id="defaultAddr" v-model="tempAddress.is_default" />
             <label for="defaultAddr">Đặt làm mặc định</label>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="showModal = false">Hủy</button>
-          <button class="btn-primary" @click="saveAddressFromModal">Lưu</button>
+          <button class="btn btn-danger" @click="showModal = false">Hủy</button>
+          <button class="btn btn-primary" @click="saveAddressFromModal">Lưu</button>
         </div>
       </div>
     </div>
@@ -474,6 +446,7 @@ const saveProfile = () => {
   padding: 40px 0;
   font-family: "Arial", sans-serif;
 }
+
 .container {
   max-width: 1200px;
   margin: 0 auto;
@@ -483,8 +456,10 @@ const saveProfile = () => {
 /* --- CẤU HÌNH BỐ CỤC 40/60 --- */
 .profile-content {
   display: flex;
-  gap: 20px; /* Khoảng cách giữa 2 cột */
-  align-items: flex-start; /* Căn trên cùng */
+  gap: 20px;
+  /* Khoảng cách giữa 2 cột */
+  align-items: flex-start;
+  /* Căn trên cùng */
 }
 
 .profile-left {
@@ -498,6 +473,7 @@ const saveProfile = () => {
   flex: 0 0 calc(60% - 10px);
   max-width: calc(60% - 10px);
 }
+
 /* ---------------------------- */
 
 .profile-card,
@@ -508,12 +484,14 @@ const saveProfile = () => {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
   height: 100%;
 }
+
 .avatar-section {
   text-align: center;
   margin-bottom: 20px;
   padding-bottom: 20px;
   border-bottom: 1px solid #eee;
 }
+
 .avatar {
   width: 120px;
   height: 120px;
@@ -521,6 +499,7 @@ const saveProfile = () => {
   position: relative;
   cursor: pointer;
 }
+
 .avatar img {
   width: 100%;
   height: 100%;
@@ -528,6 +507,7 @@ const saveProfile = () => {
   object-fit: cover;
   border: 3px solid #e0e0e0;
 }
+
 .overlay {
   position: absolute;
   top: 0;
@@ -543,27 +523,33 @@ const saveProfile = () => {
   opacity: 0;
   transition: 0.3s;
 }
+
 .avatar:hover .overlay {
   opacity: 1;
 }
+
 .form-group {
   margin-bottom: 15px;
   display: flex;
   flex-direction: column;
 }
+
 .form-row {
   display: flex;
   gap: 15px;
 }
+
 .form-group.half {
   flex: 1;
 }
+
 label {
   font-weight: 500;
   margin-bottom: 6px;
   color: #555;
   font-size: 14px;
 }
+
 input,
 select,
 textarea {
@@ -574,11 +560,13 @@ textarea {
   transition: border 0.3s;
   font-size: 14px;
 }
+
 input:focus,
 select:focus,
 textarea:focus {
   border-color: #009981;
 }
+
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -587,6 +575,7 @@ textarea:focus {
   padding-bottom: 10px;
   border-bottom: 1px solid #eee;
 }
+
 .add-new-btn {
   background: #009981;
   color: #fff;
@@ -597,7 +586,9 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 5px;
+  margin-left: auto;
 }
+
 .address-item {
   display: flex;
   justify-content: space-between;
@@ -605,12 +596,15 @@ textarea:focus {
   padding: 15px 0;
   border-bottom: 1px solid #f0f0f0;
 }
+
 .address-item:last-child {
   border-bottom: none;
 }
+
 .addr-name {
   font-weight: bold;
 }
+
 .badge-default {
   background: #fff0f0;
   color: #ee4d2d;
@@ -620,6 +614,7 @@ textarea:focus {
   border-radius: 2px;
   margin-left: 10px;
 }
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -632,6 +627,7 @@ textarea:focus {
   align-items: center;
   z-index: 1000;
 }
+
 .modal-content {
   background: #fff;
   width: 500px;
@@ -642,6 +638,7 @@ textarea:focus {
   flex-direction: column;
   max-height: 90vh;
 }
+
 .modal-header {
   padding: 15px 20px;
   background: #f8f9fa;
@@ -650,10 +647,12 @@ textarea:focus {
   justify-content: space-between;
   align-items: center;
 }
+
 .modal-body {
   padding: 20px;
   overflow-y: auto;
 }
+
 .modal-footer {
   padding: 15px 20px;
   border-top: 1px solid #eee;
@@ -661,21 +660,7 @@ textarea:focus {
   justify-content: flex-end;
   gap: 10px;
 }
-.btn-primary {
-  background: #009981;
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.btn-secondary {
-  background: #fff;
-  border: 1px solid #ddd;
-  padding: 10px 20px;
-  border-radius: 4px;
-  cursor: pointer;
-}
+
 .save-btn {
   width: 100%;
   background: #009981;
@@ -687,29 +672,36 @@ textarea:focus {
   margin-top: 10px;
   font-weight: bold;
 }
+
 .checkbox-group {
   flex-direction: row;
   align-items: center;
   gap: 10px;
 }
+
 .error-msg {
   color: red;
   font-size: 12px;
   margin-top: 2px;
 }
+
 @media (max-width: 768px) {
   .profile-content {
     flex-direction: column;
   }
-  .profile-left, .profile-right {
+
+  .profile-left,
+  .profile-right {
     flex: auto;
     max-width: 100%;
     width: 100%;
   }
+
   .address-item {
     flex-direction: column;
     align-items: flex-start;
   }
+
   .addr-actions {
     width: 100%;
     display: flex;
