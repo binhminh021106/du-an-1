@@ -2,13 +2,26 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import Swal from 'sweetalert2';
+import '@fortawesome/fontawesome-free/css/all.min.css'
 
 const router = useRouter();
 
+// --- CẤU HÌNH URL ---
+const ENV_API_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+const BACKEND_URL = ENV_API_URL.replace(/\/api\/?$/, ''); // Loại bỏ /api ở cuối để lấy root domain
+
 // --- STATE ---
-const adminUser = ref({}); // Khởi tạo rỗng để tránh lỗi undefined ban đầu
+const adminUser = ref({}); 
 const isUserMenuActive = ref(false);
 const userMenuContainer = ref(null);
+
+// --- HELPER XỬ LÝ ẢNH ---
+const getAvatarUrl = (path) => {
+    if (!path) return null; // Để template xử lý fallback
+    if (path.startsWith('http') || path.startsWith('blob:')) return path;
+    // Nối domain backend nếu là đường dẫn tương đối
+    return `${BACKEND_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+};
 
 // --- LOGIC TOGGLE MENU ---
 const toggleUserMenu = () => {
@@ -70,7 +83,7 @@ onUnmounted(() => {
             <!-- Left: Toggle Sidebar -->
             <ul class="navbar-nav">
                 <li class="nav-item">
-                    <a class="nav-link text-secondary" data-lte-toggle="sidebar" href="#" role="button">
+                    <a class="nav-link text-secondary btn mb-2" data-lte-toggle="sidebar" href="#" role="button">
                         <i class="bi bi-list fs-4"></i>
                     </a>
                 </li>
@@ -92,9 +105,10 @@ onUnmounted(() => {
                        :class="{ 'active': isUserMenuActive }" 
                        @click.prevent="toggleUserMenu">
                         
-                        <img :src="adminUser.avatar_url || `https://ui-avatars.com/api/?name=${adminUser.fullname}&background=009981&color=fff`"
-                            class="user-image rounded-circle object-fit-cover border" 
-                            alt="User Image">
+                        <!-- SỬ DỤNG HÀM HELPER getAvatarUrl TẠI ĐÂY -->
+                        <img :src="getAvatarUrl(adminUser.avatar_url) || `https://ui-avatars.com/api/?name=${adminUser.fullname}&background=009981&color=fff`"
+                             class="user-image rounded-circle object-fit-cover border" 
+                             alt="User Image">
                         
                         <div class="d-none d-md-block text-start lh-1">
                             <span class="d-block fw-semibold text-dark small">{{ adminUser.fullname }}</span>
@@ -112,10 +126,11 @@ onUnmounted(() => {
                         <!-- Header Section with Gradient -->
                         <div class="user-header-modern text-center p-4 text-white">
                             <div class="position-relative d-inline-block mb-2">
-                                <img :src="adminUser.avatar_url || `https://ui-avatars.com/api/?name=${adminUser.fullname}&background=fff&color=009981`"
-                                    class="rounded-circle border border-3 border-white shadow-sm" 
-                                    style="width: 80px; height: 80px;" 
-                                    alt="User Image">
+                                <!-- CŨNG SỬ DỤNG HELPER TẠI ĐÂY -->
+                                <img :src="getAvatarUrl(adminUser.avatar_url) || `https://ui-avatars.com/api/?name=${adminUser.fullname}&background=fff&color=009981`"
+                                     class="rounded-circle border border-3 border-white shadow-sm" 
+                                     style="width: 80px; height: 80px; object-fit: cover;" 
+                                     alt="User Image">
                                 <span class="position-absolute bottom-0 end-0 bg-success border border-2 border-white rounded-circle p-2"></span>
                             </div>
                             <h6 class="mb-0 fw-bold">{{ adminUser.fullname }}</h6>
@@ -124,12 +139,12 @@ onUnmounted(() => {
                         
                         <!-- Menu Items -->
                         <div class="p-2">
-                            <a href="#" class="dropdown-item rounded-2 px-3 py-2 d-flex align-items-center gap-2">
+                            <!-- <a href="#" class="dropdown-item rounded-2 px-3 py-2 d-flex align-items-center gap-2">
                                 <i class="bi bi-person text-muted"></i> Hồ sơ cá nhân
                             </a>
                             <a href="#" class="dropdown-item rounded-2 px-3 py-2 d-flex align-items-center gap-2">
                                 <i class="bi bi-gear text-muted"></i> Cài đặt tài khoản
-                            </a>
+                            </a> -->
                             <div class="dropdown-divider my-2"></div>
                             <a href="#" @click.prevent="handleLogout" 
                                class="dropdown-item rounded-2 px-3 py-2 d-flex align-items-center gap-2 text-danger hover-bg-danger-light">
@@ -144,6 +159,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+@import '@fortawesome/fontawesome-free/css/all.min.css';
 /* Tinh chỉnh Navbar */
 .app-header {
     min-height: 60px;

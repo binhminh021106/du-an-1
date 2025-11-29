@@ -8,7 +8,7 @@ use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Log; // ✅ THÊM DÒNG NÀY
+use Illuminate\Support\Facades\Log;
 
 class AdminProductController extends Controller
 {
@@ -31,7 +31,12 @@ class AdminProductController extends Controller
             'category_id' => 'required|exists:categories,id',
             'description' => 'nullable|string',
             'status' => 'required|in:active,inactive,draft',
-            'thumbnail' => 'nullable|image|max:5120',
+            // VALIDATE THUMBNAIL CHẶT CHẼ
+            'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120', 
+        ], [
+            'thumbnail.image' => 'File thumbnail không hợp lệ.',
+            'thumbnail.mimes' => 'Chỉ chấp nhận ảnh: jpeg, png, jpg, gif, webp.',
+            'thumbnail.max' => 'Thumbnail tối đa 5MB.',
         ]);
 
         if ($validator->fails()) {
@@ -49,7 +54,8 @@ class AdminProductController extends Controller
             
             if ($request->hasFile('thumbnail')) {
                 $file = $request->file('thumbnail');
-                $filename = time() . '_' . $file->getClientOriginalName();
+                // Đặt tên file an toàn
+                $filename = 'thumb_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
                 $path = public_path('thumbnail');
 
                 if (!File::exists($path)) {
@@ -96,7 +102,6 @@ class AdminProductController extends Controller
     public function show(string $id)
     {
         try {
-            // Load đầy đủ quan hệ
             $product = Product::with([
                 'category', 
                 'variants' => function($query) {
@@ -107,20 +112,16 @@ class AdminProductController extends Controller
                 'images', 
             ])->findOrFail($id);
             
-            // Format lại variants
+            // Format variants logic (giữ nguyên logic của bạn)
             $formattedVariants = $product->variants->map(function($variant) {
                 $attributes = [];
-                
-                // Kiểm tra tồn tại attributeValues
                 if ($variant->attributeValues && $variant->attributeValues->count() > 0) {
                     foreach($variant->attributeValues as $av) {
-                        // Kiểm tra null safety
                         if ($av && $av->attribute && $av->attribute->name) {
                             $attributes[$av->attribute->name] = $av->value;
                         }
                     }
                 }
-                
                 return [
                     'id' => $variant->id,
                     'product_id' => $variant->product_id,
@@ -133,7 +134,6 @@ class AdminProductController extends Controller
                 ];
             });
             
-            // Gán lại variants đã format
             $productData = $product->toArray();
             $productData['variants'] = $formattedVariants;
             
@@ -143,8 +143,7 @@ class AdminProductController extends Controller
             ]);
             
         } catch (\Exception $e) {
-            Log::error('Error in AdminProductController@show: ' . $e->getMessage()); // ✅ Bỏ dấu \
-            Log::error($e->getTraceAsString()); // ✅ Bỏ dấu \
+            Log::error('Error in AdminProductController@show: ' . $e->getMessage());
             
             return response()->json([
                 'success' => false,
@@ -160,7 +159,7 @@ class AdminProductController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'category_id' => 'sometimes|exists:categories,id',
-            'thumbnail' => 'nullable|image|max:5120',
+            'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120', // Validate chặt chẽ
         ]);
 
         if ($validator->fails()) {
@@ -172,12 +171,14 @@ class AdminProductController extends Controller
             $dataToUpdate = $request->only(['name', 'category_id', 'description', 'status']);
 
             if ($request->hasFile('thumbnail')) {
+                // 1. XÓA ẢNH CŨ NẾU CÓ
                 if ($product->thumbnail_url && file_exists(public_path($product->thumbnail_url))) {
-                    // File::delete(public_path($product->thumbnail_url));
+                    // Bỏ comment dòng này để xóa file cũ
+                    File::delete(public_path($product->thumbnail_url));
                 }
 
                 $file = $request->file('thumbnail');
-                $filename = time() . '_' . $file->getClientOriginalName();
+                $filename = 'thumb_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
                 $path = public_path('thumbnail');
 
                 if (!File::exists($path)) {
@@ -202,22 +203,47 @@ class AdminProductController extends Controller
         }
     }
 
+    // --- ĐÃ SỬA HÀM DESTROY ĐỂ XÓA FILE VẬT LÝ ---
     public function destroy(string $id)
     {
         try {
             $product = Product::findOrFail($id);
             
-            if ($product->thumbnail_url && File::exists(public_path($product->thumbnail_url))) {
-                File::delete(public_path($product->thumbnail_url));
+            // 1. XÓA THUMBNAIL VẬT LÝ
+            if ($product->thumbnail_url) {
+                 $thumbPath = public_path($product->thumbnail_url);
+                 if (File::exists($thumbPath)) {
+                    File::delete($thumbPath);
+                 }
             }
 
+            // 2. XÓA CÁC BIẾN THỂ
             $product->variants()->delete();
-            $product->images()->delete();
+            
+            // 3. XÓA GALLERY ẢNH (ImageProduct)
+            // Lưu ý: Phải lấy danh sách ảnh ra trước khi xóa trong DB
+            $galleryImages = $product->images; // Lấy collection ảnh
+
+            if ($galleryImages) {
+                foreach ($galleryImages as $image) {
+                    // Xóa file vật lý
+                    if ($image->image_url) {
+                        $imagePath = public_path($image->image_url);
+                        if (File::exists($imagePath)) {
+                            File::delete($imagePath);
+                        }
+                    }
+                }
+                // Sau khi xóa file xong thì xóa records trong DB
+                $product->images()->delete();
+            }
+            
+            // 4. XÓA SẢN PHẨM
             $product->delete();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Xóa sản phẩm thành công'
+                'message' => 'Xóa sản phẩm và toàn bộ ảnh thành công'
             ]);
         } catch (\Exception $e) {
             return response()->json([

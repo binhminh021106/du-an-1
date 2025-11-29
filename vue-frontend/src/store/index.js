@@ -2,7 +2,7 @@ import { createStore } from 'vuex';
 import axios from 'axios';
 
 // Cấu hình API URL
-const API_URL = 'http://127.0.0.1:8000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
 
 const saveToLocalStorage = (cart) => {
     localStorage.setItem('my_cart', JSON.stringify(cart));

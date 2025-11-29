@@ -6,8 +6,9 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File; // Sử dụng File Facade để xử lý file vật lý
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class AdminUserController extends Controller
 {
@@ -21,27 +22,44 @@ class AdminUserController extends Controller
     public function store(Request $request)
     {
         // Validate dữ liệu đầu vào
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:6|confirmed',
-            'avatar' => 'nullable|image|max:5120',
+            // Cập nhật validate ảnh: Max 10MB, kích thước tối thiểu 100x100
+            'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:10240|dimensions:min_width=100,min_height=100',
+            'phone' => 'nullable|string|max:20',
+        ], [
+            'avatar.max' => 'Ảnh không được vượt quá 10MB.',
+            'avatar.dimensions' => 'Ảnh đại diện phải có kích thước tối thiểu 100x100 pixel.',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
 
         DB::beginTransaction();
         try {
             $user = new User();
-            $user->fullName = $request->name; // Map 'name' từ form sang 'fullName' trong DB
+            $user->fullName = $request->name; // Map 'name' từ form sang 'fullName'
             $user->email = $request->email;
             $user->phone = $request->phone;
-            // $user->address = $request->address; // XÓA DÒNG NÀY: Bảng users không có cột address
             $user->status = $request->status ?? 'active';
             $user->password = Hash::make($request->password);
 
-            // --- LƯU ẢNH ---
+            // --- XỬ LÝ LƯU ẢNH ---
             if ($request->hasFile('avatar')) {
-                $path = $request->file('avatar')->store('avatars', 'public');
-                $user->avatar_url = asset('storage/' . $path);
+                $file = $request->file('avatar');
+                // Tạo tên file unique
+                $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                $path = public_path('uploads/users'); // Lưu vào thư mục public/uploads/users
+
+                if (!File::exists($path)) {
+                    File::makeDirectory($path, 0755, true);
+                }
+
+                $file->move($path, $filename);
+                $user->avatar_url = '/uploads/users/' . $filename; // Lưu đường dẫn tương đối
             }
             
             $user->save();
@@ -60,11 +78,20 @@ class AdminUserController extends Controller
         $user = User::findOrFail($id);
 
         // Validate cập nhật
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'email' => 'sometimes|required|email|unique:users,email,' . $id,
             'name' => 'sometimes|required|string|max:255',
             'phone' => 'nullable|string',
+            // Cập nhật validate ảnh: Max 10MB, kích thước tối thiểu 100x100
+            'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:10240|dimensions:min_width=100,min_height=100',
+        ], [
+            'avatar.max' => 'Ảnh không được vượt quá 10MB.',
+            'avatar.dimensions' => 'Ảnh đại diện phải có kích thước tối thiểu 100x100 pixel.',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
 
         DB::beginTransaction();
         try {
@@ -74,21 +101,31 @@ class AdminUserController extends Controller
             if ($request->has('phone')) $user->phone = $request->phone;
             if ($request->has('status')) $user->status = $request->status;
             
-            // XÓA DÒNG CẬP NHẬT ADDRESS VÌ CỘT KHÔNG TỒN TẠI
-            // if ($request->has('address')) $user->address = $request->address;
+            if ($request->filled('password')) {
+                $user->password = Hash::make($request->password);
+            }
 
-            // --- CẬP NHẬT ẢNH ---
+            // --- XỬ LÝ CẬP NHẬT ẢNH ---
             if ($request->hasFile('avatar')) {
-                // Xóa ảnh cũ nếu có và không phải là link ngoài
-                if ($user->avatar_url && strpos($user->avatar_url, asset('storage/')) !== false) {
-                    $oldPath = str_replace(asset('storage/'), '', $user->avatar_url);
-                    if (Storage::disk('public')->exists($oldPath)) {
-                        Storage::disk('public')->delete($oldPath);
+                // 1. Xóa ảnh cũ nếu có
+                if ($user->avatar_url) {
+                    $oldPath = public_path($user->avatar_url);
+                    if (File::exists($oldPath)) {
+                        File::delete($oldPath);
                     }
                 }
-                // Lưu ảnh mới
-                $path = $request->file('avatar')->store('avatars', 'public');
-                $user->avatar_url = asset('storage/' . $path);
+
+                // 2. Lưu ảnh mới
+                $file = $request->file('avatar');
+                $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                $path = public_path('uploads/users');
+
+                if (!File::exists($path)) {
+                    File::makeDirectory($path, 0755, true);
+                }
+
+                $file->move($path, $filename);
+                $user->avatar_url = '/uploads/users/' . $filename;
             }
 
             $user->save();
@@ -104,13 +141,16 @@ class AdminUserController extends Controller
     {
         try {
             $user = User::findOrFail($id);
-            // Xóa ảnh nếu cần
-            if ($user->avatar_url && strpos($user->avatar_url, asset('storage/')) !== false) {
-                 $oldPath = str_replace(asset('storage/'), '', $user->avatar_url);
-                 if (Storage::disk('public')->exists($oldPath)) {
-                    Storage::disk('public')->delete($oldPath);
-                 }
+            
+            // --- XOÁ ẢNH VẬT LÝ ---
+            if ($user->avatar_url) {
+                $imagePath = public_path($user->avatar_url);
+                // Kiểm tra file có tồn tại không trước khi xóa
+                if (File::exists($imagePath)) {
+                    File::delete($imagePath);
+                }
             }
+            
             $user->delete();
             return response()->json(['message' => 'Xóa thành công']);
         } catch (\Exception $e) {

@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useStore } from "vuex"; // 1. Import Vuex
 import apiService from '../../apiService.js';
 
-import { isInWishlist, toggleWishlist } from "./user/wishlistStore.js";
+import { isInWishlist, toggleWishlist } from "../../store/wishlistStore.js";
 
 const route = useRoute();
 const router = useRouter();
