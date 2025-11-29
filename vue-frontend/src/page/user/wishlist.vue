@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useStore } from 'vuex'; // 1. Import Vuex
 // Import store wishlist (giữ nguyên logic quản lý wishlist)
-import { wishlist, removeItemFromWishlist } from "./user/wishlistStore.js"; 
+import { wishlist, removeItemFromWishlist } from "../../store/wishlistStore.js"; 
 import apiService from '../../apiService.js';
 
 const store = useStore(); // 2. Khởi tạo store
