@@ -154,7 +154,7 @@ async function fetchAllBrands() {
 // --- CÁC HÀM HELPER ---
 function getStatusBadge(status) {
   if (status === 'published') return { class: 'text-bg-success', text: 'Hiển thị' };
-  return { class: 'text-bg-secondary', text: 'Nháp' };
+  return { class: 'text-bg-secondary', text: 'Ẩn' };
 }
 function getFormattedDate(dateString) {
   if (!dateString) return 'N/A';
@@ -626,7 +626,7 @@ async function handleDeleteBrand(brand) {
                 </div>
               </div>
               <div v-else class="table-responsive">
-                <table class="table table-hover table-striped align-middle">
+                <table class="table table-hover table-bordered align-middle">
                   <thead>
                     <tr>
                       <th style="width: 200px" class="text-center">Sắp xếp</th>
@@ -762,7 +762,7 @@ async function handleDeleteBrand(brand) {
                 </div>
               </div>
               <div v-else class="table-responsive">
-                <table class="table table-hover table-striped align-middle">
+                <table class="table table-hover table-bordered align-middle">
                   <thead>
                     <tr>
                       <th style="width: 200px" class="text-center">Sắp xếp</th>
@@ -781,8 +781,8 @@ async function handleDeleteBrand(brand) {
                     </tr>
                     <tr v-for="brand in paginatedBrands" :key="brand.id">
                       <td class="text-center">
-                         <!-- ORDER CONTROLS FOR BRAND -->
-                         <div class="btn-group btn-group-sm" role="group">
+                          <!-- ORDER CONTROLS FOR BRAND -->
+                          <div class="btn-group btn-group-sm" role="group">
                           <button type="button" class="btn btn-outline-secondary" title="Lên đầu" 
                             @click="moveItem(brand, 'top', allBrands, 'brand')">
                             <i class="bi bi-chevron-double-up"></i>
@@ -913,7 +913,7 @@ async function handleDeleteBrand(brand) {
                       <label for="status" class="form-label">Trạng thái</label>
                       <select class="form-select" id="status" v-model="slideFormData.status">
                         <option value="published">Hiển thị (Published)</option>
-                        <option value="draft">Nháp (Draft)</option>
+                        <option value="draft">Ẩn (Hidden)</option>
                       </select>
                     </div>
                   </div>
@@ -1000,7 +1000,7 @@ async function handleDeleteBrand(brand) {
                       <label for="brandStatus" class="form-label">Trạng thái</label>
                       <select class="form-select" id="brandStatus" v-model="brandFormData.status">
                         <option value="published">Hiển thị (Published)</option>
-                        <option value="draft">Nháp (Draft)</option>
+                        <option value="draft">Ẩn (Hidden)</option>
                       </select>
                     </div>
                   </div>
@@ -1094,6 +1094,91 @@ async function handleDeleteBrand(brand) {
 </template>
 
 <style scoped>
+/* Color Palette Overrides */
+:root {
+    --brand-primary: #009981;
+    --brand-dark: #00483D;
+}
+
+/* Headings */
+h3, .card-title, .modal-title {
+    color: #00483D;
+    font-weight: 700;
+}
+
+/* Primary Button (Use #009981) */
+.btn-primary {
+    background-color: #009981 !important;
+    border-color: #009981 !important;
+}
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+    background-color: #00483D !important;
+    border-color: #00483D !important;
+}
+
+/* Success Button (Mapped to Dark Teal #00483D for Brand Section) */
+.btn-success {
+    background-color: #00483D !important;
+    border-color: #00483D !important;
+}
+.btn-success:hover, .btn-success:focus, .btn-success:active {
+    background-color: #00332b !important;
+    border-color: #00332b !important;
+}
+
+/* Outline Buttons */
+.btn-outline-primary {
+    color: #009981 !important;
+    border-color: #009981 !important;
+}
+.btn-outline-primary:hover {
+    background-color: #009981 !important;
+    color: #fff !important;
+}
+
+/* Text Colors */
+.text-primary {
+    color: #009981 !important;
+}
+.text-success {
+    color: #00483D !important;
+}
+
+/* Badges */
+.bg-primary {
+    background-color: #009981 !important;
+}
+
+/* Pagination */
+.page-item.active .page-link {
+    background-color: #009981 !important;
+    border-color: #009981 !important;
+}
+.page-link {
+    color: #00483D !important;
+}
+
+/* Form Controls */
+.form-control:focus, .form-select:focus {
+    border-color: #009981;
+    box-shadow: 0 0 0 0.25rem rgba(0, 153, 129, 0.25);
+}
+
+/* Switch */
+.form-check-input:checked {
+    background-color: #009981;
+    border-color: #009981;
+}
+
+/* Loading Spinners */
+.spinner-border.text-primary {
+    color: #009981 !important;
+}
+.spinner-border.text-success {
+    color: #00483D !important;
+}
+
+/* --- EXISTING STYLES --- */
 .table td .btn {
   margin-top: 2px;
   margin-bottom: 2px;

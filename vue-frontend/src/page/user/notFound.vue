@@ -1,7 +1,7 @@
 <script setup>
 import { useRouter } from "vue-router";
 const router = useRouter();
-
+import '@fortawesome/fontawesome-free/css/all.min.css'
 // const goHome = () => {
 //   router.push('/');
 // };
@@ -20,7 +20,6 @@ const router = useRouter();
 </template>
 
 <style scoped>
-@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css');
 
 .notfound-page {
   font-family: Arial, sans-serif;
