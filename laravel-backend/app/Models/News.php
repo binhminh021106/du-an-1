@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\User; 
+// use App\Models\User; // Không cần import nữa vì đã bỏ quan hệ
 
 class News extends Model
 {
@@ -20,15 +20,16 @@ class News extends Model
         'content', 
         'image_url',
         'slug', 
-        'author_id', 
-        'status'
+        'status',
+        'author_name'
     ];
 
     /**
-     * Relationship: Một tin tức thuộc về một tác giả (User)
+     * Relationship: Đã vô hiệu hóa vì chuyển sang dùng author_name trực tiếp
+     * Giữ lại code comment để tham khảo nếu sau này cần tracking ngược lại user thật
      */
-    public function author()
-    {
-        return $this->belongsTo(User::class, 'author_id', 'id');
-    }
+    // public function author()
+    // {
+    //     return $this->belongsTo(User::class, 'author_id', 'id');
+    // }
 }

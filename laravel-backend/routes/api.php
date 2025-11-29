@@ -22,22 +22,24 @@ use App\Http\Controllers\Api\Client\AuthController;
 use App\Http\Controllers\Api\Client\BrandSlideController;
 
 // Admin Controllers
-use App\Http\Controllers\Api\admin\AdminAuthController;
-use App\Http\Controllers\Api\admin\AdminProductController;
-use App\Http\Controllers\Api\admin\AdminCategoryController;
-use App\Http\Controllers\Api\admin\AdminUserController;
-use App\Http\Controllers\Api\admin\AdminVariantController;
-use App\Http\Controllers\Api\admin\AdminCommentController;
-use App\Http\Controllers\Api\admin\AdminCouponController;
-use App\Http\Controllers\Api\admin\AdminImageProductController;
-use App\Http\Controllers\Api\admin\AdminNewController;
-use App\Http\Controllers\Api\admin\AdminOrderController;
-use App\Http\Controllers\Api\admin\AdminReviewController;
-use App\Http\Controllers\Api\admin\AdminRoleController;
-use App\Http\Controllers\Api\admin\AdminSlideController;
-use App\Http\Controllers\Api\admin\AminAccountController;
-use App\Http\Controllers\Api\admin\AdminBrandSlideController;
-use App\Http\Controllers\Api\admin\AdminAttributeController;
+// [FIX] Đổi 'admin' thành 'Admin' cho đúng chuẩn thư mục
+use App\Http\Controllers\Api\Admin\AdminAuthController;
+use App\Http\Controllers\Api\Admin\AdminProductController;
+use App\Http\Controllers\Api\Admin\AdminCategoryController;
+use App\Http\Controllers\Api\Admin\AdminUserController;
+use App\Http\Controllers\Api\Admin\AdminVariantController;
+use App\Http\Controllers\Api\Admin\AdminCommentController;
+use App\Http\Controllers\Api\Admin\AdminCouponController;
+use App\Http\Controllers\Api\Admin\AdminImageProductController;
+use App\Http\Controllers\Api\Admin\AdminNewController;
+use App\Http\Controllers\Api\Admin\AdminOrderController;
+use App\Http\Controllers\Api\Admin\AdminReviewController;
+use App\Http\Controllers\Api\Admin\AdminRoleController;
+use App\Http\Controllers\Api\Admin\AdminSlideController;
+// [FIX] Sửa lỗi chính tả Amin -> Admin
+use App\Http\Controllers\Api\Admin\AminAccountController;
+use App\Http\Controllers\Api\Admin\AdminBrandSlideController;
+use App\Http\Controllers\Api\Admin\AdminAttributeController;
 
 /* API Routes */
 
@@ -127,7 +129,7 @@ Route::group([
     Route::apiResource('reviews', AdminReviewController::class);
     Route::apiResource('roles', AdminRoleController::class);
     Route::apiResource('slides', AdminSlideController::class);
-    Route::apiResource('admins', AminAccountController::class);
+    Route::apiResource('admins', AminAccountController::class); 
     Route::apiResource('brands', AdminBrandSlideController::class);
 
     Route::apiResource('attributes', AdminAttributeController::class);

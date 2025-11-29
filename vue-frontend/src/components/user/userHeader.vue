@@ -10,22 +10,40 @@ const router = useRouter();
 const isMenuActive = ref(false);
 const menuContainer = ref(null);
 const categories = ref([]);
+const isLoadingCategories = ref(false); // [NEW] Trạng thái loading
 
 // --- LOGIC MENU USER ---
 const isUserMenuActive = ref(false);
 const userMenuContainer = ref(null);
 const user = ref(null);
 
-// --- LOGIC CHUNG ---
+// --- LOGIC CHUNG & GIỎ HÀNG ---
 const searchQuery = ref('');
+const cartItemCount = ref(0); // [NEW] Biến đếm số item trong giỏ
 
-// Fetch data
+// Fetch data danh mục (Đã nâng cấp loading)
 const fetchCategories = async () => {
+  isLoadingCategories.value = true;
   try {
     const response = await apiService.get(`/categories`);
     categories.value = response.data;
   } catch (error) {
     console.error("Lỗi khi tải danh mục:", error);
+  } finally {
+    isLoadingCategories.value = false;
+  }
+};
+
+// [NEW] Hàm tính số lượng item trong giỏ hàng
+const updateCartCount = () => {
+  try {
+    // Giả sử bạn lưu giỏ hàng trong localStorage với key 'cart'
+    // Nếu bạn dùng Pinia/Vuex, hãy thay thế logic này bằng store
+    const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+    // Đếm số lượng phần tử (unique items) thay vì cộng dồn quantity
+    cartItemCount.value = Array.isArray(cart) ? cart.length : 0;
+  } catch (e) {
+    cartItemCount.value = 0;
   }
 };
 
@@ -81,16 +99,30 @@ const handleLoginSuccess = (event) => {
   user.value = event.detail.user;
 };
 
+// [NEW] Lắng nghe sự kiện thêm vào giỏ hàng (nếu có)
+const handleCartUpdate = () => {
+  updateCartCount();
+};
+
 onMounted(() => {
   user.value = JSON.parse(localStorage.getItem('userData') || null);
   document.addEventListener('click', handleClickOutside);
   window.addEventListener('login-success', handleLoginSuccess);
+  
+  // [NEW] Lắng nghe sự kiện storage để cập nhật giỏ hàng khi có thay đổi tab khác
+  window.addEventListener('storage', handleCartUpdate);
+  // [NEW] Lắng nghe sự kiện custom (nếu bạn dispatch sự kiện này khi add to cart)
+  window.addEventListener('cart-updated', handleCartUpdate);
+  
   fetchCategories();
+  updateCartCount(); // Gọi lần đầu
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside);
   window.removeEventListener('login-success', handleLoginSuccess);
+  window.removeEventListener('storage', handleCartUpdate);
+  window.removeEventListener('cart-updated', handleCartUpdate);
 });
 </script>
 
@@ -131,15 +163,24 @@ onUnmounted(() => {
           </button>
 
           <div class="dropdown-menu" :class="{ active: isMenuActive }">
-            <ul class="menu-list" v-if="categories.length">
+            <!-- [NEW] Trạng thái Loading -->
+            <div v-if="isLoadingCategories" class="p-3 text-center text-muted small" style="padding: 15px; color: #666;">
+              <i class="fa-solid fa-spinner fa-spin"></i> Đang tải...
+            </div>
+
+            <ul class="menu-list" v-else-if="categories.length">
               <li v-for="category in categories" :key="category.id">
-                <router-link :to="'/Shop?categoryId=' + category.id">
+                <!-- [NEW] Dùng Object syntax cho router-link an toàn hơn -->
+                <router-link :to="{ name: 'Shop', query: { categoryId: category.id } }">
+                  <!-- [NEW] Thêm logic kiểm tra icon an toàn -->
                   <span v-html="category.icon" class="icon-placeholder"></span>
                   {{ category.name }}
                 </router-link>
               </li>
             </ul>
-            <div v-else class="p-3 text-center text-muted small">Đang tải danh mục...</div>
+            <div v-else class="p-3 text-center text-muted small" style="padding: 15px; color: #666;">
+                Không có danh mục nào.
+            </div>
           </div>
         </div>
 
@@ -151,8 +192,13 @@ onUnmounted(() => {
         </form>
 
         <div class="header-actions">
-          <router-link :to="{ name: 'cart' }" class="action-item side-menu-container">
-            <i class="fa-solid fa-cart-shopping"></i>
+          <!-- [NEW] Nâng cấp Giỏ hàng: Thêm class cart-action để style riêng -->
+          <router-link :to="{ name: 'cart' }" class="action-item side-menu-container cart-action">
+            <div class="cart-icon-wrapper">
+                <i class="fa-solid fa-cart-shopping"></i>
+                <!-- [NEW] Badge hiển thị số lượng item -->
+                <span v-if="cartItemCount > 0" class="cart-badge">{{ cartItemCount }}</span>
+            </div>
             <span>Giỏ hàng</span>
           </router-link>
 
@@ -199,17 +245,18 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-:root {
-  --primary-color: #009981;
-  --primary-light: #DBF9EB;
-  --primary-dark: #00483D;
-  --text-white: #ffffff;
-  --text-dark: #333333;
-  --bg-gray: #f8f9fa;
-  --danger-color: #d9534f;
-  --danger-light: #fdf2f2;
-  --danger-dark: #b92c28;
-}
+/* Xóa :root vì không hoạt động tốt trong scoped styles ở một số môi trường.
+   Thay thế bằng mã màu trực tiếp:
+   --primary-color: #009981;
+   --primary-light: #DBF9EB;
+   --primary-dark: #00483D;
+   --text-white: #ffffff;
+   --text-dark: #333333;
+   --bg-gray: #f8f9fa;
+   --danger-color: #d9534f;
+   --danger-light: #fdf2f2;
+   --danger-dark: #b92c28;
+*/
 
 .site-header {
   font-family: Arial, sans-serif;
@@ -242,8 +289,8 @@ ul {
 }
 
 .top-bar {
-  background-color: var(--primary-color);
-  color: var(--text-white);
+  background-color: #009981; /* --primary-color */
+  color: #ffffff; /* --text-white */
   font-size: 13px;
   padding: 8px 0;
 }
@@ -261,9 +308,9 @@ ul {
 }
 
 .main-header {
-  background-color: var(--text-white);
+  background-color: #ffffff; /* --text-white */
   padding: 15px 0;
-  color: var(--text-dark);
+  color: #333333; /* --text-dark */
   border-bottom: 1px solid #eee;
 }
 
@@ -271,7 +318,7 @@ ul {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--primary-color);
+  color: #009981; /* --primary-color */
   font-weight: bold;
   font-size: 24px;
 }
@@ -281,9 +328,9 @@ ul {
 }
 
 .category-button {
-  background-color: var(--bg-gray);
+  background-color: #f8f9fa; /* --bg-gray */
   border: 1px solid #eee;
-  color: var(--text-dark);
+  color: #333333; /* --text-dark */
   padding: 10px 15px;
   border-radius: 8px;
   cursor: pointer;
@@ -295,8 +342,14 @@ ul {
   transition: all 0.2s;
 }
 
+/* [EDIT] Cập nhật màu hover của nút Danh mục cho giống nút User/Account */
 .category-button:hover {
-  background-color: #e9ecef;
+  background-color: #DBF9EB; /* --primary-light */
+  color: #00483D; /* --primary-dark */
+}
+/* [EDIT] Đổi màu icon bên trong nút Danh mục khi hover */
+.category-button:hover i {
+  color: #00483D; /* --primary-dark */
 }
 
 .side-menu-container {
@@ -316,7 +369,6 @@ ul {
   border: 1px solid #eee;
   padding: 5px 0;
   overflow: hidden;
-  /* Để bo góc cho header bên trong */
 }
 
 .dropdown-menu.active {
@@ -328,16 +380,20 @@ ul {
   align-items: center;
   gap: 12px;
   padding: 12px 15px;
-  color: var(--text-dark);
+  color: #333333; /* --text-dark */
   font-size: 14px;
   transition: all 0.2s;
+  /* Thêm viền trái trong suốt để chuẩn bị cho hiệu ứng hover */
+  border-left: 3px solid transparent; 
 }
 
+/* [NEW] Hiệu ứng hover cho danh mục: Nền xanh nhạt + Viền xanh đậm */
 .menu-list li a:hover {
-  background-color: var(--primary-light);
-  color: var(--primary-dark);
+  background-color: #DBF9EB; /* --primary-light */
+  color: #00483D; /* --primary-dark */
   padding-left: 18px;
   font-weight: 500;
+  border-left: 3px solid #009981; /* --primary-color */
 }
 
 /* Đảm bảo icon có khoảng cách và màu sắc */
@@ -346,14 +402,12 @@ ul {
   text-align: center;
   color: #999;
   font-size: 16px;
-  /* Kích thước icon */
   display: inline-block;
 }
 
 .menu-list li a:hover .icon-placeholder {
-  color: var(--primary-color);
+  color: #009981; /* --primary-color */
 }
-
 
 .search-bar {
   flex-grow: 1;
@@ -363,16 +417,16 @@ ul {
 .search-bar input {
   width: 100%;
   padding: 10px 15px;
-  border: 2px solid var(--primary-color);
+  border: 2px solid #009981; /* --primary-color */
   border-radius: 8px;
   font-size: 14px;
   box-sizing: border-box;
-  background-color: var(--bg-gray);
+  background-color: #f8f9fa; /* --bg-gray */
   outline: none;
 }
 
 .search-bar input:focus {
-  background-color: var(--text-white);
+  background-color: #ffffff; /* --text-white */
 }
 
 .search-btn {
@@ -381,7 +435,7 @@ ul {
   top: 50%;
   transform: translateY(-50%);
   border: none;
-  background: var(--primary-color);
+  background: #009981; /* --primary-color */
   color: white;
   padding: 6px 15px;
   border-radius: 6px;
@@ -391,7 +445,7 @@ ul {
 }
 
 .search-btn:hover {
-  background-color: var(--primary-dark);
+  background-color: #00483D; /* --primary-dark */
 }
 
 .header-actions {
@@ -406,25 +460,72 @@ ul {
   gap: 8px;
   padding: 8px 12px;
   border-radius: 8px;
-  background-color: var(--bg-gray);
-  color: var(--text-dark);
+  background-color: #f8f9fa; /* --bg-gray */
+  color: #333333; /* --text-dark */
   font-size: 14px;
   white-space: nowrap;
   transition: all 0.2s;
 }
 
+/* [EDIT] Cập nhật hover cho các nút action (như Giỏ hàng) */
 .action-item:hover {
-  background-color: var(--primary-light);
-  color: var(--primary-dark);
+  background-color: #DBF9EB; /* --primary-light */
+  color: #00483D; /* --primary-dark */
+}
+/* [EDIT] Đảm bảo icon cũng đổi màu khi hover vào nút cha */
+.action-item:hover i {
+  color: #00483D; /* --primary-dark */
 }
 
 .action-item i {
   font-size: 20px;
-  color: var(--primary-color);
+  color: #009981; /* --primary-color */
+  transition: color 0.2s; /* Thêm transition cho mượt */
+}
+
+/* [NEW] STYLE CHO GIỎ HÀNG */
+.cart-action {
+  position: relative;
+  /* Đảm bảo icon giỏ hàng khi hover nổi bật hơn */
+}
+
+.cart-icon-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+/* [NEW] Hiệu ứng hover cho giỏ hàng: Nảy nhẹ icon */
+.cart-action:hover .cart-icon-wrapper i {
+    animation: bounce 0.5s;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+
+/* [NEW] Badge hiển thị số lượng */
+.cart-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background-color: #d9534f; /* --danger-color */
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff; /* Viền trắng tách biệt với icon */
+    padding: 0 2px;
 }
 
 .login-btn {
-  background-color: var(--primary-color);
+  background-color: #009981; /* --primary-color */
   color: white !important;
   font-weight: bold;
 }
@@ -434,47 +535,39 @@ ul {
 }
 
 .login-btn:hover {
-  background-color: var(--primary-dark);
+  background-color: #00483D; /* --primary-dark */
   opacity: 1;
   color: white !important;
 }
 
 /* ===================================== */
-/* CSS MỚI CHO USER MENU */
+/* CSS USER MENU (GIỮ NGUYÊN CẤU TRÚC) */
 /* ===================================== */
 
 .user-menu .user-menu-trigger {
-  /* Style giống .action-item nhưng có màu nền khác */
-  background-color: var(--primary-light);
-  color: var(--primary-dark);
+  background-color: #DBF9EB; /* --primary-light */
+  color: #00483D; /* --primary-dark */
   font-weight: 500;
   cursor: pointer;
   border: none;
-  /* Reset style của button */
   font-family: Arial, sans-serif;
-  /* Reset style của button */
 }
 
 .user-menu .user-menu-trigger i {
-  color: var(--primary-color);
+  color: #009981; /* --primary-color */
 }
 
 .user-menu .user-menu-trigger:hover {
-  background-color: #cceee7;
-  /* Màu hover nhạt hơn */
+  background-color: #cceee7; /* Màu hover của user hơi đậm hơn xíu */
 }
 
-/* Định vị dropdown menu của user sang phải */
 .user-dropdown {
   left: auto;
   right: 0;
   width: 260px;
-  /* Cho rộng hơn một chút */
   padding: 0;
-  /* Reset padding để header vừa khít */
 }
 
-/* Header của dropdown (chứa tên, email) */
 .user-dropdown-header {
   padding: 12px 15px;
   border-bottom: 1px solid #eee;
@@ -486,7 +579,7 @@ ul {
 
 .user-dropdown-header strong {
   font-size: 15px;
-  color: var(--text-dark);
+  color: #333333; /* --text-dark */
 }
 
 .user-dropdown-header small {
@@ -495,10 +588,8 @@ ul {
   word-break: break-all;
 }
 
-/* Thêm style cho icon trong menu list của user */
 .user-dropdown .menu-list {
   padding: 5px 0;
-  /* Thêm padding lại cho list */
 }
 
 .user-dropdown .menu-list li a i {
@@ -507,37 +598,34 @@ ul {
   color: #888;
   font-size: 16px;
   margin-right: 5px;
-  /* Tạo khoảng cách icon và chữ */
   flex-shrink: 0;
 }
 
 .user-dropdown .menu-list li a:hover i {
-  color: var(--primary-color);
+  color: #009981; /* --primary-color */
 }
 
-/* Đường kẻ phân cách */
 .divider hr {
   border: none;
   border-top: 1px solid #f0f0f0;
   margin: 4px 0;
 }
 
-/* Style cho link Đăng xuất */
 .user-dropdown .menu-list li a.logout-link {
-  color: var(--danger-color);
+  color: #d9534f; /* --danger-color */
 }
 
 .user-dropdown .menu-list li a.logout-link i {
-  color: var(--danger-color);
+  color: #d9534f; /* --danger-color */
 }
 
 .user-dropdown .menu-list li a.logout-link:hover {
-  background-color: var(--danger-light);
-  color: var(--danger-dark);
+  background-color: #fdf2f2; /* --danger-light */
+  color: #b92c28; /* --danger-dark */
   font-weight: 500;
 }
 
 .user-dropdown .menu-list li a.logout-link:hover i {
-  color: var(--danger-dark);
+  color: #b92c28; /* --danger-dark */
 }
 </style>
