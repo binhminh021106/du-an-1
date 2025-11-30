@@ -3,7 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// Client Controllers
+// --- CLIENT CONTROLLERS ---
 use App\Http\Controllers\Api\Client\ProductController;
 use App\Http\Controllers\Api\Client\CategoryController;
 use App\Http\Controllers\Api\Client\VariantController;
@@ -21,25 +21,25 @@ use App\Http\Controllers\Api\Client\OrderController;
 use App\Http\Controllers\Api\Client\AuthController;
 use App\Http\Controllers\Api\Client\BrandSlideController;
 
-// Admin Controllers
-// [FIX] Đổi 'admin' thành 'Admin' cho đúng chuẩn thư mục
-use App\Http\Controllers\Api\Admin\AdminAuthController;
-use App\Http\Controllers\Api\Admin\AdminProductController;
-use App\Http\Controllers\Api\Admin\AdminCategoryController;
-use App\Http\Controllers\Api\Admin\AdminUserController;
-use App\Http\Controllers\Api\Admin\AdminVariantController;
-use App\Http\Controllers\Api\Admin\AdminCommentController;
-use App\Http\Controllers\Api\Admin\AdminCouponController;
-use App\Http\Controllers\Api\Admin\AdminImageProductController;
-use App\Http\Controllers\Api\Admin\AdminNewController;
-use App\Http\Controllers\Api\Admin\AdminOrderController;
-use App\Http\Controllers\Api\Admin\AdminReviewController;
-use App\Http\Controllers\Api\Admin\AdminRoleController;
-use App\Http\Controllers\Api\Admin\AdminSlideController;
-// [FIX] Sửa lỗi chính tả Amin -> Admin
-use App\Http\Controllers\Api\Admin\AminAccountController;
-use App\Http\Controllers\Api\Admin\AdminBrandSlideController;
-use App\Http\Controllers\Api\Admin\AdminAttributeController;
+// --- ADMIN CONTROLLERS (NAMESPACE CHUẨN: 'admin' viết thường) ---
+// [FIX] Sửa lại namespace cho khớp với file controller thực tế
+use App\Http\Controllers\Api\admin\AdminAuthController;
+use App\Http\Controllers\Api\admin\AdminProductController;
+use App\Http\Controllers\Api\admin\AdminCategoryController;
+use App\Http\Controllers\Api\admin\AdminUserController;
+use App\Http\Controllers\Api\admin\AdminVariantController;
+use App\Http\Controllers\Api\admin\AdminCommentController;
+use App\Http\Controllers\Api\admin\AdminCouponController;
+use App\Http\Controllers\Api\admin\AdminImageProductController;
+use App\Http\Controllers\Api\admin\AdminNewController;
+use App\Http\Controllers\Api\admin\AdminOrderController;
+use App\Http\Controllers\Api\admin\AdminReviewController;
+use App\Http\Controllers\Api\admin\AdminRoleController;
+use App\Http\Controllers\Api\admin\AdminSlideController;
+use App\Http\Controllers\Api\admin\AminAccountController; // Note: Tên file gốc là Amin nên để nguyên (thiếu d)
+use App\Http\Controllers\Api\admin\AdminBrandSlideController;
+use App\Http\Controllers\Api\admin\AdminAttributeController;
+use App\Http\Controllers\Api\admin\AdminPermissionController;
 
 /* API Routes */
 
@@ -104,7 +104,11 @@ Route::group([
     'middleware' => ['auth:sanctum', 'admin']
 ], function () {
     Route::apiResource('products', AdminProductController::class);
+
+    // [FIX] Route custom update-order PHẢI đặt trước apiResource
+    Route::post('categories/update-order', [AdminCategoryController::class, 'updateOrder']);
     Route::apiResource('categories', AdminCategoryController::class);
+    
     Route::apiResource('users', AdminUserController::class);
 
     // Resource variants chuẩn (CRUD cơ bản)
@@ -120,16 +124,32 @@ Route::group([
     Route::apiResource('coupons', AdminCouponController::class);
 
 
-    // --- XỬ LÝ ẢNH (QUAN TRỌNG: bulk-delete PHẢI nằm trước apiResource) ---
+    // --- XỬ LÝ ẢNH ---
     Route::post('imageProducts/bulk-delete', [AdminImageProductController::class, 'bulkDestroy']);
     Route::apiResource('imageProducts', AdminImageProductController::class);
 
     Route::apiResource('news', AdminNewController::class);
     Route::apiResource('orders', AdminOrderController::class);
     Route::apiResource('reviews', AdminReviewController::class);
+    
+    // --- QUẢN LÝ QUYỀN HẠN & VAI TRÒ (RBAC) ---
+    // 1. Lấy danh sách tất cả quyền (Permissions) để hiển thị checkbox
+    Route::get('permissions', [AdminPermissionController::class, 'index']);
+    
+    // 2. Gán quyền cho Role (Cập nhật bảng role_permissions)
+    Route::post('roles/{id}/permissions', [AdminRoleController::class, 'assignPermissions']);
+    
+    // 3. CRUD Role cơ bản
     Route::apiResource('roles', AdminRoleController::class);
+
+    // [NEW] Route sắp xếp Slide - Đặt trước apiResource
+    Route::post('slides/update-order', [AdminSlideController::class, 'updateOrder']);
     Route::apiResource('slides', AdminSlideController::class);
+    
     Route::apiResource('admins', AminAccountController::class); 
+    
+    // [NEW] Route sắp xếp Brand - Đặt trước apiResource
+    Route::post('brands/update-order', [AdminBrandSlideController::class, 'updateOrder']);
     Route::apiResource('brands', AdminBrandSlideController::class);
 
     Route::apiResource('attributes', AdminAttributeController::class);

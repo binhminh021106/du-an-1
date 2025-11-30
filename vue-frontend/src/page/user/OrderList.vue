@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 // THAY THẾ: Import orders và hàm xử lý từ Store
-import { orders, updateOrderStatus, saveOrders } from './user/orderStore.js'; 
+import { orders, updateOrderStatus, saveOrders } from '../../store/orderStore.js'; 
 
 // Giả định useRouter và useRoute cho code chạy độc lập
 const useRouterMock = () => ({

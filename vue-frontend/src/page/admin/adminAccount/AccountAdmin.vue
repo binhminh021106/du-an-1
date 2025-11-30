@@ -45,7 +45,7 @@ const checkAuthState = async () => {
 
     if (userData) {
         currentUser.value = { ...userData, role_id: Number(userData.role_id) };
-        if (currentUser.value.id) currentAdminId.value = currentUser.value.id; // Set ID
+        if (currentUser.value.id) currentAdminId.value = currentUser.value.id;
         return true;
     }
 
@@ -56,7 +56,7 @@ const checkAuthState = async () => {
             if (data.data && !data.id) data = data.data;
             
             currentUser.value = { ...data, role_id: Number(data.role_id) };
-            if (currentUser.value.id) currentAdminId.value = currentUser.value.id; // Set ID
+            if (currentUser.value.id) currentAdminId.value = currentUser.value.id;
             localStorage.setItem('adminData', JSON.stringify(currentUser.value));
             return true;
         } catch (error) {
@@ -72,7 +72,6 @@ const requireLogin = () => {
         Swal.fire({ icon: 'error', title: 'Truy cập bị từ chối', text: 'Phiên làm việc hết hạn.', confirmButtonText: 'Đăng nhập ngay' });
         return false;
     }
-    // Chỉ Admin mới được quản lý tài khoản nội bộ
     if (!hasRole(['admin'])) {
         Swal.fire({ icon: 'warning', title: 'Quyền hạn', text: 'Bạn không có quyền quản lý nhân sự.' });
         return false;
@@ -83,8 +82,9 @@ const requireLogin = () => {
 // ==========================================
 // STATE MANAGEMENT
 // ==========================================
-const admins = ref([]); // Đổi tên biến users -> admins cho rõ nghĩa
+const admins = ref([]);
 const roles = ref([]);
+const allPermissions = ref({});
 const isLoading = ref(true);
 const isSaving = ref(false);
 const searchQuery = ref('');
@@ -92,7 +92,7 @@ const selectedRoleFilter = ref('');
 const currentAdminId = ref(null);
 const processingStatusIds = ref([]);
 const activeTab = ref(''); 
-const sortOption = ref('newest'); // [NEW] Sort option
+const sortOption = ref('newest');
 
 // Pagination State
 const paginationState = reactive({});
@@ -110,6 +110,13 @@ const viewingUser = ref({});
 const roleModalInstance = ref(null);
 const roleModalRef = ref(null);
 const isRoleEditMode = ref(false);
+
+// Permission Modal
+const permissionModalInstance = ref(null);
+const permissionModalRef = ref(null);
+const editingRolePermission = ref({}); 
+const selectedPermissionIds = ref([]); 
+const isSavingPermissions = ref(false);
 
 // Form Data
 const fileInputRef = ref(null);
@@ -146,12 +153,11 @@ function getAvatarUrl(path, name = 'User') {
     return `${baseUrl}${cleanPath}`;
 }
 
-// [UPDATED] Dynamic Tabs Logic
+// Dynamic Tabs Logic
 const dynamicTabs = computed(() => {
     const query = searchQuery.value.toLowerCase().trim();
     let filtered = [...admins.value];
 
-    // 1. Filter
     if (selectedRoleFilter.value) {
         filtered = filtered.filter(user => user.role_id === selectedRoleFilter.value);
     }
@@ -165,9 +171,7 @@ const dynamicTabs = computed(() => {
         );
     }
 
-    // 2. Sort
     filtered.sort((a, b) => {
-        // Admin hiện tại luôn lên đầu trong mọi list
         if (a.id === currentAdminId.value) return -1;
         if (b.id === currentAdminId.value) return 1;
 
@@ -182,12 +186,10 @@ const dynamicTabs = computed(() => {
 
     const tabs = [];
 
-    // 3. Create Tabs by Role (Active Users)
     roles.value.forEach(role => {
         if (selectedRoleFilter.value && selectedRoleFilter.value !== role.id) return;
         const roleUsers = filtered.filter(u => u.role_id === role.id && u.status === 'active');
-        if (roleUsers.length > 0 || (!selectedRoleFilter.value && !query)) { // Show tab if data exists OR default state
-             // Chỉ push tab nếu có data hoặc đang ở trạng thái mặc định để tránh tab trống khi search
+        if (roleUsers.length > 0 || (!selectedRoleFilter.value && !query)) {
              if(roleUsers.length > 0) {
                 tabs.push({
                     key: `role_${role.id}`,
@@ -200,7 +202,6 @@ const dynamicTabs = computed(() => {
         }
     });
 
-    // 4. Tab Inactive (All Roles)
     const inactiveUsers = filtered.filter(u => u.status !== 'active');
     if (inactiveUsers.length > 0) {
         tabs.push({
@@ -301,6 +302,15 @@ async function fetchRoles() {
     } catch (error) { console.error("Error roles:", error); roles.value = []; }
 }
 
+async function fetchPermissions() {
+    try {
+        const response = await apiService.get(`admin/permissions`);
+        allPermissions.value = response.data;
+    } catch (error) {
+        console.error("Error fetching permissions:", error);
+    }
+}
+
 // FORM HANDLERS
 function resetForm() {
     Object.assign(formData, { id: null, fullname: '', email: '', phone: '', address: '', role_id: roles.value[0]?.id || '', status: 'active', password: '', password_confirmation: '' });
@@ -347,7 +357,6 @@ function validateForm() {
         if (!formData.password || formData.password.length < 6) { errors.password = 'Mật khẩu tối thiểu 6 ký tự.'; isValid = false; }
         if (formData.password !== formData.password_confirmation) { errors.password_confirmation = 'Mật khẩu xác nhận không khớp.'; isValid = false; }
     } else {
-        // Edit mode: nếu nhập pass mới thì mới check
         if (formData.password && formData.password.length < 6) { errors.password = 'Mật khẩu mới tối thiểu 6 ký tự.'; isValid = false; }
         if (formData.password && formData.password !== formData.password_confirmation) { errors.password_confirmation = 'Mật khẩu xác nhận không khớp.'; isValid = false; }
     }
@@ -399,7 +408,6 @@ async function toggleUserStatus(user) {
     });
 
     if (result.isConfirmed) {
-        // Optimistic Update
         const oldStatus = user.status;
         user.status = newStatus;
         processingStatusIds.value.push(user.id);
@@ -408,7 +416,7 @@ async function toggleUserStatus(user) {
             await apiService.patch(`admin/admins/${user.id}`, { status: newStatus });
             Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Cập nhật thành công', timer: 1500, showConfirmButton: false });
         } catch (e) {
-            user.status = oldStatus; // Rollback
+            user.status = oldStatus; 
             Swal.fire('Lỗi', 'Cập nhật thất bại.', 'error');
         } finally {
             processingStatusIds.value = processingStatusIds.value.filter(id => id !== user.id);
@@ -459,7 +467,6 @@ async function handleSaveRole() {
 
 async function handleDeleteRole(role) {
     if (!requireLogin()) return;
-    // Chặn xóa role hệ thống
     if (['admin', 'user', 'staff', 'blogger'].includes(role.value)) return Swal.fire('Cấm', 'Không thể xóa vai trò mặc định của hệ thống.', 'error');
     
     const res = await Swal.fire({ title: 'Xóa vai trò?', text: 'Hành động này không thể hoàn tác.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' });
@@ -469,17 +476,65 @@ async function handleDeleteRole(role) {
     }
 }
 
+// Logic Phân quyền
+async function openPermissionModal(role) {
+    if(!requireLogin()) return;
+    
+    // [UPDATE] Chặn mở phân quyền cho Super Admin (nếu nút chưa disable)
+    if (role.value === 'admin') {
+        Swal.fire({
+            icon: 'info',
+            title: 'Quyền hạn đặc biệt',
+            text: 'Role "Quản trị viên (Super Admin)" mặc định có tất cả quyền hạn và không cần cấu hình thêm.'
+        });
+        return;
+    }
+
+    editingRolePermission.value = role;
+    isSavingPermissions.value = true; 
+    
+    try {
+        const response = await apiService.get(`admin/roles/${role.id}`);
+        selectedPermissionIds.value = response.data.permissions.map(p => p.id);
+        permissionModalInstance.value?.show();
+    } catch (error) {
+        console.error("Lỗi tải quyền role:", error);
+        Swal.fire('Lỗi', 'Không thể tải thông tin quyền hạn.', 'error');
+    } finally {
+        isSavingPermissions.value = false;
+    }
+}
+
+async function handleSavePermissions() {
+    isSavingPermissions.value = true;
+    try {
+        await apiService.post(`admin/roles/${editingRolePermission.value.id}/permissions`, {
+            permissions: selectedPermissionIds.value
+        });
+        
+        permissionModalInstance.value?.hide();
+        Swal.fire('Thành công', `Đã cập nhật quyền cho vai trò ${editingRolePermission.value.label}!`, 'success');
+        fetchRoles();
+    } catch (error) {
+        console.error("Lỗi lưu quyền:", error);
+        Swal.fire('Lỗi', 'Không thể lưu phân quyền.', 'error');
+    } finally {
+        isSavingPermissions.value = false;
+    }
+}
+
 // Lifecycle
 onMounted(async () => {
     await checkAuthState();
     if (!requireLogin()) { isLoading.value = false; return; }
     
-    fetchRoles().then(() => fetchAdmins());
+    Promise.all([fetchRoles(), fetchAdmins(), fetchPermissions()]);
 
     nextTick(() => {
         if (userModalRef.value) userModalInstance.value = new Modal(userModalRef.value, { backdrop: 'static' });
         if (roleModalRef.value) roleModalInstance.value = new Modal(roleModalRef.value);
         if (viewModalRef.value) viewModalInstance.value = new Modal(viewModalRef.value);
+        if (permissionModalRef.value) permissionModalInstance.value = new Modal(permissionModalRef.value, { backdrop: 'static' });
     });
 });
 </script>
@@ -733,66 +788,138 @@ onMounted(async () => {
         </div>
     </div>
 
-    <!-- MODAL ROLE CONFIG -->
+    <!-- MODAL ROLE CONFIG & PERMISSIONS -->
     <div class="modal fade" id="roleModal" ref="roleModalRef" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content border-0 shadow">
-                <div class="modal-header bg-info text-white">
-                    <h5 class="modal-title fw-bold text-white">Cấu hình Vai trò Hệ thống</h5>
+                <div class="modal-header bg-brand text-white" style="background-color: #009981;">
+                    <h5 class="modal-title fw-bold">Cấu hình Vai trò & Phân quyền</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body p-4">
-                    <div class="card border-0 shadow-sm mb-4 bg-light">
+                <div class="modal-body p-4 bg-light">
+                    <!-- Form Role -->
+                    <div class="card border-0 shadow-sm mb-4">
                         <div class="card-body">
-                            <h6 class="fw-bold text-brand mb-3">{{ isRoleEditMode ? 'Chỉnh sửa Vai trò' : 'Thêm Vai trò Mới' }}</h6>
+                            <h6 class="fw-bold text-brand mb-3 border-bottom pb-2">{{ isRoleEditMode ? 'Chỉnh sửa Vai trò' : 'Thêm Vai trò Mới' }}</h6>
                             <form @submit.prevent="handleSaveRole">
                                 <div class="row g-2 align-items-end">
                                     <div class="col-md-4">
-                                        <label class="small text-muted">Mã (VD: admin)</label>
-                                        <input type="text" class="form-control" v-model="roleFormData.value" :disabled="isRoleEditMode" required placeholder="Mã vai trò...">
+                                        <label class="small text-muted mb-1">Mã (VD: admin)</label>
+                                        <input type="text" class="form-control" v-model="roleFormData.value" :disabled="isRoleEditMode" required placeholder="Nhập mã vai trò...">
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="small text-muted">Tên hiển thị (VD: Quản trị)</label>
-                                        <input type="text" class="form-control" v-model="roleFormData.label" required placeholder="Tên hiển thị...">
+                                        <label class="small text-muted mb-1">Tên hiển thị (VD: Quản trị)</label>
+                                        <input type="text" class="form-control" v-model="roleFormData.label" required placeholder="Nhập tên hiển thị...">
                                     </div>
                                     <div class="col-md-2">
-                                        <label class="small text-muted">Màu sắc</label>
+                                        <label class="small text-muted mb-1">Màu Badge</label>
                                         <select class="form-select" v-model="roleFormData.badgeClass">
-                                            <option value="text-bg-primary">Xanh</option>
-                                            <option value="text-bg-success">Lục</option>
+                                            <option value="text-bg-primary">Xanh Dương</option>
+                                            <option value="text-bg-success">Xanh Lá</option>
                                             <option value="text-bg-danger">Đỏ</option>
                                             <option value="text-bg-warning">Vàng</option>
-                                            <option value="text-bg-info">Lam</option>
+                                            <option value="text-bg-info">Xanh Ngọc</option>
                                             <option value="text-bg-dark">Đen</option>
+                                            <option value="text-bg-secondary">Xám</option>
                                         </select>
                                     </div>
                                     <div class="col-md-2 d-flex gap-1">
-                                        <button type="submit" class="btn btn-primary w-100">Lưu</button>
-                                        <button type="button" class="btn btn-secondary w-100" @click="resetRoleForm" v-if="isRoleEditMode">Hủy</button>
+                                        <button type="submit" class="btn btn-primary w-100 shadow-sm"><i class="bi bi-save me-1"></i> Lưu</button>
+                                        <button type="button" class="btn btn-outline-secondary w-100" @click="resetRoleForm" v-if="isRoleEditMode">Hủy</button>
                                     </div>
                                 </div>
                             </form>
                         </div>
                     </div>
 
-                    <div class="table-responsive border rounded">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="bg-light">
-                                <tr><th class="ps-3">ID</th><th>Mã</th><th>Tên hiển thị</th><th class="text-end pe-3">Hành động</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="r in roles" :key="r.id">
-                                    <td class="ps-3 text-muted fw-bold">#{{ r.id }}</td>
-                                    <td><code class="text-primary">{{ r.value }}</code></td>
-                                    <td><span class="badge" :class="r.badgeClass">{{ r.label }}</span></td>
-                                    <td class="text-end pe-3">
-                                        <button class="btn btn-sm btn-light text-primary border me-1" @click="openEditRoleModal(r)">Sửa</button>
-                                        <button class="btn btn-sm btn-light text-danger border" @click="handleDeleteRole(r)" :disabled="['admin', 'user', 'staff'].includes(r.value)">Xóa</button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <!-- Role List -->
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-white fw-bold text-secondary">Danh sách Vai trò</div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="bg-light">
+                                    <tr><th class="ps-3">ID</th><th>Mã</th><th>Tên hiển thị</th><th class="text-end pe-3">Hành động</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="r in roles" :key="r.id">
+                                        <td class="ps-3 text-muted fw-bold">#{{ r.id }}</td>
+                                        <td><code class="text-primary bg-light px-2 py-1 rounded">{{ r.value }}</code></td>
+                                        <td><span class="badge" :class="r.badgeClass">{{ r.label }}</span></td>
+                                        <td class="text-end pe-3">
+                                            <!-- Button Phân Quyền (Updated Logic) -->
+                                            <button 
+                                                v-if="r.value !== 'admin'"
+                                                class="btn btn-sm btn-outline-success border me-1" 
+                                                @click="openPermissionModal(r)" 
+                                                title="Phân quyền chi tiết">
+                                                <i class="bi bi-grid-3x3-gap me-1"></i> Phân quyền
+                                            </button>
+                                            <button 
+                                                v-else
+                                                class="btn btn-sm btn-outline-secondary border me-1 disabled" 
+                                                title="Super Admin luôn có full quyền"
+                                                disabled>
+                                                <i class="bi bi-check-all me-1"></i> Full Quyền
+                                            </button>
+
+                                            <button class="btn btn-sm btn-light text-primary border me-1" @click="openEditRoleModal(r)"><i class="bi bi-pencil"></i></button>
+                                            <button class="btn btn-sm btn-light text-danger border" @click="handleDeleteRole(r)" :disabled="['admin', 'user', 'staff'].includes(r.value)"><i class="bi bi-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW MODAL: PERMISSION MATRIX -->
+    <div class="modal fade" id="permissionModal" ref="permissionModalRef" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-white border-bottom">
+                    <div>
+                        <h5 class="modal-title fw-bold text-brand">Phân quyền cho: <span class="text-dark">{{ editingRolePermission.label }}</span></h5>
+                        <small class="text-muted">Chọn các chức năng mà vai trò này được phép truy cập.</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 bg-light">
+                    <div v-if="isSavingPermissions" class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2 text-muted">Đang xử lý dữ liệu...</p>
+                    </div>
+                    <div v-else class="row g-3">
+                        <!-- Loop through Grouped Permissions -->
+                        <div class="col-md-6 col-lg-4" v-for="(perms, groupName) in allPermissions" :key="groupName">
+                            <div class="card h-100 border-0 shadow-sm hover-shadow transition-all">
+                                <div class="card-header bg-white border-bottom-0 fw-bold text-primary d-flex align-items-center">
+                                    <i class="bi bi-folder2-open me-2"></i> {{ groupName }}
+                                </div>
+                                <div class="card-body pt-0">
+                                    <div class="d-flex flex-column gap-2">
+                                        <div class="form-check" v-for="perm in perms" :key="perm.id">
+                                            <input class="form-check-input cursor-pointer" type="checkbox" 
+                                                :value="perm.id" 
+                                                v-model="selectedPermissionIds" 
+                                                :id="'perm_' + perm.id">
+                                            <label class="form-check-label cursor-pointer user-select-none" :for="'perm_' + perm.id">
+                                                {{ perm.name }}
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-white">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Đóng</button>
+                    <button type="button" class="btn btn-primary px-4" @click="handleSavePermissions" :disabled="isSavingPermissions">
+                        <span v-if="isSavingPermissions" class="spinner-border spinner-border-sm me-1"></span> Lưu thay đổi
+                    </button>
                 </div>
             </div>
         </div>
@@ -860,4 +987,13 @@ onMounted(async () => {
 .custom-switch:checked { background-color: #009981; border-color: #009981; }
 :deep(.table-striped-columns) tbody tr td:nth-child(even) { background-color: rgba(0, 0, 0, 0.02); }
 .custom-table th { font-weight: 600; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.5px; }
+
+/* Hover Effect for Permission Cards */
+.hover-shadow:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+}
+.transition-all {
+    transition: all 0.3s ease;
+}
 </style>
