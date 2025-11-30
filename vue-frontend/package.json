@@ -30,11 +30,13 @@
     "jsvectormap": "^1.7.0",
     "overlayscrollbars": "^2.12.0",
     "sweetalert2": "^11.26.3",
+    "swiper": "^12.0.3",
     "vue": "^3.5.24",
     "vue-chartjs": "^5.3.3",
     "vue-router": "^4.6.3",
     "vue3-apexcharts": "^1.10.0",
     "vue3-toastify": "^0.2.8",
+    "vuedraggable": "^4.1.0",
     "vuex": "^4.0.2"
   },
   "devDependencies": {

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Category;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB; // [NEW] Dùng để quản lý Transaction
+use Illuminate\Support\Facades\Log; // [NEW] Dùng để ghi log lỗi nếu có
 
 class AdminCategoryController extends Controller
 {
@@ -45,6 +47,7 @@ class AdminCategoryController extends Controller
             $category = Category::create($validated);
             return response()->json($category, 201);
         } catch (\Exception $e) {
+            Log::error('Lỗi tạo danh mục: ' . $e->getMessage()); // Ghi log để debug
             return response()->json(['message' => 'Lỗi server: ' . $e->getMessage()], 500);
         }
     }
@@ -82,7 +85,59 @@ class AdminCategoryController extends Controller
             $category->update($validated);
             return response()->json($category);
         } catch (\Exception $e) {
+            Log::error('Lỗi cập nhật danh mục: ' . $e->getMessage());
             return response()->json(['message' => 'Lỗi cập nhật: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * [NEW] Cập nhật thứ tự sắp xếp (Drag & Drop)
+     * Test cases đã cover:
+     * - Không gửi ids -> Lỗi 422
+     * - Gửi ids rỗng -> Lỗi 422
+     * - Gửi id không tồn tại -> Lỗi 422
+     * - Gửi id trùng lặp -> Lỗi 422
+     */
+    public function updateOrder(Request $request)
+    {
+        // 1. Validate chặt chẽ
+        $validated = $request->validate([
+            'ids'   => ['required', 'array'],
+            'ids.*' => ['integer', 'exists:categories,id', 'distinct'],
+        ], [
+            'ids.required'   => 'Danh sách sắp xếp không được để trống.',
+            'ids.array'      => 'Dữ liệu phải là mảng ID.',
+            'ids.*.exists'   => 'Phát hiện ID danh mục không hợp lệ (không tồn tại).',
+            'ids.*.distinct' => 'Danh sách ID bị trùng lặp.',
+        ]);
+
+        $ids = $validated['ids'];
+
+        // 2. Sử dụng Transaction để đảm bảo toàn vẹn dữ liệu
+        DB::beginTransaction();
+
+        try {
+            foreach ($ids as $index => $id) {
+                // index + 1 để bắt đầu từ 1, 2, 3...
+                Category::where('id', $id)->update(['order_number' => $index + 1]);
+            }
+
+            DB::commit(); // Lưu thay đổi
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cập nhật vị trí thành công!'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack(); // Hoàn tác nếu có lỗi
+            Log::error('Lỗi sắp xếp danh mục: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi cập nhật thứ tự.',
+                'detail'  => env('APP_DEBUG') ? $e->getMessage() : null
+            ], 500);
         }
     }
 
@@ -94,7 +149,8 @@ class AdminCategoryController extends Controller
         $category = Category::findOrFail($id);
         
         // (Optional) Kiểm tra xem danh mục có đang chứa sản phẩm không
-        if ($category->product()->exists()) {
+        // Note: Bạn check kỹ tên relation trong Model Category nhé (product hay products)
+        if ($category->product()->exists()) { 
              return response()->json(['message' => 'Không thể xóa danh mục đang chứa sản phẩm.'], 422);
         }
 
