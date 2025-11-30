@@ -1,27 +1,45 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue'; // Thêm computed
 import { useRouter } from 'vue-router';
-import apiService from '../../apiService'
+import { useStore } from 'vuex'; // Thêm useStore
+import apiService from '../../apiService';
 import Swal from 'sweetalert2';
 
 const router = useRouter();
+const store = useStore(); // Khởi tạo store
 
 // --- LOGIC MENU DANH MỤC ---
 const isMenuActive = ref(false);
 const menuContainer = ref(null);
 const categories = ref([]);
-const isLoadingCategories = ref(false); // [NEW] Trạng thái loading
+const isLoadingCategories = ref(false);
 
 // --- LOGIC MENU USER ---
 const isUserMenuActive = ref(false);
 const userMenuContainer = ref(null);
 const user = ref(null);
-
-// --- LOGIC CHUNG & GIỎ HÀNG ---
 const searchQuery = ref('');
-const cartItemCount = ref(0); // [NEW] Biến đếm số item trong giỏ
 
-// Fetch data danh mục (Đã nâng cấp loading)
+// --- [QUAN TRỌNG] GIỎ HÀNG TỰ ĐỘNG CẬP NHẬT ---
+// Thay vì dùng biến ref và hàm update thủ công, ta dùng computed theo dõi Store
+const cartItemCount = computed(() => {
+    // Cách 1: Nếu store lưu giỏ hàng là mảng products
+    // return store.state.cart ? store.state.cart.length : 0; 
+    
+    // Cách 2: Nếu bạn muốn cộng tổng số lượng (quantity) của từng món
+    // Ví dụ: Mua 2 cái áo + 3 cái quần = 5 items
+    const cart = store.state.cart || [];
+    if (!Array.isArray(cart)) return 0;
+    
+    // Nếu muốn đếm số loại sản phẩm (dòng):
+    return cart.length; 
+
+    // Nếu muốn đếm tổng số lượng items (tổng quantity):
+    // return cart.reduce((total, item) => total + (item.quantity || 1), 0);
+});
+
+
+// Fetch data danh mục
 const fetchCategories = async () => {
   isLoadingCategories.value = true;
   try {
@@ -31,19 +49,6 @@ const fetchCategories = async () => {
     console.error("Lỗi khi tải danh mục:", error);
   } finally {
     isLoadingCategories.value = false;
-  }
-};
-
-// [NEW] Hàm tính số lượng item trong giỏ hàng
-const updateCartCount = () => {
-  try {
-    // Giả sử bạn lưu giỏ hàng trong localStorage với key 'cart'
-    // Nếu bạn dùng Pinia/Vuex, hãy thay thế logic này bằng store
-    const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-    // Đếm số lượng phần tử (unique items) thay vì cộng dồn quantity
-    cartItemCount.value = Array.isArray(cart) ? cart.length : 0;
-  } catch (e) {
-    cartItemCount.value = 0;
   }
 };
 
@@ -58,7 +63,6 @@ const toggleUserMenu = () => {
   isMenuActive.value = false;
 };
 
-// Đóng menu khi click ra ngoài
 const handleClickOutside = (event) => {
   if (menuContainer.value && !menuContainer.value.contains(event.target)) {
     isMenuActive.value = false;
@@ -68,7 +72,6 @@ const handleClickOutside = (event) => {
   }
 };
 
-// Xử lý tìm kiếm
 const handleSearch = () => {
   if (searchQuery.value.trim()) {
     router.push({ name: 'search', query: { q: searchQuery.value } });
@@ -78,16 +81,16 @@ const handleSearch = () => {
 const handleLogout = () => {
   Swal.fire({
     title: 'Bạn có chắc muốn đăng xuất?',
-    text: "Bạn sẽ cần đăng nhập lại vào lần sau.",
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#009981',
     cancelButtonColor: '#d33',
-    confirmButtonText: 'Đồng ý, Đăng xuất',
+    confirmButtonText: 'Đồng ý',
     cancelButtonText: 'Hủy'
   }).then((result) => {
     if (result.isConfirmed) {
       localStorage.removeItem('userData');
+      store.dispatch('logout'); // Nếu có action logout trong store
       user.value = null;
       window.location.reload();
     }
@@ -95,13 +98,7 @@ const handleLogout = () => {
 };
 
 const handleLoginSuccess = (event) => {
-  console.log('Đã nhận được sự kiện login-success!', event.detail.user);
   user.value = event.detail.user;
-};
-
-// [NEW] Lắng nghe sự kiện thêm vào giỏ hàng (nếu có)
-const handleCartUpdate = () => {
-  updateCartCount();
 };
 
 onMounted(() => {
@@ -109,20 +106,17 @@ onMounted(() => {
   document.addEventListener('click', handleClickOutside);
   window.addEventListener('login-success', handleLoginSuccess);
   
-  // [NEW] Lắng nghe sự kiện storage để cập nhật giỏ hàng khi có thay đổi tab khác
-  window.addEventListener('storage', handleCartUpdate);
-  // [NEW] Lắng nghe sự kiện custom (nếu bạn dispatch sự kiện này khi add to cart)
-  window.addEventListener('cart-updated', handleCartUpdate);
-  
+  // Khởi tạo danh mục
   fetchCategories();
-  updateCartCount(); // Gọi lần đầu
+  
+  // [NEW] Dispatch action để load giỏ hàng từ localStorage vào Store khi mới vào trang
+  // (Giả sử bên Vuex bạn có action 'initializeCart')
+  store.dispatch('initializeCart'); 
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside);
   window.removeEventListener('login-success', handleLoginSuccess);
-  window.removeEventListener('storage', handleCartUpdate);
-  window.removeEventListener('cart-updated', handleCartUpdate);
 });
 </script>
 
