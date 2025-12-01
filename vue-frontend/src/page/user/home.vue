@@ -5,15 +5,16 @@ import { useRouter } from 'vue-router';
 import { useStore } from "vuex"; 
 import Swal from 'sweetalert2';
 
+// --- CẬP NHẬT: Import toggleWishlist để đồng bộ với trang chi tiết ---
+import { toggleWishlist } from "../../store/wishlistStore.js"; 
+
 // --- INIT STORE ---
 const store = useStore();
 const router = useRouter();
 
-// --- CONFIG (GIỐNG CART) ---
+// --- CONFIG ---
 const SERVER_URL = 'http://127.0.0.1:8000'; 
 const CHATBOT_API_URL = 'http://localhost:3000/api/chat-search';
-// Đặt thành true nếu đường dẫn trong DB chưa có chữ 'storage/' (ví dụ: uploads/img.jpg)
-// Đặt thành false nếu trong DB đã lưu sẵn 'storage/uploads/img.jpg' hoặc file nằm ở root
 const USE_STORAGE = false; 
 
 // --- TOAST CONFIG ---
@@ -54,7 +55,7 @@ const chatMessages = ref([
 ]);
 const chatBodyRef = ref(null);
 
-// --- HELPER FUNCTIONS (XỬ LÝ ẢNH GIỐNG CART) ---
+// --- HELPER FUNCTIONS ---
 const getImageUrl = (path) => {
     if (!path) return 'https://placehold.co/400x300?text=No+Image';
     if (path.startsWith('http') || path.startsWith('data:') || path.startsWith('blob:')) return path;
@@ -172,8 +173,16 @@ const onAddToCart = (product) => {
     Toast.fire({ icon: 'success', title: `Đã thêm ${product.name} vào giỏ!` });
 };
 
+// --- CẬP NHẬT: Xử lý Thêm/Xóa yêu thích ---
 const onAddToWishlist = (product) => {
-    Toast.fire({ icon: 'success', title: `Đã thêm ${product.name} vào yêu thích` });
+    // Gọi hàm toggleWishlist từ store (trả về true nếu thêm, false nếu xóa)
+    const isAdded = toggleWishlist(product);
+    
+    if (isAdded) {
+        Toast.fire({ icon: 'success', title: `Đã thêm ${product.name} vào yêu thích ❤️` });
+    } else {
+        Toast.fire({ icon: 'info', title: `Đã xóa ${product.name} khỏi yêu thích` });
+    }
 };
 
 const saveVoucher = (code) => {
@@ -215,33 +224,25 @@ const sendChatMessage = async () => {
         
         let realProducts = products.value;
 
-        // --- CẬP NHẬT LOGIC TÌM KIẾM (Tên SP + Danh mục + Thương hiệu) ---
+        // --- CẬP NHẬT LOGIC TÌM KIẾM ---
         if (filters.keyword) {
             const k = filters.keyword.toLowerCase();
             realProducts = realProducts.filter(p => {
-                // 1. Tìm trong tên sản phẩm
                 const nameMatch = (p.name || '').toLowerCase().includes(k);
-                
-                // 2. Tìm trong tên danh mục
                 const category = categories.value.find(c => String(c.id) === String(p.category_id || p.category?.id));
                 const catMatch = category ? category.name.toLowerCase().includes(k) : false;
-
-                // 3. Tìm trong tên thương hiệu
                 const brand = brands.value.find(b => String(b.id) === String(p.brand_id || p.brand?.id));
                 const brandMatch = brand ? brand.name.toLowerCase().includes(k) : false;
-
                 return nameMatch || catMatch || brandMatch;
             });
         }
         
-        // --- Lọc theo giá ---
         if (filters.min_price) realProducts = realProducts.filter(p => getProductPrice(p) >= filters.min_price);
         if (filters.max_price) realProducts = realProducts.filter(p => getProductPrice(p) <= filters.max_price);
 
         chatMessages.value.push({
             role: 'ai',
             text: realProducts.length > 0 ? `Tìm thấy ${realProducts.length} sản phẩm:` : "Không tìm thấy sản phẩm phù hợp.",
-            // --- CẬP NHẬT: HIỂN THỊ HẾT, KHÔNG DÙNG SLICE(0,5) ---
             products: realProducts 
         });
 
@@ -337,7 +338,10 @@ onBeforeUnmount(stopAutoSlide);
                                     onerror="this.src='https://placehold.co/400x300?text=Lỗi+Ảnh'">
                                 <div class="hover-overlay">
                                     <button class="action-btn view" @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })"><i class="fas fa-eye"></i></button>
+                                    
+                                    <!-- Nút thêm yêu thích gọi hàm onAddToWishlist -->
                                     <button class="action-btn heart" @click="onAddToWishlist(product)"><i class="fas fa-heart"></i></button>
+                                    
                                     <button class="action-btn cart" @click="onAddToCart(product)"><i class="fas fa-shopping-cart"></i></button>
                                 </div>
                                 <div class="badge-new">New</div>

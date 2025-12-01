@@ -1,15 +1,13 @@
 <script setup>
 import { ref, onMounted, computed } from "vue";
 import { useStore } from "vuex"; 
-import { useRouter } from "vue-router"; // Import router để chuyển trang bằng code
+import { useRouter } from "vue-router"; 
 
 const store = useStore(); 
 const router = useRouter();
 
 const cart = computed(() => store.getters.cartItems);
 
-// Tính tổng tiền dựa trên việc có chọn item nào không
-// Nếu có chọn -> Tính tổng item đã chọn. Nếu không -> Tính tổng tất cả
 const total = computed(() => {
     if (selectedItems.value.length > 0) {
         return cart.value
@@ -20,8 +18,6 @@ const total = computed(() => {
 });
 
 const selectedItems = ref([]);
-
-// --- CẤU HÌNH API ---
 const SERVER_URL = 'http://127.0.0.1:8000'; 
 const USE_STORAGE = false; 
 
@@ -42,21 +38,64 @@ onMounted(() => {
 });
 
 // --- ACTIONS ---
+
+// Đã cập nhật: Hiển thị tên sản phẩm khi xóa 1 món
 const removeItem = (cartId) => {
+    // Tìm sản phẩm trong giỏ hàng để lấy tên
+    const item = cart.value.find(i => i.cartId === cartId);
+    const name = item ? item.name : 'Sản phẩm';
+
+    if (!confirm(`Bạn có chắc chắn muốn xóa sản phẩm "${name}" này khỏi giỏ hàng?`)) {
+        return;
+    }
     store.dispatch('removeItem', cartId);
-    // Xóa khỏi danh sách selected nếu đang chọn
     selectedItems.value = selectedItems.value.filter(id => id !== cartId);
 }
 
-const updateQty = (cartId, qty) => {
-    let newQty = parseInt(qty);
-    if (!newQty || newQty < 1) newQty = 1;
+// 1. Hàm chặn ký tự không mong muốn (dấu trừ, e, dấu cộng)
+const checkInput = (evt) => {
+    // Chặn ký tự: - (minus), + (plus), e (exponent)
+    if (['-', '+', 'e', 'E'].includes(evt.key)) {
+        evt.preventDefault();
+    }
+}
+
+// 2. Hàm xử lý logic chính xác khi thay đổi số lượng
+const updateQty = (event, cartId, stock) => {
+    let rawValue = event.target.value;
+    let newQty = parseInt(rawValue);
+    const limit = stock || 999; 
+
+    // Trường hợp 1: Nhập tào lao, rỗng, hoặc số âm/số 0
+    if (!newQty || isNaN(newQty) || newQty < 1) {
+        newQty = 1;
+    } 
+    
+    // Trường hợp 2: Nhập quá tồn kho
+    else if (newQty > limit) {
+        alert(`Sản phẩm này chỉ còn tối đa ${limit} món!`);
+        newQty = limit;
+    }
+
+    // CẬP NHẬT LẠI GIAO DIỆN NGAY LẬP TỨC
+    event.target.value = newQty;
+
+    // Gửi lên Store
     store.dispatch('updateItemQty', { cartId, qty: newQty });
 }
 
+// Đã cập nhật: Hiển thị danh sách tên các sản phẩm đã chọn khi xóa nhiều
 const removeSelected = () => {
   if (!selectedItems.value.length) return;
-  if (!confirm(`Xóa ${selectedItems.value.length} sản phẩm đã chọn?`)) return;
+
+  // Lọc ra danh sách tên các sản phẩm đang được chọn
+  const names = cart.value
+    .filter(item => selectedItems.value.includes(item.cartId))
+    .map(item => item.name)
+    .join(", ");
+
+  if (!confirm(`Bạn có chắc chắn muốn xóa sản phẩm "${names}" này khỏi giỏ hàng?`)) return;
+  
   selectedItems.value.forEach((id) => store.dispatch('removeItem', id));
   selectedItems.value = [];
 };
@@ -67,23 +106,14 @@ const removeAll = () => {
   selectedItems.value = [];
 };
 
-// --- XỬ LÝ THANH TOÁN ---
 const proceedToCheckout = () => {
-    // Logic: Nếu có chọn checkbox -> Chỉ thanh toán item đó (Lưu vào localStorage hoặc State để trang Checkout đọc)
-    // Ở đây mình làm ví dụ đơn giản: Chuyển trang và kèm query params
-    
     let itemsToCheckout = [];
     if (selectedItems.value.length > 0) {
         itemsToCheckout = selectedItems.value;
     } else {
-        // Nếu không chọn gì cả, mặc định là thanh toán hết (lấy tất cả cartId)
         itemsToCheckout = cart.value.map(item => item.cartId);
     }
-
-    // Bạn có thể lưu tạm vào localStorage để trang Checkout lấy ra xử lý
     localStorage.setItem('checkout_items', JSON.stringify(itemsToCheckout));
-    
-    // Chuyển hướng
     router.push('/checkout');
 }
 </script>
@@ -111,9 +141,7 @@ const proceedToCheckout = () => {
         <table v-if="cart.length" class="cart-table">
           <thead>
             <tr>
-              <th width="5%">
-                <!-- Checkbox chọn tất cả (Optional) -->
-              </th>
+              <th width="5%"></th>
               <th width="40%">Sản phẩm</th>
               <th width="15%">Danh mục</th>
               <th width="15%">Giá</th>
@@ -150,7 +178,6 @@ const proceedToCheckout = () => {
                 </div>
               </td>
 
-              <!-- FIX: Đổi từ item.categoryName thành item.categoriesName cho khớp với Store -->
               <td>
                 <span class="badge-category">
                   {{ item.categoriesName || "Khác" }}
@@ -158,18 +185,22 @@ const proceedToCheckout = () => {
               </td>
               
               <td class="price">{{ formatPrice(item.price) }}</td>
+              
               <td>
                 <input 
                   type="number" 
                   min="1" 
                   :max="item.stock || 999" 
                   :value="item.qty"
-                  @change="updateQty(item.cartId, $event.target.value)" 
+                  @keypress="checkInput($event)"
+                  @change="updateQty($event, item.cartId, item.stock)"
                 />
               </td>
+
               <td class="total-price">{{ formatPrice(item.qty * item.price) }}</td>
               <td>
-                <button class="remove-btn" @click="removeItem(item.cartId)">
+                <!-- Nút xóa từng món gọi hàm removeItem -->
+                <button class="remove-btn" @click="removeItem(item.cartId)" title="Xóa sản phẩm này">
                   <i class="fa fa-trash"></i>
                 </button>
               </td>
@@ -189,7 +220,6 @@ const proceedToCheckout = () => {
             <span class="total-amount">{{ formatPrice(total) }}</span>
           </div>
           
-          <!-- Thay router-link bằng button để xử lý logic trước khi đi -->
           <button @click="proceedToCheckout" class="checkout-btn">
              Thanh toán <i class="fas fa-arrow-right" style="margin-left:5px"></i>
           </button>
@@ -200,7 +230,6 @@ const proceedToCheckout = () => {
 </template>
 
 <style scoped>
-/* Giữ nguyên style cũ của bạn, code CSS của bạn đã khá ổn */
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css');
 
 .cart-page { padding: 50px 15px; background-color: #f8f9fa; min-height: 100vh; }

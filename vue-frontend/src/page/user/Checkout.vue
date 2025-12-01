@@ -47,7 +47,12 @@ const getImageUrl = (path) => {
 
 // Actions tương tác với Vuex
 const increaseQuantity = (item) => {
-  store.dispatch('updateItemQty', { cartId: item.cartId, qty: item.qty + 1 });
+    // Kiểm tra tồn kho trước khi tăng
+    if (item.stock && item.qty >= item.stock) {
+        alert(`Sản phẩm này chỉ còn tối đa ${item.stock} món.`);
+        return;
+    }
+    store.dispatch('updateItemQty', { cartId: item.cartId, qty: item.qty + 1 });
 };
 
 const decreaseQuantity = (item) => {
@@ -71,7 +76,6 @@ const onRemoveItemLocal = (cartId) => {
 };
 
 // --- CÁC PHẦN UI/FORM GIỮ NGUYÊN NHƯ CŨ ---
-// (Shipping, Form, Address, Coupon... bạn giữ nguyên code cũ ở đây)
 const shippingFees = {
   "Thành phố Hà Nội": 50000,
   "Thành phố Hồ Chí Minh": 30000,
@@ -127,7 +131,7 @@ const closeModal = () => {
   router.push('/');
 };
 
-// --- ON MOUNTED ĐÃ SỬA ---
+// --- ON MOUNTED ---
 onMounted(async () => {
   // 1. Đọc ID cần thanh toán
   const storedIds = localStorage.getItem('checkout_items');
@@ -146,18 +150,14 @@ onMounted(async () => {
       return;
   }
 
-  // FIX 3: QUAN TRỌNG - Kiểm tra nếu Vuex chưa có dữ liệu (do reload trang) thì gọi API lấy lại
-  // Giả sử action lấy giỏ hàng của bạn tên là 'fetchCart' hoặc 'getCartItems'
+  // 3. Kiểm tra nếu Vuex chưa có dữ liệu
   if (!allCartItems.value || allCartItems.value.length === 0) {
       console.log("Vuex trống, đang tải lại giỏ hàng...");
-      // await store.dispatch('fetchCartItems'); // <--- BỎ COMMENT DÒNG NÀY NẾU BẠN CÓ ACTION ĐÓ
-      
-      // Nếu không có action load lại, cần cảnh báo hoặc đẩy về trang Cart để load lại
-      // Tạm thời log ra để debug
+      // await store.dispatch('fetchCartItems'); 
       console.warn("CẢNH BÁO: Vuex Store đang rỗng. Nếu bạn vừa F5, dữ liệu giỏ hàng đã mất.");
   }
 
-  // 3. Load User Data
+  // 4. Load User Data
   const userDataString = localStorage.getItem("userData");
   if (userDataString) {
     try {
@@ -174,7 +174,7 @@ onMounted(async () => {
     } catch (e) { console.error(e); }
   }
 
-  // 4. Load API Tỉnh thành
+  // 5. Load API Tỉnh thành
   try {
     const res = await fetch("https://provinces.open-api.vn/api/?depth=3");
     provinces.value = await res.json();
@@ -263,25 +263,67 @@ const totalPrice = computed(() => {
   return total > 0 ? total : 0;
 });
 
-// Validate & Submit
+// --- VALIDATION & SUBMIT ---
 const validateForm = () => {
   let valid = true;
   errors.name = errors.email = errors.phone = errors.address = errors.paymentMethod = "";
+  
+  // Validate Name
   if (!form.name.trim()) { errors.name = "Vui lòng nhập họ tên."; valid = false; }
+  
+  // Validate Email
   const emailRegex = /^[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}$/;
   if (!form.email.trim()) { errors.email = "Vui lòng nhập email."; valid = false; }
   else if (!emailRegex.test(form.email)) { errors.email = "Email không hợp lệ."; valid = false; }
+  
+  // Validate Phone
   const phoneRegex = /^(0[0-9]{9,10})$/;
   if (!form.phone.trim()) { errors.phone = "Vui lòng nhập số điện thoại."; valid = false; }
   else if (!phoneRegex.test(form.phone)) { errors.phone = "Số điện thoại không hợp lệ."; valid = false; }
-  if (!form.address.province || !form.address.district || !form.address.ward) { errors.address = "Vui lòng chọn đầy đủ Tỉnh/Quận/Phường."; valid = false; }
+  
+  // Validate Address (NEW: Chặn ký tự đặc biệt)
+  // Regex cho phép: Chữ cái (cả tiếng Việt), số, khoảng trắng, dấu chấm, dấu phẩy, gạch chéo, gạch ngang
+  const addressSpecialCharsRegex = /^[a-zA-Z0-9\s,./\-\u00C0-\u1EF9]+$/;
+
+  if (!form.address.province || !form.address.district || !form.address.ward) { 
+      errors.address = "Vui lòng chọn đầy đủ Tỉnh/Quận/Phường."; 
+      valid = false; 
+  } else if (!form.address.street.trim()) {
+      errors.address = "Vui lòng nhập địa chỉ cụ thể.";
+      valid = false;
+  } else if (!addressSpecialCharsRegex.test(form.address.street)) {
+      errors.address = "Địa chỉ không được chứa ký tự đặc biệt (@, #, $, ...).";
+      valid = false;
+  }
+
+  // Validate Payment
   if (!form.paymentMethod) { errors.paymentMethod = "Vui lòng chọn phương thức thanh toán."; valid = false; }
+  
+  // Validate Cart Empty
   if (cartItems.value.length === 0) valid = false;
+  
   return valid;
 };
 
 const confirmCheckout = () => {
+  // 1. Validate Form
   if (!validateForm()) return;
+
+  // 2. CHECK STOCK (NEW: Kiểm tra hàng tồn kho trước khi thanh toán)
+  // Lọc ra các sản phẩm trong giỏ hàng đang có stock <= 0
+  const outOfStockItems = cartItems.value.filter(item => {
+      // Nếu không có trường stock (undefined) thì coi như còn hàng (hoặc xử lý tùy logic backend)
+      // Ở đây ta giả sử item.stock trả về số lượng tồn kho
+      return item.stock !== undefined && item.stock <= 0;
+  });
+
+  if (outOfStockItems.length > 0) {
+      const names = outOfStockItems.map(i => i.name).join(", ");
+      alert(`Rất tiếc, các sản phẩm sau vừa hết hàng: ${names}.\nVui lòng loại bỏ khỏi giỏ hàng hoặc chọn sản phẩm khác.`);
+      return; // Dừng thanh toán
+  }
+
+  // 3. Tiến hành đặt hàng
   const total = totalPrice.value;
   const paymentMethodName = paymentMethods.find(p => p.code === form.paymentMethod)?.name || 'Không xác định';
 
@@ -317,6 +359,7 @@ const confirmCheckout = () => {
     ]
   };
 
+  // Xóa item trong Vuex Store sau khi đặt thành công
   cartItems.value.forEach(item => { store.dispatch('removeItem', item.cartId); });
   localStorage.removeItem('checkout_items');
   showModal.value = true;
@@ -428,6 +471,7 @@ const confirmCheckout = () => {
                   +
                 </button>
               </div>
+              <small v-if="item.stock !== undefined && item.stock <= 0" class="error" style="font-size:11px;">Hết hàng</small>
             </div>
             <div class="item-info-right">
               <div class="item-price">
