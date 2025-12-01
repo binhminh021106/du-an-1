@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Nov 30, 2025 at 07:23 PM
--- Server version: 8.4.3
--- PHP Version: 8.3.26
+-- Generation Time: Dec 01, 2025 at 01:33 AM
+-- Server version: 8.0.30
+-- PHP Version: 8.3.27
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -776,7 +776,7 @@ CREATE TABLE `users` (
   `fullName` varchar(150) NOT NULL,
   `email` varchar(150) NOT NULL,
   `phone` varchar(20) DEFAULT NULL,
-  `password` varchar(255) NOT NULL,
+  `password` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
   `avatar_url` varchar(255) DEFAULT NULL,
   `status` varchar(20) NOT NULL DEFAULT 'active',
   `created_at` timestamp NOT NULL DEFAULT (now()),
@@ -785,20 +785,21 @@ CREATE TABLE `users` (
   `remember_token` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
   `email_verified_at` datetime DEFAULT NULL,
   `birthday` date DEFAULT NULL,
-  `sex` varchar(10) NOT NULL
+  `sex` varchar(10) NOT NULL,
+  `google_id` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `fullName`, `email`, `phone`, `password`, `avatar_url`, `status`, `created_at`, `updated_at`, `deleted_at`, `remember_token`, `email_verified_at`, `birthday`, `sex`) VALUES
-(58, 'Nguyễn Trần Bình Minh', 'minhntbpk04039@gmail.com', '0358090730', '$2y$12$6h9S.iyL0EX8MJNRFCwcSeDTiQEqR3A4SxT72tPQs4cB2mZCXLBNO', 'http://127.0.0.1:8000/storage/avatars/pLpCZyhxaehXAtMwOrBFjajpo2Oz0f2L4atD3mHg.png', 'active', '2025-11-18 07:48:52', '2025-11-28 23:00:42', NULL, NULL, NULL, NULL, ''),
-(59, 'minhdeony12334', 'minhquadz1@gmail.com', '0123575643', '$2y$12$mOlbIJ9aHE.xYZcaHENJ0OLBnAR7Ry6V3aMqQSUJY8w6gycug5JDK', NULL, 'active', '2025-11-19 07:02:34', '2025-11-19 07:12:38', '2025-11-19 07:12:38', NULL, NULL, NULL, ''),
-(60, 'hieuht', 'test2@gmail.com', '0123456789', '$2y$12$rn9fiILfM//6hRYJZxF8T.CwPrvo4axr9VQVtW.tXc.o0kfa7Sy.C', NULL, 'active', '2025-11-19 08:19:36', '2025-11-19 23:29:58', '2025-11-19 23:29:58', NULL, NULL, NULL, ''),
-(61, 'NGUYEN TRAN BINH MINH', 'test3@gmail.com', '0123434323', '$2y$12$oc2ilUaZEQztxhTEAKPSTODUAy7Ub5IpKYJFVaIvKMJ07OGd.oKgu', NULL, 'active', '2025-11-19 22:16:33', '2025-11-19 22:16:38', '2025-11-19 22:16:38', NULL, NULL, NULL, ''),
-(62, 'Hoàng Thanh Hiếu', 'hieuv12321@gmail.com', '0377975276', '$2y$12$BYR5.zN3q87inJIBfohuI.JQfHlxqrgHjD12n6oYPHVuQs41ZNitK', 'http://127.0.0.1:8000/storage/avatars/UvhJ8Ofe4JIfgUZaVhvHQpGEs7CSyC5ZVuVXCsCB.jpg', 'active', '2025-11-19 22:35:08', '2025-11-28 07:12:33', NULL, NULL, NULL, NULL, ''),
-(63, 'Hoàng Thanh Hiếu', 'test2222@gmail.com', '0323123435', '$2y$12$kUAdXpm1hw95Y4wuFWcfru6YQUdW1ZWzpDQ4oQdX4bSWXOooNA.Y2', NULL, 'active', '2025-11-29 00:37:51', '2025-11-29 00:37:51', NULL, NULL, NULL, NULL, 'male');
+INSERT INTO `users` (`id`, `fullName`, `email`, `phone`, `password`, `avatar_url`, `status`, `created_at`, `updated_at`, `deleted_at`, `remember_token`, `email_verified_at`, `birthday`, `sex`, `google_id`) VALUES
+(58, 'Nguyễn Trần Bình Minh', 'minhntbpk04039@gmail.com', '0358090730', '$2y$12$6h9S.iyL0EX8MJNRFCwcSeDTiQEqR3A4SxT72tPQs4cB2mZCXLBNO', 'http://127.0.0.1:8000/storage/avatars/pLpCZyhxaehXAtMwOrBFjajpo2Oz0f2L4atD3mHg.png', 'active', '2025-11-18 07:48:52', '2025-11-28 23:00:42', NULL, NULL, NULL, NULL, '', NULL),
+(59, 'minhdeony12334', 'minhquadz1@gmail.com', '0123575643', '$2y$12$mOlbIJ9aHE.xYZcaHENJ0OLBnAR7Ry6V3aMqQSUJY8w6gycug5JDK', NULL, 'active', '2025-11-19 07:02:34', '2025-11-19 07:12:38', '2025-11-19 07:12:38', NULL, NULL, NULL, '', NULL),
+(60, 'hieuht', 'test2@gmail.com', '0123456789', '$2y$12$rn9fiILfM//6hRYJZxF8T.CwPrvo4axr9VQVtW.tXc.o0kfa7Sy.C', NULL, 'active', '2025-11-19 08:19:36', '2025-11-19 23:29:58', '2025-11-19 23:29:58', NULL, NULL, NULL, '', NULL),
+(61, 'NGUYEN TRAN BINH MINH', 'test3@gmail.com', '0123434323', '$2y$12$oc2ilUaZEQztxhTEAKPSTODUAy7Ub5IpKYJFVaIvKMJ07OGd.oKgu', NULL, 'active', '2025-11-19 22:16:33', '2025-11-19 22:16:38', '2025-11-19 22:16:38', NULL, NULL, NULL, '', NULL),
+(62, 'Hoàng Thanh Hiếu', 'hieuv12321@gmail.com', '0377975276', '$2y$12$BYR5.zN3q87inJIBfohuI.JQfHlxqrgHjD12n6oYPHVuQs41ZNitK', 'http://127.0.0.1:8000/storage/avatars/UvhJ8Ofe4JIfgUZaVhvHQpGEs7CSyC5ZVuVXCsCB.jpg', 'active', '2025-11-19 22:35:08', '2025-11-28 07:12:33', NULL, NULL, NULL, NULL, '', NULL),
+(63, 'Hoàng Thanh Hiếu', 'test2222@gmail.com', '0323123435', '$2y$12$kUAdXpm1hw95Y4wuFWcfru6YQUdW1ZWzpDQ4oQdX4bSWXOooNA.Y2', NULL, 'active', '2025-11-29 00:37:51', '2025-11-29 00:37:51', NULL, NULL, NULL, NULL, 'male', NULL);
 
 -- --------------------------------------------------------
 
