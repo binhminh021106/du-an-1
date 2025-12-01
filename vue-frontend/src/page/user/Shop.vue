@@ -4,222 +4,158 @@ import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'; 
 import apiService from '../../apiService.js';
 
-
 const route = useRoute()
 const router = useRouter()
 const store = useStore() 
 
-
-const SERVER_URL = 'http://127.0.0.1:8000';   
+const SERVER_URL = 'http://127.0.0.1:8000'; 
 const USE_STORAGE = false; 
 
 const getImageUrl = (path) => {
   if (!path) return 'https://placehold.co/300x300?text=No+Img';
   if (path.startsWith('http')) return path;
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-  if (USE_STORAGE) {
-    return `${SERVER_URL}/storage/${cleanPath}`; 
-  } else {
-    return `${SERVER_URL}/${cleanPath}`;         
-  }
+  return USE_STORAGE ? `${SERVER_URL}/storage/${cleanPath}` : `${SERVER_URL}/${cleanPath}`;
 };
 
-const clearAllFilters = () => {
-  searchKeyword.value = "";
-  searchTerm.value = "";
-  priceMax.value = 100000000;
-  router.push({ query: {} });
-};
-
-const searchKeyword = ref("")  
-const searchTerm = ref(route.query.search || '')
-
-
+// --- STATE ---
 const allProducts = ref([])
 const categories = ref([])
-const news = ref([])
-
-const priceMin = ref(0); 
+const searchKeyword = ref("")
+const searchTerm = ref(route.query.search || '')
 const priceMax = ref(100000000); 
-
 const hotSaleProducts = ref([])
-
-e
+const countdownDisplay = ref('00 : 00 : 00 : 00');
+const countdownInterval = ref(null);
 const saleEndTime = new Date();
 saleEndTime.setDate(saleEndTime.getDate() + 1); 
-const countdownInterval = ref(null);
-const countdownDisplay = ref('00 : 00 : 00 : 00');
 
+// --- COMPUTED ---
+// Lấy categoryId từ URL
+const currentCategoryId = computed(() => route.query.categoryId ? String(route.query.categoryId) : null);
 
+const currentCategoryName = computed(() => {
+  if (!currentCategoryId.value) return 'Tất cả sản phẩm';
+  const category = categories.value.find(c => String(c.id) === currentCategoryId.value);
+  return category ? category.name : 'Danh mục không xác định';
+});
+
+// --- HELPER FUNCTIONS ---
 const getProductPrice = (product) => {
-
   if (product.variants && product.variants.length > 0) {
     return Math.min(...product.variants.map(v => Number(v.price)));
   }
-
   return Number(product.price) || 0;
 }
 
 const formatCurrency = (value) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
-
+  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 
 const onAddToCart = (product) => {
-
   let variant = null;
   if (product.variants && product.variants.length > 0) {
      const minPrice = getProductPrice(product);
      variant = product.variants.find(v => Number(v.price) === minPrice) || product.variants[0];
   }
-
-  store.dispatch('addToCart', { 
-    product: product, 
-    quantity: 1, 
-    variant: variant 
-  });
-  
+  store.dispatch('addToCart', { product, quantity: 1, variant });
   alert(`Đã thêm ${product.name} vào giỏ hàng.`);
 }
 
 const updateCountdown = () => {
   const now = new Date();
   const distance = saleEndTime - now;
-
   if (distance < 0) {
     clearInterval(countdownInterval.value);
     countdownDisplay.value = 'Hết hạn Sale!';
     return;
   }
-
   const days = Math.floor(distance / (1000 * 60 * 60 * 24));
   const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
   const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
   const pad = (num) => String(num).padStart(2, '0');
-
   countdownDisplay.value = `${pad(days)} : ${pad(hours)} : ${pad(minutes)} : ${pad(seconds)}`;
 };
 
+// --- API FETCH ---
 const fetchData = async () => {
   try {
-    const [prodRes, catRes, newsRes] = await Promise.all([
-      apiService.get(`/products`),
-      apiService.get(`/categories?status=active`),
-      apiService.get(`/news?_limit=5`)
+    const [prodRes, catRes] = await Promise.all([
+      apiService.get(`/products?include=category,variants`), // Lấy đủ variants để tính giá
+      apiService.get(`/categories?status=active`)
     ])
     
-    const productsData = prodRes.data.data || prodRes.data || [];
-    allProducts.value = productsData;
-    
+    allProducts.value = prodRes.data.data || prodRes.data || [];
     categories.value = catRes.data.data || catRes.data || [];
-    news.value = newsRes.data.data || newsRes.data || [];
 
-    hotSaleProducts.value = productsData.slice(0, 5).map(p => {
+    // Tạo hot sale giả lập
+    hotSaleProducts.value = allProducts.value.slice(0, 5).map(p => {
       const price = getProductPrice(p);
-      return {
-        ...p,
-        sale_price: price * 0.85,
-        old_price: price,
-        discount: 15
-      }
-    })
-
+      return { ...p, sale_price: price * 0.85, old_price: price, discount: 15 }
+    });
   } catch (err) {
-    console.error('Lỗi tải dữ liệu cửa hàng:', err)
+    console.error('Lỗi tải dữ liệu:', err);
   }
 }
 
-const currentCategoryId = computed(() => route.query.categoryId ? String(route.query.categoryId) : null)
-const currentCategoryName = computed(() => {
-  if (!currentCategoryId.value) return 'Tất cả sản phẩm'
-  const category = categories.value.find(c => String(c.id) === currentCategoryId.value)
-  return category ? category.name : 'Danh mục không xác định'
-})
-
+// --- ACTIONS ---
 const selectCategory = (id) => {
-  const query = { ...route.query, categoryId: id || undefined };
-  if (!id) delete query.categoryId;
-  router.push({ query });
-}
-
-const applyFilters = () => {
   const query = { ...route.query };
-  if (searchTerm.value) {
-    query.search = searchTerm.value;
+  if (id) {
+    query.categoryId = String(id);
   } else {
-    delete query.search;
+    delete query.categoryId; // Nếu null thì xóa param để về "Tất cả"
   }
-  delete query.price_min;
-  if (priceMax.value > 0 && priceMax.value < 100000000) {
-    query.price_max = priceMax.value;
-  } else {
-    delete query.price_max;
-  }
+  // Reset trang về 1 nếu có phân trang (ở đây chưa có thì thôi)
   router.push({ query });
 }
 
-const goToProduct = (productId) => {
-  if (!productId) return;
-  router.push(`/products/${productId}`);
-}
+const clearAllFilters = () => {
+  searchKeyword.value = "";
+  priceMax.value = 100000000;
+  router.push({ path: '/Shop' }); // Reset về trang Shop gốc
+};
 
-// --- BỘ LỌC SẢN PHẨM (ĐÃ SỬA) ---
+const goToProduct = (id) => router.push(`/products/${id}`);
+
+// --- FILTER LOGIC (QUAN TRỌNG NHẤT) ---
 const filteredProducts = computed(() => {
-  if (!Array.isArray(allProducts.value)) return [];
-  
-  let products = [...allProducts.value]
+  let products = [...allProducts.value];
 
-  // 1. Lọc theo Danh mục (Hỗ trợ cả object category và category_id)
+  // 1. Lọc theo Category ID (Chuyển cả 2 về String để so sánh an toàn)
   if (currentCategoryId.value) {
     products = products.filter(p => {
-        // Kiểm tra an toàn: p.category.id hoặc p.category_id
         const pCatId = p.category?.id || p.category_id;
         return String(pCatId) === currentCategoryId.value;
-    })
+    });
   }
 
-  // 2. Lọc theo Tìm kiếm
-  if (searchTerm.value && searchTerm.value.trim()) {
-    const term = searchTerm.value.toLowerCase()
-    products = products.filter(p => p.name.toLowerCase().includes(term))
+  // 2. Lọc theo Search
+  if (searchTerm.value) {
+    const k = searchTerm.value.toLowerCase();
+    products = products.filter(p => p.name.toLowerCase().includes(k));
   }
 
-  // 3. Lọc theo Khoảng giá
-  products = products.filter(p => {
-    const price = getProductPrice(p);
-    if (priceMax.value && price > priceMax.value) return false
-    return true
-  })
-  return products
-})
+  // 3. Lọc theo Giá
+  products = products.filter(p => getProductPrice(p) <= priceMax.value);
 
-// --- LIFECYCLE HOOKS & WATCHERS ---
+  return products;
+});
+
+// --- WATCHERS ---
+watch(() => route.query.search, (val) => { searchTerm.value = val || ''; });
+watch(searchKeyword, (val) => {
+    // Debounce search input
+    const query = { ...route.query };
+    if (val) query.search = val;
+    else delete query.search;
+    router.replace({ query }); // Dùng replace để không tạo history rác
+});
+
 onMounted(() => {
   fetchData();
   countdownInterval.value = setInterval(updateCountdown, 1000);
 });
-
-let debounceTimer = null;
-const debouncedApplyFilters = () => {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    applyFilters();
-  }, 500); 
-};
-
-watch(searchKeyword, (newVal) => {
-  searchTerm.value = newVal; 
-  debouncedApplyFilters(); 
-});
-
-watch(route, (newRoute) => {
-  searchTerm.value = newRoute.query.search || '';
-  priceMax.value = Number(newRoute.query.price_max) || 100000000; 
-  if (!searchKeyword.value) {
-      searchKeyword.value = searchTerm.value;
-  }
-}, { deep: true, immediate: true }); 
 </script>
 
 <template>
@@ -228,35 +164,38 @@ watch(route, (newRoute) => {
     <div class="shop-page">
       <div class="shop-layout">
         <aside class="sidebar">
-          <div class="filter-section">
-            <h3><i class="fas fa-search"></i> Tìm kiếm sản phẩm</h3>
-            <input v-model="searchKeyword" type="text" placeholder="Nhập tên sản phẩm..." class="search-box" />
-          </div>
-          <h2 class="sidebar-title">Danh mục sản phẩm</h2>
-          <ul class="category-list">
-            <li :class="{ active: !currentCategoryId }" @click="selectCategory(null)">
-              Tất cả sản phẩm
-            </li>
-            <li v-for="cat in categories" :key="cat.id" :class="{ active: currentCategoryId == String(cat.id) }"
-              @click="selectCategory(cat.id)">
-              {{ cat.name }}
-            </li>
-          </ul>
+    <div class="filter-section">
+        <h3><i class="fas fa-search"></i> Tìm kiếm</h3>
+        <input v-model="searchKeyword" type="text" placeholder="Nhập tên sản phẩm..." class="search-box" />
+    </div>
 
-          <div class="filter-price">
-            <h5><i class="fas fa-filter"></i> Lọc theo giá</h5>
-            <div class="price-range">
-              <label>Tối đa: {{ priceMax.toLocaleString() }}đ</label>
-              <input type="range" min="100000" max="100000000" v-model.number="priceMax" step="100000"
-                class="range-slider" @change="applyFilters" />
-            </div>
-          </div>
+    <h2 class="sidebar-title">Danh mục</h2>
+    <ul class="category-list">
+        <li :class="{ active: !currentCategoryId }" 
+            @click="selectCategory(null)" 
+            style="cursor: pointer;">
+            Tất cả sản phẩm
+        </li>
+        
+        <li v-for="cat in categories" :key="cat.id" 
+            :class="{ active: currentCategoryId === String(cat.id) }"
+            @click="selectCategory(cat.id)"
+            style="cursor: pointer;">
+            {{ cat.name }}
+        </li>
+    </ul>
 
-          <button @click="clearAllFilters" class="btn-reset-all">
-            <i class="fas fa-undo"></i> Reset tất cả bộ lọc
-          </button>
+    <div class="filter-price">
+        <h5><i class="fas fa-filter"></i> Lọc giá (Max: {{ (priceMax/1000000).toFixed(1) }}Tr)</h5>
+        <div class="price-range">
+            <input type="range" min="0" max="100000000" step="500000" v-model.number="priceMax" class="range-slider" />
+        </div>
+    </div>
 
-        </aside>
+    <button @click="clearAllFilters" class="btn-reset-all">
+        <i class="fas fa-undo"></i> Reset bộ lọc
+    </button>
+</aside>
 
         <main class="main-content">
           <div class="shop-header">

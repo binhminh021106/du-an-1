@@ -6,20 +6,24 @@ import { useStore } from 'vuex';
 import apiService from '../../apiService.js';
 import { addToCart } from '../../store/cartStore.js';
 
-// --- INIT STORE ---
-const store = useStore();
-const router = useRouter(); // Giờ lệnh này sẽ hoạt động
 
-// --- CẤU HÌNH ---
+const store = useStore();
+const router = useRouter(); 
+
+
 const SERVER_URL = 'http://127.0.0.1:8000'; 
 const USE_STORAGE = false; 
-const CHATBOT_API_URL = 'http://127.0.0.1:8000/api/chatbot'; // URL Chatbot
+const CHATBOT_API_URL = 'http://127.0.0.1:8000/api/chatbot'; 
 
 const getImageUrl = (path) => {
   if (!path) return 'https://placehold.co/300x300?text=No+Img';
   if (path.startsWith('http')) return path;
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
   return USE_STORAGE ? `${SERVER_URL}/storage/${cleanPath}` : `${SERVER_URL}/${cleanPath}`;
+};
+const navigateToCategory = (categoryId) => {
+    // Chuyển sang trang Shop và gắn kèm ID danh mục lên URL
+    router.push({ path: '/Shop', query: { categoryId: categoryId } });
 };
 
 // --- ICON DANH MỤC ---
@@ -60,19 +64,19 @@ const chatMessages = ref([]);
 const isChatLoading = ref(false);
 const chatBodyRef = ref(null);
 
-// --- FETCH DATA ---
 const fetchData = async () => {
   try {
+    // Lần đầu vào trang thì tải tất cả, products lấy mặc định (không lọc)
     const [catRes, slideRes, prodRes, userRes, newsRes, brandRes] = await Promise.all([
       apiService.get(`/categories`),
       apiService.get(`/slides`),
-      apiService.get(`/products?include=category,variants`),
+      apiService.get(`/products?include=category,variants`), // Mặc định lấy tất cả
       apiService.get(`/users`),
       apiService.get(`/news`),
       apiService.get(`/brands`),
     ]);
 
-    categories.value = catRes.data.data || catRes.data || [];
+  categories.value = catRes.data.data || catRes.data || [];
     slides.value = slideRes.data.data || slideRes.data || [];
     products.value = prodRes.data.data || prodRes.data || [];
     users.value = userRes.data.data || userRes.data || [];
@@ -80,10 +84,38 @@ const fetchData = async () => {
     brands.value = brandRes.data.data || brandRes.data || [];
 
   } catch (err) {
-    console.error("Lỗi tải dữ liệu:", err);
+    console.error("Lỗi tải dữ liệu ban đầu:", err);
   }
 };
+const refreshProducts = async (categoryId = null) => {
+    try {
+        let url = '/products?include=category,variants';
+        if (categoryId) {
+            url += `&category_id=${categoryId}`;
+        }
+        
+        // Chỉ gọi API lấy products, không gọi các cái khác -> Nhanh hơn
+        const res = await apiService.get(url);
+        products.value = res.data.data || res.data || [];
+    } catch (e) {
+        console.error("Lỗi lọc sản phẩm:", e);
+    }
+}
 
+// --- 3. ACTION KHI CLICK DANH MỤC ---
+const onSelectCategory = async (id) => {
+    const idString = String(id);
+    
+    // Nếu đang chọn danh mục đó rồi mà bấm lại -> Bỏ chọn (Hiện tất cả)
+    if (activeCategoryId.value === idString) {
+        activeCategoryId.value = null;
+        await refreshProducts(null); 
+    } else {
+        // Nếu chọn danh mục mới -> Cập nhật ID và lọc
+        activeCategoryId.value = idString;
+        await refreshProducts(id);
+    }
+};
 // --- COMPUTED PROPERTIES ---
 const topFavoriteProducts = computed(() => {
   if (!Array.isArray(products.value)) return [];
@@ -236,19 +268,22 @@ onBeforeUnmount(stopAutoSlide);
 
         <main class="container">
             <section class="top-section-layout">
-                <nav class="categories-sidebar">
-                    <h3 class="sidebar-title">DANH MỤC</h3>
-                    <div class="category-list">
-                        <router-link v-for="category in categories" :key="category.id"
-                            :to="{ path: '/Shop', query: { categoryId: category.id } }"
-                            class="category-item-clean text-uppercase"
-                            :class="{ active: String(category.id) === String(activeCategoryId) }"
-                            @click="setActiveCategory(category.id)">
-                            <span v-if="category.icon" v-html="category.icon" class="cat-icon"></span>
-                            <span>{{ category.name }}</span>
-                        </router-link>
-                    </div>
-                </nav>
+          <nav class="categories-sidebar">
+    <h3 class="sidebar-title">DANH MỤC</h3>
+    <div class="category-list">
+        <div v-for="category in categories" :key="category.id"
+            class="category-item-clean text-uppercase"
+            @click="navigateToCategory(category.id)" 
+            style="cursor: pointer;">
+            
+            <span v-if="category.icon" v-html="category.icon" class="cat-icon"></span>
+            
+            <span>{{ category.name }}</span>
+            
+            <i class="fas fa-chevron-right ms-auto" style="font-size: 10px; color: #ccc;"></i>
+        </div>
+    </div>
+</nav>
 
                 <section class="slider" @mouseenter="stopAutoSlide" @mouseleave="startAutoSlide">
                     <div class="slider-wrapper" :style="{ transform: 'translateX(-' + currentSlide * 100 + '%)' }">
