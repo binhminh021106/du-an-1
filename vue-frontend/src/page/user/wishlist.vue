@@ -1,9 +1,11 @@
 <script setup>
 import { ref, onMounted } from 'vue';
-// Import store
-import { wishlist, removeItemFromWishlist } from "./user/wishlistStore.js"; 
-import { addToCart } from "./user/cartStore.js"; 
+import { useStore } from 'vuex'; // 1. Import Vuex
+// Import store wishlist (giữ nguyên logic quản lý wishlist)
+import { wishlist, removeItemFromWishlist } from "../../store/wishlistStore.js"; 
 import apiService from '../../apiService.js';
+
+const store = useStore(); // 2. Khởi tạo store
 
 // --- CẤU HÌNH SERVER ẢNH ---
 const SERVER_URL = 'http://127.0.0.1:8000';   
@@ -82,11 +84,19 @@ const handleRemove = (itemId) => {
 };
 
 const moveItemToCart = (item) => {
+    // Tự động chọn variant đầu tiên hoặc tạo variant mặc định
     const variant = item.variants && item.variants.length > 0 
         ? item.variants[0]
         : { id: 'default', name: 'Mặc định', price: item.price, stock: item.stock || 999 };
 
-    addToCart(item, variant, 1);
+    // 3. Sử dụng Vuex Action để thêm vào giỏ
+    store.dispatch('addToCart', {
+        product: item,
+        variant: variant,
+        quantity: 1
+    });
+
+    // Xóa khỏi wishlist sau khi thêm vào giỏ
     removeItemFromWishlist(item.id); 
     alert(`Đã chuyển "${item.name}" sang Giỏ hàng!`);
 };

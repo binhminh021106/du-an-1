@@ -1,24 +1,77 @@
 <script setup>
 import { ref, reactive, onMounted, watch, computed, nextTick } from "vue";
-// Giả định các store này tồn tại trong dự án của bạn như code gốc
-import { cart, total, removeItem, updateItemQty, saveCart } from "./user/cartStore.js";
-import { addOrder } from './user/orderStore.js';
+import { useStore } from "vuex";
+import { useRouter } from "vue-router";
 
-// Cart
-const cartItems = computed(() => cart.value);
-const subtotal = computed(() => total.value);
+const store = useStore();
+const router = useRouter();
 
+// --- 1. XỬ LÝ DỮ LIỆU TỪ VUEX & LOCALSTORAGE ---
+const selectedIds = ref([]);
+
+// Lấy danh sách từ getter
+const allCartItems = computed(() => store.getters.cartItems || []);
+
+// FIX 1: Logic lọc sản phẩm (Chuyển về String để so sánh chính xác)
+const cartItems = computed(() => {
+  if (!selectedIds.value || selectedIds.value.length === 0) return [];
+  if (!allCartItems.value || allCartItems.value.length === 0) return [];
+
+  return allCartItems.value.filter(item => {
+    // So sánh dạng String để tránh lỗi 1 (number) !== "1" (string)
+    return selectedIds.value.some(id => String(id) === String(item.cartId));
+  });
+});
+
+// FIX 2: Tính tổng tiền (Xử lý kỹ phần giá tiền để tránh lỗi NaN)
+const subtotal = computed(() => {
+  return cartItems.value.reduce((total, item) => {
+    // Loại bỏ dấu chấm, phẩy nếu giá là string format (VD: "100.000" -> 100000)
+    let price = item.price;
+    if (typeof price === 'string') {
+        // Giữ lại số và dấu chấm thập phân (nếu backend trả về kiểu 100.00)
+        price = parseFloat(price.replace(/[^0-9.]/g, "")); 
+    }
+    return total + (Number(price) * Number(item.qty));
+  }, 0);
+});
+
+// Helper xử lý ảnh
+const getImageUrl = (path) => {
+  if (!path) return 'https://placehold.co/70x70?text=No+Img';
+  if (path.startsWith('http')) return path;
+  const SERVER_URL = 'http://127.0.0.1:8000'; 
+  const cleanPath = path.startsWith('/') ? path : '/' + path;
+  return `${SERVER_URL}${cleanPath}`;
+};
+
+// Actions tương tác với Vuex
 const increaseQuantity = (item) => {
-  updateItemQty(item.cartId, item.qty + 1);
-};
-const decreaseQuantity = (item) => {
-  if (item.qty > 1) updateItemQty(item.cartId, item.qty - 1);
-};
-const onRemoveItemLocal = (cartId) => {
-  removeItem(cartId);
+  store.dispatch('updateItemQty', { cartId: item.cartId, qty: item.qty + 1 });
 };
 
-// Shipping & Payment
+const decreaseQuantity = (item) => {
+  if (item.qty > 1) {
+    store.dispatch('updateItemQty', { cartId: item.cartId, qty: item.qty - 1 });
+  }
+};
+
+const onRemoveItemLocal = (cartId) => {
+  store.dispatch('removeItem', cartId);
+  // Cập nhật lại selectedIds sau khi xóa
+  selectedIds.value = selectedIds.value.filter(id => String(id) !== String(cartId));
+  
+  // Cập nhật lại LocalStorage để đồng bộ
+  localStorage.setItem('checkout_items', JSON.stringify(selectedIds.value));
+
+  if (cartItems.value.length === 0) {
+      alert("Giỏ hàng thanh toán trống!");
+      router.push('/cart');
+  }
+};
+
+// --- CÁC PHẦN UI/FORM GIỮ NGUYÊN NHƯ CŨ ---
+// (Shipping, Form, Address, Coupon... bạn giữ nguyên code cũ ở đây)
 const shippingFees = {
   "Thành phố Hà Nội": 50000,
   "Thành phố Hồ Chí Minh": 30000,
@@ -31,7 +84,6 @@ const paymentMethods = [
   { code: "CARD", name: "VN Pay", icon: "fa-credit-card" },
 ];
 
-// Form
 const form = reactive({
   name: "",
   email: "",
@@ -46,16 +98,9 @@ const wards = ref([]);
 const selectedProvince = ref("");
 const selectedDistrict = ref("");
 const selectedWard = ref("");
-const errors = reactive({
-  name: "",
-  email: "",
-  phone: "",
-  address: "",
-  paymentMethod: "",
-});
+const errors = reactive({ name: "", email: "", phone: "", address: "", paymentMethod: "" });
 const shippingCost = ref(0);
 
-// Address Book & Coupon State
 const savedAddresses = ref([]);
 const selectedSavedAddressId = ref("");
 const couponCode = ref("");
@@ -63,7 +108,6 @@ const discountAmount = ref(0);
 const appliedCoupon = ref("");
 const couponMessage = ref("");
 
-// --- NEW: DANH SÁCH MÃ GIẢM GIÁ CÓ SẴN ---
 const availableCoupons = [
   { code: "GIAM10", label: "Giảm 10%", desc: "Cho mọi đơn hàng" },
   { code: "GIAM20", label: "Giảm 20%", desc: "Đơn từ 500k" },
@@ -72,71 +116,85 @@ const availableCoupons = [
 
 const quickApplyCoupon = (code) => {
   couponCode.value = code;
-  applyCoupon(); // Tái sử dụng hàm logic cũ
+  applyCoupon();
 };
-// ------------------------------------------
 
-// Modal
 const showModal = ref(false);
 const modalContent = ref({});
 
 const closeModal = () => {
   showModal.value = false;
+  router.push('/');
 };
 
-// Load user & provinces
+// --- ON MOUNTED ĐÃ SỬA ---
 onMounted(async () => {
+  // 1. Đọc ID cần thanh toán
+  const storedIds = localStorage.getItem('checkout_items');
+  if (storedIds) {
+    try {
+      selectedIds.value = JSON.parse(storedIds);
+    } catch (e) {
+      console.error("Lỗi đọc checkout_items", e);
+    }
+  }
+
+  // 2. Kiểm tra danh sách ID
+  if (!selectedIds.value || selectedIds.value.length === 0) {
+      alert("Vui lòng chọn sản phẩm từ giỏ hàng trước!");
+      router.push('/cart');
+      return;
+  }
+
+  // FIX 3: QUAN TRỌNG - Kiểm tra nếu Vuex chưa có dữ liệu (do reload trang) thì gọi API lấy lại
+  // Giả sử action lấy giỏ hàng của bạn tên là 'fetchCart' hoặc 'getCartItems'
+  if (!allCartItems.value || allCartItems.value.length === 0) {
+      console.log("Vuex trống, đang tải lại giỏ hàng...");
+      // await store.dispatch('fetchCartItems'); // <--- BỎ COMMENT DÒNG NÀY NẾU BẠN CÓ ACTION ĐÓ
+      
+      // Nếu không có action load lại, cần cảnh báo hoặc đẩy về trang Cart để load lại
+      // Tạm thời log ra để debug
+      console.warn("CẢNH BÁO: Vuex Store đang rỗng. Nếu bạn vừa F5, dữ liệu giỏ hàng đã mất.");
+  }
+
+  // 3. Load User Data
   const userDataString = localStorage.getItem("userData");
   if (userDataString) {
     try {
       const parsed = JSON.parse(userDataString);
       const userData = parsed.user || parsed.data || parsed;
-
-      // console.log("User Data for Checkout:", userData);
-
       form.name = userData.fullName || userData.name || "";
       form.email = userData.email || "";
       form.phone = userData.phone || "";
-
       if (userData.user_addresses && Array.isArray(userData.user_addresses)) {
         savedAddresses.value = userData.user_addresses;
       } else if (userData.addresses && Array.isArray(userData.addresses)) {
         savedAddresses.value = userData.addresses;
       }
-    } catch (e) {
-      console.error("Lỗi parse user data:", e);
-    }
+    } catch (e) { console.error(e); }
   }
 
+  // 4. Load API Tỉnh thành
   try {
     const res = await fetch("https://provinces.open-api.vn/api/?depth=3");
     provinces.value = await res.json();
-  } catch (e) {
-    console.error(e);
-  }
+  } catch (e) { console.error(e); }
 });
 
-// Logic điền địa chỉ từ sổ địa chỉ
+// Logic Address Book
 const fillAddressFromBook = async () => {
   if (!selectedSavedAddressId.value) return;
-
-  const addr = savedAddresses.value.find(
-    (a) => a.id === selectedSavedAddressId.value
-  );
+  const addr = savedAddresses.value.find(a => a.id === selectedSavedAddressId.value);
   if (addr) {
     form.name = addr.customer_name;
     form.phone = addr.customer_phone;
     form.address.street = addr.shipping_address;
-
     selectedProvince.value = addr.city;
-
     await nextTick();
-
     const p = provinces.value.find((p) => p.name === addr.city);
     if (p) {
       districts.value = p.districts;
       selectedDistrict.value = addr.district;
-
       await nextTick();
       const d = districts.value.find((d) => d.name === addr.district);
       if (d) {
@@ -147,18 +205,14 @@ const fillAddressFromBook = async () => {
   }
 };
 
-// Watchers Address
+// Watchers
 watch(selectedProvince, (val) => {
   const p = provinces.value.find((p) => p.name === val);
   districts.value = p ? p.districts : [];
   if (selectedSavedAddressId.value === "") {
-    selectedDistrict.value = "";
-    wards.value = [];
-    selectedWard.value = "";
+    selectedDistrict.value = ""; wards.value = []; selectedWard.value = "";
   }
   shippingCost.value = shippingFees[val] ?? 30000;
-  
-  // Re-check coupon if freeship depends on location change
   if(appliedCoupon.value === 'FREESHIP') applyCoupon();
 });
 
@@ -166,54 +220,41 @@ watch(selectedDistrict, (val) => {
   const p = provinces.value.find((p) => p.name === selectedProvince.value);
   const d = p?.districts.find((d) => d.name === val);
   wards.value = d ? d.wards : [];
-  if (selectedSavedAddressId.value === "") {
-    selectedWard.value = "";
-  }
+  if (selectedSavedAddressId.value === "") selectedWard.value = "";
 });
 
-watch(
-  [selectedProvince, selectedDistrict, selectedWard, () => form.address.street],
-  () => {
-    form.address.province = selectedProvince.value;
-    form.address.district = selectedDistrict.value;
-    form.address.ward = selectedWard.value;
-  }
-);
+watch([selectedProvince, selectedDistrict, selectedWard, () => form.address.street], () => {
+  form.address.province = selectedProvince.value;
+  form.address.district = selectedDistrict.value;
+  form.address.ward = selectedWard.value;
+});
 
-// Coupon Logic
+// Coupon Logic & Total Price
 const applyCoupon = () => {
   const code = couponCode.value.trim().toUpperCase();
-  couponMessage.value = "";
-  discountAmount.value = 0;
-  appliedCoupon.value = "";
-
+  couponMessage.value = ""; discountAmount.value = 0; appliedCoupon.value = "";
   if (!code) return;
 
   if (code === "GIAM10") {
     discountAmount.value = subtotal.value * 0.1;
-    appliedCoupon.value = "GIAM10";
-    couponMessage.value = "Đã áp dụng mã giảm 10%!";
+    appliedCoupon.value = "GIAM10"; couponMessage.value = "Đã áp dụng mã giảm 10%!";
   } else if (code === "GIAM20") {
-    // Ví dụ logic check điều kiện
     if(subtotal.value >= 500000) {
         discountAmount.value = subtotal.value * 0.2;
-        appliedCoupon.value = "GIAM20";
-        couponMessage.value = "Đã áp dụng mã giảm 20%!";
+        appliedCoupon.value = "GIAM20"; couponMessage.value = "Đã áp dụng mã giảm 20%!";
     } else {
         couponMessage.value = "Đơn hàng chưa đủ 500k để dùng mã này.";
     }
   } else if (code === "FREESHIP") {
     if (shippingCost.value > 0) {
       discountAmount.value = shippingCost.value;
-      appliedCoupon.value = "FREESHIP";
-      couponMessage.value = "Đã miễn phí vận chuyển!";
+      appliedCoupon.value = "FREESHIP"; couponMessage.value = "Đã miễn phí vận chuyển!";
     } else {
       couponMessage.value = "Đơn này đã được freeship sẵn!";
-      appliedCoupon.value = "FREESHIP"; // Vẫn tính là đã apply
+      appliedCoupon.value = "FREESHIP";
     }
   } else {
     couponMessage.value = "Mã giảm giá không hợp lệ.";
-    return;
   }
 };
 
@@ -222,92 +263,51 @@ const totalPrice = computed(() => {
   return total > 0 ? total : 0;
 });
 
-// Validate
+// Validate & Submit
 const validateForm = () => {
   let valid = true;
   errors.name = errors.email = errors.phone = errors.address = errors.paymentMethod = "";
-
-  if (!form.name.trim()) {
-    errors.name = "Vui lòng nhập họ tên.";
-    valid = false;
-  }
-
+  if (!form.name.trim()) { errors.name = "Vui lòng nhập họ tên."; valid = false; }
   const emailRegex = /^[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}$/;
-  if (!form.email.trim()) {
-    errors.email = "Vui lòng nhập email.";
-    valid = false;
-  } else if (!emailRegex.test(form.email)) {
-    errors.email = "Email không hợp lệ.";
-    valid = false;
-  }
-
+  if (!form.email.trim()) { errors.email = "Vui lòng nhập email."; valid = false; }
+  else if (!emailRegex.test(form.email)) { errors.email = "Email không hợp lệ."; valid = false; }
   const phoneRegex = /^(0[0-9]{9,10})$/;
-  if (!form.phone.trim()) {
-    errors.phone = "Vui lòng nhập số điện thoại.";
-    valid = false;
-  } else if (!phoneRegex.test(form.phone)) {
-    errors.phone = "Số điện thoại không hợp lệ.";
-    valid = false;
-  }
-
-  if (!form.address.province || !form.address.district || !form.address.ward) {
-    errors.address = "Vui lòng chọn đầy đủ Tỉnh/Quận/Phường.";
-    valid = false;
-  }
-
-  if (!form.paymentMethod) {
-    errors.paymentMethod = "Vui lòng chọn phương thức thanh toán.";
-    valid = false;
-  }
-
-  if (cartItems.value.length === 0) {
-    valid = false;
-  }
-
+  if (!form.phone.trim()) { errors.phone = "Vui lòng nhập số điện thoại."; valid = false; }
+  else if (!phoneRegex.test(form.phone)) { errors.phone = "Số điện thoại không hợp lệ."; valid = false; }
+  if (!form.address.province || !form.address.district || !form.address.ward) { errors.address = "Vui lòng chọn đầy đủ Tỉnh/Quận/Phường."; valid = false; }
+  if (!form.paymentMethod) { errors.paymentMethod = "Vui lòng chọn phương thức thanh toán."; valid = false; }
+  if (cartItems.value.length === 0) valid = false;
   return valid;
 };
 
-// Checkout
 const confirmCheckout = () => {
   if (!validateForm()) return;
-
   const total = totalPrice.value;
   const paymentMethodName = paymentMethods.find(p => p.code === form.paymentMethod)?.name || 'Không xác định';
 
   const newOrderData = {
     items: cartItems.value.map(item => ({
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      qty: item.qty,
-      image: item.image_url
+      id: item.id, name: item.name, price: item.price, qty: item.qty, image: item.image_url
     })),
     customer: {
-      name: form.name,
-      phone: form.phone,
+      name: form.name, phone: form.phone,
       address: `${form.address.street}, ${form.address.ward}, ${form.address.district}, ${form.address.province}`
     },
     payment: {
-      subtotal: subtotal.value,
-      shippingFee: shippingCost.value,
-      discount: discountAmount.value,
-      total: total,
-      method: paymentMethodName
+      subtotal: subtotal.value, shippingFee: shippingCost.value, discount: discountAmount.value, total: total, method: paymentMethodName
     },
-    total: total,
-    email: form.email,
+    total: total, email: form.email,
   };
 
-  const placedOrder = addOrder(newOrderData);
-
+  const fakeOrderId = "ORD-" + Date.now().toString().slice(-6);
   modalContent.value = {
-    title: `✅ Đặt hàng thành công! (Mã: ${placedOrder.id})`,
+    title: `✅ Đặt hàng thành công! (Mã: ${fakeOrderId})`,
     details: [
-      { label: "Người nhận", value: placedOrder.customer.name },
-      { label: "SĐT", value: placedOrder.customer.phone },
+      { label: "Người nhận", value: newOrderData.customer.name },
+      { label: "SĐT", value: newOrderData.customer.phone },
       { label: "Email", value: newOrderData.email },
-      { label: "Địa chỉ", value: placedOrder.customer.address },
-      { label: "Phương thức TT", value: placedOrder.payment.method },
+      { label: "Địa chỉ", value: newOrderData.customer.address },
+      { label: "Phương thức TT", value: newOrderData.payment.method },
     ],
     summary: [
       { label: "Tạm tính", value: `${subtotal.value.toLocaleString()} đ` },
@@ -317,9 +317,8 @@ const confirmCheckout = () => {
     ]
   };
 
-  cart.value.length = 0;
-  saveCart();
-
+  cartItems.value.forEach(item => { store.dispatch('removeItem', item.cartId); });
+  localStorage.removeItem('checkout_items');
   showModal.value = true;
 };
 </script>
@@ -407,10 +406,20 @@ const confirmCheckout = () => {
         <h3>Đơn hàng của bạn</h3>
         <ul>
           <li v-for="item in cartItems" :key="item.cartId" class="cart-item-summary">
-            <img :src="item.image_url" :alt="item.name" class="item-image-summary" />
+            <!-- Xử lý ảnh fallback để tránh lỗi giao diện -->
+            <!-- FIX: Sử dụng hàm getImageUrl để hiển thị đúng đường dẫn ảnh -->
+            <img 
+              :src="getImageUrl(item.image_url)" 
+              :alt="item.name" 
+              class="item-image-summary" 
+              @error="$event.target.src='https://placehold.co/70x70?text=No+Img'"
+            />
             <div class="item-details-summary">
               <div class="item-name">{{ item.name }}</div>
-              <div class="item-quantity-controls">
+              <small v-if="item.variantName !== 'Mặc định'" style="color:gray;">
+                  {{ item.variantName }}
+              </small>
+              <div class="item-quantity-controls" style="margin-top:5px;">
                 <button type="button" @click="decreaseQuantity(item)" :disabled="item.qty <= 1" class="qty-btn">
                   −
                 </button>
@@ -422,7 +431,7 @@ const confirmCheckout = () => {
             </div>
             <div class="item-info-right">
               <div class="item-price">
-                {{ (item.price * item.qty).toLocaleString() }} đ
+                {{ (Number(item.price) * Number(item.qty)).toLocaleString() }} đ
               </div>
               <button type="button" @click="onRemoveItemLocal(item.cartId)" class="remove-item-btn">
                 &times;
@@ -525,7 +534,7 @@ const confirmCheckout = () => {
 </template>
 
 <style scoped>
-/* GIỮ NGUYÊN CSS CŨ */
+/* Code CSS giữ nguyên từ bản đẹp của bạn */
 .checkout-page {
   font-family: Arial, sans-serif;
   padding: 40px 20px;

@@ -1,6 +1,8 @@
 <script setup>
 import { reactive, ref, onMounted, watch, computed } from "vue";
 import { useRouter } from "vue-router";
+import Swal from "sweetalert2";
+import "@fortawesome/fontawesome-free/css/all.min.css";
 
 const fileInput = ref(null);
 const router = useRouter();
@@ -438,7 +440,6 @@ const saveProfile = () => {
 </template>
 
 <style scoped>
-@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css");
 
 .profile-page {
   background-color: #f5f5fa;

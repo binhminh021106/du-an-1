@@ -1,26 +1,22 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useStore } from 'vuex'; 
 import apiService from '../../apiService.js';
-import { addToCart } from "./user/cartStore.js";
 
-// --- CẤU HÌNH & KHỞI TẠO ---
+
 const route = useRoute()
 const router = useRouter()
+const store = useStore() 
 
-// --- 1. CẤU HÌNH XỬ LÝ ẢNH (Đồng bộ với Cart.vue) ---
+
 const SERVER_URL = 'http://127.0.0.1:8000';   
 const USE_STORAGE = false; 
 
 const getImageUrl = (path) => {
   if (!path) return 'https://placehold.co/300x300?text=No+Img';
-  
-  // Nếu là link tuyệt đối (http...) thì giữ nguyên
   if (path.startsWith('http')) return path;
-
-  // Xóa dấu / ở đầu nếu có
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-  
   if (USE_STORAGE) {
     return `${SERVER_URL}/storage/${cleanPath}`; 
   } else {
@@ -38,7 +34,7 @@ const clearAllFilters = () => {
 const searchKeyword = ref("")  
 const searchTerm = ref(route.query.search || '')
 
-// --- STATE ---
+
 const allProducts = ref([])
 const categories = ref([])
 const news = ref([])
@@ -48,31 +44,42 @@ const priceMax = ref(100000000);
 
 const hotSaleProducts = ref([])
 
-// Countdown State
+e
 const saleEndTime = new Date();
 saleEndTime.setDate(saleEndTime.getDate() + 1); 
 const countdownInterval = ref(null);
 const countdownDisplay = ref('00 : 00 : 00 : 00');
 
 
-const getMinPrice = (variants) => {
-  if (!variants || !variants.length) return 0
-  // Chuyển về Number để tránh lỗi so sánh chuỗi
-  return Math.min(...variants.map(v => Number(v.price)))
+const getProductPrice = (product) => {
+
+  if (product.variants && product.variants.length > 0) {
+    return Math.min(...product.variants.map(v => Number(v.price)));
+  }
+
+  return Number(product.price) || 0;
 }
+
 const formatCurrency = (value) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
 
-const onAddToCart = (product) => {
-  const minPrice = getMinPrice(product.variants);
-  const variant = (product.variants && product.variants.length) 
-      ? (product.variants.find(v => Number(v.price) === minPrice) || product.variants[0])
-      : { id: 'default', name: 'Mặc định', price: minPrice || product.price || 0, stock: 999 };
 
-  addToCart(product, variant, 1); 
+const onAddToCart = (product) => {
+
+  let variant = null;
+  if (product.variants && product.variants.length > 0) {
+     const minPrice = getProductPrice(product);
+     variant = product.variants.find(v => Number(v.price) === minPrice) || product.variants[0];
+  }
+
+  store.dispatch('addToCart', { 
+    product: product, 
+    quantity: 1, 
+    variant: variant 
+  });
+  
   alert(`Đã thêm ${product.name} vào giỏ hàng.`);
 }
-
 
 const updateCountdown = () => {
   const now = new Date();
@@ -94,8 +101,6 @@ const updateCountdown = () => {
   countdownDisplay.value = `${pad(days)} : ${pad(hours)} : ${pad(minutes)} : ${pad(seconds)}`;
 };
 
-
-
 const fetchData = async () => {
   try {
     const [prodRes, catRes, newsRes] = await Promise.all([
@@ -111,11 +116,11 @@ const fetchData = async () => {
     news.value = newsRes.data.data || newsRes.data || [];
 
     hotSaleProducts.value = productsData.slice(0, 5).map(p => {
-      const minPrice = getMinPrice(p.variants);
+      const price = getProductPrice(p);
       return {
         ...p,
-        sale_price: minPrice * 0.85,
-        old_price: minPrice,
+        sale_price: price * 0.85,
+        old_price: price,
         discount: 15
       }
     })
@@ -124,7 +129,6 @@ const fetchData = async () => {
     console.error('Lỗi tải dữ liệu cửa hàng:', err)
   }
 }
-
 
 const currentCategoryId = computed(() => route.query.categoryId ? String(route.query.categoryId) : null)
 const currentCategoryName = computed(() => {
@@ -138,7 +142,6 @@ const selectCategory = (id) => {
   if (!id) delete query.categoryId;
   router.push({ query });
 }
-
 
 const applyFilters = () => {
   const query = { ...route.query };
@@ -161,25 +164,30 @@ const goToProduct = (productId) => {
   router.push(`/products/${productId}`);
 }
 
-// Bộ lọc sản phẩm chính
+// --- BỘ LỌC SẢN PHẨM (ĐÃ SỬA) ---
 const filteredProducts = computed(() => {
   if (!Array.isArray(allProducts.value)) return [];
   
   let products = [...allProducts.value]
 
-  // Lọc theo Danh mục
-  if (currentCategoryId.value)
-    products = products.filter(p => String(p.category?.id) === currentCategoryId.value)
+  // 1. Lọc theo Danh mục (Hỗ trợ cả object category và category_id)
+  if (currentCategoryId.value) {
+    products = products.filter(p => {
+        // Kiểm tra an toàn: p.category.id hoặc p.category_id
+        const pCatId = p.category?.id || p.category_id;
+        return String(pCatId) === currentCategoryId.value;
+    })
+  }
 
-  // Lọc theo Tìm kiếm
+  // 2. Lọc theo Tìm kiếm
   if (searchTerm.value && searchTerm.value.trim()) {
     const term = searchTerm.value.toLowerCase()
     products = products.filter(p => p.name.toLowerCase().includes(term))
   }
 
-  // Lọc theo Khoảng giá
+  // 3. Lọc theo Khoảng giá
   products = products.filter(p => {
-    const price = getMinPrice(p.variants)
+    const price = getProductPrice(p);
     if (priceMax.value && price > priceMax.value) return false
     return true
   })
@@ -204,7 +212,6 @@ watch(searchKeyword, (newVal) => {
   searchTerm.value = newVal; 
   debouncedApplyFilters(); 
 });
-
 
 watch(route, (newRoute) => {
   searchTerm.value = newRoute.query.search || '';
@@ -272,7 +279,6 @@ watch(route, (newRoute) => {
               <div class="product-card" v-for="product in filteredProducts" :key="product.id"
                 @click="goToProduct(product.id)">
                 <div class="product-image">
-                  <!-- CẬP NHẬT: Thêm fallback thumbnail_url -->
                   <img 
                     :src="getImageUrl(product.thumbnail_url || product.image_url)" 
                     :alt="product.name" 
@@ -281,9 +287,12 @@ watch(route, (newRoute) => {
                 </div>
                 <div class="product-info">
                   <h3 class="product-name">{{ product.name }}</h3>
+                  
+                  <!-- FIX: Hiển thị giá đúng cho cả SP đơn giản và có biến thể -->
                   <p class="product-price">
-                    {{ formatCurrency(getMinPrice(product.variants)) }}
+                    {{ formatCurrency(getProductPrice(product)) }}
                   </p>
+                  
                   <button class="btn-add-cart" @click.stop="onAddToCart(product)">
                     <i class="fas fa-cart-plus"></i> Thêm vào giỏ
                   </button>
@@ -308,7 +317,6 @@ watch(route, (newRoute) => {
             <div class="hot-sale-card" v-for="product in hotSaleProducts" :key="product.id">
               <div class="discount-badge">Giảm {{ product.discount || 10 }}%</div>
               <div class="hot-sale-image">
-                <!-- CẬP NHẬT: Thêm fallback thumbnail_url -->
                 <img 
                     :src="getImageUrl(product.thumbnail_url || product.image_url)" 
                     :alt="product.name" 
