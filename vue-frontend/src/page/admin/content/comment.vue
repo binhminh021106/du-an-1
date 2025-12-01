@@ -4,15 +4,11 @@ import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-// ==========================================
 // CONFIGURATION
-// ==========================================
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 const BACKEND_URL = API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
 
-// ==========================================
 // AUTHENTICATION & PERMISSIONS
-// ==========================================
 const currentUser = ref({});
 
 const hasRole = (allowedRoles) => {
@@ -77,9 +73,7 @@ const requireLogin = () => {
     return true;
 };
 
-// ==========================================
 // STATE MANAGEMENT
-// ==========================================
 const allComments = ref([]);
 const isLoading = ref(true);
 const searchQuery = ref('');
@@ -98,9 +92,7 @@ const pagination = reactive({
     rejected: { currentPage: 1, itemsPerPage: 8 }
 });
 
-// ==========================================
 // COMPUTED & LOGIC
-// ==========================================
 
 // 1. Filter & Sort Global
 const processedComments = computed(() => {
@@ -164,9 +156,7 @@ watch([searchQuery, sortOption], () => {
     pagination.rejected.currentPage = 1;
 });
 
-// ==========================================
 // HELPER FUNCTIONS
-// ==========================================
 const changePage = (type, page) => { pagination[type].currentPage = page; };
 const setActiveTab = (tabName) => activeTab.value = tabName;
 
@@ -188,9 +178,7 @@ const openViewModal = (comment) => {
     viewModalInstance.value?.show();
 };
 
-// ==========================================
 // ACTIONS (API)
-// ==========================================
 async function fetchComments() {
     if (allComments.value.length === 0) isLoading.value = true;
     try {

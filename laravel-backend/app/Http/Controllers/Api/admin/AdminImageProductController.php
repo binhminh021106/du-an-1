@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\ImageProduct;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB; // [NEW] Import Transaction
 
 class AdminImageProductController extends Controller
 {
@@ -20,12 +21,12 @@ class AdminImageProductController extends Controller
     {
         // 1. Validate chặt chẽ
         $validator = Validator::make($request->all(), [
-            'product_id' => 'required|exists:product,id', // Lưu ý: check lại tên bảng là 'product' hay 'products'
+            'product_id' => 'required|exists:product,id', // Lưu ý: check lại tên bảng 'products' hay 'product' trong DB
             'image' => [
                 'required',
-                'image',             // Check Magic Number (chặn file giả mạo đuôi)
-                'mimes:jpeg,png,jpg,gif,webp', // Chỉ chấp nhận các đuôi này
-                'max:5120'           // Tối đa 5MB (5120 KB)
+                'image',                   // Check Magic Number
+                'mimes:jpeg,png,jpg,gif,webp', 
+                'max:5120'                 // Max 5MB
             ],
         ], [
             'image.image' => 'File tải lên không phải là hình ảnh hợp lệ.',
@@ -40,15 +41,22 @@ class AdminImageProductController extends Controller
             ], 422);
         }
 
-        try {
-            $imageUrl = '';
+        DB::beginTransaction(); // Bắt đầu giao dịch
 
+        try {
+            // 2. Tạo record rỗng trước để lấy ID
+            $imageProduct = ImageProduct::create([
+                'product_id' => $request->product_id,
+                'image_url' => '', // Tạm thời để trống
+            ]);
+
+            // 3. Xử lý file sau khi có ID
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
-                
-                // 2. Tạo tên file an toàn (Không dùng tên gốc để tránh lỗi ký tự đặc biệt hoặc hack path)
                 $extension = $file->getClientOriginalExtension();
-                $filename = 'prod_' . time() . '_' . uniqid() . '.' . $extension;
+                
+                // Tên file theo chuẩn: prod_img_{ID}.{ext} (Ví dụ: prod_img_105.jpg)
+                $filename = 'product_img_' . $imageProduct->id . '.' . $extension;
                 
                 $path = public_path('product'); 
 
@@ -58,14 +66,12 @@ class AdminImageProductController extends Controller
 
                 $file->move($path, $filename);
                 
-                // Lưu đường dẫn tương đối để serve web
-                $imageUrl = '/product/' . $filename;
+                // Cập nhật lại đường dẫn
+                $imageProduct->image_url = '/product/' . $filename;
+                $imageProduct->save();
             }
 
-            $imageProduct = ImageProduct::create([
-                'product_id' => $request->product_id,
-                'image_url' => $imageUrl
-            ]);
+            DB::commit(); // Lưu thành công
 
             return response()->json([
                 'success' => true,
@@ -74,6 +80,11 @@ class AdminImageProductController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            DB::rollBack(); // Hoàn tác nếu lỗi
+            
+            // Nếu file lỡ upload rồi mà lỗi DB thì xóa file đi cho sạch (nếu cần thiết)
+            // Logic ở trên move file sau khi create nên rollback DB là đủ, nhưng cẩn thận vẫn tốt.
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi upload ảnh: ' . $e->getMessage()
@@ -141,13 +152,10 @@ class AdminImageProductController extends Controller
                 // 1. Xóa file vật lý
                 $this->deletePhysicalFile($img->image_url);
                 
-                // 2. Xóa record (xóa từng cái hoặc xóa bulk ở dưới)
+                // 2. Xóa record
                 $img->delete(); 
                 $countDeleted++;
             }
-
-            // Nếu muốn xóa record 1 lần bằng query (nhanh hơn nếu ko dùng Observer)
-            // ImageProduct::whereIn('id', $ids)->delete();
 
             return response()->json([
                 'success' => true,

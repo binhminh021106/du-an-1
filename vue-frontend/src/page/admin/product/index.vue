@@ -11,8 +11,8 @@ const rawApiUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 const API_BASE_URL = rawApiUrl.replace(/\/api\/?$/, '');
 const MIN_IMAGE_WIDTH = 500;
 const MIN_IMAGE_HEIGHT = 500;
-const MAX_FILE_SIZE_MB = 5; // Giới hạn 5MB cho tối ưu
-const MIN_PRICE = 1000; // Giá tối thiểu 1k
+const MAX_FILE_SIZE_MB = 5;
+const MIN_PRICE = 1000;
 const MAX_PRICE = 100000000; 
 
 // ==========================================
@@ -90,7 +90,7 @@ const attributesList = ref([]);
 const isLoading = ref(true);
 const isSaving = ref(false);
 const isEditMode = ref(false);
-const activeTab = ref('active'); 
+const activeTab = ref('draft'); // Default tab: Mới tạo
 
 // Spinner States
 const isCreatingAttr = ref(false);
@@ -130,7 +130,7 @@ const sortCriteria = ref('product_id-desc');
 
 // Main Form
 const formData = reactive({
-    id: null, name: '', description: '', category_id: null, status: 'inactive',
+    id: null, name: '', description: '', category_id: null, status: 'draft', // Default status: draft
     attribute_definitions: reactive([]), variants: reactive([]), existing_images: reactive([]),
 });
 
@@ -188,15 +188,24 @@ const searchedAndSortedProducts = computed(() => {
     return sorted;
 });
 
-// 2. Split Lists
+// 2. Split Lists by Status
+// Draft: Mới tạo (chưa từng active hoặc set về draft)
+const draftProducts = computed(() => searchedAndSortedProducts.value.filter(p => p.status === 'draft'));
+// Active: Đang bán
 const activeProducts = computed(() => searchedAndSortedProducts.value.filter(p => p.status === 'active'));
+// Inactive: Đã ẩn
 const inactiveProducts = computed(() => searchedAndSortedProducts.value.filter(p => p.status === 'inactive'));
 
-// 3. Displayed List
-const displayedProducts = computed(() => activeTab.value === 'active' ? activeProducts.value : inactiveProducts.value);
+// 3. Displayed List based on Tab
+const displayedProducts = computed(() => {
+    if (activeTab.value === 'draft') return draftProducts.value;
+    if (activeTab.value === 'active') return activeProducts.value;
+    return inactiveProducts.value;
+});
 
 // 4. Counts
 const statusCounts = computed(() => ({
+    draft: draftProducts.value.length,
     active: activeProducts.value.length,
     inactive: inactiveProducts.value.length
 }));
@@ -241,19 +250,15 @@ const goToPage = (p) => { if (p >= 1 && p <= totalPages.value) currentPage.value
 // VALIDATE IMAGE (ADVANCED)
 // ==========================================
 const validateImageFile = async (file) => {
-    // 1. Check Size
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
         return { valid: false, msg: `Dung lượng tối đa ${MAX_FILE_SIZE_MB}MB.` };
     }
-    
-    // 2. Check Magic Number (Basic Format)
     const isFormatValid = await new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = (e) => {
             const arr = (new Uint8Array(e.target.result)).subarray(0, 4);
             let header = "";
             for (let i = 0; i < arr.length; i++) header += arr[i].toString(16);
-            // JPG/PNG/GIF/WEBP
             resolve(header.startsWith('ffd8ff') || header.startsWith('89504e47') || header.startsWith('47494638') || header.startsWith('52494646'));
         };
         reader.readAsArrayBuffer(file.slice(0, 4));
@@ -261,14 +266,13 @@ const validateImageFile = async (file) => {
 
     if (!isFormatValid) return { valid: false, msg: 'Định dạng file không hợp lệ (Chỉ nhận ảnh).' };
 
-    // 3. Check Dimensions (Width/Height)
     return new Promise((resolve) => {
         const img = new Image();
         img.src = URL.createObjectURL(file);
         img.onload = () => {
             URL.revokeObjectURL(img.src);
             if (img.width < MIN_IMAGE_WIDTH || img.height < MIN_IMAGE_HEIGHT) {
-                resolve({ valid: false, msg: `Kích thước ảnh quá nhỏ! Tối thiểu ${MIN_IMAGE_WIDTH}x${MIN_IMAGE_HEIGHT}px để đảm bảo chất lượng.` });
+                resolve({ valid: false, msg: `Kích thước ảnh quá nhỏ! Tối thiểu ${MIN_IMAGE_WIDTH}x${MIN_IMAGE_HEIGHT}px.` });
             } else {
                 resolve({ valid: true });
             }
@@ -316,9 +320,12 @@ async function fetchProducts() {
             let thumbPath = p.thumbnail_url;
             if (!thumbPath && productImages.length > 0) thumbPath = productImages[0].image_url;
 
+            // Normalize status: if status not set, default to draft
+            const status = p.status || 'draft';
+
             return {
-                sold_count: 0, favorite_count: 0, review_count: 0, average_rating: 0.0, status: 'active',
-                created_at: new Date().toISOString(), ...p,
+                sold_count: 0, favorite_count: 0, review_count: 0, average_rating: 0.0,
+                created_at: new Date().toISOString(), ...p, status: status,
                 product_id: p.product_id || p.id, category: category || null,
                 variants: productVariants, images: productImages, thumbnail_url: getImageUrl(thumbPath)
             };
@@ -372,11 +379,9 @@ async function handleGalleryChange(event) {
             galleryFiles.value.push(file);
             galleryPreviews.value.push(URL.createObjectURL(file));
         } else {
-            // Thông báo lỗi cho từng file không đạt
             Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: `Bỏ qua ${file.name}: ${check.msg}` });
         }
     }
-    // Reset input nếu không file nào hợp lệ để cho phép chọn lại
     if (validFiles.length === 0) event.target.value = null;
 }
 
@@ -413,7 +418,7 @@ function addVariantRow() {
 function removeVariantRow(index) { formData.variants.splice(index, 1); }
 
 function resetForm() {
-    Object.assign(formData, { id: null, name: '', description: '', category_id: null, status: 'inactive', attribute_definitions: reactive([]), variants: reactive([]), existing_images: reactive([]) });
+    Object.assign(formData, { id: null, name: '', description: '', category_id: null, status: 'draft', attribute_definitions: reactive([]), variants: reactive([]), existing_images: reactive([]) });
     thumbnailFile.value = null; thumbnailPreview.value = null;
     galleryFiles.value = []; galleryPreviews.value.forEach(url => URL.revokeObjectURL(url)); galleryPreviews.value = [];
     selectedAttributeId.value = ''; selectedImageIds.value = [];
@@ -434,7 +439,8 @@ async function openVariantConfigModal(productItem) {
         const res = await apiService.get(`/admin/products/${productItem.id}`);
         const product = res.data.data || res.data;
         formData.id = product.id; formData.name = product.name; formData.description = product.description;
-        formData.category_id = product.category_id || product.category?.id; formData.status = product.status;
+        formData.category_id = product.category_id || product.category?.id; 
+        formData.status = product.status || 'draft';
         thumbnailPreview.value = getImageUrl(product.thumbnail_url);
         formData.existing_images = reactive((product.images || []).map(img => ({ id: img.id, url: getImageUrl(img.image_url) })));
         
@@ -506,28 +512,31 @@ async function handleQuickStatusToggle(product) {
     if (!requireLogin()) return;
     if (processingStatusIds.value.includes(product.id)) return;
 
-    // [NEW] Validate before activating
-    if (product.status !== 'active') {
-        // Nếu đang muốn chuyển sang active, kiểm tra điều kiện
-        // 1. Phải có biến thể
+    // LOGIC CHUYỂN ĐỔI TRẠNG THÁI
+    // 1. Nếu đang Active -> Chuyển về Inactive (Ẩn)
+    // 2. Nếu đang Draft hoặc Inactive -> Chuyển sang Active (Bán)
+    
+    const targetStatus = product.status === 'active' ? 'inactive' : 'active';
+
+    // VALIDATE KHI MUỐN ACTIVE
+    if (targetStatus === 'active') {
         if (!product.variants || product.variants.length === 0) {
-            return Swal.fire('Chưa hoàn thiện', 'Sản phẩm này chưa có biến thể nào. Vui lòng thêm biến thể trước khi bán.', 'warning');
+            return Swal.fire('Không thể đăng bán', 'Sản phẩm này chưa có biến thể nào.', 'warning');
         }
-        // 2. Phải có giá bán hợp lệ
         const hasValidPrice = product.variants.some(v => parseFloat(v.price) >= MIN_PRICE);
         if (!hasValidPrice) {
-             return Swal.fire('Chưa hoàn thiện', 'Sản phẩm chưa có giá bán hợp lệ.', 'warning');
+             return Swal.fire('Không thể đăng bán', 'Sản phẩm chưa có giá bán hợp lệ.', 'warning');
         }
     }
 
-    const newStatus = product.status === 'active' ? 'inactive' : 'active';
-    const actionText = newStatus === 'active' ? 'Hiện' : 'Ẩn';
+    const actionText = targetStatus === 'active' ? 'Đăng bán' : 'Ẩn sản phẩm';
     if (!(await Swal.fire({ title: `Xác nhận ${actionText}?`, icon: 'question', showCancelButton: true })).isConfirmed) return;
+    
     processingStatusIds.value.push(product.id);
     try {
-        const payload = new FormData(); payload.append('_method', 'PATCH'); payload.append('status', newStatus);
+        const payload = new FormData(); payload.append('_method', 'PATCH'); payload.append('status', targetStatus);
         await apiService.post(`/admin/products/${product.id}`, payload);
-        product.status = newStatus;
+        product.status = targetStatus;
         Swal.fire({ icon: 'success', title: 'Cập nhật thành công!', timer: 1500, showConfirmButton: false });
     } catch (e) { Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error'); } 
     finally { processingStatusIds.value = processingStatusIds.value.filter(id => id !== product.id); }
@@ -597,12 +606,15 @@ async function handleSave() {
         productData.append('name', formData.name);
         productData.append('description', formData.description || '');
         productData.append('category_id', formData.category_id);
-        productData.append('status', isEditMode.value ? formData.status : 'inactive');
+        
+        // Logic status: Tạo mới luôn là draft. Sửa thì theo form.
+        productData.append('status', isEditMode.value ? formData.status : 'draft');
+        
         if (thumbnailFile.value) productData.append('thumbnail', thumbnailFile.value);
 
         if (!isEditMode.value) {
             const res = await apiService.post('/admin/products', productData, { headers: { 'Content-Type': 'multipart/form-data' } });
-            Swal.fire('Thành công', 'Đã tạo nháp. Hãy thêm biến thể!', 'success');
+            Swal.fire('Thành công', 'Đã tạo sản phẩm mới (Nháp). Hãy thêm biến thể!', 'success');
             savedProductId = res.data.id || res.data.product_id;
         } else {
             productData.append('_method', 'PATCH');
@@ -678,9 +690,15 @@ onMounted(async () => {
     <div class="app-content">
         <div class="container-fluid">
             <div class="card mb-4 shadow-sm border-0">
-                <!-- TABS -->
+                <!-- TABS (3 TAB RIÊNG BIỆT) -->
                 <div class="card-header border-bottom-0 pb-0 bg-white">
                     <ul class="nav nav-tabs card-header-tabs custom-tabs">
+                        <li class="nav-item">
+                            <a class="nav-link d-flex align-items-center" :class="{ active: activeTab === 'draft' }" href="#" @click.prevent="setActiveTab('draft')">
+                                <i class="bi bi-stars me-1 text-primary"></i> Mới tạo (Nháp)
+                                <span class="badge rounded-pill bg-primary ms-2">{{ statusCounts.draft }}</span>
+                            </a>
+                        </li>
                         <li class="nav-item">
                             <a class="nav-link d-flex align-items-center" :class="{ active: activeTab === 'active' }" href="#" @click.prevent="setActiveTab('active')">
                                 <i class="bi bi-check-circle me-1 text-success"></i> Đang bán
@@ -689,7 +707,7 @@ onMounted(async () => {
                         </li>
                         <li class="nav-item">
                             <a class="nav-link d-flex align-items-center" :class="{ active: activeTab === 'inactive' }" href="#" @click.prevent="setActiveTab('inactive')">
-                                <i class="bi bi-eye-slash me-1 text-secondary"></i> Ẩn/Nháp
+                                <i class="bi bi-eye-slash me-1 text-secondary"></i> Đã ẩn
                                 <span class="badge rounded-pill bg-secondary ms-2">{{ statusCounts.inactive }}</span>
                             </a>
                         </li>
@@ -742,7 +760,7 @@ onMounted(async () => {
                             </thead>
                             <tbody>
                                 <tr v-if="isLoading"><td colspan="8" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>
-                                <tr v-else-if="paginatedProducts.length === 0"><td colspan="8" class="text-center py-5 text-muted fst-italic">Không tìm thấy sản phẩm nào.</td></tr>
+                                <tr v-else-if="paginatedProducts.length === 0"><td colspan="8" class="text-center py-5 text-muted fst-italic">Không tìm thấy sản phẩm nào trong mục này.</td></tr>
                                 <tr v-else v-for="p in paginatedProducts" :key="p.id">
                                     <td class="ps-3 text-muted fw-bold">#{{ p.product_id }}</td>
                                     <td>
@@ -758,7 +776,11 @@ onMounted(async () => {
                                         <div class="form-check form-switch d-flex align-items-center" title="Bật/Tắt trạng thái">
                                             <div v-if="processingStatusIds.includes(p.id)" class="spinner-border spinner-border-sm text-primary" role="status"></div>
                                             <input v-else class="form-check-input custom-switch cursor-pointer" type="checkbox" role="switch" 
-                                                :checked="p.status === 'active'" @click.prevent="handleQuickStatusToggle(p)">
+                                                :checked="p.status === 'active'" 
+                                                @click.prevent="handleQuickStatusToggle(p)">
+                                            <span class="ms-2 small text-muted">
+                                                {{ p.status === 'active' ? 'Đang bán' : (p.status === 'draft' ? 'Nháp' : 'Ẩn') }}
+                                            </span>
                                         </div>
                                     </td>
                                     <td class="text-center pe-3">
@@ -822,9 +844,13 @@ onMounted(async () => {
                             <div class="mb-3" v-if="isEditMode">
                                 <label class="form-label fw-bold">Trạng thái</label>
                                 <select class="form-select" v-model="formData.status">
+                                    <option value="draft">Nháp (Mới tạo)</option>
                                     <option value="active">Đang bán</option>
-                                    <option value="inactive">Ẩn / Nháp</option>
+                                    <option value="inactive">Ẩn (Ngưng bán)</option>
                                 </select>
+                                <div class="form-text small" v-if="formData.status === 'active' && (!formData.variants || formData.variants.length === 0)">
+                                    <i class="bi bi-exclamation-circle text-danger"></i> Cần thêm biến thể trước khi chọn "Đang bán".
+                                </div>
                             </div>
                             <div class="p-3 bg-light rounded border border-dashed text-center">
                                 <label class="form-label fw-bold mb-2">Ảnh đại diện</label>
@@ -868,14 +894,14 @@ onMounted(async () => {
                                                     <button class="btn btn-sm btn-primary rounded-circle shadow-sm" style="width: 32px; height: 32px; padding: 0;"><i class="bi bi-cart-plus"></i></button>
                                                 </div>
                                             </div>
-                                         </div>
-                                         
-                                         <div class="mt-4 text-center">
-                                             <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i> Sau khi lưu, bạn có thể thêm biến thể màu sắc, size...</p>
-                                             <button class="btn btn-primary px-4 shadow-sm" @click="handleSave" :disabled="isSaving">
-                                                <span v-if="isSaving" class="spinner-border spinner-border-sm me-1"></span> Lưu & Tiếp tục
+                                       </div>
+                                       
+                                       <div class="mt-4 text-center">
+                                            <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i> Sản phẩm sẽ được tạo ở trạng thái <b>Nháp</b>.</p>
+                                            <button class="btn btn-primary px-4 shadow-sm" @click="handleSave" :disabled="isSaving">
+                                                <span v-if="isSaving" class="spinner-border spinner-border-sm me-1"></span> Tạo Nháp & Thêm Biến Thể
                                             </button>
-                                         </div>
+                                       </div>
                                     </div>
                                 </div>
                             </div>

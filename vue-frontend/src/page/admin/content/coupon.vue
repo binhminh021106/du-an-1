@@ -4,14 +4,10 @@ import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-// ==========================================
 // CONFIGURATION
-// ==========================================
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
-// ==========================================
 // AUTHENTICATION & PERMISSIONS
-// ==========================================
 const currentUser = ref({});
 
 const hasRole = (allowedRoles) => {
@@ -76,9 +72,7 @@ const requireLogin = () => {
     return true;
 };
 
-// ==========================================
 // STATE MANAGEMENT
-// ==========================================
 const isLoading = ref(true);
 const isSaving = ref(false);
 const allCoupons = ref([]);
@@ -107,9 +101,7 @@ const couponForm = reactive({
     expiresAt: '', usageLimit: null, usageCount: 0, limitPerUser: null
 });
 
-// ==========================================
 // COMPUTED & WATCHERS
-// ==========================================
 // Helper check hết hạn
 const checkIsExpired = (coupon) => {
     if (!coupon.expires_at) return false;
@@ -192,9 +184,7 @@ watch([searchQuery, sortOption], () => { // [UPDATED] Watch cả sortOption
     pagination.trashed.currentPage = 1;
 });
 
-// ==========================================
 // HELPER FUNCTIONS
-// ==========================================
 const formatCurrency = (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value || 0);
 const formatDateForDisplay = (dateString) => {
     if (!dateString) return 'Vô hạn';
@@ -219,9 +209,7 @@ const getStatus = (coupon) => {
 const changePage = (listName, page) => { if (pagination[listName]) pagination[listName].currentPage = page; };
 const setActiveTab = (tabName) => activeTab.value = tabName;
 
-// ==========================================
 // ACTIONS
-// ==========================================
 function resetForm() {
     Object.assign(couponForm, {
         id: null, name: '', code: '', type: 'percent', value: 0,
@@ -257,9 +245,7 @@ function openViewModal(coupon) {
     viewModalInstance.value?.show();
 }
 
-// ==========================================
 // API CALLS
-// ==========================================
 async function fetchCoupons() {
     isLoading.value = true;
     try {

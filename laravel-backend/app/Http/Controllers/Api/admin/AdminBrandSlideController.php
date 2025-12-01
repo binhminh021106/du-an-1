@@ -5,7 +5,8 @@ namespace App\Http\Controllers\Api\admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\BrandSlide;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File; // Sử dụng File facade cho nhất quán
+// use Illuminate\Support\Facades\Storage; // Bỏ cái này để đồng bộ logic
 
 class AdminBrandSlideController extends Controller
 {
@@ -20,7 +21,8 @@ class AdminBrandSlideController extends Controller
             return [
                 'id'          => $brand->id,
                 'name'        => $brand->name,
-                'imageUrl'    => $brand->image_url ? asset($brand->image_url) : null,
+                // Kiểm tra nếu là URL đầy đủ (http) thì giữ nguyên, nếu không thì dùng asset
+                'imageUrl'    => $brand->image_url ? (filter_var($brand->image_url, FILTER_VALIDATE_URL) ? $brand->image_url : asset($brand->image_url)) : null,
                 'linkUrl'     => $brand->link_url,
                 'order'       => $brand->order_number,
                 'status'      => $brand->status,
@@ -46,35 +48,55 @@ class AdminBrandSlideController extends Controller
             'image.required' => 'Vui lòng chọn logo/ảnh thương hiệu.',
         ]);
 
-        // Upload ảnh vào thư mục 'brands'
-        $imagePath = null;
-        if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('brands', 'public');
-            $imagePath = '/storage/' . $path;
+        try {
+            // 1. Tạo Brand trước để lấy ID (Chưa lưu ảnh thật)
+            $brand = BrandSlide::create([
+                'name'         => $request->name,
+                'image_url'    => '', // Tạm thời để trống
+                'link_url'     => $request->linkUrl,
+                'order_number' => $request->order ?? 0,
+                'status'       => $request->status,
+            ]);
+
+            // 2. Xử lý upload ảnh sau khi có ID -> Đổi tên thành brand_{ID}
+            if ($request->hasFile('image')) {
+                $file = $request->file('image');
+                $extension = $file->getClientOriginalExtension();
+                
+                // Tên file chuẩn: brand_1.png
+                $fileName = 'brand_' . $brand->id . '.' . $extension;
+                
+                // Đường dẫn lưu: public/uploads/brands
+                $path = public_path('uploads/brands');
+
+                if (!File::exists($path)) {
+                    File::makeDirectory($path, 0755, true);
+                }
+
+                $file->move($path, $fileName);
+                
+                // Cập nhật lại đường dẫn
+                $brand->image_url = '/uploads/brands/' . $fileName;
+                $brand->save();
+            }
+
+            return response()->json([
+                'message' => 'Thêm brand thành công',
+                'data'    => $brand
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi: ' . $e->getMessage()], 500);
         }
-
-        $brand = BrandSlide::create([
-            'name'         => $request->name,
-            'image_url'    => $imagePath,
-            'link_url'     => $request->linkUrl,    // Vue gửi linkUrl
-            'order_number' => $request->order ?? 0, // Vue gửi order
-            'status'       => $request->status,
-        ]);
-
-        return response()->json([
-            'message' => 'Thêm brand thành công',
-            'data'    => $brand
-        ], 201);
     }
 
     /**
-     * Cập nhật Brand (Đã sửa lỗi Partial Update)
+     * Cập nhật Brand
      */
     public function update(Request $request, string $id)
     {
         $brand = BrandSlide::findOrFail($id);
 
-        // Validate linh hoạt (sometimes)
         $request->validate([
             'name'   => 'sometimes|required|string|max:255',
             'image'  => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
@@ -82,39 +104,47 @@ class AdminBrandSlideController extends Controller
             'status' => 'sometimes|required|in:published,draft',
         ]);
 
-        // Chỉ cập nhật các trường có gửi lên
-        if ($request->has('name')) {
-            $brand->name = $request->name;
+        try {
+            if ($request->has('name')) $brand->name = $request->name;
+            if ($request->has('linkUrl')) $brand->link_url = $request->linkUrl;
+            if ($request->has('order')) $brand->order_number = $request->order;
+            if ($request->has('status')) $brand->status = $request->status;
+
+            // Xử lý ảnh nếu có thay đổi
+            if ($request->hasFile('image')) {
+                // 1. Xóa ảnh cũ
+                if ($brand->image_url) {
+                    $oldPath = public_path($brand->image_url);
+                    if (File::exists($oldPath)) {
+                        File::delete($oldPath);
+                    }
+                }
+
+                // 2. Lưu ảnh mới với tên chuẩn brand_{ID}
+                $file = $request->file('image');
+                $extension = $file->getClientOriginalExtension();
+                $fileName = 'brand_' . $brand->id . '.' . $extension;
+                
+                $path = public_path('uploads/brands');
+
+                if (!File::exists($path)) {
+                    File::makeDirectory($path, 0755, true);
+                }
+
+                $file->move($path, $fileName);
+                $brand->image_url = '/uploads/brands/' . $fileName;
+            }
+
+            $brand->save();
+
+            return response()->json([
+                'message' => 'Cập nhật thành công',
+                'data'    => $brand
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi: ' . $e->getMessage()], 500);
         }
-
-        if ($request->has('linkUrl')) {
-            $brand->link_url = $request->linkUrl;
-        }
-
-        if ($request->has('order')) {
-            $brand->order_number = $request->order;
-        }
-
-        if ($request->has('status')) {
-            $brand->status = $request->status;
-        }
-
-        // Xử lý ảnh nếu có thay đổi
-        if ($request->hasFile('image')) {
-            // Xóa ảnh cũ dùng hàm helper
-            $this->deleteImageFromStorage($brand->image_url);
-
-            // Upload ảnh mới
-            $path = $request->file('image')->store('brands', 'public');
-            $brand->image_url = '/storage/' . $path;
-        }
-
-        $brand->save();
-
-        return response()->json([
-            'message' => 'Cập nhật thành công',
-            'data'    => $brand
-        ]);
     }
 
     /**
@@ -122,32 +152,27 @@ class AdminBrandSlideController extends Controller
      */
     public function destroy(string $id)
     {
-        $brand = BrandSlide::findOrFail($id);
+        try {
+            $brand = BrandSlide::findOrFail($id);
 
-        // Xóa file ảnh
-        $this->deleteImageFromStorage($brand->image_url);
+            // Xóa file ảnh vật lý
+            if ($brand->image_url) {
+                $path = public_path($brand->image_url);
+                if (File::exists($path)) {
+                    File::delete($path);
+                }
+            }
 
-        $brand->delete();
+            $brand->delete();
 
-        return response()->json(['message' => 'Đã xóa brand thành công']);
+            return response()->json(['message' => 'Đã xóa brand thành công']);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi: ' . $e->getMessage()], 500);
+        }
     }
 
     public function show(string $id)
     {
         return response()->json(BrandSlide::findOrFail($id));
-    }
-
-    /**
-     * Hàm phụ: Xóa file ảnh khỏi đĩa cứng
-     */
-    private function deleteImageFromStorage($path)
-    {
-        if ($path) {
-            $relativePath = str_replace('/storage/', '', $path);
-            
-            if (Storage::disk('public')->exists($relativePath)) {
-                Storage::disk('public')->delete($relativePath);
-            }
-        }
     }
 }
