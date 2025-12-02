@@ -647,7 +647,6 @@ const handleRegister = async () => {
     .login-section {
         border-left: none;
         padding-top: 60px;
-        /* Thêm padding top để tránh đè lên nút X trên mobile */
     }
 }
 
