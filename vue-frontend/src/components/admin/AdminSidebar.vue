@@ -114,15 +114,21 @@ onMounted(() => {
             </a>
             <ul class="nav nav-treeview">
               <li class="nav-item" v-if="can('categories.access')">
-                <router-link to="/admin/categories" class="nav-link" active-class="active">
+                <router-link :to="{ name: 'admin-categories' }" class="nav-link" active-class="active">
                   <i class="bi bi-circle nav-icon small-dot"></i>
                   <p>Danh mục</p>
                 </router-link>
               </li>
               <li class="nav-item" v-if="can('products.access')">
-                <router-link to="/admin/products" class="nav-link" active-class="active">
+                <router-link :to="{ name: 'admin-products'}" class="nav-link" active-class="active">
                   <i class="bi bi-circle nav-icon small-dot"></i>
                   <p>Tất cả sản phẩm</p>
+                </router-link>
+              </li>
+              <li class="nav-item" v-if="can('brands.access')">
+                <router-link :to="{ name: 'admin-brands'}" class="nav-link" active-class="active">
+                  <i class="bi bi-circle nav-icon small-dot"></i>
+                  <p>Thương Hiệu</p>
                 </router-link>
               </li>
             </ul>
