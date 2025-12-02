@@ -32,6 +32,7 @@ const extractCategoryName = (data) => {
 
 export default createStore({
     state: {
+        // Khởi tạo state từ LocalStorage ngay lập tức để tránh delay
         cart: JSON.parse(localStorage.getItem('my_cart')) || []
     },
     getters: {
@@ -73,6 +74,7 @@ export default createStore({
                     variantName: variant ? variant.name : 'Mặc định',
                     price: variant ? Number(variant.price) : Number(product.price),
                     image_url: product.image_url || product.thumbnail_url,
+                    categoriesName: catName,
                     categoriesName: catName,
                     stock: currentStock,
                     qty: quantity > currentStock ? currentStock : quantity,

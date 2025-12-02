@@ -8,7 +8,7 @@ import apiService from '../../apiService.js';
 const store = useStore(); // 2. Khởi tạo store
 
 // --- CẤU HÌNH SERVER ẢNH ---
-const SERVER_URL = 'http://127.0.0.1:8000';   
+const SERVER_URL = 'http://127.0.0.1:8000'; 
 const USE_STORAGE = false; 
 
 // 1. Hàm xử lý hiển thị ảnh
@@ -43,7 +43,7 @@ const getProductStock = (product) => {
     return Number(product.stock) || 0;
 };
 
-// 2. Hàm làm mới dữ liệu từ API (Đã sửa logic cập nhật)
+// 2. Hàm làm mới dữ liệu từ API
 const enrichWishlistData = async () => {
   if (!wishlist.value || !wishlist.value.length) return;
 
@@ -77,9 +77,10 @@ onMounted(() => {
 });
 
 // --- ACTIONS ---
-const handleRemove = (itemId) => {
-    if(confirm('Bạn có chắc muốn xóa sản phẩm này khỏi danh sách yêu thích?')) {
-        removeItemFromWishlist(itemId);
+// SỬA: Nhận vào nguyên object item thay vì chỉ itemId để lấy name
+const handleRemove = (item) => {
+    if(confirm(`Bạn có chắc muốn xóa "${item.name}" này khỏi danh sách yêu thích?`)) {
+        removeItemFromWishlist(item.id);
     }
 };
 
@@ -148,7 +149,8 @@ const moveItemToCart = (item) => {
                         <button class="add-cart-btn" @click="moveItemToCart(item)">
                             <i class="fas fa-cart-plus"></i> Thêm vào giỏ
                         </button>
-                        <button class="remove-btn" @click="handleRemove(item.id)" title="Xóa">
+                        <!-- SỬA: Truyền nguyên object item vào hàm handleRemove -->
+                        <button class="remove-btn" @click="handleRemove(item)" title="Xóa">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>

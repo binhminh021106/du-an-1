@@ -217,9 +217,27 @@ const saveAddressFromModal = () => {
   if (editUser.addresses.length === 0) tempAddress.is_default = true;
 
   if (isEditingIndex.value === -1) {
+    // Trường hợp thêm mới
     editUser.addresses.push({ ...tempAddress });
+    Swal.fire({
+      icon: 'success',
+      title: 'Thêm địa chỉ thành công!',
+      showConfirmButton: false,
+      timer: 1500,
+      background: '#f0fff4',
+      color: '#009981',
+    });
   } else {
+    // Trường hợp cập nhật
     editUser.addresses[isEditingIndex.value] = { ...tempAddress };
+    Swal.fire({
+      icon: 'success',
+      title: 'Cập nhật địa chỉ thành công!',
+      showConfirmButton: false,
+      timer: 1500,
+      background: '#f0fff4',
+      color: '#009981',
+    });
   }
   showModal.value = false;
 };

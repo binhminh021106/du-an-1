@@ -15,6 +15,11 @@ const formData = reactive({
     sex: ''
 });
 
+// --- HÀM MỚI: QUAY VỀ TRANG CHỦ ---
+const goHome = () => {
+    router.push({ name: 'home' }); // Đảm bảo route 'home' đã tồn tại
+};
+
 const loginWithGoogle = () => {
     window.location.href = 'http://127.0.0.1:8000/api/auth/google';
 };
@@ -157,6 +162,11 @@ const handleRegister = async () => {
 <template>
     <div class="login-page-wrapper">
         <div class="login-container">
+
+            <!-- NÚT X ĐỂ VỀ TRANG CHỦ -->
+            <button class="close-btn" @click="goHome" title="Về trang chủ">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
 
             <div class="promo-section">
                 <router-link to="/" class="thinkhub-logo">
@@ -330,7 +340,38 @@ const handleRegister = async () => {
     border-radius: 12px;
     overflow: hidden;
     margin: 20px;
+    /* QUAN TRỌNG: Để nút Close định vị tuyệt đối theo khung này */
+    position: relative;
 }
+
+/* --- STYLE CHO NÚT CLOSE (DẤU X) --- */
+.close-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    color: #999;
+    cursor: pointer;
+    z-index: 10;
+    transition: all 0.2s ease;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.close-btn:hover {
+    background-color: #f0f0f0;
+    color: #333;
+    transform: rotate(90deg);
+    /* Hiệu ứng xoay nhẹ khi hover */
+}
+
+/* --- END STYLE CLOSE BTN --- */
 
 .promo-section {
     padding: 40px;
@@ -605,6 +646,8 @@ const handleRegister = async () => {
 
     .login-section {
         border-left: none;
+        padding-top: 60px;
+        /* Thêm padding top để tránh đè lên nút X trên mobile */
     }
 }
 
@@ -623,5 +666,4 @@ const handleRegister = async () => {
 .thinkhub-logo img:hover {
     transform: scale(1.05);
 }
-
 </style>

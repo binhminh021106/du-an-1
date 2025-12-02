@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 // THAY THẾ: Import orders và hàm xử lý từ Store
+// Sửa đường dẫn import cho phù hợp với cấu trúc thư mục: ../store instead of ../../store
 import { orders, updateOrderStatus, saveOrders } from '../../store/orderStore.js'; 
 
 // Giả định useRouter và useRoute cho code chạy độc lập
@@ -22,8 +23,7 @@ const searchQuery = ref('');
 const currentPage = ref(1);
 const itemsPerPage = 5;
 
-// Dữ liệu đơn hàng hiện tại là từ orderStore
-// const orders = ref([...]) <--- ĐÃ BỊ XÓA
+// Dữ liệu đơn hàng hiện tại là từ orderStore (đã được import ở trên)
 
 // --- TÍNH NĂNG: Sắp xếp, Lọc, và Phân trang ---
 
