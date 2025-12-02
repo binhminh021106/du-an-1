@@ -15,7 +15,7 @@ app.use(cors({
 app.use(bodyParser.json());
 
 // --- KEY CỦA BẠN ---
-const API_KEY = "AIzaSyAxlCPXF0PJjsAs3hY8vN7WOOHvYY8B1ys"; 
+const API_KEY = "AIzaSyC7qIw9dU6BnjJz8EbPgVZOdT3vceMBqJo"; 
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 

@@ -1,5 +1,3 @@
-// orderStore.js
-
 import { ref } from "vue";
 
 // Biến lưu trữ danh sách đơn hàng
@@ -20,6 +18,7 @@ const loadOrders = () => {
             // Sắp xếp theo ngày (mới nhất lên đầu)
             orders.value = parsedOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
         } else {
+            // Không tạo dữ liệu ảo nữa, để danh sách trống
             orders.value = [];
         }
     } catch (e) {
