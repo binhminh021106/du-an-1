@@ -3,6 +3,10 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+// ==============================================================================
+// 1. IMPORT CONTROLLERS (CLIENT & ADMIN)
+// ==============================================================================
+
 // --- CLIENT CONTROLLERS ---
 use App\Http\Controllers\Api\Client\ProductController;
 use App\Http\Controllers\Api\Client\CategoryController;
@@ -20,9 +24,11 @@ use App\Http\Controllers\Api\Client\CartController;
 use App\Http\Controllers\Api\Client\OrderController;
 use App\Http\Controllers\Api\Client\AuthController;
 use App\Http\Controllers\Api\Client\BrandSlideController;
+// [NEW] Import Wishlist Controller
+use App\Http\Controllers\Api\Client\WishlistController;
 
-
-// --- ADMIN CONTROLLERS ---
+// --- ADMIN CONTROLLERS (NAMESPACE CHUẨN: 'admin' viết thường) ---
+// [FIX] Sửa lại namespace cho khớp với file controller thực tế
 use App\Http\Controllers\Api\admin\AdminAuthController;
 use App\Http\Controllers\Api\admin\AdminProductController;
 use App\Http\Controllers\Api\admin\AdminCategoryController;
@@ -36,7 +42,7 @@ use App\Http\Controllers\Api\admin\AdminOrderController;
 use App\Http\Controllers\Api\admin\AdminReviewController;
 use App\Http\Controllers\Api\admin\AdminRoleController;
 use App\Http\Controllers\Api\admin\AdminSlideController;
-use App\Http\Controllers\Api\admin\AminAccountController;
+use App\Http\Controllers\Api\admin\AminAccountController; // Note: Tên file gốc là Amin nên để nguyên (thiếu d)
 use App\Http\Controllers\Api\admin\AdminBrandSlideController;
 use App\Http\Controllers\Api\admin\AdminAttributeController;
 use App\Http\Controllers\Api\admin\AdminPermissionController;
@@ -104,6 +110,30 @@ Route::get('/order/{id}', [OrderController::class, 'show']);
 Route::get('/brands', [BrandSlideController::class, 'index']);
 Route::get('/brand/{id}', [BrandSlideController::class, 'show']);
 
+
+// ==============================================================================
+// 4. CLIENT PROTECTED ROUTES (Phải đăng nhập mới dùng được)
+// ==============================================================================
+Route::middleware(['auth:sanctum'])->group(function () {
+    
+    // --- GIỎ HÀNG (DATABASE) ---
+    // Route này giúp FE lưu sản phẩm vào bảng cart_items
+    Route::post('/cart/add', [CartController::class, 'addToCart']);
+    
+    // --- YÊU THÍCH (WISHLIST) [MỚI] ---
+    // Route này để xem danh sách yêu thích
+    Route::get('/wishlist', [WishlistController::class, 'index']);
+    // Route này để thêm/xóa yêu thích (Toggle)
+    Route::post('/wishlist/toggle', [WishlistController::class, 'toggle']);
+
+    // --- USER INFO ---
+    // Lấy thông tin chính chủ đang đăng nhập (để hiển thị lên Header, Profile...)
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    });
+});
+
+
 // --- ADMIN ROUTES ---
 Route::group([
     'prefix' => 'admin',
@@ -152,9 +182,4 @@ Route::group([
     Route::apiResource('brands', AdminBrandController::class); 
 
     Route::apiResource('attributes', AdminAttributeController::class);
-});
-
-// [ADDED] Route lấy thông tin User đang đăng nhập (cho cả Admin & Client)
-Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
-    return $request->user();
 });

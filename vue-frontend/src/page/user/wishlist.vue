@@ -167,7 +167,7 @@ const moveItemToCart = (item) => {
         <div v-else class="empty-wishlist">
             <i class="fas fa-heart-broken"></i>
             <p>Danh sách yêu thích của bạn đang trống.</p>
-            <router-link to="/" class="continue-shopping">Khám phá sản phẩm ngay</router-link>
+            <router-link to="/Shop" class="continue-shopping">Khám phá sản phẩm ngay</router-link>
         </div>
 
       </div>

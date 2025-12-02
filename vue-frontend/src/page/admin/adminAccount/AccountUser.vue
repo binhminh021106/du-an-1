@@ -4,16 +4,12 @@ import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-// ==========================================
 // CONFIGURATION
-// ==========================================
 const rawApiUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 const API_BASE_URL = rawApiUrl.replace(/\/api\/?$/, '');
 const MAX_FILE_SIZE_MB = 5;
 
-// ==========================================
 // AUTHENTICATION & PERMISSIONS
-// ==========================================
 const currentUser = ref({});
 
 const hasRole = (allowedRoles) => {
@@ -78,9 +74,7 @@ const requireLogin = () => {
     return true;
 };
 
-// ==========================================
 // STATE MANAGEMENT
-// ==========================================
 const allCustomers = ref([]);
 const isLoading = ref(true);
 const isSaving = ref(false);
@@ -127,9 +121,7 @@ const errors = reactive({
     password_confirmation: ''
 });
 
-// ==========================================
 // COMPUTED & LOGIC
-// ==========================================
 function getImageUrl(path) {
     if (!path) return 'https://placehold.co/150x150?text=User';
     if (path.startsWith('blob:') || path.startsWith('http')) return path;
@@ -188,9 +180,7 @@ watch(searchQuery, () => {
     pagination.inactive.currentPage = 1;
 });
 
-// ==========================================
 // HELPER FUNCTIONS
-// ==========================================
 const changePage = (type, page) => { pagination[type].currentPage = page; };
 const setActiveTab = (tabName) => activeTab.value = tabName;
 
@@ -271,9 +261,7 @@ const validateForm = () => {
     return isValid;
 };
 
-// ==========================================
 // ACTIONS (API)
-// ==========================================
 async function fetchCustomers() {
     if (allCustomers.value.length === 0) isLoading.value = true;
     try {

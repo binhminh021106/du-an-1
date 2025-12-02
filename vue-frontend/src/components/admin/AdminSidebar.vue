@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, reactive } from 'vue';
-import apiService from '../../apiService.js';
+// import apiService from '../../apiService.js'; // Đảm bảo đường dẫn đúng
 
 // --- STATE ---
 const currentUser = ref({});
@@ -17,6 +17,11 @@ const menuState = reactive({
 
 // Hàm toggle menu
 const toggleMenu = (menu) => {
+    // Đóng các menu khác nếu muốn (Accordion style) - tuỳ chọn
+    // Object.keys(menuState).forEach(key => {
+    //     if (key !== menu) menuState[key] = false;
+    // });
+    
     menuState[menu] = !menuState[menu];
 };
 
@@ -39,12 +44,13 @@ const fetchUserData = async () => {
             currentUser.value = JSON.parse(storedAdmin);
             if (currentUser.value.role_id === 11) return;
 
-            if (currentUser.value.role_id) {
-                const response = await apiService.get(`admin/roles/${currentUser.value.role_id}`);
-                if (response.data && response.data.permissions) {
-                    userPermissions.value = response.data.permissions.map(p => p.slug);
-                }
-            }
+            // Mock call hoặc gọi API thật
+            // if (currentUser.value.role_id) {
+            //     const response = await apiService.get(`admin/roles/${currentUser.value.role_id}`);
+            //     if (response.data && response.data.permissions) {
+            //         userPermissions.value = response.data.permissions.map(p => p.slug);
+            //     }
+            // }
         } catch (e) {
             console.error("Lỗi tải thông tin quyền hạn:", e);
         }
@@ -57,11 +63,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- Áp dụng màu nền custom -->
   <aside class="app-sidebar shadow custom-sidebar" data-bs-theme="dark">
     <div class="sidebar-brand">
       <router-link to="/admin" class="brand-link">
-        <img src="../img/logo.png" alt="Logo" class="brand-image opacity-75 shadow">
+        <!-- Đảm bảo đường dẫn ảnh đúng -->
+        <img src="../img/logo.png" alt="Logo" class="brand-image opacity-75 shadow" onError="this.style.display='none'">
         <span class="brand-text fw-bold text-white">ThinkHub</span>
       </router-link>
     </div>
@@ -84,6 +90,7 @@ onMounted(() => {
               <i class="nav-icon bi bi-people-fill"></i>
               <p>
                 Người Dùng
+                <!-- Thêm class transition-icon và binding xoay -->
                 <i class="right bi bi-chevron-left transition-icon" :class="{ 'rotate-down': menuState.users }"></i>
               </p>
             </a>
@@ -217,9 +224,8 @@ onMounted(() => {
 
 <style scoped>
 /* --- 1. Custom Background Color --- */
-/* Đổi màu nền sidebar sang màu tối hơn chút để nổi bật text */
 .custom-sidebar {
-    background-color: #212529 !important; /* Dark Gray chuẩn AdminLTE */
+    background-color: #212529 !important;
 }
 
 .sidebar-brand {
@@ -233,55 +239,57 @@ onMounted(() => {
     font-weight: 500;
     margin: 0;
     margin-left: 8px;
+    display: inline-block; /* Giữ text thẳng hàng */
+    vertical-align: middle;
 }
 
-/* --- 3. Active States (The "Xịn Sò" Part) --- */
-/* Màu Active chuẩn #009981 */
+/* --- 3. Active States --- */
 .nav-pills .nav-link.active, 
 .nav-link.active {
-    background-color: #009981 !important; /* Màu xanh bạn chọn */
+    background-color: #009981 !important;
     color: #fff !important;
     box-shadow: 0 4px 6px rgba(0,0,0,0.2);
     border-radius: 6px;
     font-weight: 600;
 }
 
-/* Màu cho group header khi đang mở */
 .nav-link.active-group {
     background-color: rgba(255, 255, 255, 0.1) !important;
     color: #fff !important;
 }
 
-/* Hover Effect */
 .nav-link:hover {
     background-color: rgba(255, 255, 255, 0.08);
     color: #fff;
 }
 
-/* --- 4. Dropdown Animation & Icons --- */
+/* --- 4. Dropdown Animation & Icons (QUAN TRỌNG) --- */
 .transition-icon {
     transition: transform 0.3s ease;
     font-size: 0.8rem;
+    display: inline-block; /* FIX: Phải là block hoặc inline-block mới xoay được */
+    margin-left: auto; /* Đẩy icon về phía bên phải nếu dùng flex trong thẻ a */
+    float: right; /* AdminLTE thường dùng float cho icon bên phải */
+    margin-top: 4px;
 }
 
 .rotate-down {
-    transform: rotate(-90deg);
+    transform: rotate(-90deg) !important; /* Xoay ngược chiều kim đồng hồ để từ Trái (<) thành Xuống (v) */
 }
 
 .nav-treeview {
-    display: none; /* Mặc định ẩn */
-    background-color: rgba(0, 0, 0, 0.2); /* Màu nền tối hơn cho menu con */
+    display: none;
+    background-color: rgba(0, 0, 0, 0.2);
     margin-left: 0;
     padding-left: 0;
 }
 
-/* Khi có class menu-open thì hiện menu con */
 .menu-open > .nav-treeview {
     display: block;
 }
 
 .small-dot {
-    font-size: 0.5rem; /* Icon chấm tròn nhỏ cho menu con */
+    font-size: 0.5rem;
     opacity: 0.7;
     margin-right: 5px;
 }
