@@ -9,7 +9,6 @@ const saveToLocalStorage = (cart) => {
 };
 
 // --- TỪ ĐIỂN DANH MỤC (Dựa trên DB của bạn) ---
-// Giúp hiển thị tên ngay cả khi API chỉ trả về ID
 const CATEGORY_MAP = {
     1: 'Laptop Gaming ASUS ROG',
     42: 'Điện thoại di động',
@@ -24,20 +23,15 @@ const CATEGORY_MAP = {
 
 // Hàm helper thông minh để lấy tên danh mục
 const extractCategoryName = (data) => {
-    // 1. Ưu tiên: Check nếu có category_id thì tra từ điển ngay
     if (data.category_id && CATEGORY_MAP[data.category_id]) {
         return CATEGORY_MAP[data.category_id];
     }
-
-    // 2. Check object category (nếu sau này bạn sửa API trả về object)
     let catObj = data.category || data.categories;
     if (Array.isArray(catObj)) catObj = catObj.length > 0 ? catObj[0] : null;
     
     if (catObj && typeof catObj === 'object' && catObj.name) {
         return catObj.name;
     }
-
-    // 3. Các trường hợp khác
     if (data.category_name) return data.category_name;
     if (data.categories_name) return data.categories_name;
 
@@ -46,6 +40,7 @@ const extractCategoryName = (data) => {
 
 export default createStore({
     state: {
+        // Khởi tạo state từ LocalStorage ngay lập tức để tránh delay
         cart: JSON.parse(localStorage.getItem('my_cart')) || []
     },
     getters: {
@@ -60,14 +55,17 @@ export default createStore({
         }
     },
     mutations: {
+        // [MỚI] Mutation để set lại toàn bộ giỏ hàng (dùng cho initializeCart)
+        SET_CART(state, items) {
+            state.cart = items;
+        },
+
         ADD_TO_CART(state, { product, quantity, variant }) {
             const variantId = variant ? variant.id : 'default';
             const compareId = `${product.id}-${variantId}`;
             
             const existingItem = state.cart.find(item => item.compareId === compareId);
             const currentStock = variant ? Number(variant.stock) : Number(product.stock);
-
-            // Tự động lấy tên danh mục
             const catName = extractCategoryName(product);
 
             if (existingItem) {
@@ -77,7 +75,6 @@ export default createStore({
                     alert(`Chỉ còn ${currentStock} sản phẩm trong kho!`);
                 }
                 existingItem.qty = newQty;
-                // Update danh mục nếu chưa có
                 if (existingItem.categoriesName === 'Khác' && catName !== 'Khác') {
                     existingItem.categoriesName = catName;
                 }
@@ -90,9 +87,7 @@ export default createStore({
                     variantName: variant ? variant.name : 'Mặc định',
                     price: variant ? Number(variant.price) : Number(product.price),
                     image_url: product.image_url || product.thumbnail_url,
-                    
-                    categoriesName: catName, // <-- Đã fix
-                    
+                    categoriesName: catName,
                     stock: currentStock,
                     qty: quantity > currentStock ? currentStock : quantity,
                     cartId: Date.now() + Math.random().toString(36).substr(2, 9)
@@ -128,8 +123,6 @@ export default createStore({
 
             item.image_url = data.thumbnail_url || data.image_url || item.image_url;
             item.name = data.name || item.name;
-            
-            // Cập nhật lại danh mục
             const newCatName = extractCategoryName(data);
             if (newCatName !== 'Khác') {
                 item.categoriesName = newCatName;
@@ -153,6 +146,19 @@ export default createStore({
         }
     },
     actions: {
+        // [QUAN TRỌNG] Thêm action này để sửa lỗi "unknown action type: initializeCart"
+        initializeCart({ commit }) {
+            const storedCart = localStorage.getItem('my_cart');
+            if (storedCart) {
+                try {
+                    const parsedCart = JSON.parse(storedCart);
+                    commit('SET_CART', parsedCart);
+                } catch (e) {
+                    console.error("Lỗi parse cart:", e);
+                }
+            }
+        },
+
         addToCart({ commit }, payload) { commit('ADD_TO_CART', payload); },
         removeItem({ commit }, cartId) { commit('REMOVE_ITEM', cartId); },
         updateItemQty({ commit }, payload) { commit('UPDATE_QTY', payload); },
@@ -181,6 +187,7 @@ export default createStore({
                     console.warn(`Lỗi update SP ${id}`);
                 }
             });
+            // Lưu lại sau khi cập nhật dữ liệu mới từ API
             setTimeout(() => saveToLocalStorage(state.cart), 1000);
         }
     }

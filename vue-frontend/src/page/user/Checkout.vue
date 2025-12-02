@@ -2,6 +2,8 @@
 import { ref, reactive, onMounted, watch, computed, nextTick } from "vue";
 import { useStore } from "vuex";
 import { useRouter } from "vue-router";
+// THÊM: Import hàm thêm đơn hàng từ Store để lưu lịch sử
+import { addOrder } from '../../store/orderStore.js';
 
 const store = useStore();
 const router = useRouter();
@@ -128,7 +130,7 @@ const modalContent = ref({});
 
 const closeModal = () => {
   showModal.value = false;
-  router.push('/');
+  router.push('/OrderList'); // Chuyển hướng về trang lịch sử đơn hàng
 };
 
 // --- ON MOUNTED ---
@@ -281,8 +283,7 @@ const validateForm = () => {
   if (!form.phone.trim()) { errors.phone = "Vui lòng nhập số điện thoại."; valid = false; }
   else if (!phoneRegex.test(form.phone)) { errors.phone = "Số điện thoại không hợp lệ."; valid = false; }
   
-  // Validate Address (NEW: Chặn ký tự đặc biệt)
-  // Regex cho phép: Chữ cái (cả tiếng Việt), số, khoảng trắng, dấu chấm, dấu phẩy, gạch chéo, gạch ngang
+  // Validate Address
   const addressSpecialCharsRegex = /^[a-zA-Z0-9\s,./\-\u00C0-\u1EF9]+$/;
 
   if (!form.address.province || !form.address.district || !form.address.ward) { 
@@ -309,21 +310,18 @@ const confirmCheckout = () => {
   // 1. Validate Form
   if (!validateForm()) return;
 
-  // 2. CHECK STOCK (NEW: Kiểm tra hàng tồn kho trước khi thanh toán)
-  // Lọc ra các sản phẩm trong giỏ hàng đang có stock <= 0
+  // 2. CHECK STOCK
   const outOfStockItems = cartItems.value.filter(item => {
-      // Nếu không có trường stock (undefined) thì coi như còn hàng (hoặc xử lý tùy logic backend)
-      // Ở đây ta giả sử item.stock trả về số lượng tồn kho
       return item.stock !== undefined && item.stock <= 0;
   });
 
   if (outOfStockItems.length > 0) {
       const names = outOfStockItems.map(i => i.name).join(", ");
       alert(`Rất tiếc, các sản phẩm sau vừa hết hàng: ${names}.\nVui lòng loại bỏ khỏi giỏ hàng hoặc chọn sản phẩm khác.`);
-      return; // Dừng thanh toán
+      return; 
   }
 
-  // 3. Tiến hành đặt hàng
+  // 3. Tiến hành đặt hàng & LƯU VÀO STORE
   const total = totalPrice.value;
   const paymentMethodName = paymentMethods.find(p => p.code === form.paymentMethod)?.name || 'Không xác định';
 
@@ -341,9 +339,12 @@ const confirmCheckout = () => {
     total: total, email: form.email,
   };
 
-  const fakeOrderId = "ORD-" + Date.now().toString().slice(-6);
+  // --- QUAN TRỌNG: GỌI HÀM LƯU ĐƠN HÀNG VÀO ORDERSTORE ---
+  const savedOrder = addOrder(newOrderData); 
+
+  // 4. Hiển thị modal thành công
   modalContent.value = {
-    title: `✅ Đặt hàng thành công! (Mã: ${fakeOrderId})`,
+    title: `✅ Đặt hàng thành công! (Mã: ${savedOrder.id})`,
     details: [
       { label: "Người nhận", value: newOrderData.customer.name },
       { label: "SĐT", value: newOrderData.customer.phone },
@@ -450,7 +451,6 @@ const confirmCheckout = () => {
         <ul>
           <li v-for="item in cartItems" :key="item.cartId" class="cart-item-summary">
             <!-- Xử lý ảnh fallback để tránh lỗi giao diện -->
-            <!-- FIX: Sử dụng hàm getImageUrl để hiển thị đúng đường dẫn ảnh -->
             <img 
               :src="getImageUrl(item.image_url)" 
               :alt="item.name" 
@@ -544,7 +544,6 @@ const confirmCheckout = () => {
                 </div>
             </div>
         </div>
-        <!-- END NEW -->
 
         <button type="button" @click="confirmCheckout" class="checkout-btn">Xác nhận thanh toán</button>
       </div>
