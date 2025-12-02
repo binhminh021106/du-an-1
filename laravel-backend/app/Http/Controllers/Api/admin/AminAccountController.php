@@ -4,14 +4,15 @@ namespace App\Http\Controllers\Api\admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Admin; 
+use App\Models\Admin;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Validator;
 
 class AminAccountController extends Controller
 {
     /**
      * Display a listing of the resource.
-     * Lấy danh sách tất cả tài khoản nội bộ
      */
     public function index()
     {
@@ -21,44 +22,65 @@ class AminAccountController extends Controller
 
     /**
      * Store a newly created resource in storage.
-     * Tạo tài khoản nội bộ mới
      */
     public function store(Request $request)
     {
-        // 1. Validate dữ liệu đầu vào
-        $request->validate([
-            // Đã xóa 'username' vì frontend không gửi lên nữa
-            'fullname' => 'required|string|max:255', // Thêm validate cho fullname
+        // Sử dụng Validator facade để đồng bộ response lỗi
+        $validator = Validator::make($request->all(), [
+            'fullname' => 'required|string|max:255',
             'email' => 'required|email|max:100|unique:admins,email',
-            'password' => 'required|string|min:6', 
-            'role_id' => 'required', 
-            'phone' => 'nullable|string|max:20', // Thêm validate cơ bản cho phone
+            'password' => 'required|string|min:6',
+            'role_id' => 'required',
+            'phone' => 'nullable|string|max:20',
+            'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ]);
 
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi dữ liệu đầu vào',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
         try {
-            // 2. Tạo đối tượng Admin mới
             $admin = new Admin();
-            // $admin->username = $request->username; // XÓA DÒNG NÀY để tránh lỗi
-            
-            // Sử dụng fullname từ request
-            $admin->fullname = $request->fullname; 
-            
+            $admin->fullname = $request->fullname;
             $admin->email = $request->email;
             $admin->password = Hash::make($request->password);
             $admin->phone = $request->phone ?? null;
             $admin->address = $request->address ?? null;
-            
-            // QUAN TRỌNG: Lưu vào cột role_id
             $admin->role_id = $request->role_id;
-            
             $admin->status = $request->status ?? 'active';
-            $admin->avatar_url = $request->avatar_url ?? '';
+
+            // --- XỬ LÝ UPLOAD ẢNH ---
+            if ($request->hasFile('avatar')) {
+                $file = $request->file('avatar');
+                // Tạo tên file unique
+                $fileName = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                $path = public_path('uploads/admins');
+
+                if (!File::exists($path)) {
+                    File::makeDirectory($path, 0755, true);
+                }
+
+                $file->move($path, $fileName);
+                $admin->avatar_url = '/uploads/admins/' . $fileName;
+            } else {
+                $admin->avatar_url = $request->avatar_url ?? '';
+            }
             
             $admin->save();
 
-            return response()->json($admin, 201);
+            return response()->json([
+                'success' => true,
+                'message' => 'Tạo tài khoản thành công',
+                'data' => $admin
+            ], 201);
+
         } catch (\Exception $e) {
             return response()->json([
+                'success' => false,
                 'message' => 'Lỗi khi tạo tài khoản: ' . $e->getMessage()
             ], 500);
         }
@@ -66,7 +88,6 @@ class AminAccountController extends Controller
 
     /**
      * Display the specified resource.
-     * Xem chi tiết 1 tài khoản
      */
     public function show(string $id)
     {
@@ -76,43 +97,71 @@ class AminAccountController extends Controller
 
     /**
      * Update the specified resource in storage.
-     * Cập nhật thông tin
      */
     public function update(Request $request, string $id)
     {
         $admin = Admin::findOrFail($id);
 
-        // 1. Validate
-        $request->validate([
-            // Xóa validate username
+        $validator = Validator::make($request->all(), [
             'fullname' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|email|max:100|unique:admins,email,' . $id,
             'password' => 'sometimes|nullable|min:6',
+            'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ]);
 
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi dữ liệu đầu vào',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
         try {
-            // 2. Cập nhật các trường thông thường
-            // Xóa logic update username
             if ($request->has('fullname')) $admin->fullname = $request->fullname;
             if ($request->has('email')) $admin->email = $request->email;
             if ($request->has('phone')) $admin->phone = $request->phone;
             if ($request->has('address')) $admin->address = $request->address;
-            
             if ($request->has('role_id')) $admin->role_id = $request->role_id;
-            
             if ($request->has('status')) $admin->status = $request->status;
-            if ($request->has('avatar_url')) $admin->avatar_url = $request->avatar_url;
 
-            // 3. Xử lý mật khẩu
+            // --- XỬ LÝ UPLOAD ẢNH KHI UPDATE ---
+            if ($request->hasFile('avatar')) {
+                // 1. Xóa ảnh cũ nếu tồn tại
+                if ($admin->avatar_url) {
+                    $oldPath = public_path($admin->avatar_url);
+                    if (File::exists($oldPath)) {
+                        File::delete($oldPath);
+                    }
+                }
+
+                // 2. Lưu ảnh mới
+                $file = $request->file('avatar');
+                $fileName = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                $path = public_path('uploads/admins');
+
+                if (!File::exists($path)) {
+                    File::makeDirectory($path, 0755, true);
+                }
+
+                $file->move($path, $fileName);
+                $admin->avatar_url = '/uploads/admins/' . $fileName;
+            }
+
             if ($request->filled('password')) {
                 $admin->password = Hash::make($request->password);
             }
 
             $admin->save();
 
-            return response()->json($admin);
+            return response()->json([
+                'success' => true,
+                'message' => 'Cập nhật thành công',
+                'data' => $admin
+            ]);
         } catch (\Exception $e) {
             return response()->json([
+                'success' => false,
                 'message' => 'Lỗi khi cập nhật: ' . $e->getMessage()
             ], 500);
         }
@@ -120,16 +169,29 @@ class AminAccountController extends Controller
 
     /**
      * Remove the specified resource from storage.
-     * Xóa tài khoản
      */
     public function destroy(string $id)
     {
         try {
             $admin = Admin::findOrFail($id);
+
+            // --- XÓA FILE VẬT LÝ ---
+            if ($admin->avatar_url) {
+                $path = public_path($admin->avatar_url);
+                if (File::exists($path)) {
+                    File::delete($path);
+                }
+            }
+
             $admin->delete();
-            return response()->json(['message' => 'Đã xóa tài khoản thành công.']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã xóa tài khoản và ảnh đại diện thành công.'
+            ]);
         } catch (\Exception $e) {
             return response()->json([
+                'success' => false,
                 'message' => 'Lỗi khi xóa: ' . $e->getMessage()
             ], 500);
         }

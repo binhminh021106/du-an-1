@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Slide;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;  // [NEW] Import Transaction
+use Illuminate\Support\Facades\Log; // [NEW] Import Log
 
 class AdminSlideController extends Controller
 {
@@ -14,6 +16,7 @@ class AdminSlideController extends Controller
      */
     public function index()
     {
+        // [UPDATE] Đảm bảo luôn sắp xếp theo order_number để hiển thị đúng thứ tự
         $slides = Slide::orderBy('order_number', 'asc')->get();
 
         // Map dữ liệu từ Database (snake_case) sang JSON cho Vue (camelCase)
@@ -61,19 +64,25 @@ class AdminSlideController extends Controller
         }
 
         // 3. Lưu vào Database (Map tên biến từ Vue sang cột DB)
-        $slide = Slide::create([
-            'title'        => $request->title,
-            'description'  => $request->description,
-            'image_url'    => $imagePath,          // Cột DB: image_url
-            'link_url'     => $request->linkUrl,   // Vue gửi: linkUrl -> DB: link_url
-            'order_number' => $request->order ?? 0,// Vue gửi: order -> DB: order_number
-            'status'       => $request->status,
-        ]);
+        try {
+            $slide = Slide::create([
+                'title'        => $request->title,
+                'description'  => $request->description,
+                'image_url'    => $imagePath,          // Cột DB: image_url
+                'link_url'     => $request->linkUrl,   // Vue gửi: linkUrl -> DB: link_url
+                'order_number' => $request->order ?? 0,// Vue gửi: order -> DB: order_number
+                'status'       => $request->status,
+            ]);
 
-        return response()->json([
-            'message' => 'Thêm slide thành công',
-            'data'    => $slide
-        ], 201);
+            return response()->json([
+                'message' => 'Thêm slide thành công',
+                'data'    => $slide
+            ], 201);
+        } catch (\Exception $e) {
+            // Xóa ảnh nếu lưu DB thất bại để tránh rác
+            $this->deleteImageFromStorage($imagePath);
+            return response()->json(['message' => 'Lỗi server: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -86,7 +95,7 @@ class AdminSlideController extends Controller
     }
 
     /**
-     * Cập nhật Slide (Có thay đổi ảnh hoặc không)
+     * Cập nhật Slide
      */
     public function update(Request $request, string $id)
     {
@@ -95,38 +104,93 @@ class AdminSlideController extends Controller
         // 1. Validate
         $request->validate([
             'title' => 'required|string|max:255',
-            // Ảnh không bắt buộc khi update (nullable)
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
             'order' => 'nullable|integer|min:0',
             'status' => 'required|in:published,draft',
         ]);
 
-        // 2. Chuẩn bị dữ liệu update
-        $updateData = [
-            'title'        => $request->title,
-            'description'  => $request->description,
-            'link_url'     => $request->linkUrl,    // Map: linkUrl -> link_url
-            'order_number' => $request->order ?? 0, // Map: order -> order_number
-            'status'       => $request->status,
-        ];
+        // 2. Cập nhật thông tin cơ bản
+        $slide->title = $request->title;
+        $slide->status = $request->status;
 
-        // 3. Kiểm tra nếu có gửi ảnh mới lên
+        if ($request->has('description')) {
+            $slide->description = $request->description;
+        }
+
+        if ($request->has('linkUrl')) {
+            $slide->link_url = $request->linkUrl;
+        }
+
+        if ($request->has('order')) {
+            $slide->order_number = $request->order;
+        }
+
+        // 3. Xử lý ảnh mới (nếu có)
         if ($request->hasFile('image')) {
-            // Xóa ảnh cũ đi cho đỡ rác server
+            // Xóa ảnh cũ
             $this->deleteImageFromStorage($slide->image_url);
 
             // Upload ảnh mới
             $path = $request->file('image')->store('slides', 'public');
-            $updateData['image_url'] = '/storage/' . $path;
+            $slide->image_url = '/storage/' . $path;
         }
 
-        // 4. Thực hiện update
-        $slide->update($updateData);
+        // 4. Lưu
+        try {
+            $slide->save();
+            return response()->json([
+                'message' => 'Cập nhật thành công',
+                'data'    => $slide
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi cập nhật: ' . $e->getMessage()], 500);
+        }
+    }
 
-        return response()->json([
-            'message' => 'Cập nhật thành công',
-            'data'    => $slide
+    /**
+     * [NEW] Cập nhật thứ tự sắp xếp Slide (Drag & Drop)
+     */
+    public function updateOrder(Request $request)
+    {
+        // 1. Validate chặt chẽ
+        $validated = $request->validate([
+            'ids'   => ['required', 'array'],
+            'ids.*' => ['integer', 'exists:slides,id', 'distinct'], // Check tồn tại trong bảng slides
+        ], [
+            'ids.required'   => 'Danh sách sắp xếp không được để trống.',
+            'ids.array'      => 'Dữ liệu phải là mảng ID.',
+            'ids.*.exists'   => 'Phát hiện ID Slide không hợp lệ.',
+            'ids.*.distinct' => 'Danh sách ID bị trùng lặp.',
         ]);
+
+        $ids = $validated['ids'];
+
+        // 2. Transaction
+        DB::beginTransaction();
+
+        try {
+            foreach ($ids as $index => $id) {
+                // index + 1 để bắt đầu từ 1
+                Slide::where('id', $id)->update(['order_number' => $index + 1]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cập nhật vị trí Slide thành công!'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Lỗi sắp xếp Slide: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi cập nhật thứ tự.',
+                'detail'  => env('APP_DEBUG') ? $e->getMessage() : null
+            ], 500);
+        }
     }
 
     /**
@@ -136,8 +200,7 @@ class AdminSlideController extends Controller
     {
         $slide = Slide::findOrFail($id);
 
-        // Xóa file ảnh trong storage luôn (nếu muốn xóa sạch)
-        // Nếu dùng SoftDeletes thì có thể cân nhắc không xóa file ngay
+        // Xóa file ảnh trong storage
         $this->deleteImageFromStorage($slide->image_url);
 
         $slide->delete();
@@ -151,13 +214,10 @@ class AdminSlideController extends Controller
     private function deleteImageFromStorage($path)
     {
         if ($path) {
-            // Đường dẫn trong DB: /storage/slides/abc.jpg
-            // Cần chuyển thành: slides/abc.jpg để hàm delete hiểu
             $relativePath = str_replace('/storage/', '', $path);
-            
             if (Storage::disk('public')->exists($relativePath)) {
                 Storage::disk('public')->delete($relativePath);
             }
         }
     }
-}
+}   

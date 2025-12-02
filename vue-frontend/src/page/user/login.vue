@@ -2,7 +2,7 @@
 import { ref, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import Swal from 'sweetalert2';
-import apiService from '../../apiService'; // Đảm bảo đường dẫn đúng
+import apiService from '../../apiService';
 
 const router = useRouter();
 
@@ -19,6 +19,15 @@ const error = reactive({
 
 const isLoading = ref(false);
 const passwordFieldType = ref('password');
+
+// --- HÀM MỚI: QUAY VỀ TRANG CHỦ ---
+const goHome = () => {
+    router.push({ name: 'home' }); // Đảm bảo route 'home' đã tồn tại trong router của bạn
+};
+
+const loginWithGoogle = () => {
+    window.location.href = 'http://127.0.0.1:8000/api/auth/google';
+};
 
 // Hàm xử lý đăng nhập chuẩn Backend
 const handleLogin = async () => {
@@ -76,7 +85,7 @@ const handleLogin = async () => {
 
     } catch (apiError) {
         // 5. Xử lý nếu Server báo lỗi (401, 422...)
-        console.log(apiError); 
+        console.log(apiError);
 
         const response = apiError.response;
         let msg = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
@@ -114,6 +123,12 @@ const togglePasswordVisibility = () => {
 <template>
     <div class="login-page-wrapper">
         <div class="login-container">
+            
+            <!-- NÚT X ĐỂ VỀ TRANG CHỦ -->
+            <button class="close-btn" @click="goHome" title="Về trang chủ">
+                <i class="fa-solid fa-xmark"></i> <!-- Sử dụng icon Xmark -->
+            </button>
+
             <div class="promo-section">
                 <h2>Nhập hội khách hàng thành viên TMEMBER</h2>
                 <p>Để không bỏ lỡ các ưu đãi hấp dẫn từ ThinkHub</p>
@@ -166,12 +181,13 @@ const togglePasswordVisibility = () => {
                 <div class="separator">Hoặc đăng nhập bằng</div>
 
                 <div class="social-login">
-                    <button class="social-btn">
+                    <button class="social-btn" @click="loginWithGoogle" type="button">
                         <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg"
                             alt="Google">
                         Google
                     </button>
-                    <button class="social-btn">
+                    
+                    <button class="social-btn" type="button">
                         <img src="../../assets/facebook-svgrepo-com.svg" width="500px">
                         Facebook
                     </button>
@@ -217,7 +233,37 @@ const togglePasswordVisibility = () => {
     border-radius: 12px;
     overflow: hidden;
     margin: 20px;
+    /* QUAN TRỌNG: Để nút Close định vị tuyệt đối theo khung này */
+    position: relative; 
 }
+
+/* --- STYLE CHO NÚT CLOSE (DẤU X) --- */
+.close-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    color: #999;
+    cursor: pointer;
+    z-index: 10;
+    transition: all 0.2s ease;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.close-btn:hover {
+    background-color: #f0f0f0;
+    color: #333;
+    transform: rotate(90deg); /* Hiệu ứng xoay nhẹ khi hover */
+}
+
+/* --- END STYLE CLOSE BTN --- */
 
 .promo-section {
     padding: 40px;
@@ -436,6 +482,7 @@ const togglePasswordVisibility = () => {
 
     .login-section {
         border-left: none;
+        padding-top: 60px; /* Thêm padding top để tránh đè lên nút X trên mobile */
     }
 }
 </style>

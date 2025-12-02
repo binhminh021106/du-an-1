@@ -1,435 +1,561 @@
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue';
+import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue';
 import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-// --- STATE QUẢN LÝ ---
+// ==========================================
+// CONFIGURATION
+// ==========================================
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+const BACKEND_URL = API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
 
-const allReviews = ref([]); // Danh sách TẤT CẢ đánh giá  
+// ==========================================
+// AUTHENTICATION & PERMISSIONS
+// ==========================================
+const currentUser = ref({});
+
+const hasRole = (allowedRoles) => {
+    const userRoleId = Number(currentUser.value?.role_id);
+    let userRoleName = '';
+
+    if (userRoleId === 11) userRoleName = 'admin';
+    else if (userRoleId === 12) userRoleName = 'staff';
+    else if (userRoleId === 13) userRoleName = 'blogger';
+
+    if (!userRoleName) return false;
+    if (userRoleName === 'admin') return true; // Admin chấp hết
+
+    return allowedRoles.includes(userRoleName);
+};
+
+const checkAuthState = async () => {
+    const token = localStorage.getItem('adminToken');
+    if (token) apiService.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+    const storedAdmin = localStorage.getItem('adminData');
+    const storedUser = localStorage.getItem('user_info');
+    let userData = null;
+
+    try {
+        if (storedAdmin) userData = JSON.parse(storedAdmin);
+        else if (storedUser) userData = JSON.parse(storedUser);
+    } catch (e) { console.error("Parse error", e); }
+
+    if (userData) {
+        currentUser.value = { ...userData, role_id: Number(userData.role_id) };
+        return true;
+    }
+
+    if (token) {
+        try {
+            const response = await apiService.get('/user');
+            let data = response.data;
+            if (data.data && !data.id) data = data.data;
+            
+            currentUser.value = { ...data, role_id: Number(data.role_id) };
+            localStorage.setItem('adminData', JSON.stringify(currentUser.value));
+            return true;
+        } catch (error) {
+            console.error("Auth API Error:", error);
+            return false;
+        }
+    }
+    return false;
+};
+
+const requireLogin = () => {
+    if (!currentUser.value.id) {
+        Swal.fire({ icon: 'error', title: 'Lỗi truy cập', text: 'Phiên làm việc hết hạn.', confirmButtonText: 'Đăng nhập ngay' });
+        return false;
+    }
+    // Cho phép Admin và Staff quản lý đánh giá
+    if (!hasRole(['admin', 'staff'])) {
+        Swal.fire({ icon: 'warning', title: 'Quyền hạn', text: 'Bạn không có quyền quản lý đánh giá.' });
+        return false;
+    }
+    return true;
+};
+
+// ==========================================
+// STATE MANAGEMENT
+// ==========================================
+const allReviews = ref([]);
 const isLoading = ref(true);
 const searchQuery = ref('');
+const sortOption = ref('newest'); 
+const activeTab = ref('pending'); 
 
-// State cho Modal Xem
+// Modals
 const viewModalRef = ref(null);
 const viewModalInstance = ref(null);
 const viewingReview = ref({});
 
-// State cho phân trang (cục bộ)
-const localPagination = reactive({
-  currentPage: 1,
-  itemsPerPage: 10, // Hiển thị 10 đánh giá mỗi trang
+// Pagination (Riêng biệt cho 3 tab để giữ trạng thái trang khi chuyển tab)
+const pagination = reactive({
+    pending: { currentPage: 1, itemsPerPage: 8 },
+    approved: { currentPage: 1, itemsPerPage: 8 },
+    rejected: { currentPage: 1, itemsPerPage: 8 }
 });
 
-// --- COMPUTED ---
+// ==========================================
+// COMPUTED & LOGIC
+// ==========================================
 
-// Lọc đánh giá dựa trên tìm kiếm
-const filteredReviews = computed(() => {
-  const query = searchQuery.value.toLowerCase().trim();
-  if (!query) {
-    return allReviews.value;
-  }
-  return allReviews.value.filter(review =>
-    (review.user?.username && review.user.username.toLowerCase().includes(query)) ||
-    (review.product?.name && review.product.name.toLowerCase().includes(query)) ||
-    (review.content && review.content.toLowerCase().includes(query))
-  );
-});
+// 1. Lọc và Sắp xếp tổng
+const processedReviews = computed(() => {
+    let result = [...allReviews.value];
 
-// Tính tổng số trang
-const totalPages = computed(() => {
-  return Math.max(1, Math.ceil(filteredReviews.value.length / localPagination.itemsPerPage));
-});
-
-// Lấy danh sách đánh giá đã phân trang
-const paginatedReviews = computed(() => {
-  // Reset về trang 1 nếu trang hiện tại không hợp lệ
-  if (localPagination.currentPage > totalPages.value) {
-    localPagination.currentPage = 1;
-  }
-  const start = (localPagination.currentPage - 1) * localPagination.itemsPerPage;
-  const end = start + localPagination.itemsPerPage;
-  return filteredReviews.value.slice(start, end);
-});
-
-// --- WATCHERS ---
-watch(searchQuery, () => {
-  localPagination.currentPage = 1; // Reset về trang 1 khi tìm kiếm
-});
-
-
-// --- VÒNG ĐỜI (LIFECYCLE) ---
-onMounted(() => {
-  fetchReviews(); // Tải tất cả đánh giá
-  if (viewModalRef.value) {
-    viewModalInstance.value = new Modal(viewModalRef.value);
-  }
-});
-
-// --- CÁC HÀM TẢI DỮ LIỆU ---
-
-/**
- * Tải TẤT CẢ đánh giá
- */
-async function fetchReviews() {
-  isLoading.value = true;
-  try {
-    // Tải tất cả, sắp xếp theo ID, và lấy kèm product, user
-    const response = await apiService.get(
-      `admin/reviews`
-    );
-
-    allReviews.value = response.data;
-
-  } catch (error) {
-    console.error("Lỗi khi tải đánh giá:", error);
-    Swal.fire('Lỗi', 'Không thể tải danh sách đánh giá.', 'error');
-  } finally {
-    isLoading.value = false;
-  }
-}
-
-// --- CÁC HÀM HELPER ---
-
-function formatDate(dateString) {
-  if (!dateString) return 'N/A';
-  return new Date(dateString).toLocaleString('vi-VN');
-}
-
-// Hàm helper để lấy class CSS và TEXT cho badge trạng thái
-function getStatusBadge(status) {
-  switch (status) {
-    case 'pending':
-      return { class: 'text-bg-warning', text: 'Chờ duyệt' };
-    case 'approved':
-      return { class: 'text-bg-success', text: 'Đã duyệt' };
-    case 'rejected':
-      return { class: 'text-bg-danger', text: 'Đã từ chối' };
-    default:
-      return { class: 'text-bg-secondary', text: status };
-  }
-}
-
-/**
- * Hiển thị số sao
- * @param {number} rating - Số sao (1-5)
- */
-function renderStars(rating) {
-  let stars = '';
-  for (let i = 0; i < 5; i++) {
-    stars += (i < rating) ? '★' : '☆';
-  }
-  return stars;
-}
-
-// Chuyển trang
-function goToPage(page) {
-  if (page >= 1 && page <= totalPages.value) {
-    localPagination.currentPage = page;
-  }
-}
-
-// --- CÁC HÀM CRUD ---
-
-/**
- * Mở modal xem chi tiết
- * @param {object} review - Đánh giá để xem
- */
-function openViewModal(review) {
-  viewingReview.value = review;
-  viewModalInstance.value.show();
-}
-
-/**
- * Cập nhật trạng thái (Duyệt / Từ chối)
- * @param {object} review - Đánh giá cần cập nhật
- * @param {string} newStatus - Trạng thái mới ('approved' hoặc 'rejected')
- */
-async function handleUpdateStatus(review, newStatus) {
-  try {
-    const response = await apiService.patch(`admin/reviews/${review.id}`, {
-      status: newStatus
-    });
-
-    // Cập nhật lại dữ liệu trên giao diện
-    review.status = response.data.status;
-
-    Swal.fire({
-      toast: true,
-      position: 'top-end',
-      icon: 'success',
-      title: `Đã ${newStatus === 'approved' ? 'duyệt' : 'từ chối'} đánh giá!`,
-      showConfirmButton: false,
-      timer: 2000
-    });
-
-  } catch (error) {
-    console.error("Lỗi khi cập nhật trạng thái:", error);
-    Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
-  }
-}
-
-
-/**
- * Xử lý xóa đánh giá
- * @param {object} review - Đánh giá cần xóa
- */
-async function handleDelete(review) {
-  const result = await Swal.fire({
-    title: 'Bạn có chắc chắn?',
-    text: `Bạn sẽ xóa vĩnh viễn đánh giá này!`,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#d33',
-    cancelButtonColor: '#3085d6',
-    confirmButtonText: 'Đồng ý xóa!',
-    cancelButtonText: 'Hủy bỏ'
-  });
-
-  if (result.isConfirmed) {
-    try {
-      await apiService.delete(`admin/reviews/${review.id}`);
-      Swal.fire(
-        'Đã xóa!',
-        'Đánh giá đã được xóa.',
-        'success'
-      );
-
-      // Tải lại dữ liệu
-      fetchReviews();
-
-    } catch (error) {
-      console.error("Lỗi khi xóa đánh giá:", error);
-      Swal.fire('Lỗi', 'Không thể xóa đánh giá này.', 'error');
+    // Search
+    const query = searchQuery.value.toLowerCase().trim();
+    if (query) {
+        result = result.filter(r =>
+            (r.user?.username && r.user.username.toLowerCase().includes(query)) ||
+            (r.product?.name && r.product.name.toLowerCase().includes(query)) ||
+            (r.content && r.content.toLowerCase().includes(query))
+        );
     }
-  }
+
+    // Sort
+    result.sort((a, b) => {
+        switch (sortOption.value) {
+            case 'rating_desc': return b.rating - a.rating;
+            case 'rating_asc': return a.rating - b.rating;
+            case 'oldest': return new Date(a.created_at) - new Date(b.created_at);
+            case 'newest': 
+            default: return new Date(b.created_at) - new Date(a.created_at);
+        }
+    });
+
+    return result;
+});
+
+// 2. Chia danh sách theo Tab
+const pendingList = computed(() => processedReviews.value.filter(r => r.status === 'pending'));
+const approvedList = computed(() => processedReviews.value.filter(r => r.status === 'approved'));
+const rejectedList = computed(() => processedReviews.value.filter(r => r.status === 'rejected'));
+
+// 3. Đếm số lượng cho Tabs Badge
+const statusCounts = computed(() => ({
+    pending: pendingList.value.length,
+    approved: approvedList.value.length,
+    rejected: rejectedList.value.length
+}));
+
+// 4. Helper Phân trang
+function getPaginatedData(list, type) {
+    const pageInfo = pagination[type];
+    const totalPages = Math.max(1, Math.ceil(list.length / pageInfo.itemsPerPage));
+    if (pageInfo.currentPage > totalPages) pageInfo.currentPage = 1;
+    
+    const start = (pageInfo.currentPage - 1) * pageInfo.itemsPerPage;
+    return { 
+        data: list.slice(start, start + pageInfo.itemsPerPage), 
+        totalPages 
+    };
 }
+
+const pagedPending = computed(() => getPaginatedData(pendingList.value, 'pending'));
+const pagedApproved = computed(() => getPaginatedData(approvedList.value, 'approved'));
+const pagedRejected = computed(() => getPaginatedData(rejectedList.value, 'rejected'));
+
+// Watchers
+watch([searchQuery, sortOption], () => {
+    pagination.pending.currentPage = 1;
+    pagination.approved.currentPage = 1;
+    pagination.rejected.currentPage = 1;
+});
+
+// ==========================================
+// HELPER FUNCTIONS
+// ==========================================
+const changePage = (type, page) => { pagination[type].currentPage = page; };
+const setActiveTab = (tabName) => activeTab.value = tabName;
+
+const getProductImageUrl = (path) => {
+    if (!path) return 'https://placehold.co/120x120/EBF4FF/1D62F0?text=No+Img';
+    if (path.startsWith('http')) return path;
+    return `${BACKEND_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+};
+
+const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleString('vi-VN', { 
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
+    });
+};
+
+const renderStars = (rating) => '★'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
+
+const openViewModal = (review) => {
+    viewingReview.value = review;
+    viewModalInstance.value?.show();
+};
+
+// ==========================================
+// ACTIONS (API)
+// ==========================================
+async function fetchReviews() {
+    if (allReviews.value.length === 0) isLoading.value = true;
+    try {
+        const response = await apiService.get(`admin/reviews`);
+        allReviews.value = response.data;
+    } catch (error) {
+        console.error("Lỗi tải đánh giá:", error);
+    } finally {
+        isLoading.value = false;
+    }
+}
+
+async function handleUpdateStatus(review, newStatus) {
+    if (!requireLogin()) return;
+
+    const oldStatus = review.status;
+    const actionText = newStatus === 'approved' ? 'Duyệt' : 'Từ chối';
+    
+    // Optimistic Update (Cập nhật giao diện trước)
+    review.status = newStatus;
+
+    // Toast thông báo
+    Swal.fire({
+        toast: true, position: 'top-end', icon: newStatus === 'approved' ? 'success' : 'info',
+        title: `Đã ${actionText} đánh giá`, showConfirmButton: false, timer: 1500
+    });
+
+    try {
+        await apiService.patch(`admin/reviews/${review.id}`, { status: newStatus });
+    } catch (error) {
+        // Rollback nếu lỗi
+        review.status = oldStatus;
+        Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
+    }
+}
+
+async function handleDelete(review) {
+    if (!requireLogin()) return;
+    
+    const result = await Swal.fire({
+        title: 'Xóa đánh giá?',
+        text: "Hành động này không thể hoàn tác!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        confirmButtonText: 'Xóa ngay',
+        cancelButtonText: 'Hủy'
+    });
+
+    if (result.isConfirmed) {
+        try {
+            await apiService.delete(`admin/reviews/${review.id}`);
+            allReviews.value = allReviews.value.filter(r => r.id !== review.id);
+            Swal.fire('Đã xóa!', 'Đánh giá đã được xóa.', 'success');
+        } catch (error) {
+            Swal.fire('Lỗi', 'Không thể xóa.', 'error');
+        }
+    }
+}
+
+onMounted(async () => {
+    await checkAuthState();
+    if (!requireLogin()) { isLoading.value = false; return; }
+    
+    nextTick(() => {
+        if (viewModalRef.value) viewModalInstance.value = new Modal(viewModalRef.value);
+    });
+    fetchReviews();
+});
 </script>
 
 <template>
-  <!-- 1. Header của trang -->
-  <div class="app-content-header">
-    <div class="container-fluid">
-      <div class="row">
-        <div class="col-sm-6">
-          <h3 class="mb-0">Quản lý Đánh giá</h3>
+    <div class="app-content-header">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-sm-6"><h3 class="mb-0 text-brand">Quản lý Đánh giá</h3></div>
+                <div class="col-sm-6">
+                    <ol class="breadcrumb float-sm-end">
+                        <li class="breadcrumb-item"><router-link to="/admin">Trang chủ</router-link></li>
+                        <li class="breadcrumb-item active">Đánh giá</li>
+                    </ol>
+                </div>
+            </div>
         </div>
-        <div class="col-sm-6">
-          <ol class="breadcrumb float-sm-end">
-            <li class="breadcrumb-item"><router-link to="/admin">Trang chủ</router-link></li>
-            <li class="breadcrumb-item active" aria-current="page">
-              Đánh giá
-            </li>
-          </ol>
-        </div>
-      </div>
     </div>
-  </div>
 
-  <!-- 2. Nội dung chính của trang -->
-  <div class="app-content">
-    <div class="container-fluid">
-      <div class="row">
-        <div class="col-12">
-          <!-- Card chứa bảng -->
-          <div class="card">
-            <div class="card-header">
-              <!-- Thêm Thanh tìm kiếm -->
-              <div class="row align-items-center">
-                <div class="col-md-6 col-12 mb-2 mb-md-0">
-                  <h3 class="card-title mb-0">Danh sách Đánh giá</h3>
+    <div class="app-content">
+        <div class="container-fluid">
+            <div class="card mb-4 shadow-sm border-0">
+                
+                <!-- TABS -->
+                <div class="card-header border-bottom-0 pb-0 bg-white">
+                    <ul class="nav nav-tabs card-header-tabs custom-tabs">
+                        <li class="nav-item">
+                            <a class="nav-link d-flex align-items-center" :class="{ active: activeTab === 'pending' }" href="#" @click.prevent="setActiveTab('pending')">
+                                <i class="bi bi-hourglass-split me-1 text-warning"></i> Chờ duyệt
+                                <span class="badge rounded-pill bg-warning text-dark ms-2" v-if="statusCounts.pending > 0">{{ statusCounts.pending }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link d-flex align-items-center" :class="{ active: activeTab === 'approved' }" href="#" @click.prevent="setActiveTab('approved')">
+                                <i class="bi bi-check-circle me-1 text-success"></i> Đã duyệt
+                                <span class="badge rounded-pill bg-success ms-2">{{ statusCounts.approved }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link d-flex align-items-center" :class="{ active: activeTab === 'rejected' }" href="#" @click.prevent="setActiveTab('rejected')">
+                                <i class="bi bi-x-circle me-1 text-danger"></i> Đã từ chối
+                                <span class="badge rounded-pill bg-danger ms-2">{{ statusCounts.rejected }}</span>
+                            </a>
+                        </li>
+                    </ul>
                 </div>
-                <div class="col-md-6 col-12">
-                  <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0">
-                      <i class="bi bi-search text-muted"></i>
-                    </span>
-                    <input type="text" class="form-control border-start-0 ps-0"
-                      placeholder="Tìm theo người gửi, sản phẩm, nội dung..." v-model="searchQuery">
-                  </div>
+
+                <!-- FILTER BAR -->
+                <div class="card-body bg-light border-bottom py-3">
+                    <div class="row align-items-center g-3">
+                        <div class="col-md-4 col-12">
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                                <input type="text" class="form-control border-start-0 ps-0" placeholder="Tìm người dùng, sản phẩm..." v-model="searchQuery">
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <select class="form-select" v-model="sortOption">
+                                <option value="newest">⏱️ Mới nhất</option>
+                                <option value="oldest">⏳ Cũ nhất</option>
+                                <option value="rating_desc">⭐ Sao (Cao - Thấp)</option>
+                                <option value="rating_asc">⭐ Sao (Thấp - Cao)</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
-              </div>
-            </div>
 
-            <div class="card-body p-0">
-              <!-- Hiển thị loading -->
-              <div v-if="isLoading && allReviews.length === 0" class="text-center p-5">
-                <div class="spinner-border text-primary" role="status">
-                  <span class="visually-hidden">Loading...</span>
+                <!-- TABLE CONTENT -->
+                <div class="card-body p-0">
+                    <div class="tab-content">
+                        
+                        <!-- TAB: PENDING -->
+                        <div class="tab-pane fade show active" v-if="activeTab === 'pending'">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0 custom-table">
+                                    <thead class="bg-light text-secondary">
+                                        <tr>
+                                            <th style="width: 50px" class="ps-3">ID</th>
+                                            <th>Sản phẩm</th>
+                                            <th>Người gửi</th>
+                                            <th style="width: 120px">Sao</th>
+                                            <th>Nội dung</th>
+                                            <th style="width: 150px">Ngày gửi</th>
+                                            <th style="width: 160px" class="text-end pe-3">Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-if="isLoading"><td colspan="7" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>
+                                        <tr v-else-if="pagedPending.data.length === 0"><td colspan="7" class="text-center py-5 text-muted fst-italic">Không có đánh giá chờ duyệt.</td></tr>
+                                        <tr v-else v-for="review in pagedPending.data" :key="review.id">
+                                            <td class="ps-3 fw-bold text-muted">{{ review.id }}</td>
+                                            <td><span class="fw-bold text-dark">{{ review.product?.name }}</span></td>
+                                            <td>{{ review.user?.username || 'Ẩn danh' }}</td>
+                                            <td class="text-warning small">{{ renderStars(review.rating) }}</td>
+                                            <td><span class="d-inline-block text-truncate text-muted" style="max-width: 250px;">{{ review.content }}</span></td>
+                                            <td class="small text-muted">{{ formatDate(review.created_at) }}</td>
+                                            <td class="text-end pe-3">
+                                                <button class="btn btn-sm btn-light text-secondary border me-1" @click="openViewModal(review)"><i class="bi bi-eye"></i></button>
+                                                <button class="btn btn-sm btn-success me-1" @click="handleUpdateStatus(review, 'approved')" title="Duyệt"><i class="bi bi-check-lg"></i></button>
+                                                <button class="btn btn-sm btn-outline-danger" @click="handleUpdateStatus(review, 'rejected')" title="Từ chối"><i class="bi bi-x-lg"></i></button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="card-footer bg-white border-top-0 py-3" v-if="pagedPending.totalPages > 1">
+                                <ul class="pagination pagination-sm m-0 justify-content-end">
+                                    <li class="page-item" :class="{ disabled: pagination.pending.currentPage === 1 }"><button class="page-link border-0" @click="changePage('pending', pagination.pending.currentPage - 1)">&laquo;</button></li>
+                                    <li v-for="p in pagedPending.totalPages" :key="p" class="page-item" :class="{ active: pagination.pending.currentPage === p }"><button class="page-link border-0 rounded-circle mx-1" @click="changePage('pending', p)">{{ p }}</button></li>
+                                    <li class="page-item" :class="{ disabled: pagination.pending.currentPage === pagedPending.totalPages }"><button class="page-link border-0" @click="changePage('pending', pagination.pending.currentPage + 1)">&raquo;</button></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- TAB: APPROVED -->
+                        <div class="tab-pane fade show active" v-if="activeTab === 'approved'">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0 custom-table">
+                                    <thead class="bg-light text-secondary">
+                                        <tr>
+                                            <th style="width: 50px" class="ps-3">ID</th>
+                                            <th>Sản phẩm</th>
+                                            <th>Người gửi</th>
+                                            <th style="width: 120px">Sao</th>
+                                            <th>Nội dung</th>
+                                            <th style="width: 150px">Ngày gửi</th>
+                                            <th style="width: 160px" class="text-end pe-3">Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-if="isLoading"><td colspan="7" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>
+                                        <tr v-else-if="pagedApproved.data.length === 0"><td colspan="7" class="text-center py-5 text-muted fst-italic">Chưa có đánh giá nào được duyệt.</td></tr>
+                                        <tr v-else v-for="review in pagedApproved.data" :key="review.id">
+                                            <td class="ps-3 fw-bold text-muted">{{ review.id }}</td>
+                                            <td><span class="fw-bold text-dark">{{ review.product?.name }}</span></td>
+                                            <td>{{ review.user?.username || 'Ẩn danh' }}</td>
+                                            <td class="text-warning small">{{ renderStars(review.rating) }}</td>
+                                            <td><span class="d-inline-block text-truncate text-muted" style="max-width: 250px;">{{ review.content }}</span></td>
+                                            <td class="small text-muted">{{ formatDate(review.created_at) }}</td>
+                                            <td class="text-end pe-3">
+                                                <button class="btn btn-sm btn-light text-secondary border me-1" @click="openViewModal(review)"><i class="bi bi-eye"></i></button>
+                                                <button class="btn btn-sm btn-light text-secondary border me-1" @click="handleUpdateStatus(review, 'rejected')" title="Gỡ bỏ"><i class="bi bi-x-lg"></i></button>
+                                                <button class="btn btn-sm btn-light text-danger border" @click="handleDelete(review)"><i class="bi bi-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="card-footer bg-white border-top-0 py-3" v-if="pagedApproved.totalPages > 1">
+                                <ul class="pagination pagination-sm m-0 justify-content-end">
+                                    <li class="page-item" :class="{ disabled: pagination.approved.currentPage === 1 }"><button class="page-link border-0" @click="changePage('approved', pagination.approved.currentPage - 1)">&laquo;</button></li>
+                                    <li v-for="p in pagedApproved.totalPages" :key="p" class="page-item" :class="{ active: pagination.approved.currentPage === p }"><button class="page-link border-0 rounded-circle mx-1" @click="changePage('approved', p)">{{ p }}</button></li>
+                                    <li class="page-item" :class="{ disabled: pagination.approved.currentPage === pagedApproved.totalPages }"><button class="page-link border-0" @click="changePage('approved', pagination.approved.currentPage + 1)">&raquo;</button></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- TAB: REJECTED -->
+                        <div class="tab-pane fade show active" v-if="activeTab === 'rejected'">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0 custom-table">
+                                    <thead class="bg-light text-secondary">
+                                        <tr>
+                                            <th style="width: 50px" class="ps-3">ID</th>
+                                            <th>Sản phẩm</th>
+                                            <th>Người gửi</th>
+                                            <th style="width: 120px">Sao</th>
+                                            <th>Nội dung</th>
+                                            <th style="width: 150px">Ngày gửi</th>
+                                            <th style="width: 160px" class="text-end pe-3">Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-if="isLoading"><td colspan="7" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>
+                                        <tr v-else-if="pagedRejected.data.length === 0"><td colspan="7" class="text-center py-5 text-muted fst-italic">Chưa có đánh giá nào bị từ chối.</td></tr>
+                                        <tr v-else v-for="review in pagedRejected.data" :key="review.id">
+                                            <td class="ps-3 fw-bold text-muted">{{ review.id }}</td>
+                                            <td><span class="fw-bold text-dark">{{ review.product?.name }}</span></td>
+                                            <td>{{ review.user?.username || 'Ẩn danh' }}</td>
+                                            <td class="text-warning small">{{ renderStars(review.rating) }}</td>
+                                            <td><span class="d-inline-block text-truncate text-muted" style="max-width: 250px;">{{ review.content }}</span></td>
+                                            <td class="small text-muted">{{ formatDate(review.created_at) }}</td>
+                                            <td class="text-end pe-3">
+                                                <button class="btn btn-sm btn-light text-secondary border me-1" @click="openViewModal(review)"><i class="bi bi-eye"></i></button>
+                                                <button class="btn btn-sm btn-outline-success me-1" @click="handleUpdateStatus(review, 'approved')" title="Duyệt lại"><i class="bi bi-check-lg"></i></button>
+                                                <button class="btn btn-sm btn-light text-danger border" @click="handleDelete(review)"><i class="bi bi-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="card-footer bg-white border-top-0 py-3" v-if="pagedRejected.totalPages > 1">
+                                <ul class="pagination pagination-sm m-0 justify-content-end">
+                                    <li class="page-item" :class="{ disabled: pagination.rejected.currentPage === 1 }"><button class="page-link border-0" @click="changePage('rejected', pagination.rejected.currentPage - 1)">&laquo;</button></li>
+                                    <li v-for="p in pagedRejected.totalPages" :key="p" class="page-item" :class="{ active: pagination.rejected.currentPage === p }"><button class="page-link border-0 rounded-circle mx-1" @click="changePage('rejected', p)">{{ p }}</button></li>
+                                    <li class="page-item" :class="{ disabled: pagination.rejected.currentPage === pagedRejected.totalPages }"><button class="page-link border-0" @click="changePage('rejected', pagination.rejected.currentPage + 1)">&raquo;</button></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                    </div>
                 </div>
-              </div>
-
-              <!-- Hiển thị bảng dữ liệu -->
-              <div v-else class="table-responsive">
-                <table class="table table-hover table-striped align-middle">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Người gửi</th>
-                      <th>Sản phẩm</th>
-                      <th style="width: 120px">Xếp hạng</th>
-                      <th>Nội dung</th>
-                      <th style="width: 120px">Trạng thái</th>
-                      <th style="width: 160px">Ngày gửi</th>
-                      <th style="width: 220px">Hành động</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-if="paginatedReviews.length === 0">
-                      <td colspan="8" class="text-center">
-                        {{ searchQuery ? 'Không tìm thấy đánh giá nào.' : 'Không có đánh giá nào.' }}
-                      </td>
-                    </tr>
-                    <tr v-for="review in paginatedReviews" :key="review.id">
-                      <td>{{ review.id }}</td>
-                      <td>{{ review.user?.username || '(Không rõ)' }}</td>
-                      <td>{{ review.product?.name || '(Không rõ)' }}</td>
-                      <td>
-                        <span class="text-warning" style="font-size: 1.1rem; letter-spacing: 1px;">
-                          {{ renderStars(review.rating) }}
-                        </span>
-                      </td>
-                      <td>
-                        <span :title="review.content">
-                          {{ review.content.length > 50 ? review.content.substring(0, 50) + '...' : review.content
-                          }}
-                        </span>
-                      </td>
-                      <td>
-                        <!-- Cập nhật badge để hiển thị text Tiếng Việt -->
-                        <span class="badge" :class="getStatusBadge(review.status).class">
-                          {{ getStatusBadge(review.status).text }}
-                        </span>
-                      </td>
-                      <td>{{ formatDate(review.created_at) }}</td>
-                      <td>
-                        <!-- Thêm nút Xem -->
-                        <button class="btn btn-info btn-sm me-1" @click="openViewModal(review)" title="Xem chi tiết">
-                          <i class="bi bi-eye"></i>
-                        </button>
-
-                        <button v-if="review.status !== 'approved'" class="btn btn-success btn-sm me-1"
-                          @click="handleUpdateStatus(review, 'approved')">
-                          <i class="bi bi-check-lg"></i> Duyệt
-                        </button>
-                        <button v-if="review.status !== 'rejected'" class="btn btn-secondary btn-sm me-1"
-                          @click="handleUpdateStatus(review, 'rejected')">
-                          <i class="bi bi-x-lg"></i> Từ chối
-                        </button>
-                        <button class="btn btn-danger btn-sm" @click="handleDelete(review)">
-                          <i class="bi bi-trash"></i> Xóa
-                        </button>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
             </div>
-            <!-- /.card-body -->
-
-            <!-- 3. PHÂN TRANG (PAGINATION) -->
-            <div class="card-footer clearfix" v-if="!isLoading && totalPages > 1">
-              <ul class="pagination pagination-sm m-0 float-end">
-                <!-- Nút Về trang trước -->
-                <li class="page-item" :class="{ disabled: localPagination.currentPage === 1 }">
-                  <a class="page-link" href="#" @click.prevent="goToPage(localPagination.currentPage - 1)">&laquo;</a>
-                </li>
-
-                <!-- Các trang -->
-                <li v-for="page in totalPages" :key="page" class="page-item"
-                  :class="{ active: localPagination.currentPage === page }">
-                  <a class="page-link" href="#" @click.prevent="goToPage(page)">{{ page }}</a>
-                </li>
-
-                <!-- Nút Tới trang sau -->
-                <li class="page-item" :class="{ disabled: localPagination.currentPage === totalPages }">
-                  <a class="page-link" href="#" @click.prevent="goToPage(localPagination.currentPage + 1)">&raquo;</a>
-                </li>
-              </ul>
-            </div>
-            <!-- /.card-footer -->
-
-          </div>
-          <!-- /.card -->
         </div>
-      </div>
     </div>
-  </div>
 
-  <!-- Modal Xem Chi Tiết (ĐÃ CẬP NHẬT) -->
-  <div class="modal fade" id="viewModal" ref="viewModalRef" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-body p-4 position-relative">
-          <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal"
-            aria-label="Close"></button>
+    <!-- MODAL VIEW DETAIL -->
+    <div class="modal fade" id="viewModal" ref="viewModalRef" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-brand"><i class="bi bi-chat-square-quote me-2"></i> Chi tiết đánh giá</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-4">
+                        <!-- Product Info -->
+                        <div class="col-md-5 text-center border-end">
+                            <div class="mb-3 position-relative">
+                                <img :src="getProductImageUrl(viewingReview.product?.thumbnail_url)" class="img-fluid rounded shadow-sm border" style="max-height: 200px; object-fit: contain;">
+                            </div>
+                            <h5 class="text-primary fw-bold mb-1">{{ viewingReview.product?.name || 'Sản phẩm không rõ' }}</h5>
+                            <p class="text-muted small">ID: #{{ viewingReview.product?.id }}</p>
+                            <div class="mt-3">
+                                <span v-if="viewingReview.status === 'pending'" class="badge bg-warning text-dark px-3 py-2">Đang chờ duyệt</span>
+                                <span v-if="viewingReview.status === 'approved'" class="badge bg-success px-3 py-2">Đã duyệt</span>
+                                <span v-if="viewingReview.status === 'rejected'" class="badge bg-danger px-3 py-2">Đã từ chối</span>
+                            </div>
+                        </div>
 
-          <!-- Status Badge -->
-          <div class="position-absolute top-0 start-0 m-3">
-            <span class="badge" :class="getStatusBadge(viewingReview.status).class">
-              {{ getStatusBadge(viewingReview.status).text }}
-            </span>
-          </div>
+                        <!-- Review Info -->
+                        <div class="col-md-7">
+                            <div class="d-flex align-items-center mb-4 p-3 bg-light rounded">
+                                <img :src="viewingReview.user?.avatar || `https://placehold.co/50x50/009981/ffffff?text=${viewingReview.user?.username?.charAt(0).toUpperCase() || 'U'}`" class="rounded-circle me-3 border" width="50" height="50">
+                                <div>
+                                    <div class="fw-bold fs-6">{{ viewingReview.user?.username || 'Người dùng ẩn danh' }}</div>
+                                    <div class="text-muted small">User ID: #{{ viewingReview.user?.id }}</div>
+                                </div>
+                            </div>
 
-          <!-- Thông tin SẢN PHẨM (MỚI) -->
-          <div class="text-center mb-4 mt-3">
-            <img
-              :src="viewingReview.product?.images?.[0]?.url || 'https://placehold.co/120x120/EBF4FF/1D62F0?text=N/A'"
-              class="img-thumbnail shadow-sm" alt="Product Image"
-              style="width: 120px; height: 120px; object-fit: cover; border-radius: 8px;">
-            <h5 class="mt-3 mb-1">{{ viewingReview.product?.name || 'Sản phẩm không rõ' }}</h5>
-            <p class="text-muted mb-0">ID Sản phẩm: {{ viewingReview.product?.id || 'N/A' }}</p>
-          </div>
-
-          <!-- Chi tiết đánh giá -->
-          <div class="list-group list-group-flush">
-            <div class="list-group-item px-0 text-center">
-              <h6 class="mb-2"><i class="bi bi-star me-2 text-warning"></i>Xếp hạng</h6>
-              <span class="text-warning" style="font-size: 1.5rem; letter-spacing: 2px;">
-                {{ renderStars(viewingReview.rating) }}
-              </span>
-            </div>
-             <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-chat-dots me-3 text-muted"></i>Nội dung đánh giá</h6>
-               <p class="mb-1 text-muted small" style="white-space: pre-wrap;">{{ viewingReview.content || 'Không có nội dung.' }}</p>
-            </div>
-            <!-- Thông tin người gửi (Đã di chuyển xuống) -->
-             <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-person me-3 text-primary"></i>Người gửi</h6>
-                <div class="d-flex align-items-center">
-                   <img
-                    :src="viewingReview.user?.avatar || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${viewingReview.user?.username ? viewingReview.user.username.charAt(0).toUpperCase() : 'U'}`"
-                    class="rounded-circle" alt="Avatar"
-                    style="width: 40px; height: 40px; object-fit: cover; margin-right: 10px;">
-                    <span class="mb-1 text-muted small">{{ viewingReview.user?.username || 'Người dùng ẩn danh' }} (ID: {{ viewingReview.user?.id || 'N/A' }})</span>
+                            <div class="mb-2">
+                                <span class="text-warning fs-5 me-2">{{ renderStars(viewingReview.rating) }}</span>
+                                <span class="text-muted small fw-bold">({{ viewingReview.rating }}/5 Tuyệt vời)</span>
+                            </div>
+                            
+                            <div class="p-3 border rounded mb-3 bg-white">
+                                <p class="mb-0 text-dark">{{ viewingReview.content }}</p>
+                            </div>
+                            
+                            <div class="text-end text-muted small">
+                                <i class="bi bi-clock me-1"></i> Gửi lúc: {{ formatDate(viewingReview.created_at) }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top-0">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Đóng</button>
+                    <div v-if="viewingReview.status === 'pending'" class="d-flex gap-2">
+                        <button class="btn btn-outline-danger px-3" @click="() => { viewModalInstance.hide(); handleUpdateStatus(viewingReview, 'rejected'); }">Từ chối</button>
+                        <button class="btn btn-success px-3" @click="() => { viewModalInstance.hide(); handleUpdateStatus(viewingReview, 'approved'); }">Duyệt bài</button>
+                    </div>
                 </div>
             </div>
-            <div class="list-group-item px-0">
-               <h6 class="mb-2"><i class="bi bi-calendar-event me-3 text-muted"></i>Ngày gửi</h6>
-               <p class="mb-1 text-muted small">{{ formatDate(viewingReview.createdAt) }}</p>
-            </div>
-          </div>
         </div>
-        <div class="modal-footer bg-light justify-content-center">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
-        </div>
-      </div>
     </div>
-  </div>
 </template>
 
 <style scoped>
-.table td .btn {
-  margin-top: 2px;
-  margin-bottom: 2px;
-  font-size: 0.8rem;
-}
+/* COLORS */
+.text-brand { color: #009981 !important; }
+.text-primary { color: #009981 !important; }
+.bg-primary { background-color: #009981 !important; }
+.btn-primary { background-color: #009981 !important; border-color: #009981 !important; color: white !important; }
+.btn-primary:hover { background-color: #007a67 !important; border-color: #007a67 !important; }
+.btn-outline-primary { color: #009981 !important; border-color: #009981 !important; }
+.btn-outline-primary:hover { background-color: #009981 !important; color: white !important; }
 
-.card-body.p-0 .table {
-  margin-bottom: 0;
-}
+/* Success Button (Mapped to Brand) */
+.btn-success { background-color: #009981 !important; border-color: #009981 !important; color: white; }
+.btn-success:hover { background-color: #007a67 !important; border-color: #007a67 !important; }
 
-.text-warning {
-  color: #ffc107 !important;
-}
+/* TABS */
+.custom-tabs .nav-link { color: #6c757d; border: none; font-weight: 500; padding: 12px 20px; border-bottom: 3px solid transparent; cursor: pointer; }
+.custom-tabs .nav-link:hover { color: #009981; }
+.custom-tabs .nav-link.active { color: #009981; background: transparent; border-bottom: 3px solid #009981; }
+
+/* PAGINATION */
+.page-item.active .page-link { background-color: #009981 !important; border-color: #009981 !important; color: white !important; }
+.page-link { color: #666; cursor: pointer; }
+
+/* TABLE */
+:deep(.table-striped-columns) tbody tr td:nth-child(even) { background-color: rgba(0, 0, 0, 0.02); }
+.custom-table th { font-weight: 600; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.5px; }
+
+/* MODAL */
+.modal-title { color: #00483D; }
 </style>

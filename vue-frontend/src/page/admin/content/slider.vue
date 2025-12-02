@@ -1,16 +1,18 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-import apiService from '../../../apiService.js'; // Đảm bảo apiService hỗ trợ gửi FormData
+import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
+import draggable from 'vuedraggable'; // [NEW] Import thư viện kéo thả
 
 // --- STATE CHUNG ---
 const isLoading = ref(true);
 const isLoadingBrands = ref(true);
 const isUploading = ref(false); // Trạng thái đang upload ảnh
+const drag = ref(false); // [NEW] Trạng thái đang kéo
 
 // --- STATE SLIDES ---
-const allSlides = ref([]);
+const allSlides = ref([]); // Dữ liệu gốc
 const searchQuery = ref('');
 const slideModalRef = ref(null);
 const slideModalInstance = ref(null);
@@ -22,12 +24,8 @@ const isEditMode = ref(false);
 // State xử lý file ảnh Slide
 const slideFile = ref(null);
 const slidePreviewImage = ref('');
-const slideFileInputRef = ref(null); // Để reset input file
+const slideFileInputRef = ref(null); 
 
-const slidePagination = reactive({
-  currentPage: 1,
-  itemsPerPage: 5,
-});
 const slideFormData = reactive({
   id: null, title: '', description: '', imageUrl: '', linkUrl: '', status: 'published', order: 0
 });
@@ -47,10 +45,6 @@ const brandFile = ref(null);
 const brandPreviewImage = ref('');
 const brandFileInputRef = ref(null);
 
-const brandPagination = reactive({
-  currentPage: 1,
-  itemsPerPage: 5,
-});
 const brandFormData = reactive({
   id: null, name: '', imageUrl: '', linkUrl: '', order: 0, status: 'published'
 });
@@ -74,57 +68,47 @@ onMounted(() => {
   }
 });
 
-// --- LOGIC TÌM KIẾM & PHÂN TRANG (SLIDES) ---
-watch(searchQuery, () => {
-  slidePagination.currentPage = 1;
-});
+// --- LOGIC TÌM KIẾM (SLIDES) ---
+// [UPDATE] Bỏ phân trang để hỗ trợ Drag & Drop toàn bộ danh sách
 const filteredSlides = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
-  if (!query) return allSlides.value;
-  return allSlides.value.filter(s =>
-    s.title.toLowerCase().includes(query) ||
-    s.description.toLowerCase().includes(query)
-  );
-});
-const totalSlidePages = computed(() => Math.max(1, Math.ceil(filteredSlides.value.length / slidePagination.itemsPerPage)));
-const paginatedSlides = computed(() => {
-  const start = (slidePagination.currentPage - 1) * slidePagination.itemsPerPage;
-  const end = start + slidePagination.itemsPerPage;
-  return filteredSlides.value.slice(start, end);
-});
-function goToSlidePage(page) {
-  if (page >= 1 && page <= totalSlidePages.value) {
-    slidePagination.currentPage = page;
+  // Nếu đang tìm kiếm, trả về kết quả lọc (không support drag)
+  if (query) {
+    return allSlides.value.filter(s =>
+      s.title.toLowerCase().includes(query) ||
+      s.description.toLowerCase().includes(query)
+    ).sort((a, b) => a.order - b.order);
   }
-}
-
-// --- LOGIC TÌM KIẾM & PHÂN TRANG (BRANDS) ---
-watch(brandSearchQuery, () => {
-  brandPagination.currentPage = 1;
+  // Mặc định trả về toàn bộ list đã sort (support drag trực tiếp vào allSlides)
+  return allSlides.value; // Sort đã được xử lý khi fetch
 });
+
+// Check xem có đang tìm kiếm không để ẩn chức năng kéo thả
+const isSearchingSlide = computed(() => searchQuery.value.trim().length > 0);
+
+
+// --- LOGIC TÌM KIẾM (BRANDS) ---
 const filteredBrands = computed(() => {
   const query = brandSearchQuery.value.toLowerCase().trim();
-  if (!query) return allBrands.value;
-  return allBrands.value.filter(b => b.name.toLowerCase().includes(query));
-});
-const totalBrandPages = computed(() => Math.max(1, Math.ceil(filteredBrands.value.length / brandPagination.itemsPerPage)));
-const paginatedBrands = computed(() => {
-  const start = (brandPagination.currentPage - 1) * brandPagination.itemsPerPage;
-  const end = start + brandPagination.itemsPerPage;
-  return filteredBrands.value.slice(start, end);
-});
-function goToBrandPage(page) {
-  if (page >= 1 && page <= totalBrandPages.value) {
-    brandPagination.currentPage = page;
+  if (query) {
+    return allBrands.value.filter(b => b.name.toLowerCase().includes(query))
+        .sort((a, b) => a.order - b.order);
   }
-}
+  return allBrands.value;
+});
+
+const isSearchingBrand = computed(() => brandSearchQuery.value.trim().length > 0);
+
 
 // --- CÁC HÀM TẢI DỮ LIỆU ---
 async function fetchAllSlides() {
   isLoading.value = true;
   try {
     const response = await apiService.get(`admin/slides`);
-    allSlides.value = response.data.map(s => ({ ...s, created_at: s.created_at || new Date().toISOString() }));
+    // [UPDATE] Map và sort ngay khi nhận dữ liệu
+    allSlides.value = response.data
+        .map(s => ({ ...s, created_at: s.created_at || new Date().toISOString() }))
+        .sort((a, b) => a.order - b.order);
   } catch (error) {
     console.error("Lỗi khi tải slide:", error);
   } finally {
@@ -136,7 +120,9 @@ async function fetchAllBrands() {
   isLoadingBrands.value = true;
   try {
     const response = await apiService.get(`admin/brands`);
-    allBrands.value = response.data.map(b => ({ ...b, status: b.status || 'published' }));
+    allBrands.value = response.data
+        .map(b => ({ ...b, status: b.status || 'published' }))
+        .sort((a, b) => a.order - b.order);
   } catch (error) {
     console.error("Lỗi khi tải brand:", error);
   } finally {
@@ -144,49 +130,88 @@ async function fetchAllBrands() {
   }
 }
 
+// --- [NEW] XỬ LÝ DRAG & DROP (SLIDES) ---
+async function onSlideDragEnd(event) {
+    drag.value = false;
+    if (event.newIndex === event.oldIndex) return; // Không thay đổi vị trí
+
+    // Lấy danh sách ID theo thứ tự mới từ allSlides (v-model của draggable)
+    const orderedIds = allSlides.value.map(item => item.id);
+
+    try {
+        await apiService.post('admin/slides/update-order', { ids: orderedIds });
+        
+        // Cập nhật lại số order hiển thị local cho đẹp
+        allSlides.value.forEach((item, index) => {
+            item.order = index + 1;
+        });
+
+        // Toast thông báo nhỏ góc phải
+        const Toast = Swal.mixin({
+            toast: true, position: 'top-end', showConfirmButton: false, timer: 1500, timerProgressBar: true
+        });
+        Toast.fire({ icon: 'success', title: 'Đã cập nhật vị trí Slide' });
+
+    } catch (error) {
+        console.error("Lỗi sort slide:", error);
+        Swal.fire('Lỗi', 'Không thể lưu thứ tự sắp xếp.', 'error');
+        fetchAllSlides(); // Revert lại nếu lỗi
+    }
+}
+
+// --- [NEW] XỬ LÝ DRAG & DROP (BRANDS) ---
+async function onBrandDragEnd(event) {
+    drag.value = false;
+    if (event.newIndex === event.oldIndex) return;
+
+    const orderedIds = allBrands.value.map(item => item.id);
+
+    try {
+        // [NOTE] Đảm bảo bạn đã có API admin/brands/update-order nhé!
+        await apiService.post('admin/brands/update-order', { ids: orderedIds });
+        
+        allBrands.value.forEach((item, index) => {
+            item.order = index + 1;
+        });
+
+        const Toast = Swal.mixin({
+            toast: true, position: 'top-end', showConfirmButton: false, timer: 1500, timerProgressBar: true
+        });
+        Toast.fire({ icon: 'success', title: 'Đã cập nhật vị trí Brand' });
+
+    } catch (error) {
+        console.error("Lỗi sort brand:", error);
+        Swal.fire('Lỗi', 'Không thể lưu thứ tự sắp xếp.', 'error');
+        fetchAllBrands();
+    }
+}
+
+
 // --- CÁC HÀM HELPER ---
 function getStatusBadge(status) {
   if (status === 'published') return { class: 'text-bg-success', text: 'Hiển thị' };
-  return { class: 'text-bg-secondary', text: 'Nháp' };
+  return { class: 'text-bg-secondary', text: 'Ẩn' };
 }
 function getFormattedDate(dateString) {
   if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleDateString('vi-VN');
 }
 
-// --- HÀM UPLOAD FILE (QUAN TRỌNG) ---
-async function uploadFileToServer(file) {
-  const formData = new FormData();
-  formData.append('file', file); // 'file' là tên trường mà Server mong đợi
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // Giả sử server trả về đường dẫn ảnh
-      console.log("Giả lập upload file:", file.name);
-      // Trả về URL tạm thời để demo (trong thực tế đây sẽ là URL từ server trả về)
-      resolve(`https://placehold.co/600x400?text=${encodeURIComponent(file.name)}`);
-    }, 1000);
-  });
-}
-
-// --- XỬ LÝ ẢNH SLIDE ---
+// --- HÀM XỬ LÝ URL ẢNH ---
 function onSlideFileChange(event) {
   const file = event.target.files[0];
   if (file) {
-    // Kiểm tra định dạng
     if (!file.type.startsWith('image/')) {
       Swal.fire('Lỗi', 'Vui lòng chọn file hình ảnh.', 'error');
       return;
     }
-    // Kiểm tra kích thước (ví dụ 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      Swal.fire('Lỗi', 'Kích thước ảnh không được quá 2MB.', 'error');
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      Swal.fire('Lỗi', 'Kích thước ảnh không được quá 5MB.', 'error');
       return;
     }
-
     slideFile.value = file;
-    // Tạo URL preview local
     slidePreviewImage.value = URL.createObjectURL(file);
-    slideErrors.imageUrl = ''; // Xóa lỗi nếu có
+    slideErrors.imageUrl = '';
   }
 }
 
@@ -197,12 +222,14 @@ function resetSlideForm() {
   });
   slideFile.value = null;
   slidePreviewImage.value = '';
-  if (slideFileInputRef.value) slideFileInputRef.value.value = ''; // Reset input file
+  if (slideFileInputRef.value) slideFileInputRef.value.value = '';
   Object.keys(slideErrors).forEach(key => slideErrors[key] = '');
 }
 
 function openCreateSlideModal() {
   resetSlideForm();
+  const maxOrder = allSlides.value.length > 0 ? Math.max(...allSlides.value.map(s => s.order)) : 0;
+  slideFormData.order = maxOrder + 1;
   isEditMode.value = false;
   slideModalInstance.value.show();
 }
@@ -218,9 +245,8 @@ function openEditSlideModal(slide) {
     status: slide.status,
     order: slide.order
   });
-  // Khi edit, preview ban đầu là ảnh cũ từ server
   slidePreviewImage.value = slide.imageUrl;
-  slideFile.value = null; // Chưa chọn file mới
+  slideFile.value = null;
   if (slideFileInputRef.value) slideFileInputRef.value.value = '';
 
   Object.keys(slideErrors).forEach(key => slideErrors[key] = '');
@@ -241,9 +267,6 @@ function validateSlideForm() {
     isValid = false;
   }
 
-  // Logic validate ảnh:
-  // Nếu tạo mới: Phải chọn file (slideFile khác null)
-  // Nếu sửa: Nếu không chọn file mới (slideFile null) thì phải có ảnh cũ (imageUrl)
   if (!isEditMode.value && !slideFile.value) {
     slideErrors.imageUrl = 'Vui lòng chọn hình ảnh.';
     isValid = false;
@@ -262,55 +285,42 @@ function validateSlideForm() {
 async function handleSaveSlide() {
   if (!validateSlideForm()) return;
   isLoading.value = true;
-  isUploading.value = true; // Hiển thị loading ảnh
+  isUploading.value = true;
 
   try {
-    // 1. Tạo đối tượng FormData
     const formData = new FormData();
-
-    // 2. Đưa dữ liệu text vào
     formData.append('title', slideFormData.title);
     formData.append('description', slideFormData.description || '');
     formData.append('linkUrl', slideFormData.linkUrl || '');
     formData.append('order', slideFormData.order);
     formData.append('status', slideFormData.status);
 
-    // 3. QUAN TRỌNG: Đưa file ảnh vào (nếu có chọn)
-    // Key 'image' phải trùng với $request->validate(['image' => ...]) bên Laravel
     if (slideFile.value) {
       formData.append('image', slideFile.value);
     }
 
-    // 4. Gửi API
     if (isEditMode.value) {
-      // MẸO: Laravel Put không nhận file trực tiếp, phải dùng POST + _method: 'PUT'
       formData.append('_method', 'PUT');
-
       await apiService.post(`admin/slides/${slideFormData.id}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-
       Swal.fire('Thành công', 'Đã cập nhật slide!', 'success');
     } else {
-      // Thêm mới dùng POST bình thường
       await apiService.post(`admin/slides`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-
       Swal.fire('Thành công', 'Đã tạo slide mới!', 'success');
     }
 
     slideModalInstance.value.hide();
-    fetchAllSlides(); // Tải lại danh sách
+    fetchAllSlides();
 
   } catch (error) {
     console.error("Lỗi khi lưu slide:", error);
-
-    // Hiển thị lỗi chi tiết từ Laravel trả về
     if (error.response && error.response.data && error.response.data.errors) {
       const errs = error.response.data.errors;
       if (errs.title) slideErrors.title = errs.title[0];
-      if (errs.image) slideErrors.imageUrl = errs.image[0]; // Hiển thị lỗi ảnh (ví dụ: file quá lớn)
+      if (errs.image) slideErrors.imageUrl = errs.image[0];
       Swal.fire('Lỗi nhập liệu', 'Vui lòng kiểm tra lại thông tin.', 'warning');
     } else {
       Swal.fire('Thất bại', 'Đã có lỗi xảy ra phía Server.', 'error');
@@ -318,6 +328,27 @@ async function handleSaveSlide() {
   } finally {
     isLoading.value = false;
     isUploading.value = false;
+  }
+}
+
+async function handleSlideToggleStatus(slide) {
+  const newStatus = slide.status === 'published' ? 'draft' : 'published';
+  const actionText = newStatus === 'published' ? 'hiển thị' : 'ẩn';
+  try {
+    const oldStatus = slide.status;
+    slide.status = newStatus;
+
+    const formData = new FormData();
+    formData.append('title', slide.title);
+    formData.append('status', newStatus);
+    formData.append('_method', 'PUT');
+
+    await apiService.post(`admin/slides/${slide.id}`, formData);
+    Swal.fire('Thành công', `Đã ${actionText} slide "${slide.title}"`, 'success');
+  } catch (error) {
+    slide.status = slide.status === 'published' ? 'draft' : 'published';
+    console.error("Lỗi cập nhật trạng thái slide:", error);
+    Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
   }
 }
 
@@ -343,6 +374,7 @@ async function handleDeleteSlide(slide) {
     }
   }
 }
+
 
 // --- XỬ LÝ ẢNH BRAND ---
 function onBrandFileChange(event) {
@@ -371,6 +403,8 @@ function resetBrandForm() {
 
 function openCreateBrandModal() {
   resetBrandForm();
+  const maxOrder = allBrands.value.length > 0 ? Math.max(...allBrands.value.map(b => b.order)) : 0;
+  brandFormData.order = maxOrder + 1;
   isBrandEditMode.value = false;
   brandModalInstance.value.show();
 }
@@ -401,7 +435,6 @@ function validateBrandForm() {
     isValid = false;
   }
 
-  // Logic validate ảnh Brand
   if (!isBrandEditMode.value && !brandFile.value) {
     brandErrors.imageUrl = 'Vui lòng chọn hình ảnh.';
     isValid = false;
@@ -428,7 +461,6 @@ async function handleSaveBrand() {
     formData.append('order', brandFormData.order);
     formData.append('status', brandFormData.status);
 
-    // Key 'image' phải khớp với Controller Brand
     if (brandFile.value) {
       formData.append('image', brandFile.value);
     }
@@ -440,7 +472,6 @@ async function handleSaveBrand() {
       });
       Swal.fire('Thành công', 'Đã cập nhật brand!', 'success');
     } else {
-      // SỬA LỖI 405: Thêm admin/ vào trước
       await apiService.post(`admin/brands`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
@@ -463,15 +494,14 @@ async function handleBrandToggleStatus(brand) {
   const actionText = newStatus === 'published' ? 'hiển thị' : 'ẩn';
   try {
     brand.status = newStatus;
-    await apiService.patch(`admin/brands/${brand.id}`, { status: newStatus });
-    Swal.fire({
-      toast: true,
-      position: 'top-end',
-      icon: 'success',
-      title: `Đã ${actionText} brand!`,
-      showConfirmButton: false,
-      timer: 2000
-    });
+    
+    const formData = new FormData();
+    formData.append('name', brand.name); 
+    formData.append('status', newStatus);
+    formData.append('_method', 'PUT');
+
+    await apiService.post(`admin/brands/${brand.id}`, formData);
+    Swal.fire('Thành công', `Đã ${actionText} brand "${brand.name}"!`, 'success');
   } catch (error) {
     console.error("Lỗi cập nhật trạng thái brand:", error);
     brand.status = newStatus === 'published' ? 'draft' : 'published';
@@ -524,6 +554,7 @@ async function handleDeleteBrand(brand) {
 
   <div class="app-content">
     <div class="container-fluid">
+      <!-- SLIDE SECTION -->
       <div class="row">
         <div class="col-12">
           <div class="card">
@@ -548,16 +579,16 @@ async function handleDeleteBrand(brand) {
             </div>
 
             <div class="card-body p-0">
-              <div v-if="isLoading && paginatedSlides.length === 0" class="text-center p-5">
+              <div v-if="isLoading && allSlides.length === 0" class="text-center p-5">
                 <div class="spinner-border text-primary" role="status">
                   <span class="visually-hidden">Loading...</span>
                 </div>
               </div>
               <div v-else class="table-responsive">
-                <table class="table table-hover table-striped align-middle">
+                <table class="table table-hover table-bordered align-middle">
                   <thead>
                     <tr>
-                      <th style="width: 100px">Thứ tự</th>
+                      <th style="width: 50px" class="text-center">#</th>
                       <th style="width: 250px">Ảnh</th>
                       <th>Tiêu đề</th>
                       <th>Link liên kết</th>
@@ -565,70 +596,100 @@ async function handleDeleteBrand(brand) {
                       <th style="width: 180px" class="text-center">Hành động</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    <tr v-if="paginatedSlides.length === 0">
-                      <td colspan="6" class="text-center">
-                        {{ searchQuery ? 'Không tìm thấy slide nào.' : 'Không có slide nào.' }}
-                      </td>
-                    </tr>
-                    <tr v-for="slide in paginatedSlides" :key="slide.id">
-                      <td>
-                        <span class="badge text-bg-dark" style="font-size: 0.9rem;">{{ slide.order }}</span>
-                      </td>
-                      <td>
-                        <img :src="slide.imageUrl || 'https://placehold.co/100x50?text=N/A'" alt="Ảnh slide"
-                          class="img-thumbnail">
-                      </td>
-                      <td>
-                        <strong>{{ slide.title }}</strong>
-                        <p class="text-muted small mb-0">{{ slide.description }}</p>
-                      </td>
-                      <td>
-                        <a :href="slide.linkUrl" target="_blank" v-if="slide.linkUrl">{{ slide.linkUrl }}</a>
-                        <span v-else class="text-muted">N/A</span>
-                      </td>
-                      <td>
-                        <span class="badge" :class="getStatusBadge(slide.status).class">
-                          {{ getStatusBadge(slide.status).text }}
-                        </span>
-                      </td>
-                      <td class="text-center gap-2">
-                        <button class="btn btn-outline-info btn-sm me-1" @click="openViewSlideModal(slide)"
-                          title="Xem chi tiết">
-                          <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="btn btn-outline-warning btn-sm me-1" @click="openEditSlideModal(slide)">
-                          <i class="bi bi-pencil"></i>
-                        </button>
-                        <button class="btn btn-outline-danger btn-sm" @click="handleDeleteSlide(slide)">
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      </td>
-                    </tr>
+                  
+                  <!-- DRAGGABLE FOR SLIDES -->
+                  <!-- Nếu đang search thì render tbody thường (không drag được), ngược lại render draggable -->
+                  <draggable 
+                      v-if="!isSearchingSlide"
+                      v-model="allSlides" 
+                      tag="tbody" 
+                      item-key="id"
+                      handle=".drag-handle"
+                      @start="drag=true" 
+                      @end="onSlideDragEnd"
+                  >
+                      <template #item="{ element: slide }">
+                        <tr :class="{ 'bg-light': drag }">
+                          <td class="text-center cursor-move drag-handle" title="Kéo thả để sắp xếp">
+                            <i class="bi bi-grip-vertical text-secondary fs-4 opacity-50 hover-opacity-100"></i>
+                          </td>
+                          <td>
+                            <img :src="slide.imageUrl || 'https://placehold.co/100x50?text=N/A'" alt="Ảnh slide"
+                              class="img-thumbnail" style="height: 60px; object-fit: cover;">
+                          </td>
+                          <td>
+                            <strong>{{ slide.title }}</strong>
+                            <p class="text-muted small mb-0">{{ slide.description }}</p>
+                          </td>
+                          <td>
+                            <a :href="slide.linkUrl" target="_blank" v-if="slide.linkUrl">{{ slide.linkUrl }}</a>
+                            <span v-else class="text-muted">N/A</span>
+                          </td>
+                          <td>
+                            <span class="badge" :class="getStatusBadge(slide.status).class">
+                              {{ getStatusBadge(slide.status).text }}
+                            </span>
+                          </td>
+                          <td class="text-center">
+                             <!-- Action Buttons (Toggle, View, Edit, Delete) -->
+                             <div class="d-flex justify-content-center align-items-center gap-2">
+                                <div class="form-check form-switch" title="Kích hoạt/Vô hiệu hóa">
+                                  <input class="form-check-input" type="checkbox" role="switch"
+                                    :checked="slide.status === 'published'"
+                                    @change="handleSlideToggleStatus(slide)">
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                  <button class="btn btn-outline-info" @click="openViewSlideModal(slide)" title="Xem">
+                                    <i class="bi bi-eye"></i>
+                                  </button>
+                                  <button class="btn btn-outline-warning" @click="openEditSlideModal(slide)" title="Sửa">
+                                    <i class="bi bi-pencil"></i>
+                                  </button>
+                                  <button class="btn btn-outline-danger" @click="handleDeleteSlide(slide)" title="Xóa">
+                                    <i class="bi bi-trash"></i>
+                                  </button>
+                                </div>
+                             </div>
+                          </td>
+                        </tr>
+                      </template>
+                  </draggable>
+
+                  <!-- FALLBACK TBODY KHI ĐANG SEARCH (KHÔNG SORT ĐƯỢC) -->
+                  <tbody v-else>
+                      <tr v-if="filteredSlides.length === 0"><td colspan="6" class="text-center">Không tìm thấy slide nào.</td></tr>
+                      <tr v-for="slide in filteredSlides" :key="slide.id">
+                          <td class="text-center text-muted">{{ slide.order }}</td>
+                          <td><img :src="slide.imageUrl || 'https://placehold.co/100x50?text=N/A'" class="img-thumbnail" style="height: 60px;"></td>
+                          <td><strong>{{ slide.title }}</strong></td>
+                          <td>{{ slide.linkUrl || 'N/A' }}</td>
+                          <td><span class="badge" :class="getStatusBadge(slide.status).class">{{ getStatusBadge(slide.status).text }}</span></td>
+                          <td class="text-center">
+                              <div class="d-flex justify-content-center align-items-center gap-2">
+                                <div class="form-check form-switch">
+                                  <input class="form-check-input" type="checkbox" role="switch" :checked="slide.status === 'published'" @change="handleSlideToggleStatus(slide)">
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                  <button class="btn btn-outline-info" @click="openViewSlideModal(slide)"><i class="bi bi-eye"></i></button>
+                                  <button class="btn btn-outline-warning" @click="openEditSlideModal(slide)"><i class="bi bi-pencil"></i></button>
+                                  <button class="btn btn-outline-danger" @click="handleDeleteSlide(slide)"><i class="bi bi-trash"></i></button>
+                                </div>
+                             </div>
+                          </td>
+                      </tr>
                   </tbody>
                 </table>
               </div>
             </div>
-            <div class="card-footer clearfix" v-if="!isLoading && totalSlidePages > 1">
-              <ul class="pagination pagination-sm m-0 float-end">
-                <li class="page-item" :class="{ disabled: slidePagination.currentPage === 1 }">
-                  <a class="page-link" href="#"
-                    @click.prevent="goToSlidePage(slidePagination.currentPage - 1)">&laquo;</a>
-                </li>
-                <li v-for="page in totalSlidePages" :key="page" class="page-item"
-                  :class="{ active: slidePagination.currentPage === page }">
-                  <a class="page-link" href="#" @click.prevent="goToSlidePage(page)">{{ page }}</a>
-                </li>
-                <li class="page-item" :class="{ disabled: slidePagination.currentPage === totalSlidePages }">
-                  <a class="page-link" href="#"
-                    @click.prevent="goToSlidePage(slidePagination.currentPage + 1)">&raquo;</a>
-                </li>
-              </ul>
+            <!-- FOOTER HINT -->
+            <div class="card-footer bg-white text-center py-2 text-muted small" v-if="!isSearchingSlide && allSlides.length > 1">
+               <i class="bi bi-info-circle me-1"></i> Mẹo: Kéo thả biểu tượng <i class="bi bi-grip-vertical"></i> để sắp xếp thứ tự hiển thị.
             </div>
           </div>
         </div>
       </div>
 
+      <!-- BRAND SECTION -->
       <div class="row mt-4">
         <div class="col-12">
           <div class="card">
@@ -653,87 +714,100 @@ async function handleDeleteBrand(brand) {
             </div>
 
             <div class="card-body p-0">
-              <div v-if="isLoadingBrands && paginatedBrands.length === 0" class="text-center p-5">
+              <div v-if="isLoadingBrands && allBrands.length === 0" class="text-center p-5">
                 <div class="spinner-border text-success" role="status">
                   <span class="visually-hidden">Loading...</span>
                 </div>
               </div>
               <div v-else class="table-responsive">
-                <table class="table table-hover table-striped align-middle">
+                <table class="table table-hover table-bordered align-middle">
                   <thead>
                     <tr>
-                      <th style="width: 100px">Thứ tự</th>
+                      <th style="width: 50px" class="text-center">#</th>
                       <th style="width: 250px">Ảnh</th>
                       <th>Tên Brand</th>
                       <th>Link liên kết</th>
                       <th style="width: 120px">Trạng thái</th>
-                      <th style="width: 220px" class="text-center">Hành động</th>
+                      <th style="width: 180px" class="text-center">Hành động</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    <tr v-if="paginatedBrands.length === 0">
-                      <td colspan="6" class="text-center">
-                        {{ brandSearchQuery ? 'Không tìm thấy brand nào.' : 'Không có brand nào.' }}
-                      </td>
-                    </tr>
-                    <tr v-for="brand in paginatedBrands" :key="brand.id">
-                      <td>
-                        <span class="badge text-bg-dark" style="font-size: 0.9rem;">{{ brand.order }}</span>
-                      </td>
-                      <td>
-                        <img :src="brand.imageUrl || 'https://placehold.co/100x50?text=N/A'" alt="Ảnh brand"
-                          class="img-thumbnail" width="120">
-                      </td>
-                      <td><strong>{{ brand.name }}</strong></td>
-                      <td>
-                        <a :href="brand.linkUrl" target="_blank" v-if="brand.linkUrl">{{ brand.linkUrl }}</a>
-                        <span v-else class="text-muted">N/A</span>
-                      </td>
-                      <td>
-                        <span class="badge" :class="getStatusBadge(brand.status).class">
-                          {{ getStatusBadge(brand.status).text }}
-                        </span>
-                      </td>
-                      <td class="text-center">
-                        <div class="d-flex justify-content-center align-items-center">
-                          <div class="form-check form-switch d-inline-block align-middle me-3"
-                            title="Kích hoạt/Vô hiệu hóa">
-                            <input class="form-check-input" type="checkbox" role="switch"
-                              style="width: 2.5em; height: 1.25em; cursor: pointer;"
-                              :id="'brandStatusSwitch-' + brand.id" :checked="brand.status === 'published'"
-                              @change="handleBrandToggleStatus(brand)"> 
-                          </div>
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary" title="Chỉnh sửa"
-                              @click="openEditBrandModal(brand)">
-                              <i class="bi bi-pencil"></i>
-                            </button>
-                            <button class="btn btn-outline-danger" title="Xóa" @click="handleDeleteBrand(brand)">
-                              <i class="bi bi-trash"></i>
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
+                  
+                  <!-- DRAGGABLE FOR BRANDS -->
+                  <draggable 
+                      v-if="!isSearchingBrand"
+                      v-model="allBrands" 
+                      tag="tbody" 
+                      item-key="id"
+                      handle=".drag-handle"
+                      @start="drag=true" 
+                      @end="onBrandDragEnd"
+                  >
+                      <template #item="{ element: brand }">
+                        <tr :class="{ 'bg-light': drag }">
+                          <td class="text-center cursor-move drag-handle" title="Kéo thả để sắp xếp">
+                            <i class="bi bi-grip-vertical text-secondary fs-4 opacity-50 hover-opacity-100"></i>
+                          </td>
+                          <td>
+                            <img :src="brand.imageUrl || 'https://placehold.co/100x50?text=N/A'" alt="Ảnh brand"
+                              class="img-thumbnail" width="120">
+                          </td>
+                          <td><strong>{{ brand.name }}</strong></td>
+                          <td>
+                            <a :href="brand.linkUrl" target="_blank" v-if="brand.linkUrl">{{ brand.linkUrl }}</a>
+                            <span v-else class="text-muted">N/A</span>
+                          </td>
+                          <td>
+                            <span class="badge" :class="getStatusBadge(brand.status).class">
+                              {{ getStatusBadge(brand.status).text }}
+                            </span>
+                          </td>
+                          <td class="text-center">
+                            <div class="d-flex justify-content-center align-items-center gap-2">
+                              <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                  :checked="brand.status === 'published'"
+                                  @change="handleBrandToggleStatus(brand)"> 
+                              </div>
+                              <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" title="Chỉnh sửa"
+                                  @click="openEditBrandModal(brand)">
+                                  <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-outline-danger" title="Xóa" @click="handleDeleteBrand(brand)">
+                                  <i class="bi bi-trash"></i>
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      </template>
+                  </draggable>
+                   <!-- FALLBACK BRAND TBODY -->
+                  <tbody v-else>
+                      <tr v-if="filteredBrands.length === 0"><td colspan="6" class="text-center">Không tìm thấy brand nào.</td></tr>
+                      <tr v-for="brand in filteredBrands" :key="brand.id">
+                          <td class="text-center text-muted">{{ brand.order }}</td>
+                          <td><img :src="brand.imageUrl || 'https://placehold.co/100x50?text=N/A'" class="img-thumbnail" width="120"></td>
+                          <td><strong>{{ brand.name }}</strong></td>
+                          <td>{{ brand.linkUrl || 'N/A' }}</td>
+                          <td><span class="badge" :class="getStatusBadge(brand.status).class">{{ getStatusBadge(brand.status).text }}</span></td>
+                          <td class="text-center">
+                              <div class="d-flex justify-content-center align-items-center gap-2">
+                                <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" :checked="brand.status === 'published'" @change="handleBrandToggleStatus(brand)"></div>
+                                <div class="btn-group btn-group-sm">
+                                  <button class="btn btn-outline-primary" @click="openEditBrandModal(brand)"><i class="bi bi-pencil"></i></button>
+                                  <button class="btn btn-outline-danger" @click="handleDeleteBrand(brand)"><i class="bi bi-trash"></i></button>
+                                </div>
+                              </div>
+                          </td>
+                      </tr>
                   </tbody>
                 </table>
               </div>
             </div>
-            <div class="card-footer clearfix" v-if="!isLoadingBrands && totalBrandPages > 1">
-              <ul class="pagination pagination-sm m-0 float-end">
-                <li class="page-item" :class="{ disabled: brandPagination.currentPage === 1 }">
-                  <a class="page-link" href="#"
-                    @click.prevent="goToBrandPage(brandPagination.currentPage - 1)">&laquo;</a>
-                </li>
-                <li v-for="page in totalBrandPages" :key="page" class="page-item"
-                  :class="{ active: brandPagination.currentPage === page }">
-                  <a class="page-link" href="#" @click.prevent="goToBrandPage(page)">{{ page }}</a>
-                </li>
-                <li class="page-item" :class="{ disabled: brandPagination.currentPage === totalBrandPages }">
-                  <a class="page-link" href="#"
-                    @click.prevent="goToBrandPage(brandPagination.currentPage + 1)">&raquo;</a>
-                </li>
-              </ul>
+             <!-- FOOTER HINT -->
+            <div class="card-footer bg-white text-center py-2 text-muted small" v-if="!isSearchingBrand && allBrands.length > 1">
+               <i class="bi bi-info-circle me-1"></i> Mẹo: Kéo thả biểu tượng <i class="bi bi-grip-vertical"></i> để sắp xếp thứ tự hiển thị.
             </div>
           </div>
         </div>
@@ -741,6 +815,7 @@ async function handleDeleteBrand(brand) {
     </div>
   </div>
 
+  <!-- MODALS (Giữ nguyên như cũ) -->
   <div class="modal fade" id="slideModal" ref="slideModalRef" tabindex="-1" aria-labelledby="slideModalLabel"
     aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
@@ -788,7 +863,7 @@ async function handleDeleteBrand(brand) {
                       <label for="status" class="form-label">Trạng thái</label>
                       <select class="form-select" id="status" v-model="slideFormData.status">
                         <option value="published">Hiển thị (Published)</option>
-                        <option value="draft">Nháp (Draft)</option>
+                        <option value="draft">Ẩn (Hidden)</option>
                       </select>
                     </div>
                   </div>
@@ -875,7 +950,7 @@ async function handleDeleteBrand(brand) {
                       <label for="brandStatus" class="form-label">Trạng thái</label>
                       <select class="form-select" id="brandStatus" v-model="brandFormData.status">
                         <option value="published">Hiển thị (Published)</option>
-                        <option value="draft">Nháp (Draft)</option>
+                        <option value="draft">Ẩn (Hidden)</option>
                       </select>
                     </div>
                   </div>
@@ -969,6 +1044,91 @@ async function handleDeleteBrand(brand) {
 </template>
 
 <style scoped>
+/* Color Palette Overrides */
+:root {
+    --brand-primary: #009981;
+    --brand-dark: #00483D;
+}
+
+/* Headings */
+h3, .card-title, .modal-title {
+    color: #00483D;
+    font-weight: 700;
+}
+
+/* Primary Button (Use #009981) */
+.btn-primary {
+    background-color: #009981 !important;
+    border-color: #009981 !important;
+}
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+    background-color: #00483D !important;
+    border-color: #00483D !important;
+}
+
+/* Success Button (Mapped to Dark Teal #00483D for Brand Section) */
+.btn-success {
+    background-color: #00483D !important;
+    border-color: #00483D !important;
+}
+.btn-success:hover, .btn-success:focus, .btn-success:active {
+    background-color: #00332b !important;
+    border-color: #00332b !important;
+}
+
+/* Outline Buttons */
+.btn-outline-primary {
+    color: #009981 !important;
+    border-color: #009981 !important;
+}
+.btn-outline-primary:hover {
+    background-color: #009981 !important;
+    color: #fff !important;
+}
+
+/* Text Colors */
+.text-primary {
+    color: #009981 !important;
+}
+.text-success {
+    color: #00483D !important;
+}
+
+/* Badges */
+.bg-primary {
+    background-color: #009981 !important;
+}
+
+/* Pagination */
+.page-item.active .page-link {
+    background-color: #009981 !important;
+    border-color: #009981 !important;
+}
+.page-link {
+    color: #00483D !important;
+}
+
+/* Form Controls */
+.form-control:focus, .form-select:focus {
+    border-color: #009981;
+    box-shadow: 0 0 0 0.25rem rgba(0, 153, 129, 0.25);
+}
+
+/* Switch */
+.form-check-input:checked {
+    background-color: #009981;
+    border-color: #009981;
+}
+
+/* Loading Spinners */
+.spinner-border.text-primary {
+    color: #009981 !important;
+}
+.spinner-border.text-success {
+    color: #00483D !important;
+}
+
+/* --- EXISTING STYLES --- */
 .table td .btn {
   margin-top: 2px;
   margin-bottom: 2px;
@@ -996,4 +1156,8 @@ async function handleDeleteBrand(brand) {
   height: 1.25em;
   cursor: pointer;
 }
+
+/* DRAG HANDLE STYLE */
+.cursor-move { cursor: move; }
+.hover-opacity-100:hover { opacity: 1 !important; color: #009981 !important; }
 </style>

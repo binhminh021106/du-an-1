@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api\Client; // <--- CHỮ C VIẾT HOA
+namespace App\Http\Controllers\Api\Client;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -10,22 +10,21 @@ class NewController extends Controller
 {
     public function index()
     {
-        // Lấy tin tức published, mới nhất lên đầu
-        $data = News::with('author:id,fullName,avatar_url')
-            ->where('status', 'published')
+        // Lấy danh sách tin tức đã xuất bản (published)
+        // author_name đã có sẵn trong bảng news nên không cần with('author')
+        $data = News::where('status', 'published')
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // Trả về đúng format mà Frontend đang chờ
-        return response()->json($data); 
+        return response()->json($data);
     }
 
     public function show($slug)
     {
-        $post = News::with('author:id,fullName,avatar_url')
-            ->where('slug', $slug)
+        // Lấy chi tiết tin tức theo slug
+        $post = News::where('slug', $slug)
             ->where('status', 'published')
-            ->firstOrFail();
+            ->firstOrFail(); // Trả về lỗi 404 nếu không tìm thấy
 
         return response()->json($post);
     }

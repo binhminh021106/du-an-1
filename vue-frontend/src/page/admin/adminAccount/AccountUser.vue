@@ -1,681 +1,757 @@
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue';
+import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue';
 import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-const customers = ref([]);
+// ==========================================
+// CONFIGURATION
+// ==========================================
+const rawApiUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API_BASE_URL = rawApiUrl.replace(/\/api\/?$/, '');
+const MAX_FILE_SIZE_MB = 5;
+
+// ==========================================
+// AUTHENTICATION & PERMISSIONS
+// ==========================================
+const currentUser = ref({});
+
+const hasRole = (allowedRoles) => {
+    const userRoleId = Number(currentUser.value?.role_id);
+    let userRoleName = '';
+
+    if (userRoleId === 11) userRoleName = 'admin';
+    else if (userRoleId === 12) userRoleName = 'staff';
+    else if (userRoleId === 13) userRoleName = 'blogger';
+
+    if (!userRoleName) return false;
+    if (userRoleName === 'admin') return true;
+
+    return allowedRoles.includes(userRoleName);
+};
+
+const checkAuthState = async () => {
+    const token = localStorage.getItem('adminToken');
+    if (token) apiService.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+    const storedAdmin = localStorage.getItem('adminData');
+    const storedUser = localStorage.getItem('user_info');
+    let userData = null;
+
+    try {
+        if (storedAdmin) userData = JSON.parse(storedAdmin);
+        else if (storedUser) userData = JSON.parse(storedUser);
+    } catch (e) { console.error("Parse error", e); }
+
+    if (userData) {
+        currentUser.value = { ...userData, role_id: Number(userData.role_id) };
+        return true;
+    }
+
+    if (token) {
+        try {
+            const response = await apiService.get('/user');
+            let data = response.data;
+            if (data.data && !data.id) data = data.data;
+            
+            currentUser.value = { ...data, role_id: Number(data.role_id) };
+            localStorage.setItem('adminData', JSON.stringify(currentUser.value));
+            return true;
+        } catch (error) {
+            console.error("Auth API Error:", error);
+            return false;
+        }
+    }
+    return false;
+};
+
+const requireLogin = () => {
+    if (!currentUser.value.id) {
+        Swal.fire({ icon: 'error', title: 'Truy cập bị từ chối', text: 'Phiên làm việc hết hạn.', confirmButtonText: 'Đăng nhập ngay' });
+        return false;
+    }
+    // Admin và Staff được quản lý user
+    if (!hasRole(['admin', 'staff'])) {
+        Swal.fire({ icon: 'warning', title: 'Quyền hạn', text: 'Bạn không có quyền quản lý khách hàng.' });
+        return false;
+    }
+    return true;
+};
+
+// ==========================================
+// STATE MANAGEMENT
+// ==========================================
+const allCustomers = ref([]);
 const isLoading = ref(true);
-const searchQuery = ref('');
-const currentPage = ref(1);
-const itemsPerPage = ref(10);
-
-// State Modal
-const customerModalRef = ref(null);
-const customerModalInstance = ref(null);
-const viewModalRef = ref(null);
-const viewModalInstance = ref(null);
-
+const isSaving = ref(false);
 const isEditMode = ref(false);
+const searchQuery = ref('');
+const activeTab = ref('active'); // active | inactive
+
+// Modals
+const modalInstance = ref(null);
+const modalRef = ref(null);
+const viewModalInstance = ref(null);
+const viewModalRef = ref(null);
 const viewingCustomer = ref({});
 
-// Form data
-// Cập nhật khớp với DB columns: fullName, avatar_url
+// Pagination
+const pagination = reactive({
+    active: { currentPage: 1, itemsPerPage: 10 },
+    inactive: { currentPage: 1, itemsPerPage: 10 }
+});
+
+// Form Data
 const formData = reactive({
-  id: null,
-  fullName: '', // Đổi từ name sang fullName
-  email: '',
-  phone: '',
-  address: '', // Lưu ý: DB schema bạn gửi không có address, nhưng tôi vẫn giữ để tránh lỗi nếu backend có xử lý phụ
-  avatar_url: '', // Đổi từ avatar sang avatar_url cho khớp hiển thị
-  status: 'active',
-  password: '', // Thêm trường password
-  password_confirmation: '' // Thêm trường xác nhận password
+    id: null,
+    fullName: '', 
+    email: '',
+    phone: '',
+    address: '',
+    sex: 'other',      // [NEW] Giới tính
+    birthday: '',      // [NEW] Ngày sinh
+    avatar_url: '',
+    status: 'active',
+    password: '', 
+    password_confirmation: '' 
 });
 
 const avatarFile = ref(null);
 const avatarPreview = ref(null);
 
 const errors = reactive({
-  fullName: '',
-  email: '',
-  phone: '',
-  password: '',
-  password_confirmation: ''
+    fullName: '',
+    email: '',
+    phone: '',
+    password: '',
+    password_confirmation: ''
 });
 
-// --- COMPUTED ---
-const filteredCustomers = computed(() => {
-  if (!searchQuery.value) {
-    return customers.value;
-  }
-  const query = searchQuery.value.toLowerCase();
-  return customers.value.filter(customer =>
-    (customer.fullName && customer.fullName.toLowerCase().includes(query)) ||
-    (customer.email && customer.email.toLowerCase().includes(query)) ||
-    (customer.phone && customer.phone.includes(query))
-  );
-});
-
-const totalPages = computed(() => {
-  return Math.ceil(filteredCustomers.value.length / itemsPerPage.value);
-});
-
-const paginatedCustomers = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage.value;
-  const end = start + itemsPerPage.value;
-  return filteredCustomers.value.slice(start, end);
-});
-
-// --- WATCHERS ---
-watch(searchQuery, () => {
-  currentPage.value = 1; // Reset to first page on search
-});
-
-// --- LIFECYCLE ---
-onMounted(() => {
-  fetchCustomers();
-  if (customerModalRef.value) {
-    customerModalInstance.value = new Modal(customerModalRef.value, { backdrop: 'static' });
-  }
-  if (viewModalRef.value) {
-    viewModalInstance.value = new Modal(viewModalRef.value);
-  }
-});
-
-// --- METHODS ---
-
-// Hàm format ngày giờ
-function formatDate(dateString) {
-  if (!dateString) return 'Chưa cập nhật';
-  const date = new Date(dateString);
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(date);
+// ==========================================
+// COMPUTED & LOGIC
+// ==========================================
+function getImageUrl(path) {
+    if (!path) return 'https://placehold.co/150x150?text=User';
+    if (path.startsWith('blob:') || path.startsWith('http')) return path;
+    const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    const cleanPath = path.startsWith('/') ? path : '/' + path;
+    return `${baseUrl}${cleanPath}`;
 }
 
-async function fetchCustomers() {
-  isLoading.value = true;
-  try {
-    const response = await apiService.get(`admin/users`);
-    
-    // Map dữ liệu trả về để đảm bảo an toàn
-    customers.value = response.data.map(customer => ({
-      ...customer,
-      // Ưu tiên dùng fullName từ DB, nếu không có thì fallback sang name
-      fullName: customer.fullName || customer.name || 'Không tên', 
-      status: customer.status || 'active',
-      // Đảm bảo avatar_url có giá trị
-      avatar_url: customer.avatar_url || customer.avatar || ''
-    }));
+// 1. Filter & Sort
+const processedCustomers = computed(() => {
+    let result = [...allCustomers.value];
+    const query = searchQuery.value.toLowerCase().trim();
 
-  } catch (error) {
-    console.error("Lỗi tải danh sách khách hàng:", error);
-    Swal.fire('Lỗi', 'Không thể tải danh sách khách hàng.', 'error');
-  } finally {
-    isLoading.value = false;
-  }
-}
-
-function resetForm() {
-  formData.id = null;
-  formData.fullName = '';
-  formData.email = '';
-  formData.phone = '';
-  formData.address = '';
-  formData.avatar_url = '';
-  formData.status = 'active';
-  formData.password = ''; // Reset password
-  formData.password_confirmation = ''; // Reset confirm password
-  
-  avatarFile.value = null;
-  avatarPreview.value = null;
-  Object.keys(errors).forEach(key => errors[key] = '');
-}
-
-function onFileChange(e) {
-  const file = e.target.files[0];
-  if (file) {
-    if (file.size > 5 * 1024 * 1024) {
-      Swal.fire('Lỗi', 'Kích thước ảnh quá lớn (tối đa 5MB).', 'error');
-      e.target.value = ''; // Clear input
-      return;
+    if (query) {
+        result = result.filter(c =>
+            (c.fullName && c.fullName.toLowerCase().includes(query)) ||
+            (c.email && c.email.toLowerCase().includes(query)) ||
+            (c.phone && c.phone.includes(query))
+        );
     }
-    avatarFile.value = file;
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      avatarPreview.value = e.target.result;
+
+    // Sort mới nhất trước
+    result.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return result;
+});
+
+// 2. Split Lists
+const activeList = computed(() => processedCustomers.value.filter(c => c.status === 'active'));
+const inactiveList = computed(() => processedCustomers.value.filter(c => c.status !== 'active'));
+
+// 3. Status Counts
+const statusCounts = computed(() => ({
+    active: activeList.value.length,
+    inactive: inactiveList.value.length
+}));
+
+// 4. Pagination Helper
+function getPaginatedData(list, type) {
+    const pageInfo = pagination[type];
+    const totalPages = Math.max(1, Math.ceil(list.length / pageInfo.itemsPerPage));
+    if (pageInfo.currentPage > totalPages) pageInfo.currentPage = 1;
+
+    const start = (pageInfo.currentPage - 1) * pageInfo.itemsPerPage;
+    return { 
+        data: list.slice(start, start + pageInfo.itemsPerPage), 
+        totalPages 
     };
-    reader.readAsDataURL(file);
-  }
 }
 
-function validateForm() {
-  Object.keys(errors).forEach(key => errors[key] = '');
-  let isValid = true;
+const pagedActive = computed(() => getPaginatedData(activeList.value, 'active'));
+const pagedInactive = computed(() => getPaginatedData(inactiveList.value, 'inactive'));
 
-  if (!formData.fullName.trim()) {
-    errors.fullName = 'Vui lòng nhập họ và tên.';
-    isValid = false;
-  }
+// Watchers
+watch(searchQuery, () => {
+    pagination.active.currentPage = 1;
+    pagination.inactive.currentPage = 1;
+});
 
-  if (!formData.email) {
-    errors.email = 'Vui lòng nhập email.';
-    isValid = false;
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-    errors.email = 'Email không đúng định dạng.';
-    isValid = false;
-  }
+// ==========================================
+// HELPER FUNCTIONS
+// ==========================================
+const changePage = (type, page) => { pagination[type].currentPage = page; };
+const setActiveTab = (tabName) => activeTab.value = tabName;
 
-  if (formData.phone && !/^[0-9]{10,11}$/.test(formData.phone)) {
-    errors.phone = 'Số điện thoại không hợp lệ (10-11 số).';
-    isValid = false;
-  }
+const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('vi-VN');
+};
 
-  // Validation Password (chỉ bắt buộc khi Thêm mới)
-  if (!isEditMode.value) {
-    if (!formData.password) {
-      errors.password = 'Vui lòng nhập mật khẩu.';
-      isValid = false;
-    } else if (formData.password.length < 6) {
-      errors.password = 'Mật khẩu phải có ít nhất 6 ký tự.';
-      isValid = false;
+// Định dạng ngày cho input date (YYYY-MM-DD)
+const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+    try {
+        return new Date(dateString).toISOString().split('T')[0];
+    } catch (e) { return ''; }
+};
+
+const getGenderText = (sex) => {
+    if (sex === 'male') return 'Nam';
+    if (sex === 'female') return 'Nữ';
+    return 'Khác';
+};
+
+const getGenderBadge = (sex) => {
+    if (sex === 'male') return 'bg-info text-dark';
+    if (sex === 'female') return 'bg-danger bg-opacity-75';
+    return 'bg-secondary';
+};
+
+const resetForm = () => {
+    Object.assign(formData, {
+        id: null, fullName: '', email: '', phone: '', address: '',
+        sex: 'other', birthday: '',
+        avatar_url: '', status: 'active', password: '', password_confirmation: ''
+    });
+    avatarFile.value = null;
+    avatarPreview.value = null;
+    Object.keys(errors).forEach(key => errors[key] = '');
+};
+
+// Validate Image
+const onFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+            Swal.fire('Lỗi', `Kích thước ảnh quá lớn (tối đa ${MAX_FILE_SIZE_MB}MB).`, 'warning');
+            e.target.value = ''; 
+            return;
+        }
+        if (!['image/jpeg', 'image/png', 'image/webp', 'image/jpg'].includes(file.type)) {
+            Swal.fire('Lỗi', 'Chỉ chấp nhận file ảnh (JPG, PNG, WEBP).', 'warning');
+            e.target.value = '';
+            return;
+        }
+        avatarFile.value = file;
+        avatarPreview.value = URL.createObjectURL(file);
     }
+};
 
-    if (formData.password !== formData.password_confirmation) {
-      errors.password_confirmation = 'Mật khẩu xác nhận không khớp.';
-      isValid = false;
+const validateForm = () => {
+    Object.keys(errors).forEach(key => errors[key] = '');
+    let isValid = true;
+
+    if (!formData.fullName.trim()) { errors.fullName = 'Vui lòng nhập họ và tên.'; isValid = false; }
+    
+    if (!formData.email) { errors.email = 'Vui lòng nhập email.'; isValid = false; }
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) { errors.email = 'Email không đúng định dạng.'; isValid = false; }
+    
+    if (formData.phone && !/^[0-9]{10,11}$/.test(formData.phone)) { errors.phone = 'Số điện thoại không hợp lệ (10-11 số).'; isValid = false; }
+
+    if (!isEditMode.value) {
+        if (!formData.password) { errors.password = 'Vui lòng nhập mật khẩu.'; isValid = false; }
+        else if (formData.password.length < 6) { errors.password = 'Mật khẩu phải có ít nhất 6 ký tự.'; isValid = false; }
+        
+        if (formData.password !== formData.password_confirmation) { 
+            errors.password_confirmation = 'Mật khẩu xác nhận không khớp.'; isValid = false; 
+        }
     }
-  }
+    return isValid;
+};
 
-  return isValid;
-}
-
-function openCreateModal() {
-  resetForm();
-  isEditMode.value = false;
-  customerModalInstance.value.show();
-}
-
-function openEditModal(customer) {
-  resetForm();
-  isEditMode.value = true;
-  
-  // Populate form - Sử dụng đúng trường từ DB
-  formData.id = customer.id;
-  formData.fullName = customer.fullName; // Fix lỗi không hiện tên
-  formData.email = customer.email;
-  formData.phone = customer.phone;
-  // formData.address = customer.address; // Nếu DB không có cột address thì dòng này có thể undefined
-  if(customer.address) formData.address = customer.address;
-
-  formData.avatar_url = customer.avatar_url;
-  formData.status = customer.status || 'active';
-  
-  // Show existing avatar if any
-  avatarPreview.value = customer.avatar_url; 
-
-  customerModalInstance.value.show();
-}
-
-function openViewModal(customer) {
-  viewingCustomer.value = customer;
-  viewModalInstance.value.show();
+// ==========================================
+// ACTIONS (API)
+// ==========================================
+async function fetchCustomers() {
+    if (allCustomers.value.length === 0) isLoading.value = true;
+    try {
+        const response = await apiService.get(`admin/users`);
+        
+        // Map dữ liệu từ API
+        allCustomers.value = response.data.map(customer => ({
+            ...customer,
+            fullName: customer.fullName || customer.name || 'Không tên', 
+            status: customer.status || 'active',
+            avatar_url: getImageUrl(customer.avatar_url || customer.avatar),
+            sex: customer.sex || 'other', // Default sex
+            birthday: customer.birthday || null
+        }));
+    } catch (error) {
+        console.error("Lỗi tải danh sách khách hàng:", error);
+        Swal.fire('Lỗi', 'Không thể tải danh sách khách hàng.', 'error');
+    } finally {
+        isLoading.value = false;
+    }
 }
 
 async function handleSave() {
-  if (!validateForm()) return;
+    if (!requireLogin()) return;
+    if (!validateForm()) return;
 
-  isLoading.value = true;
-  try {
+    isSaving.value = true;
     const formDataPayload = new FormData();
-
-    // Map fullName vào trường backend yêu cầu (thường backend Laravel dùng name hoặc full_name, cần check kỹ)
-    // Ở đây tôi gửi cả 'name' và 'fullName' để đảm bảo tương thích, hoặc bạn sửa lại theo đúng API docs
-    formDataPayload.append('fullName', formData.fullName); 
-    formDataPayload.append('name', formData.fullName); // Fallback nếu backend dùng 'name'
-
+    formDataPayload.append('name', formData.fullName); // Controller dùng 'name' map sang 'fullName'
     formDataPayload.append('email', formData.email);
+    
     if (formData.phone) formDataPayload.append('phone', formData.phone);
     if (formData.address) formDataPayload.append('address', formData.address);
     if (formData.status) formDataPayload.append('status', formData.status);
+    if (formData.sex) formDataPayload.append('sex', formData.sex);
+    if (formData.birthday) formDataPayload.append('birthday', formData.birthday);
 
-    // Xử lý Password khi tạo mới
     if (!isEditMode.value && formData.password) {
-      formDataPayload.append('password', formData.password);
-      formDataPayload.append('password_confirmation', formData.password_confirmation);
+        formDataPayload.append('password', formData.password);
+        formDataPayload.append('password_confirmation', formData.password_confirmation);
     }
-
     if (avatarFile.value) {
-      formDataPayload.append('avatar', avatarFile.value); // Key file thường là 'avatar' hoặc 'image'
+        formDataPayload.append('avatar', avatarFile.value);
     }
 
-    if (isEditMode.value) {
-      formDataPayload.append('_method', 'PATCH');
-      
-      await apiService.post(`admin/users/${formData.id}`, formDataPayload);
-      
-      Swal.fire('Thành công', 'Đã cập nhật thông tin khách hàng!', 'success');
-    } else {
-      await apiService.post(`admin/users`, formDataPayload);
-      
-      Swal.fire('Thành công', 'Đã thêm khách hàng mới!', 'success');
+    try {
+        if (isEditMode.value) {
+            formDataPayload.append('_method', 'PATCH');
+            await apiService.post(`admin/users/${formData.id}`, formDataPayload);
+            Swal.fire('Thành công', 'Đã cập nhật thông tin khách hàng!', 'success');
+        } else {
+            await apiService.post(`admin/users`, formDataPayload);
+            Swal.fire('Thành công', 'Đã thêm khách hàng mới!', 'success');
+        }
+        modalInstance.value?.hide();
+        fetchCustomers(); 
+    } catch (error) {
+        console.error("Lỗi lưu:", error);
+        const errorsData = error.response?.data?.errors;
+        // Hiển thị lỗi cụ thể từ Laravel (VD: Email trùng)
+        if (errorsData) {
+             if (errorsData.email) errors.email = errorsData.email[0];
+             if (errorsData.phone) errors.phone = errorsData.phone[0];
+             if (errorsData.password) errors.password = errorsData.password[0];
+             Swal.fire('Lỗi dữ liệu', 'Vui lòng kiểm tra lại thông tin nhập vào.', 'warning');
+        } else {
+             Swal.fire('Lỗi', error.response?.data?.message || 'Đã có lỗi xảy ra.', 'error');
+        }
+    } finally {
+        isSaving.value = false;
     }
-
-    customerModalInstance.value.hide();
-    fetchCustomers();
-
-  } catch (error) {
-    console.error("Lỗi khi lưu khách hàng:", error);
-    const errors = error.response?.data?.errors;
-    // Lấy lỗi đầu tiên tìm thấy
-    const firstError = errors ? Object.values(errors)[0][0] : (error.response?.data?.message || 'Đã có lỗi xảy ra.');
-    
-    Swal.fire('Lỗi', firstError, 'error');
-  } finally {
-    isLoading.value = false;
-  }
 }
 
-async function toggleCustomerStatus(customer) {
-  const newStatus = customer.status === 'active' ? 'inactive' : 'active';
-  const actionText = newStatus === 'inactive' ? 'khóa' : 'mở khóa';
+async function toggleStatus(customer) {
+    if (!requireLogin()) return;
 
-  const result = await Swal.fire({
-    title: 'Bạn có chắc chắn?',
-    text: `Bạn muốn ${actionText} tài khoản "${customer.fullName}"?`,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: newStatus === 'inactive' ? '#d33' : '#3085d6',
-    confirmButtonText: newStatus === 'inactive' ? 'Khóa ngay' : 'Mở khóa',
-    cancelButtonText: 'Hủy bỏ'
-  });
+    const oldStatus = customer.status;
+    const newStatus = customer.status === 'active' ? 'inactive' : 'active';
+    const actionText = newStatus === 'inactive' ? 'KHÓA' : 'MỞ KHÓA';
+    const confirmColor = newStatus === 'inactive' ? '#d33' : '#009981';
 
-  if (result.isConfirmed) {
-    isLoading.value = true;
-    try {
-      await apiService.patch(`admin/users/${customer.id}`, { status: newStatus });
-      Swal.fire('Thành công!', `Đã ${actionText} tài khoản.`, 'success');
-      customer.status = newStatus; 
-    } catch (error) {
-      console.error(`Lỗi khi ${actionText} khách hàng:`, error);
-      Swal.fire('Lỗi', `Không thể ${actionText} tài khoản này.`, 'error');
-      fetchCustomers();
-    } finally {
-      isLoading.value = false;
+    // Hiển thị SweetAlert xác nhận trước
+    const result = await Swal.fire({
+        title: `Xác nhận ${actionText}?`,
+        text: `Bạn muốn ${actionText.toLowerCase()} tài khoản "${customer.fullName}"?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: confirmColor,
+        confirmButtonText: 'Đồng ý', 
+        cancelButtonText: 'Hủy'
+    });
+
+    // Chỉ thực hiện nếu người dùng bấm "Đồng ý"
+    if (result.isConfirmed) {
+        // Optimistic Update
+        customer.status = newStatus;
+
+        try {
+            await apiService.patch(`admin/users/${customer.id}`, { status: newStatus });
+            
+            // Toast thông báo thành công
+            const Toast = Swal.mixin({
+                toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, timerProgressBar: true
+            });
+            Toast.fire({ icon: 'success', title: `Đã ${actionText.toLowerCase()} tài khoản` });
+
+            fetchCustomers(); // Refresh list
+        } catch (error) {
+            customer.status = oldStatus; // Rollback UI nếu lỗi
+            Swal.fire('Lỗi', `Không thể ${actionText.toLowerCase()} tài khoản này.`, 'error');
+        }
     }
-  }
 }
 
 async function handleDelete(customer) {
-  const result = await Swal.fire({
-    title: 'Xác nhận xóa?',
-    text: `Bạn có chắc muốn xóa "${customer.fullName}"? Hành động này không thể hoàn tác.`,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#d33',
-    cancelButtonColor: '#3085d6',
-    confirmButtonText: 'Xóa ngay',
-    cancelButtonText: 'Hủy'
-  });
+    if (!requireLogin()) return;
 
-  if (result.isConfirmed) {
-    isLoading.value = true;
-    try {
-      await apiService.delete(`admin/users/${customer.id}`);
-      Swal.fire('Đã xóa!', 'Tài khoản đã được xóa thành công.', 'success');
+    const result = await Swal.fire({
+        title: 'Xác nhận xóa?',
+        text: `Bạn có chắc muốn xóa vĩnh viễn "${customer.fullName}"?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        confirmButtonText: 'Xóa ngay', 
+        cancelButtonText: 'Hủy'
+    });
 
-      if (paginatedCustomers.value.length === 1 && currentPage.value > 1) {
-        currentPage.value--;
-      }
-      fetchCustomers();
-    } catch (error) {
-      console.error("Lỗi khi xóa khách hàng:", error);
-      Swal.fire('Lỗi', 'Không thể xóa khách hàng này.', 'error');
-    } finally {
-      isLoading.value = false;
+    if (result.isConfirmed) {
+        try {
+            await apiService.delete(`admin/users/${customer.id}`);
+            allCustomers.value = allCustomers.value.filter(c => c.id !== customer.id);
+            Swal.fire('Đã xóa!', 'Tài khoản đã được xóa thành công.', 'success');
+        } catch (error) {
+            console.error("Lỗi khi xóa khách hàng:", error);
+            Swal.fire('Lỗi', 'Không thể xóa khách hàng này.', 'error');
+        }
     }
-  }
 }
 
-// --- PAGINATION ---
-function goToPage(page) {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page;
-  }
-}
+// Modal Helpers
+const openCreateModal = () => { if (!requireLogin()) return; resetForm(); isEditMode.value = false; modalInstance.value?.show(); };
+const openEditModal = (customer) => { 
+    if (!requireLogin()) return;
+    resetForm();
+    isEditMode.value = true;
+    Object.assign(formData, {
+        id: customer.id,
+        fullName: customer.fullName,
+        email: customer.email,
+        phone: customer.phone,
+        address: customer.address,
+        sex: customer.sex,
+        birthday: formatDateForInput(customer.birthday),
+        status: customer.status || 'active'
+    });
+    avatarPreview.value = customer.avatar_url; 
+    modalInstance.value?.show(); 
+};
+const openViewModal = (customer) => { viewingCustomer.value = customer; viewModalInstance.value?.show(); };
+
+// Lifecycle
+onMounted(async () => {
+    await checkAuthState();
+    if (!requireLogin()) { isLoading.value = false; return; }
+    
+    nextTick(() => {
+        if (modalRef.value) modalInstance.value = new Modal(modalRef.value, { backdrop: 'static' });
+        if (viewModalRef.value) viewModalInstance.value = new Modal(viewModalRef.value);
+    });
+    fetchCustomers();
+});
 </script>
 
 <template>
-  <div class="app-content-header">
-    <div class="container-fluid">
-      <div class="row">
-        <div class="col-sm-6">
-          <h3 class="mb-0">Quản lý Khách hàng</h3>
-        </div>
-        <div class="col-sm-6">
-          <ol class="breadcrumb float-sm-end">
-            <li class="breadcrumb-item"><router-link to="/admin">Trang chủ</router-link></li>
-            <li class="breadcrumb-item active" aria-current="page">Khách hàng</li>
-          </ol>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="app-content">
-    <div class="container-fluid">
-      <div class="card mb-4">
-        <div class="card-header">
-          <div class="row align-items-center">
-            <div class="col-md-6 col-12 mb-2 mb-md-0">
-              <div class="input-group">
-                <span class="input-group-text bg-white border-end-0">
-                  <i class="bi bi-search text-muted"></i>
-                </span>
-                <input type="text" class="form-control border-start-0 ps-0"
-                  placeholder="Tìm kiếm theo tên, email, SĐT..." v-model="searchQuery">
-              </div>
-            </div>
-            <div class="col-md-6 col-12 text-md-end">
-              <button class="btn btn-primary" @click="openCreateModal">
-                <i class="bi bi-person-plus-fill me-1"></i> Thêm Tài khoản
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th class="ps-3">Khách hàng</th>
-                  <th>Liên hệ</th>
-                  <th>Trạng thái</th>
-                  <th class="text-center">Hành động</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="isLoading">
-                  <td colspan="4" class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status">
-                      <span class="visually-hidden">Loading...</span>
-                    </div>
-                  </td>
-                </tr>
-                <tr v-else-if="filteredCustomers.length === 0">
-                  <td colspan="4" class="text-center py-4 text-muted">
-                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                    {{ searchQuery ? 'Không tìm thấy khách hàng nào.' : 'Không có khách hàng nào.' }}
-                  </td>
-                </tr>
-                <tr v-for="customer in paginatedCustomers" :key="customer.id"
-                  :class="{ 'inactive-row': customer.status !== 'active' }">
-                  <td class="ps-3">
-                    <div class="d-flex align-items-center">
-                      <img
-                        :src="customer.avatar_url || `https://placehold.co/40x40/EBF4FF/1D62F0?text=${(customer.fullName ? customer.fullName.charAt(0) : 'U').toUpperCase()}`"
-                        class="rounded-circle me-3" alt="Avatar" style="width: 40px; height: 40px; object-fit: cover;">
-                      <div>
-                        <div class="fw-bold">{{ customer.fullName }}</div>
-                        <div class="small text-muted">ID: {{ customer.id }}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div v-if="customer.email"><i class="bi bi-envelope me-1 text-muted"></i> {{ customer.email }}</div>
-                    <div v-if="customer.phone"><i class="bi bi-telephone me-1 text-muted"></i> {{ customer.phone }}
-                    </div>
-                  </td>
-                  <td>
-                    <span :class="['badge', customer.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
-                      {{ customer.status === 'active' ? 'Hoạt động' : 'Đã khóa' }}
-                    </span>
-                  </td>
-                  <td class="text-center">
-                    <div class="d-flex justify-content-center align-items-center">
-                      <!-- Toggle Switch -->
-                      <div class="form-check form-switch me-3" title="Khóa/Mở khóa tài khoản">
-                        <input class="form-check-input" type="checkbox" role="switch"
-                          style="width: 2.5em; height: 1.25em; cursor: pointer;" :checked="customer.status === 'active'"
-                          @click.prevent="toggleCustomerStatus(customer)">
-                      </div>
-
-                      <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-secondary" title="Xem chi tiết" @click="openViewModal(customer)">
-                          <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="btn btn-outline-primary" title="Chỉnh sửa" @click="openEditModal(customer)">
-                          <i class="bi bi-pencil"></i>
-                        </button>
-                        <button class="btn btn-outline-danger" title="Xóa" @click="handleDelete(customer)">
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="card-footer clearfix" v-if="totalPages > 1">
-          <div class="d-flex justify-content-between align-items-center">
-            <small class="text-muted">
-              Hiển thị {{ (currentPage - 1) * itemsPerPage + 1 }} đến
-              {{ Math.min(currentPage * itemsPerPage, filteredCustomers.length) }}
-              trong tổng số {{ filteredCustomers.length }} khách hàng
-            </small>
-            <ul class="pagination pagination-sm m-0">
-              <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                <button class="page-link" @click="goToPage(currentPage - 1)">&laquo;</button>
-              </li>
-              <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
-                <button class="page-link" @click="goToPage(page)">{{ page }}</button>
-              </li>
-              <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                <button class="page-link" @click="goToPage(currentPage + 1)">&raquo;</button>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Create/Edit Modal -->
-  <div class="modal fade" id="customerModal" ref="customerModalRef" tabindex="-1" aria-hidden="true"
-    data-bs-backdrop="static">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">{{ isEditMode ? 'Cập nhật Khách hàng' : 'Thêm mới Tài khoản' }}</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="handleSave" id="customerForm">
+    <div class="app-content-header">
+        <div class="container-fluid">
             <div class="row">
-              <!-- Left Column: Avatar & Basic Info -->
-              <div class="col-md-4 text-center mb-3">
-                <div class="mb-3">
-                  <img :src="avatarPreview || 'https://placehold.co/150x150?text=Avatar'"
-                    class="img-thumbnail rounded-circle" alt="Avatar Preview"
-                    style="width: 150px; height: 150px; object-fit: cover;">
+                <div class="col-sm-6"><h3 class="mb-0 text-brand">Quản lý Khách hàng</h3></div>
+                <div class="col-sm-6">
+                    <ol class="breadcrumb float-sm-end">
+                        <li class="breadcrumb-item"><router-link to="/admin">Trang chủ</router-link></li>
+                        <li class="breadcrumb-item active">Khách hàng</li>
+                    </ol>
                 </div>
-                <div class="mb-3">
-                  <label for="avatarInput" class="form-label btn btn-sm btn-outline-primary">
-                    <i class="bi bi-camera-fill"></i> Chọn ảnh
-                  </label>
-                  <input type="file" class="d-none" id="avatarInput" accept="image/*" @change="onFileChange">
-                </div>
-                <!-- Status in Edit Mode -->
-                <div class="mb-3" v-if="isEditMode">
-                  <label for="status" class="form-label fw-bold">Trạng thái</label>
-                  <select class="form-select" id="status" v-model="formData.status">
-                    <option value="active">Hoạt động</option>
-                    <option value="inactive">Đã khóa</option>
-                  </select>
-                </div>
-              </div>
-
-              <!-- Right Column: Personal Details -->
-              <div class="col-md-8">
-                <!-- Full Name (Đã đổi binding từ name sang fullName) -->
-                <div class="mb-3">
-                  <label for="fullName" class="form-label required">Họ và tên</label>
-                  <input type="text" class="form-control" :class="{ 'is-invalid': errors.fullName }" id="fullName"
-                    v-model="formData.fullName">
-                  <div class="invalid-feedback">{{ errors.fullName }}</div>
-                </div>
-                
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label for="email" class="form-label required">Email</label>
-                    <input type="email" class="form-control" :class="{ 'is-invalid': errors.email }" id="email"
-                      v-model="formData.email" :readonly="isEditMode">
-                    <div class="invalid-feedback">{{ errors.email }}</div>
-                    <div v-if="isEditMode" class="form-text">Không thể thay đổi email.</div>
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label for="phone" class="form-label">Số điện thoại</label>
-                    <input type="tel" class="form-control" :class="{ 'is-invalid': errors.phone }" id="phone"
-                      v-model="formData.phone">
-                    <div class="invalid-feedback">{{ errors.phone }}</div>
-                  </div>
-                </div>
-
-                <!-- PASSWORD SECTION (Chỉ hiện khi thêm mới) -->
-                <div class="row" v-if="!isEditMode">
-                  <div class="col-md-6 mb-3">
-                    <label for="password" class="form-label required">Mật khẩu</label>
-                    <input type="password" class="form-control" :class="{ 'is-invalid': errors.password }" id="password"
-                      v-model="formData.password" placeholder="Nhập mật khẩu...">
-                    <div class="invalid-feedback">{{ errors.password }}</div>
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label for="password_confirmation" class="form-label required">Xác nhận mật khẩu</label>
-                    <input type="password" class="form-control" :class="{ 'is-invalid': errors.password_confirmation }"
-                      id="password_confirmation" v-model="formData.password_confirmation" placeholder="Nhập lại mật khẩu...">
-                    <div class="invalid-feedback">{{ errors.password_confirmation }}</div>
-                  </div>
-                </div>
-
-                <div class="mb-3">
-                  <label for="address" class="form-label">Địa chỉ</label>
-                  <textarea class="form-control" id="address" v-model="formData.address" rows="2"></textarea>
-                </div>
-              </div>
             </div>
-
-          </form>
         </div>
-        <div class="modal-footer bg-light">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
-          <button type="submit" form="customerForm" class="btn btn-primary" :disabled="isLoading">
-            <span v-if="isLoading" class="spinner-border spinner-border-sm me-1" role="status"
-              aria-hidden="true"></span>
-            {{ isEditMode ? 'Lưu thay đổi' : 'Tạo tài khoản' }}
-          </button>
-        </div>
-      </div>
     </div>
-  </div>
 
-  <!-- View Details Modal -->
-  <div class="modal fade" id="viewModal" ref="viewModalRef" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-body p-4 position-relative">
-          <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal"
-            aria-label="Close"></button>
+    <div class="app-content">
+        <div class="container-fluid">
+            <div class="card mb-4 shadow-sm border-0">
+                <!-- TABS -->
+                <div class="card-header border-bottom-0 pb-0 bg-white">
+                    <ul class="nav nav-tabs card-header-tabs custom-tabs">
+                        <li class="nav-item">
+                            <a class="nav-link d-flex align-items-center" :class="{ active: activeTab === 'active' }" href="#" @click.prevent="setActiveTab('active')">
+                                <i class="bi bi-check-circle me-1 text-success"></i> Đang hoạt động
+                                <span class="badge rounded-pill bg-success ms-2">{{ statusCounts.active }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link d-flex align-items-center" :class="{ active: activeTab === 'inactive' }" href="#" @click.prevent="setActiveTab('inactive')">
+                                <i class="bi bi-lock-fill me-1 text-danger"></i> Đã khóa
+                                <span class="badge rounded-pill bg-danger ms-2">{{ statusCounts.inactive }}</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
 
-          <!-- Status Badge -->
-          <div class="position-absolute top-0 start-0 m-3">
-            <span :class="['badge', viewingCustomer.status === 'active' ? 'text-bg-success' : 'text-bg-danger']">
-              {{ viewingCustomer.status === 'active' ? 'Đang hoạt động' : 'Đã khóa' }}
-            </span>
-          </div>
+                <!-- FILTER BAR -->
+                <div class="card-body bg-light border-bottom py-3">
+                    <div class="row align-items-center g-3">
+                        <div class="col-md-5 col-12">
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                                <input type="text" class="form-control border-start-0 ps-0" placeholder="Tìm tên, email, SĐT..." v-model="searchQuery">
+                            </div>
+                        </div>
+                        <div class="col-md-7 col-12 text-end">
+                            <button class="btn btn-primary px-4 shadow-sm" @click="openCreateModal">
+                                <i class="bi bi-person-plus-fill me-1"></i> Thêm Khách hàng
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
-          <div class="text-center mb-4 mt-3">
-            <img
-              :src="viewingCustomer.avatar_url || 'https://placehold.co/120x120?text=' + (viewingCustomer.fullName ? viewingCustomer.fullName.charAt(0).toUpperCase() : 'U')"
-              class="rounded-circle img-thumbnail shadow-sm" alt="Avatar"
-              style="width: 120px; height: 120px; object-fit: cover;">
-            <h4 class="mt-3 mb-1">{{ viewingCustomer.fullName }}</h4>
-            <p class="text-muted mb-0">ID: {{ viewingCustomer.id }}</p>
-          </div>
-          
-          <!-- Thông tin chi tiết đầy đủ theo Schema -->
-          <div class="list-group list-group-flush">
-            <div class="list-group-item px-0 d-flex justify-content-between">
-              <span><i class="bi bi-envelope me-2 text-primary"></i> Email:</span>
-              <span class="fw-medium">{{ viewingCustomer.email }}</span>
+                <!-- TABLE -->
+                <div class="card-body p-0">
+                    <div class="tab-content">
+                        <template v-for="tab in ['active', 'inactive']" :key="tab">
+                            <div class="tab-pane fade show active" v-if="activeTab === tab">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0 custom-table">
+                                        <thead class="bg-light text-secondary">
+                                            <tr>
+                                                <th class="ps-3">Khách hàng</th>
+                                                <th>Liên hệ</th>
+                                                <th>Giới tính</th>
+                                                <th>Ngày tạo</th>
+                                                <th class="text-center">Trạng thái</th>
+                                                <th class="text-center pe-3">Hành động</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-if="isLoading"><td colspan="6" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>
+                                            <tr v-else-if="(tab === 'active' ? pagedActive : pagedInactive).data.length === 0">
+                                                <td colspan="6" class="text-center py-5 text-muted fst-italic">Không có tài khoản nào trong mục này.</td>
+                                            </tr>
+                                            <tr v-else v-for="customer in (tab === 'active' ? pagedActive : pagedInactive).data" :key="customer.id">
+                                                <td class="ps-3">
+                                                    <div class="d-flex align-items-center">
+                                                        <img :src="customer.avatar_url" class="rounded-circle me-3 shadow-sm border" style="width: 40px; height: 40px; object-fit: cover;">
+                                                        <div>
+                                                            <div class="fw-bold text-dark">{{ customer.fullName }}</div>
+                                                            <div class="small text-muted">ID: #{{ customer.id }}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex flex-column small">
+                                                        <span class="text-truncate" style="max-width: 200px;"><i class="bi bi-envelope me-1 text-primary"></i> {{ customer.email }}</span>
+                                                        <span class="text-muted mt-1"><i class="bi bi-telephone me-1"></i> {{ customer.phone || '---' }}</span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge rounded-pill fw-normal border" :class="getGenderBadge(customer.sex)">{{ getGenderText(customer.sex) }}</span>
+                                                </td>
+                                                <td class="small text-muted">{{ formatDate(customer.created_at) }}</td>
+                                                <td class="text-center">
+                                                    <div class="form-check form-switch d-flex justify-content-center">
+                                                        <input class="form-check-input custom-switch cursor-pointer" type="checkbox" role="switch"
+                                                            :checked="customer.status === 'active'" 
+                                                            @click.prevent="toggleStatus(customer)" 
+                                                            :title="customer.status === 'active' ? 'Nhấn để khóa' : 'Nhấn để mở khóa'">
+                                                    </div>
+                                                </td>
+                                                <td class="text-center pe-3">
+                                                    <div class="d-flex justify-content-center gap-1">
+                                                        <button class="btn btn-sm btn-light text-secondary border" @click="openViewModal(customer)" title="Xem"><i class="bi bi-eye"></i></button>
+                                                        <button class="btn btn-sm btn-light text-primary border" @click="openEditModal(customer)" title="Sửa"><i class="bi bi-pencil"></i></button>
+                                                        <button class="btn btn-sm btn-light text-danger border" @click="handleDelete(customer)" title="Xóa"><i class="bi bi-trash"></i></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <!-- Pagination -->
+                                <div class="card-footer bg-white border-top-0 py-3" v-if="(tab === 'active' ? pagedActive : pagedInactive).totalPages > 1">
+                                    <ul class="pagination pagination-sm m-0 justify-content-end">
+                                        <li class="page-item" :class="{ disabled: pagination[tab].currentPage === 1 }"><button class="page-link border-0" @click="changePage(tab, pagination[tab].currentPage - 1)">&laquo;</button></li>
+                                        <li v-for="p in (tab === 'active' ? pagedActive : pagedInactive).totalPages" :key="p" class="page-item" :class="{ active: pagination[tab].currentPage === p }"><button class="page-link border-0 rounded-circle mx-1" @click="changePage(tab, p)">{{ p }}</button></li>
+                                        <li class="page-item" :class="{ disabled: pagination[tab].currentPage === (tab === 'active' ? pagedActive : pagedInactive).totalPages }"><button class="page-link border-0" @click="changePage(tab, pagination[tab].currentPage + 1)">&raquo;</button></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
             </div>
-            <div class="list-group-item px-0 d-flex justify-content-between">
-              <span><i class="bi bi-check-circle me-2 text-info"></i> Xác thực Email:</span>
-              <span class="fw-medium">{{ viewingCustomer.email_verified_at ? formatDate(viewingCustomer.email_verified_at) : 'Chưa xác thực' }}</span>
-            </div>
-            <div class="list-group-item px-0 d-flex justify-content-between">
-              <span><i class="bi bi-telephone me-2 text-success"></i> Số điện thoại:</span>
-              <span class="fw-medium">{{ viewingCustomer.phone || 'Trống' }}</span>
-            </div>
-            <div class="list-group-item px-0 d-flex justify-content-between">
-              <span><i class="bi bi-calendar-plus me-2 text-secondary"></i> Ngày tạo:</span>
-              <span class="fw-medium">{{ formatDate(viewingCustomer.created_at) }}</span>
-            </div>
-            <div class="list-group-item px-0 d-flex justify-content-between">
-              <span><i class="bi bi-calendar-check me-2 text-secondary"></i> Cập nhật lần cuối:</span>
-              <span class="fw-medium">{{ formatDate(viewingCustomer.updated_at) }}</span>
-            </div>
-            <div class="list-group-item px-0">
-              <div><i class="bi bi-geo-alt me-2 text-danger"></i> Địa chỉ:</div>
-              <div class="mt-1 text-muted fst-italic">{{ viewingCustomer.address || 'Chưa cập nhật địa chỉ' }}</div>
-            </div>
-          </div>
         </div>
-        <div class="modal-footer bg-light justify-content-center">
-          <button type="button" class="btn btn-primary px-4"
-            @click="() => { viewModalInstance.hide(); openEditModal(viewingCustomer); }">
-            <i class="bi bi-pencil me-2"></i> Chỉnh sửa thông tin
-          </button>
-        </div>
-      </div>
     </div>
-  </div>
 
+    <!-- Create/Edit Modal -->
+    <div class="modal fade" id="customerModal" ref="modalRef" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-brand">{{ isEditMode ? 'Cập nhật Khách hàng' : 'Thêm mới Tài khoản' }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <form @submit.prevent="handleSave" id="customerForm">
+                        <div class="row g-4">
+                            <!-- Left: Avatar & Status -->
+                            <div class="col-md-4 text-center border-end">
+                                <div class="mb-3 position-relative d-inline-block">
+                                    <img :src="avatarPreview || 'https://placehold.co/150x150?text=Avatar'" class="img-thumbnail rounded-circle shadow-sm" style="width: 150px; height: 150px; object-fit: cover;">
+                                    <label for="avatarInput" class="position-absolute bottom-0 end-0 btn btn-sm btn-primary rounded-circle shadow-sm" style="width: 32px; height: 32px; padding: 4px;" title="Đổi ảnh">
+                                        <i class="bi bi-camera-fill"></i>
+                                    </label>
+                                    <input type="file" class="d-none" id="avatarInput" accept="image/*" @change="onFileChange">
+                                </div>
+                                <div class="text-muted small mb-3">Chấp nhận: JPG, PNG, WEBP (Max 5MB)</div>
+                                
+                                <div class="mb-3 text-start px-2" v-if="isEditMode">
+                                    <label class="form-label fw-bold small text-uppercase text-secondary">Trạng thái</label>
+                                    <select class="form-select" v-model="formData.status">
+                                        <option value="active">Hoạt động</option>
+                                        <option value="inactive">Đã khóa</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Right: Info -->
+                            <div class="col-md-8 ps-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label required fw-bold">Họ và tên</label>
+                                    <input type="text" class="form-control" :class="{ 'is-invalid': errors.fullName }" v-model="formData.fullName" placeholder="Nhập họ tên...">
+                                    <div class="invalid-feedback">{{ errors.fullName }}</div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label required fw-bold">Email</label>
+                                        <input type="email" class="form-control" :class="{ 'is-invalid': errors.email }" v-model="formData.email" :readonly="isEditMode">
+                                        <div class="invalid-feedback">{{ errors.email }}</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Số điện thoại</label>
+                                        <input type="tel" class="form-control" :class="{ 'is-invalid': errors.phone }" v-model="formData.phone" placeholder="09xxxxxxxx">
+                                        <div class="invalid-feedback">{{ errors.phone }}</div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Giới tính</label>
+                                        <select class="form-select" v-model="formData.sex">
+                                            <option value="male">Nam</option>
+                                            <option value="female">Nữ</option>
+                                            <option value="other">Khác</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Ngày sinh</label>
+                                        <input type="date" class="form-control" v-model="formData.birthday">
+                                    </div>
+                                </div>
+
+                                <div class="row" v-if="!isEditMode">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label required fw-bold">Mật khẩu</label>
+                                        <input type="password" class="form-control" :class="{ 'is-invalid': errors.password }" v-model="formData.password" placeholder="******">
+                                        <div class="invalid-feedback">{{ errors.password }}</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label required fw-bold">Xác nhận MK</label>
+                                        <input type="password" class="form-control" :class="{ 'is-invalid': errors.password_confirmation }" v-model="formData.password_confirmation" placeholder="******">
+                                        <div class="invalid-feedback">{{ errors.password_confirmation }}</div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Địa chỉ</label>
+                                    <textarea class="form-control" rows="2" v-model="formData.address" placeholder="Số nhà, phường/xã..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer bg-light border-top-0">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" form="customerForm" class="btn btn-primary px-4" :disabled="isSaving">
+                        <span v-if="isSaving" class="spinner-border spinner-border-sm me-1"></span> {{ isEditMode ? 'Lưu thay đổi' : 'Tạo tài khoản' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Modal -->
+    <div class="modal fade" id="viewModal" ref="viewModalRef" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-body p-0 position-relative">
+                    <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal"></button>
+                    <div class="text-center bg-light p-4 rounded-top">
+                        <img :src="viewingCustomer.avatar_url" class="rounded-circle shadow-sm mb-3 border border-3 border-white" style="width: 100px; height: 100px; object-fit: cover;">
+                        <h4 class="fw-bold text-dark mb-1">{{ viewingCustomer.fullName }}</h4>
+                        <span :class="['badge', viewingCustomer.status === 'active' ? 'bg-success' : 'bg-danger']">
+                            {{ viewingCustomer.status === 'active' ? 'Đang hoạt động' : 'Đã khóa' }}
+                        </span>
+                    </div>
+                    <div class="p-4">
+                        <div class="list-group list-group-flush">
+                            <div class="list-group-item px-0 d-flex justify-content-between">
+                                <span class="text-muted"><i class="bi bi-envelope me-2"></i> Email</span>
+                                <span class="fw-medium text-dark">{{ viewingCustomer.email }}</span>
+                            </div>
+                            <div class="list-group-item px-0 d-flex justify-content-between">
+                                <span class="text-muted"><i class="bi bi-telephone me-2"></i> Số điện thoại</span>
+                                <span class="fw-medium text-dark">{{ viewingCustomer.phone || '---' }}</span>
+                            </div>
+                            <div class="list-group-item px-0 d-flex justify-content-between">
+                                <span class="text-muted"><i class="bi bi-gender-ambiguous me-2"></i> Giới tính</span>
+                                <span class="fw-medium text-dark">{{ getGenderText(viewingCustomer.sex) }}</span>
+                            </div>
+                            <div class="list-group-item px-0 d-flex justify-content-between">
+                                <span class="text-muted"><i class="bi bi-cake2 me-2"></i> Ngày sinh</span>
+                                <span class="fw-medium text-dark">{{ formatDate(viewingCustomer.birthday) }}</span>
+                            </div>
+                            <div class="list-group-item px-0">
+                                <div class="text-muted mb-1"><i class="bi bi-geo-alt me-2"></i> Địa chỉ</div>
+                                <div class="small text-dark fst-italic ps-4">{{ viewingCustomer.address || 'Chưa cập nhật' }}</div>
+                            </div>
+                             <div class="list-group-item px-0 d-flex justify-content-between">
+                                <span class="text-muted"><i class="bi bi-calendar-check me-2"></i> Tham gia ngày</span>
+                                <span class="fw-medium text-dark">{{ formatDate(viewingCustomer.created_at) }}</span>
+                            </div>
+                        </div>
+                        <div class="mt-4 text-center">
+                             <button class="btn btn-primary w-100" @click="() => { viewModalInstance.hide(); openEditModal(viewingCustomer); }">
+                                <i class="bi bi-pencil me-2"></i> Chỉnh sửa thông tin
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </template>
 
 <style scoped>
-.required::after {
-  content: " *";
-  color: red;
-}
+/* COLORS */
+.text-brand { color: #009981 !important; }
+.text-primary { color: #009981 !important; }
+.bg-primary { background-color: #009981 !important; }
+.btn-primary { background-color: #009981 !important; border-color: #009981 !important; color: white !important; }
+.btn-primary:hover { background-color: #007a67 !important; border-color: #007a67 !important; }
+.btn-outline-primary { color: #009981 !important; border-color: #009981 !important; }
+.btn-outline-primary:hover { background-color: #009981 !important; color: white !important; }
 
-/* Smooth transition for table rows */
-.table-hover tbody tr {
-  transition: background-color 0.2s;
-}
+/* TABS */
+.custom-tabs .nav-link { color: #6c757d; border: none; font-weight: 500; padding: 12px 20px; border-bottom: 3px solid transparent; cursor: pointer; }
+.custom-tabs .nav-link:hover { color: #009981; }
+.custom-tabs .nav-link.active { color: #009981; background: transparent; border-bottom: 3px solid #009981; }
 
-.form-check-input {
-  width: 2.5em;
-  height: 1.25em;
-}
+/* PAGINATION */
+.page-item.active .page-link { background-color: #009981 !important; border-color: #009981 !important; color: white !important; }
+.page-link { color: #666; cursor: pointer; }
 
-.inactive-row {
-  opacity: 0.65;
-  background-color: #f8f9fa;
-  transition: opacity 0.2s ease-in-out, background-color 0.2s ease-in-out;
-}
-
-.inactive-row:hover {
-  opacity: 1;
-  background-color: #f1f3f5;
-}
+/* COMPONENTS */
+.form-label.required::after { content: " *"; color: red; }
+.cursor-pointer { cursor: pointer; }
+.custom-switch:checked { background-color: #009981; border-color: #009981; }
+:deep(.table-striped-columns) tbody tr td:nth-child(even) { background-color: rgba(0, 0, 0, 0.02); }
+.custom-table th { font-weight: 600; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.5px; }
+.grayscale { filter: grayscale(100%); opacity: 0.6; }
 </style>

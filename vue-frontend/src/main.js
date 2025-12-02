@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import App from "./App.vue";
 import router from "./router/index.js";
 import "./authStore.js";
+import store from './store' 
 
 import VueApexCharts from "vue3-apexcharts";
 
@@ -18,4 +19,6 @@ import "./style.css";
 const app = createApp(App);
 app.use(VueApexCharts);
 app.use(router);
+app.use(store) // Đăng ký Vuex
 app.mount("#app");
+

@@ -5,20 +5,21 @@ namespace App\Http\Controllers\Api\admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Role;
+use Illuminate\Support\Facades\DB; // Import DB để dùng transaction
 
 class AdminRoleController extends Controller
 {
     public function index()
     {
-        $roles = Role::all();
+        // Khi lấy danh sách role, đếm luôn số lượng quyền đã gán (permissions_count)
+        $roles = Role::withCount('permissions')->get();
         return response()->json($roles);
     }
 
     public function store(Request $request)
     {
-        // Validate
         $request->validate([
-            'value' => 'required|unique:role,value|max:50', // Mã role không trùng
+            'value' => 'required|unique:role,value|max:50',
             'label' => 'required|max:100',
         ]);
 
@@ -37,7 +38,8 @@ class AdminRoleController extends Controller
 
     public function show($id)
     {
-        $role = Role::findOrFail($id);
+        // Lấy role kèm theo danh sách quyền đã sở hữu
+        $role = Role::with('permissions')->findOrFail($id);
         return response()->json($role);
     }
 
@@ -58,15 +60,50 @@ class AdminRoleController extends Controller
         }
     }
 
+    /**
+     * [NEW] Hàm Cấp Quyền cho Vai Trò
+     * API: POST /api/admin/roles/{id}/permissions
+     * Body: { "permissions": [1, 2, 5, ...] }  (Mảng các ID của quyền)
+     */
+    public function assignPermissions(Request $request, $id)
+    {
+        $role = Role::findOrFail($id);
+
+        // Validate dữ liệu gửi lên phải là mảng
+        $request->validate([
+            'permissions' => 'array',
+            'permissions.*' => 'integer|exists:permissions,id' // Các ID phải tồn tại
+        ]);
+
+        try {
+            // Sử dụng sync: Tự động thêm quyền mới và gỡ quyền cũ không có trong mảng
+            // Ví dụ: Cũ [1,2], Mới [1,3] -> Xóa 2, Thêm 3 -> Kết quả [1,3]
+            $role->permissions()->sync($request->permissions);
+
+            return response()->json([
+                'message' => 'Đã cập nhật quyền hạn cho vai trò ' . $role->label,
+                'role' => $role->load('permissions') // Trả về role kèm quyền mới
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi cấp quyền: ' . $e->getMessage()], 500);
+        }
+    }
+
     public function destroy($id)
     {
         try {
             $role = Role::findOrFail($id);
-            // Kiểm tra xem có admin nào đang dùng role này không?
-            // Nếu dùng Relationship hasMany trong Model Role thì check: if ($role->admins()->exists()) ...
+            
+            // Chặn xóa các role hệ thống quan trọng
+            if (in_array($role->value, ['admin', 'staff', 'user'])) {
+                return response()->json(['message' => 'Không thể xóa vai trò mặc định của hệ thống.'], 403);
+            }
 
+            // Xóa role (Bảng trung gian role_permissions sẽ tự xóa nhờ Foreign Key Cascade ở DB)
             $role->delete();
-            return response()->json(['message' => 'Đã xóa vai trò']);
+            
+            return response()->json(['message' => 'Đã xóa vai trò thành công']);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Lỗi xóa role: ' . $e->getMessage()], 500);
         }

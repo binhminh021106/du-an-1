@@ -12,7 +12,17 @@ const formData = reactive({
     password: '',
     phone: '',
     confirmPassword: '',
+    sex: ''
 });
+
+// --- HÀM MỚI: QUAY VỀ TRANG CHỦ ---
+const goHome = () => {
+    router.push({ name: 'home' }); // Đảm bảo route 'home' đã tồn tại
+};
+
+const loginWithGoogle = () => {
+    window.location.href = 'http://127.0.0.1:8000/api/auth/google';
+};
 
 const error = reactive({
     fullName: '',
@@ -20,9 +30,11 @@ const error = reactive({
     phone: '',
     password: '',
     confirmPassword: '',
+    sex: '',
     general: '',
     terms: ''
 });
+
 
 const isLoading = ref(false);
 const agreedToTerms = ref(false);
@@ -75,6 +87,12 @@ const validateForm = () => {
         isValid = false;
     }
 
+    if (!formData.sex) {
+        error.sex = 'Vui lòng chọn giới tính';
+        isValid = false;
+    }
+
+
     if (!formData.confirmPassword) {
         error.confirmPassword = 'Vui lòng xác nhận mật khẩu.';
         isValid = false;
@@ -100,7 +118,9 @@ const handleRegister = async () => {
         email: formData.email,
         phone: formData.phone,
         password: formData.password,
+        sex: formData.sex
     };
+
 
     try {
         const res = await apiService.post(`/register`, payload);
@@ -143,7 +163,15 @@ const handleRegister = async () => {
     <div class="login-page-wrapper">
         <div class="login-container">
 
+            <!-- NÚT X ĐỂ VỀ TRANG CHỦ -->
+            <button class="close-btn" @click="goHome" title="Về trang chủ">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
             <div class="promo-section">
+                <router-link to="/" class="thinkhub-logo">
+                    <img src="/src/components/img/LogoThinkHub.png" alt="ThinkHub Logo" />
+                </router-link>
                 <h2>Chào mừng bạn mới!</h2>
                 <p>Tạo tài khoản để quản lý đơn hàng và nhận ưu đãi độc quyền.</p>
 
@@ -188,6 +216,18 @@ const handleRegister = async () => {
                             :class="['form-control', error.phone ? 'is-invalid' : '']">
                         <div v-if="error.phone" class="invalid-feedback d-block">{{ error.phone }}</div>
                     </div>
+
+                    <div class="form-group">
+                        <label for="sex">Giới tính</label>
+                        <select v-model="formData.sex" :class="['form-control', error.sex ? 'is-invalid' : '']">
+                            <option value="">-- Chọn giới tính --</option>
+                            <option value="male">Nam</option>
+                            <option value="female">Nữ</option>
+                            <option value="other">Khác</option>
+                        </select>
+                        <div v-if="error.sex" class="invalid-feedback d-block">{{ error.sex }}</div>
+                    </div>
+
 
                     <div class="form-group">
                         <label for="password">Mật khẩu</label>
@@ -239,7 +279,7 @@ const handleRegister = async () => {
 
                 <div class="separator">Hoặc đăng ký bằng</div>
                 <div class="social-login">
-                    <button class="social-btn">
+                    <button @click="loginWithGoogle" class="social-btn">
                         <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg"
                             alt="Google">
                         Google
@@ -300,7 +340,38 @@ const handleRegister = async () => {
     border-radius: 12px;
     overflow: hidden;
     margin: 20px;
+    /* QUAN TRỌNG: Để nút Close định vị tuyệt đối theo khung này */
+    position: relative;
 }
+
+/* --- STYLE CHO NÚT CLOSE (DẤU X) --- */
+.close-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    color: #999;
+    cursor: pointer;
+    z-index: 10;
+    transition: all 0.2s ease;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.close-btn:hover {
+    background-color: #f0f0f0;
+    color: #333;
+    transform: rotate(90deg);
+    /* Hiệu ứng xoay nhẹ khi hover */
+}
+
+/* --- END STYLE CLOSE BTN --- */
 
 .promo-section {
     padding: 40px;
@@ -395,6 +466,15 @@ const handleRegister = async () => {
 
 
 .login-form input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid black;
+    border-radius: 8px;
+    font-size: 1rem;
+    box-sizing: border-box;
+}
+
+.login-form select {
     width: 100%;
     padding: 12px 15px;
     border: 1px solid black;
@@ -566,6 +646,23 @@ const handleRegister = async () => {
 
     .login-section {
         border-left: none;
+        padding-top: 60px;
     }
+}
+
+.thinkhub-logo {
+    display: inline-block;
+    margin-bottom: 16px;
+}
+
+.thinkhub-logo img {
+    max-width: 200px;
+    height: auto;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.thinkhub-logo img:hover {
+    transform: scale(1.05);
 }
 </style>
