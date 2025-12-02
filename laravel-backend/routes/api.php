@@ -3,6 +3,10 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+// ==============================================================================
+// 1. IMPORT CONTROLLERS (CLIENT & ADMIN)
+// ==============================================================================
+
 // --- CLIENT CONTROLLERS ---
 use App\Http\Controllers\Api\Client\ProductController;
 use App\Http\Controllers\Api\Client\CategoryController;
@@ -20,6 +24,8 @@ use App\Http\Controllers\Api\Client\CartController;
 use App\Http\Controllers\Api\Client\OrderController;
 use App\Http\Controllers\Api\Client\AuthController;
 use App\Http\Controllers\Api\Client\BrandSlideController;
+// [NEW] Import Wishlist Controller
+use App\Http\Controllers\Api\Client\WishlistController;
 
 // --- ADMIN CONTROLLERS (NAMESPACE CHUẨN: 'admin' viết thường) ---
 // [FIX] Sửa lại namespace cho khớp với file controller thực tế
@@ -40,6 +46,7 @@ use App\Http\Controllers\Api\admin\AminAccountController; // Note: Tên file g�
 use App\Http\Controllers\Api\admin\AdminBrandSlideController;
 use App\Http\Controllers\Api\admin\AdminAttributeController;
 use App\Http\Controllers\Api\admin\AdminPermissionController;
+use App\Http\Controllers\Api\admin\AdminBrandController; // [ADD] Import controller Brand Admin
 
 /* API Routes */
 
@@ -52,6 +59,11 @@ Route::get('auth/google/callback', [AuthController::class, 'handleGoogleCallback
 
 Route::post('/admin/register', [AdminAuthController::class, 'register']);
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
+
+// [FIX] Thêm route login giả để tránh lỗi 500 "Route [login] not defined" khi token hết hạn
+Route::get('/login', function () {
+    return response()->json(['message' => 'Unauthenticated.'], 401);
+})->name('login');
 
 
 // --- PUBLIC DATA (CLIENT) ---
@@ -98,6 +110,30 @@ Route::get('/order/{id}', [OrderController::class, 'show']);
 Route::get('/brands', [BrandSlideController::class, 'index']);
 Route::get('/brand/{id}', [BrandSlideController::class, 'show']);
 
+
+// ==============================================================================
+// 4. CLIENT PROTECTED ROUTES (Phải đăng nhập mới dùng được)
+// ==============================================================================
+Route::middleware(['auth:sanctum'])->group(function () {
+    
+    // --- GIỎ HÀNG (DATABASE) ---
+    // Route này giúp FE lưu sản phẩm vào bảng cart_items
+    Route::post('/cart/add', [CartController::class, 'addToCart']);
+    
+    // --- YÊU THÍCH (WISHLIST) [MỚI] ---
+    // Route này để xem danh sách yêu thích
+    Route::get('/wishlist', [WishlistController::class, 'index']);
+    // Route này để thêm/xóa yêu thích (Toggle)
+    Route::post('/wishlist/toggle', [WishlistController::class, 'toggle']);
+
+    // --- USER INFO ---
+    // Lấy thông tin chính chủ đang đăng nhập (để hiển thị lên Header, Profile...)
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    });
+});
+
+
 // --- ADMIN ROUTES ---
 Route::group([
     'prefix' => 'admin',
@@ -105,16 +141,13 @@ Route::group([
 ], function () {
     Route::apiResource('products', AdminProductController::class);
 
-    // [FIX] Route custom update-order PHẢI đặt trước apiResource
+    // Route custom update-order PHẢI đặt trước apiResource
     Route::post('categories/update-order', [AdminCategoryController::class, 'updateOrder']);
     Route::apiResource('categories', AdminCategoryController::class);
     
     Route::apiResource('users', AdminUserController::class);
 
-    // Resource variants chuẩn (CRUD cơ bản)
     Route::apiResource('variants', AdminVariantController::class);
-
-    // Route này ánh xạ POST /api/admin/variants/{id}/attributes -> hàm updateAttributes
     Route::post('variants/{id}/attributes', [AdminVariantController::class, 'updateAttributes']);
 
     Route::get('coupons/trashed', [AdminCouponController::class, 'trashed']);
@@ -122,7 +155,6 @@ Route::group([
     Route::delete('coupons/{id}/force', [AdminCouponController::class, 'forceDelete']);
     Route::apiResource('comments', AdminCommentController::class);
     Route::apiResource('coupons', AdminCouponController::class);
-
 
     // --- XỬ LÝ ẢNH ---
     Route::post('imageProducts/bulk-delete', [AdminImageProductController::class, 'bulkDestroy']);
@@ -133,28 +165,21 @@ Route::group([
     Route::apiResource('reviews', AdminReviewController::class);
     
     // --- QUẢN LÝ QUYỀN HẠN & VAI TRÒ (RBAC) ---
-    // 1. Lấy danh sách tất cả quyền (Permissions) để hiển thị checkbox
     Route::get('permissions', [AdminPermissionController::class, 'index']);
-    
-    // 2. Gán quyền cho Role (Cập nhật bảng role_permissions)
     Route::post('roles/{id}/permissions', [AdminRoleController::class, 'assignPermissions']);
-    
-    // 3. CRUD Role cơ bản
     Route::apiResource('roles', AdminRoleController::class);
 
-    // [NEW] Route sắp xếp Slide - Đặt trước apiResource
     Route::post('slides/update-order', [AdminSlideController::class, 'updateOrder']);
     Route::apiResource('slides', AdminSlideController::class);
     
     Route::apiResource('admins', AminAccountController::class); 
     
-    // [NEW] Route sắp xếp Brand - Đặt trước apiResource
-    Route::post('brands/update-order', [AdminBrandSlideController::class, 'updateOrder']);
-    Route::apiResource('brands', AdminBrandSlideController::class);
+    // --- QUẢN LÝ THƯƠNG HIỆU ---
+    // Route này dùng AdminBrandController (Quản lý CRUD đầy đủ) thay vì AdminBrandSlideController (chỉ slide)
+    Route::get('brands/trashed', [AdminBrandController::class, 'trashed']); // Thùng rác
+    Route::post('brands/{id}/restore', [AdminBrandController::class, 'restore']); // Khôi phục
+    Route::delete('brands/{id}/force', [AdminBrandController::class, 'forceDelete']); // Xóa vĩnh viễn
+    Route::apiResource('brands', AdminBrandController::class); 
 
     Route::apiResource('attributes', AdminAttributeController::class);
-});
-
-Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
-    return $request->user();
 });

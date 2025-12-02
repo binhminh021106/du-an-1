@@ -2,7 +2,7 @@
 import { reactive, ref, onMounted, watch, computed } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
-import "@fortawesome/fontawesome-free/css/all.min.css";
+// import "@fortawesome/fontawesome-free/css/all.min.css";
 
 const fileInput = ref(null);
 const router = useRouter();
@@ -28,7 +28,7 @@ const editUser = reactive({
   name: "",
   email: "",
   birthday: "", // Thay thế age bằng birthday
-  sex: "Nam",   // Thay gender bằng sex cho khớp DB
+  sex: "",   // Thay gender bằng sex cho khớp DB
   phone: "",
   addresses: [],
 });
@@ -217,9 +217,27 @@ const saveAddressFromModal = () => {
   if (editUser.addresses.length === 0) tempAddress.is_default = true;
 
   if (isEditingIndex.value === -1) {
+    // Trường hợp thêm mới
     editUser.addresses.push({ ...tempAddress });
+    Swal.fire({
+      icon: 'success',
+      title: 'Thêm địa chỉ thành công!',
+      showConfirmButton: false,
+      timer: 1500,
+      background: '#f0fff4',
+      color: '#009981',
+    });
   } else {
+    // Trường hợp cập nhật
     editUser.addresses[isEditingIndex.value] = { ...tempAddress };
+    Swal.fire({
+      icon: 'success',
+      title: 'Cập nhật địa chỉ thành công!',
+      showConfirmButton: false,
+      timer: 1500,
+      background: '#f0fff4',
+      color: '#009981',
+    });
   }
   showModal.value = false;
 };

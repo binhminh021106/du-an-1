@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\BrandSlide;
 use Illuminate\Support\Facades\File; // Sử dụng File facade cho nhất quán
-// use Illuminate\Support\Facades\Storage; // Bỏ cái này để đồng bộ logic
 
 class AdminBrandSlideController extends Controller
 {
@@ -58,13 +57,15 @@ class AdminBrandSlideController extends Controller
                 'status'       => $request->status,
             ]);
 
-            // 2. Xử lý upload ảnh sau khi có ID -> Đổi tên thành brand_{ID}
+            // 2. Xử lý upload ảnh sau khi có ID -> Đổi tên thành brand_{ID}_{RANDOM}
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
                 $extension = $file->getClientOriginalExtension();
                 
-                // Tên file chuẩn: brand_1.png
-                $fileName = 'brand_' . $brand->id . '.' . $extension;
+                // --- THAY ĐỔI: Thêm số random vào tên file ---
+                // Sử dụng mt_rand() để tạo số ngẫu nhiên 6 chữ số
+                $randomNum = mt_rand(100000, 999999);
+                $fileName = 'brand_' . $brand->id . '_' . $randomNum . '.' . $extension;
                 
                 // Đường dẫn lưu: public/uploads/brands
                 $path = public_path('uploads/brands');
@@ -120,10 +121,13 @@ class AdminBrandSlideController extends Controller
                     }
                 }
 
-                // 2. Lưu ảnh mới với tên chuẩn brand_{ID}
+                // 2. Lưu ảnh mới với tên chuẩn brand_{ID}_{RANDOM}
                 $file = $request->file('image');
                 $extension = $file->getClientOriginalExtension();
-                $fileName = 'brand_' . $brand->id . '.' . $extension;
+                
+                // --- THAY ĐỔI: Thêm số random vào tên file ---
+                $randomNum = mt_rand(100000, 999999);
+                $fileName = 'brand_' . $brand->id . '_' . $randomNum . '.' . $extension;
                 
                 $path = public_path('uploads/brands');
 

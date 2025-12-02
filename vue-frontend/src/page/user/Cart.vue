@@ -1,89 +1,106 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { onMounted, computed, watch } from "vue";
 import { useStore } from "vuex"; 
-import { useRouter } from "vue-router"; // Import router để chuyển trang bằng code
+import { useRouter } from "vue-router"; 
 
 const store = useStore(); 
 const router = useRouter();
 
+// Lấy cart từ getter
 const cart = computed(() => store.getters.cartItems);
 
-// Tính tổng tiền dựa trên việc có chọn item nào không
-// Nếu có chọn -> Tính tổng item đã chọn. Nếu không -> Tính tổng tất cả
-const total = computed(() => {
-    if (selectedItems.value.length > 0) {
-        return cart.value
-            .filter(item => selectedItems.value.includes(item.cartId))
-            .reduce((sum, item) => sum + (Number(item.price) * Number(item.qty)), 0);
+// Hàm tiện ích: Xử lý giá an toàn (chuyển string "1.000.000" -> number 1000000)
+const parsePrice = (value) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+        return Number(value.replace(/[^0-9]/g, ''));
     }
-    return store.getters.cartTotal;
+    return 0;
+};
+
+// Tính tổng tiền: Luôn tính tất cả sản phẩm trong giỏ
+const total = computed(() => {
+    return cart.value.reduce((sum, item) => sum + (parsePrice(item.price) * Number(item.qty)), 0);
 });
 
-const selectedItems = ref([]);
+// --- HELPER: LẤY TÊN BIẾN THỂ AN TOÀN ---
+const getVariantLabel = (item) => {
+    // Ưu tiên 1: Check variantName (camelCase)
+    if (item.variantName && item.variantName !== 'Mặc định') return item.variantName;
+    
+    // Ưu tiên 2: Check variant_name (snake_case - thường gặp ở Laravel)
+    if (item.variant_name && item.variant_name !== 'Mặc định') return item.variant_name;
+    
+    // Ưu tiên 3: Nếu có SKU thì hiển thị SKU để phân biệt
+    if (item.sku) return `SKU: ${item.sku}`;
+
+    // Ưu tiên 4: Nếu backend trả về mảng attributes (ví dụ: [{name: 'Màu', value: 'Đen'}])
+    if (Array.isArray(item.attributes) && item.attributes.length > 0) {
+        return item.attributes.map(a => `${a.name || ''}: ${a.value || ''}`).join(' - ');
+    }
+    
+    return null;
+};
 
 // --- CẤU HÌNH API ---
 const SERVER_URL = 'http://127.0.0.1:8000'; 
 const USE_STORAGE = false; 
 
 const getImageUrl = (path) => {
-  if (!path) return 'https://placehold.co/70x70?text=No+Img';
+  if (!path) return 'https://placehold.co/100x100?text=No+Img';
   if (path.startsWith('http')) return path;
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
   return USE_STORAGE ? `${SERVER_URL}/storage/${cleanPath}` : `${SERVER_URL}/${cleanPath}`;
 };
 
 const formatPrice = (v) => {
-    if(v === undefined || v === null || isNaN(v)) return "0 ₫";
-    return Number(v).toLocaleString("vi-VN") + "\u00A0₫";
+    const price = parsePrice(v);
+    if(isNaN(price)) return "0 ₫";
+    return price.toLocaleString("vi-VN") + " ₫";
 }
 
 onMounted(() => {
   store.dispatch('enrichCartData');
 });
 
+// Debug: Log dữ liệu cart khi thay đổi để kiểm tra cấu trúc API trả về
+watch(cart, (newVal) => {
+    if(newVal && newVal.length > 0) {
+        console.log("🛒 Dữ liệu Giỏ hàng hiện tại:", newVal);
+    }
+});
+
 // --- ACTIONS ---
 const removeItem = (cartId) => {
+    if(!confirm("Bạn muốn xóa sản phẩm này khỏi giỏ hàng?")) return;
     store.dispatch('removeItem', cartId);
-    // Xóa khỏi danh sách selected nếu đang chọn
-    selectedItems.value = selectedItems.value.filter(id => id !== cartId);
 }
 
-const updateQty = (cartId, qty) => {
-    let newQty = parseInt(qty);
-    if (!newQty || newQty < 1) newQty = 1;
+const updateQty = (cartId, currentQty, change) => {
+    let newQty = parseInt(currentQty) + change;
+    // Tìm item để check stock
+    const item = cart.value.find(i => i.cartId === cartId);
+    const maxStock = item ? (item.stock || 999) : 999;
+
+    if (newQty < 1) return; // Không cho giảm dưới 1
+    if (newQty > maxStock) {
+        alert(`Sản phẩm này chỉ còn ${maxStock} món trong kho!`);
+        return;
+    }
+    
     store.dispatch('updateItemQty', { cartId, qty: newQty });
 }
 
-const removeSelected = () => {
-  if (!selectedItems.value.length) return;
-  if (!confirm(`Xóa ${selectedItems.value.length} sản phẩm đã chọn?`)) return;
-  selectedItems.value.forEach((id) => store.dispatch('removeItem', id));
-  selectedItems.value = [];
-};
-
-const removeAll = () => {
-  if (!confirm("Xóa tất cả giỏ hàng?")) return;
-  store.dispatch('clearCart');
-  selectedItems.value = [];
-};
-
 // --- XỬ LÝ THANH TOÁN ---
 const proceedToCheckout = () => {
-    // Logic: Nếu có chọn checkbox -> Chỉ thanh toán item đó (Lưu vào localStorage hoặc State để trang Checkout đọc)
-    // Ở đây mình làm ví dụ đơn giản: Chuyển trang và kèm query params
-    
-    let itemsToCheckout = [];
-    if (selectedItems.value.length > 0) {
-        itemsToCheckout = selectedItems.value;
-    } else {
-        // Nếu không chọn gì cả, mặc định là thanh toán hết (lấy tất cả cartId)
-        itemsToCheckout = cart.value.map(item => item.cartId);
+    if (cart.value.length === 0) {
+        alert("Giỏ hàng đang trống!");
+        return;
     }
-
-    // Bạn có thể lưu tạm vào localStorage để trang Checkout lấy ra xử lý
-    localStorage.setItem('checkout_items', JSON.stringify(itemsToCheckout));
     
-    // Chuyển hướng
+    // Lấy toàn bộ sản phẩm để thanh toán
+    const itemsToCheckout = cart.value.map(item => item.cartId);
+    localStorage.setItem('checkout_items', JSON.stringify(itemsToCheckout));
     router.push('/checkout');
 }
 </script>
@@ -91,150 +108,403 @@ const proceedToCheckout = () => {
 <template>
   <div class="cart-page">
     <div class="container">
-      <div class="cart-card">
-        <h2>🛍️ Giỏ hàng của bạn</h2>
+      
+      <!-- HEADER -->
+      <div class="page-header">
+        <h1><i class="fa-solid fa-bag-shopping"></i> Giỏ hàng của bạn</h1>
+        <span class="item-count">{{ cart.length }} sản phẩm</span>
+      </div>
 
-        <div v-if="cart.length" class="top-actions">
-          <button 
-            class="small-btn danger" 
-            @click="removeSelected" 
-            :disabled="!selectedItems.length"
-          >
-            <i class="fas fa-trash-alt"></i> Xóa ({{ selectedItems.length }})
-          </button>
+      <div v-if="cart.length === 0" class="empty-state">
+          <img src="https://cdni.iconscout.com/illustration/premium/thumb/empty-cart-2130356-1800917.png" alt="Empty Cart">
+          <h3>Giỏ hàng đang trống</h3>
+          <p>Hãy dạo một vòng và chọn những món đồ ưng ý nhé!</p>
+          <router-link to="/shop" class="btn-primary">Tiếp tục mua sắm</router-link>
+      </div>
 
-          <button class="small-btn danger" @click="removeAll">
-            <i class="fas fa-dumpster"></i> Xóa tất cả
-          </button>
-        </div>
+      <div v-else class="cart-layout">
+        
+        <!-- CỘT TRÁI: DANH SÁCH ITEM -->
+        <div class="cart-items-section">
+            
+            <!-- List Item Cards -->
+            <div class="item-list">
+                <div 
+                    v-for="item in cart" 
+                    :key="item.cartId" 
+                    class="cart-item-card"
+                >
+                    <!-- Image -->
+                    <div class="item-image">
+                        <router-link :to="`/products/${item.id}`">
+                             <img :src="getImageUrl(item.thumbnail_url || item.image_url)" alt="Product">
+                        </router-link>
+                    </div>
 
-        <table v-if="cart.length" class="cart-table">
-          <thead>
-            <tr>
-              <th width="5%">
-                <!-- Checkbox chọn tất cả (Optional) -->
-              </th>
-              <th width="40%">Sản phẩm</th>
-              <th width="15%">Danh mục</th>
-              <th width="15%">Giá</th>
-              <th width="10%">Số lượng</th>
-              <th width="15%">Tạm tính</th>
-              <th width="5%"></th> 
-            </tr>
-          </thead>
+                    <!-- Content -->
+                    <div class="item-content">
+                        <div class="item-info">
+                            <span class="category-tag">{{ item.categoriesName || "Sản phẩm" }}</span>
+                            <router-link :to="`/products/${item.id}`" class="item-name">
+                                {{ item.name }}
+                            </router-link>
+                            
+                            <!-- FIX: Sử dụng hàm getVariantLabel để hiển thị đa năng -->
+                            <div class="item-variants" v-if="getVariantLabel(item)">
+                                <span class="variant-badge">
+                                    <i class="fa-solid fa-layer-group"></i> {{ getVariantLabel(item) }}
+                                </span>
+                            </div>
+                        </div>
 
-          <tbody>
-            <tr v-for="item in cart" :key="item.cartId">
-              <td>
-                  <input type="checkbox" v-model="selectedItems" :value="item.cartId" />
-              </td>
-              
-              <td>
-                <div class="product-info">
-                  <router-link :to="`/products/${item.id}`">
-                    <img 
-                      :src="getImageUrl(item.thumbnail_url || item.image_url)" 
-                      alt="Product"
-                      @error="$event.target.src='https://placehold.co/70x70?text=No+Img'" 
-                    />
-                  </router-link>
-                  <div class="product-details">
-                    <router-link :to="`/products/${item.id}`" class="product-name">
-                      {{ item.name }}
-                    </router-link>
-                    
-                    <small v-if="item.variantName && item.variantName !== 'Mặc định'">
-                      Phân loại: <strong>{{ item.variantName }}</strong>
-                    </small>
-                  </div>
+                        <div class="item-actions-mobile">
+                            <!-- Giá -->
+                            <div class="item-price">
+                                {{ formatPrice(item.price) }}
+                            </div>
+
+                            <!-- Bộ tăng giảm số lượng -->
+                            <div class="qty-control">
+                                <button @click="updateQty(item.cartId, item.qty, -1)" :disabled="item.qty <= 1">-</button>
+                                <input type="number" :value="item.qty" readonly>
+                                <button @click="updateQty(item.cartId, item.qty, 1)" :disabled="item.qty >= (item.stock || 999)">+</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Delete Button (Desktop) -->
+                    <button class="btn-remove-item" @click="removeItem(item.cartId)" title="Xóa">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
-              </td>
+            </div>
+        </div>
 
-              <!-- FIX: Đổi từ item.categoryName thành item.categoriesName cho khớp với Store -->
-              <td>
-                <span class="badge-category">
-                  {{ item.categoriesName || "Khác" }}
-                </span>
-              </td>
-              
-              <td class="price">{{ formatPrice(item.price) }}</td>
-              <td>
-                <input 
-                  type="number" 
-                  min="1" 
-                  :max="item.stock || 999" 
-                  :value="item.qty"
-                  @change="updateQty(item.cartId, $event.target.value)" 
-                />
-              </td>
-              <td class="total-price">{{ formatPrice(item.qty * item.price) }}</td>
-              <td>
-                <button class="remove-btn" @click="removeItem(item.cartId)">
-                  <i class="fa fa-trash"></i>
+        <!-- CỘT PHẢI: TỔNG KẾT (Sticky) -->
+        <div class="cart-summary-section">
+            <div class="summary-card">
+                <h3>Thanh toán</h3>
+                
+                <div class="summary-row">
+                    <span>Số lượng:</span>
+                    <span>{{ cart.length }} món</span>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <div class="summary-row total">
+                    <span>Tổng cộng:</span>
+                    <span class="price-highlight">{{ formatPrice(total) }}</span>
+                </div>
+
+                <div class="summary-note">
+                    * Đã bao gồm thuế VAT (nếu có)
+                </div>
+
+                <button 
+                    @click="proceedToCheckout" 
+                    class="btn-checkout"
+                    :disabled="cart.length === 0"
+                >
+                    Mua Hàng ngay
                 </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div v-else class="empty-cart">
-            <i class="fa-solid fa-cart-shopping"></i>
-            <p>Giỏ hàng của bạn đang trống.</p>
-            <router-link to="/" class="continue-shopping">Tiếp tục mua sắm</router-link>
+                
+                <router-link to="/shop" class="link-continue">
+                    <i class="fa-solid fa-arrow-left"></i> Tiếp tục chọn đồ
+                </router-link>
+            </div>
         </div>
 
-        <div v-if="cart.length" class="cart-footer">
-          <div class="total-section">
-            <h3>Tổng thanh toán ({{ selectedItems.length > 0 ? selectedItems.length : cart.length }} món):</h3>
-            <span class="total-amount">{{ formatPrice(total) }}</span>
-          </div>
-          
-          <!-- Thay router-link bằng button để xử lý logic trước khi đi -->
-          <button @click="proceedToCheckout" class="checkout-btn">
-             Thanh toán <i class="fas fa-arrow-right" style="margin-left:5px"></i>
-          </button>
-        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* Giữ nguyên style cũ của bạn, code CSS của bạn đã khá ổn */
+/* Reset & Base */
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-.cart-page { padding: 50px 15px; background-color: #f8f9fa; min-height: 100vh; }
-.cart-card { background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); max-width: 1100px; margin: auto; }
-h2 { color: #2c3e50; margin-bottom: 25px; font-weight: 700; border-bottom: 2px solid #eee; padding-bottom: 15px; }
-.top-actions { display: flex; gap: 12px; margin-bottom: 20px; }
-.small-btn { padding: 8px 16px; font-size: 13px; border-radius: 6px; border: none; cursor: pointer; font-weight: 500; transition: all 0.2s; display: flex; align-items: center; gap: 5px; }
-.small-btn.danger { background: #fff0f0; color: #e74c3c; border: 1px solid #ffcccc; }
-.small-btn.danger:hover { background: #e74c3c; color: white; border-color: #ff7675; }
-.small-btn:disabled { opacity: 0.5; cursor: not-allowed; background: #f5f5f5; color: #aaa; border-color: #eee; }
-.cart-table { width: 100%; border-collapse: separate; border-spacing: 0 15px; }
-.cart-table th { background: transparent; color: #7f8c8d; padding: 10px; text-align: left; font-weight: 600; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; }
-.cart-table td { padding: 15px 10px; background: #fff; border-top: 1px solid #f1f2f6; border-bottom: 1px solid #f1f2f6; vertical-align: middle; }
-.cart-table td:first-child { border-left: 1px solid #f1f2f6; border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
-.cart-table td:last-child { border-right: 1px solid #f1f2f6; border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
-.product-info { display: flex; align-items: center; gap: 15px; }
-.product-info img { width: 70px; height: 70px; border-radius: 8px; border: 1px solid #eee; object-fit: cover; transition: transform 0.2s; }
-.product-info img:hover { transform: scale(1.05); }
-.product-details { display: flex; flex-direction: column; gap: 5px; }
-.product-name { font-weight: 600; color: #2c3e50; text-decoration: none; font-size: 15px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.product-name:hover { color: #009981; }
-.badge-category { background-color: #eef2f7; color: #4a69bd; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-.cart-table input[type="number"] { width: 60px; padding: 8px; text-align: center; border: 1px solid #dfe6e9; border-radius: 6px; font-weight: 600; color: #2d3436; }
-.cart-table input[type="number"]:focus { border-color: #009981; outline: none; }
-.total-price { color: #009981; font-weight: 700; font-size: 15px; }
-.remove-btn { width: 35px; height: 35px; border-radius: 50%; border: 1px solid #eee; background: white; color: #bdc3c7; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
-.remove-btn:hover { background: #ff7675; color: white; border-color: #ff7675; }
-.cart-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; padding-top: 25px; border-top: 2px dashed #dfe6e9; }
-.total-section h3 { font-size: 16px; color: #636e72; margin-bottom: 5px; }
-.total-amount { color: #d63031; font-size: 26px; font-weight: 700; }
-.checkout-btn { background: #009981; color: white; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; box-shadow: 0 4px 10px rgba(0, 153, 129, 0.3); transition: transform 0.2s; display: flex; align-items: center; gap: 10px; border:none; cursor: pointer; }
-.checkout-btn:hover { transform: translateY(-2px); background: #007a67; }
-.empty-cart { text-align: center; padding: 80px 20px; color: #b2bec3; }
-.empty-cart i { font-size: 60px; margin-bottom: 20px; opacity: 0.5; }
-.continue-shopping { color: #009981; text-decoration: none; font-weight: 600; border: 1px solid #009981; padding: 10px 25px; border-radius: 6px; margin-top: 15px; display: inline-block; transition: all 0.2s; }
-.continue-shopping:hover { background: #009981; color: white; }
+.cart-page {
+    font-family: 'Inter', sans-serif;
+    background-color: #f3f4f6;
+    min-height: 100vh;
+    padding: 40px 15px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Header */
+.page-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+.page-header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0;
+}
+.item-count {
+    background: #e5e7eb;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 14px;
+    color: #4b5563;
+    font-weight: 600;
+}
+
+/* Layout Grid */
+.cart-layout {
+    display: grid;
+    grid-template-columns: 1fr 350px; /* Cột trái to, cột phải cố định 350px */
+    gap: 25px;
+    align-items: start;
+}
+
+/* Item Card - THE IMPORTANT PART */
+.cart-item-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: flex-start; /* Căn hàng trên cùng */
+    gap: 20px;
+    margin-bottom: 15px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: box-shadow 0.2s;
+    border: 1px solid transparent;
+    position: relative;
+}
+.cart-item-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.item-image img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+}
+
+.item-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 100px;
+}
+
+.item-info { display: flex; flex-direction: column; gap: 5px; }
+
+.category-tag {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #6b7280;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.item-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+    text-decoration: none;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-right: 30px; /* Tránh đè lên nút xóa */
+}
+.item-name:hover { color: #10b981; }
+
+.item-variants { margin-top: 5px; }
+.variant-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #f3f4f6;
+    color: #4b5563;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    border: 1px solid #e5e7eb;
+}
+
+.item-actions-mobile {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 15px;
+}
+
+.item-price {
+    font-size: 16px;
+    font-weight: 700;
+    color: #059669;
+}
+
+/* Quantity Control - Custom Button */
+.qty-control {
+    display: flex;
+    align-items: center;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: white;
+}
+.qty-control button {
+    width: 30px;
+    height: 30px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 16px;
+    color: #374151;
+    transition: background 0.2s;
+}
+.qty-control button:hover:not(:disabled) { background: #f3f4f6; }
+.qty-control button:disabled { color: #d1d5db; cursor: not-allowed; }
+.qty-control input {
+    width: 40px;
+    text-align: center;
+    border: none;
+    font-weight: 600;
+    font-size: 14px;
+    color: #111827;
+    outline: none;
+    /* Hide spin button */
+    -moz-appearance: textfield;
+}
+.qty-control input::-webkit-outer-spin-button,
+.qty-control input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.btn-remove-item {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: transparent;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    font-size: 18px;
+    transition: color 0.2s;
+}
+.btn-remove-item:hover { color: #ef4444; }
+
+/* Summary Column */
+.cart-summary-section {
+    position: sticky;
+    top: 20px; /* Trượt theo màn hình */
+}
+
+.summary-card {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+.summary-card h3 {
+    margin-top: 0;
+    color: #111827;
+    font-size: 18px;
+    margin-bottom: 20px;
+}
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    color: #4b5563;
+    font-size: 15px;
+}
+.summary-row.total {
+    color: #111827;
+    font-weight: 700;
+    font-size: 18px;
+    margin-top: 15px;
+}
+.price-highlight { color: #059669; }
+.divider { border-top: 1px dashed #d1d5db; margin: 15px 0; }
+.summary-note {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-bottom: 10px;
+    font-style: italic;
+    text-align: right;
+}
+
+.btn-checkout {
+    width: 100%;
+    background: #10b981;
+    color: white;
+    border: none;
+    padding: 15px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.btn-checkout:hover:not(:disabled) {
+    background: #059669;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+.btn-checkout:disabled {
+    background: #d1d5db;
+    cursor: not-allowed;
+}
+
+.link-continue {
+    display: block;
+    text-align: center;
+    margin-top: 15px;
+    color: #6b7280;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+}
+.link-continue:hover { color: #10b981; }
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: white;
+    border-radius: 12px;
+}
+.empty-state img { width: 200px; margin-bottom: 20px; opacity: 0.8; }
+.empty-state h3 { font-size: 20px; color: #111827; margin-bottom: 10px; }
+.empty-state p { color: #6b7280; margin-bottom: 25px; }
+.btn-primary {
+    background: #10b981;
+    color: white;
+    padding: 10px 25px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .cart-layout { grid-template-columns: 1fr; }
+    .cart-summary-section { position: static; }
+}
+
+@media (max-width: 576px) {
+    .cart-item-card { flex-direction: column; gap: 15px; position: relative; }
+    .item-image { width: 100%; }
+    .item-image img { width: 100%; height: 200px; }
+    .btn-remove-item { top: 15px; right: 15px; background: white; padding: 5px; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .item-actions-mobile { flex-direction: row; justify-content: space-between; width: 100%; margin-top: 10px; }
+}
 </style>

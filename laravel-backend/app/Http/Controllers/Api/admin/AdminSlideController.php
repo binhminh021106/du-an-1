@@ -65,13 +65,14 @@ class AdminSlideController extends Controller
                 'status'       => $request->status,
             ]);
 
-            // 2. Xử lý upload ảnh sau khi có ID -> Đổi tên thành slide_{ID}
+            // 2. Xử lý upload ảnh sau khi có ID -> Đổi tên thành slide_{ID}_{RANDOM}
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
                 $extension = $file->getClientOriginalExtension();
                 
-                // Tên file chuẩn: slide_1.jpg
-                $fileName = 'slide_' . $slide->id . '.' . $extension;
+                // --- THAY ĐỔI: Thêm số random vào tên file ---
+                $randomNum = mt_rand(100000, 999999);
+                $fileName = 'slide_' . $slide->id . '_' . $randomNum . '.' . $extension;
                 
                 // Đường dẫn lưu: public/uploads/slides
                 $path = public_path('uploads/slides');
@@ -141,10 +142,13 @@ class AdminSlideController extends Controller
                     }
                 }
 
-                // 2. Upload ảnh mới chuẩn tên slide_{ID}
+                // 2. Upload ảnh mới chuẩn tên slide_{ID}_{RANDOM}
                 $file = $request->file('image');
                 $extension = $file->getClientOriginalExtension();
-                $fileName = 'slide_' . $slide->id . '.' . $extension;
+                
+                // --- THAY ĐỔI: Thêm số random vào tên file ---
+                $randomNum = mt_rand(100000, 999999);
+                $fileName = 'slide_' . $slide->id . '_' . $randomNum . '.' . $extension;
                 
                 $path = public_path('uploads/slides');
 

@@ -82,8 +82,11 @@ class AdminProductController extends Controller
             if ($request->hasFile('thumbnail')) {
                 $file = $request->file('thumbnail');
                 
-                // Đặt tên file theo chuẩn: thumb_PRODUCTID.ext (Dễ quản lý, tránh trùng lặp)
-                $filename = 'thumb_' . $product->id . '.' . $file->getClientOriginalExtension();
+                // --- THAY ĐỔI: Thêm số random vào tên file ---
+                // Format: thumb_{ID}_{RANDOM}.ext
+                $randomNum = mt_rand(100000, 999999);
+                $filename = 'thumb_' . $product->id . '_' . $randomNum . '.' . $file->getClientOriginalExtension();
+                
                 $path = public_path('thumbnail');
 
                 // Tạo thư mục nếu chưa có
@@ -215,8 +218,11 @@ class AdminProductController extends Controller
 
                 // 2. LƯU ẢNH MỚI
                 $file = $request->file('thumbnail');
-                // Thêm timestamp để tránh cache trình duyệt khi update ảnh cùng tên
-                $filename = 'thumb_' . $product->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+                
+                // --- THAY ĐỔI: Dùng số random thay vì time() ---
+                $randomNum = mt_rand(100000, 999999);
+                $filename = 'thumb_' . $product->id . '_' . $randomNum . '.' . $file->getClientOriginalExtension();
+                
                 $path = public_path('thumbnail');
 
                 if (!File::exists($path)) {

@@ -55,8 +55,10 @@ class AdminImageProductController extends Controller
                 $file = $request->file('image');
                 $extension = $file->getClientOriginalExtension();
                 
-                // Tên file theo chuẩn: prod_img_{ID}.{ext} (Ví dụ: prod_img_105.jpg)
-                $filename = 'product_img_' . $imageProduct->id . '.' . $extension;
+                // --- THAY ĐỔI: Thêm số random vào tên file ---
+                // Tên file theo chuẩn: product_img_{ID}_{RANDOM}.{ext}
+                $randomNum = mt_rand(100000, 999999);
+                $filename = 'product_img_' . $imageProduct->id . '_' . $randomNum . '.' . $extension;
                 
                 $path = public_path('product'); 
 
