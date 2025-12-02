@@ -4,6 +4,7 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
 
+// Helper lưu Local Storage
 const saveToLocalStorage = (cart) => {
     localStorage.setItem('my_cart', JSON.stringify(cart));
 };
@@ -32,12 +33,13 @@ const extractCategoryName = (data) => {
 
 export default createStore({
     state: {
-        // Khởi tạo state từ LocalStorage ngay lập tức để tránh delay
-        cart: JSON.parse(localStorage.getItem('my_cart')) || []
+        cart: JSON.parse(localStorage.getItem('my_cart')) || [],
+        // [FIX] Kiểm tra cả 2 loại key token
+        isLoggedIn: !!(localStorage.getItem('authToken') || localStorage.getItem('auth_token')), 
     },
     getters: {
         cartItems: (state) => state.cart,
-        cartCount: (state) => state.cart.reduce((count, item) => count + Number(item.qty), 0),
+        cartCount: (state) => state.cart.length, 
         cartTotal: (state) => {
             return state.cart.reduce((total, item) => {
                 const p = Number(item.price) || 0;
@@ -62,18 +64,15 @@ export default createStore({
                 let newQty = existingItem.qty + quantity;
                 if (newQty > currentStock) newQty = currentStock;
                 existingItem.qty = newQty;
-                if (existingItem.categoriesName === 'Khác' && catName !== 'Khác') {
-                    existingItem.categoriesName = catName;
-                }
             } else {
                 state.cart.push({
                     compareId: compareId,
                     id: product.id,
                     name: product.name,
-                    variantId: variant ? variant.id : null,
-                    variantName: variant ? variant.name : 'Mặc định',
+                    variantId: variantId,
+                    variantName: variant ? (variant.attributes ? Object.values(variant.attributes).join(' - ') : 'Mặc định') : 'Mặc định',
                     price: variant ? Number(variant.price) : Number(product.price),
-                    image_url: product.image_url || product.thumbnail_url,
+                    image_url: product.thumbnail_url || product.image_url,
                     categoriesName: catName,
                     categoriesName: catName,
                     stock: currentStock,
@@ -104,7 +103,6 @@ export default createStore({
         UPDATE_ITEM_INFO(state, { cartId, data }) {
             const item = state.cart.find(i => i.cartId === cartId);
             if (!item || !data) return;
-
             item.image_url = data.thumbnail_url || data.image_url || item.image_url;
             item.name = data.name || item.name;
             const newCatName = extractCategoryName(data);
@@ -136,10 +134,13 @@ export default createStore({
                 } catch (e) {
                     commit('SET_CART', []);
                 }
+            } else {
+                commit('ADD_TO_CART_LOCAL', payload);
+                console.log("⚠️ Lưu Local (Chưa đăng nhập)");
+                return true;
             }
         },
 
-        addToCart({ commit }, payload) { commit('ADD_TO_CART', payload); },
         removeItem({ commit }, cartId) { commit('REMOVE_ITEM', cartId); },
         updateItemQty({ commit }, payload) { commit('UPDATE_QTY', payload); },
         clearCart({ commit }) { commit('CLEAR_CART'); },

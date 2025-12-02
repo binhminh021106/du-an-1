@@ -4,6 +4,8 @@ import { useRoute, useRouter } from "vue-router";
 import { useStore } from "vuex"; 
 import apiService from '../../apiService.js';
 import { isInWishlist, toggleWishlist } from "../../store/wishlistStore.js";
+// Import SweetAlert2 (Đảm bảo project đã cài: npm install sweetalert2)
+import Swal from 'sweetalert2';
 
 const route = useRoute();
 const router = useRouter();
@@ -29,9 +31,7 @@ const isFavorite = ref(false);
 // [FIX] Khai báo biến bundleDeals để tránh lỗi template
 const bundleDeals = ref([]); 
 
-const selectedVariantIndex = ref(0);
 const selectedImage = ref('');
-
 const allProducts = ref([]);
 const relatedProducts = ref([]);
 const tradeInSearchTerm = ref('');
@@ -119,7 +119,7 @@ const fetchAllProducts = async () => {
  const res = await apiService.get(`/products`);
     allProducts.value = res.data.data || res.data || [];
   } catch (err) {
-    console.error("Lỗi tải tất cả sản phẩm:", err);
+    console.error("Lỗi tải danh sách:", err);
   }
 };
 
@@ -168,7 +168,8 @@ const loadProductById = async (id) => {
     reviews.value = reviewRes.data.data || reviewRes.data || [];
 
   } catch (error) {
-    console.error("Lỗi tải sản phẩm:", error);
+    console.error("Lỗi:", error);
+    notify('error', 'Không thể tải thông tin sản phẩm', 'Lỗi kết nối');
   } finally {
     loading.value = false;
   }
@@ -179,12 +180,13 @@ const onAddToCart = (productItem) => {
   
   store.dispatch('addToCart', { 
     product: productItem, 
-    variant: activeVariant.value, 
+    variant: availableVariant.value, 
     quantity: quantity.value 
   });
   alert(`Đã thêm ${quantity.value} x ${productItem.name} vào giỏ hàng!`);
 };
 
+// --- ACTION YÊU THÍCH (ĐÃ CẬP NHẬT THÔNG BÁO) ---
 const toggleFavorite = (productItem) => {
     if (!productItem || typeof toggleWishlist !== 'function') return;
     const added = toggleWishlist(productItem);
@@ -199,8 +201,8 @@ onMounted(() => {
   fetchAllProducts();
 });
 
-watch(() => route.params.id, (newId, oldId) => {
-  if (newId && newId !== oldId) loadProductById(newId);
+watch(() => route.params.id, (newId) => {
+  if (newId) loadProductById(newId);
 });
 
 // [FIX] Cải thiện logic lấy sản phẩm liên quan
@@ -224,7 +226,7 @@ watchEffect(() => {
 
 <template>
   <div class="container py-5 product-detail-page">
-    <div v-if="!loading && product" class="row g-4">
+    <div v-if="!loading && product" class="row g-4 mb-5">
 
       <!-- Cột Trái: Hình ảnh -->
       <div class="col-lg-5">
@@ -235,143 +237,122 @@ watchEffect(() => {
 
         <div class="thumbnail-gallery" v-if="product.gallery_images && product.gallery_images.length > 1">
           <img v-for="(image, index) in product.gallery_images" :key="index" 
-            :src="getImageUrl(image)"
-            :alt="`Thumbnail ${index + 1}`" class="thumbnail-item" :class="{ active: selectedImage === image }"
-            @click="selectImage(image)" 
-            @error="$event.target.style.display='none'"/>
+             :src="getImageUrl(image)"
+             class="thumbnail-item" :class="{ active: selectedImage === image }"
+             @click="selectImage(image)" />
         </div>
-
-        <section class="mt-4 mb-5 product-description">
-          <h4 class="section-title">📄 Mô tả sản phẩm</h4>
-          <p>
-            {{ product.description || "Sản phẩm chất lượng cao, bảo hành chính hãng 12 tháng." }}
-          </p>
-        </section>
       </div>
 
-      <!-- Cột Phải: Thông tin & Nút Mua -->
+      <!-- Cột Phải: Thông tin & Options -->
       <div class="col-lg-7">
-        <div class="product-info-box">
+        <div class="product-info-box h-100">
 
           <h2 class="fw-bold mb-3 product-title">{{ product.name }}</h2>
 
           <div class="d-flex align-items-center mb-3 text-muted small">
             <div class="me-3">
-              <i class="bi bi-star-fill text-warning"></i>
-              {{ product.average_rating || 5 }} / 5
+              <i class="bi bi-star-fill text-warning"></i> {{ product.average_rating || 5 }} / 5
             </div>
-            <div>
-              ({{ product.review_count || 0 }} đánh giá |
-              {{ product.sold_count || 0 }} đã bán)
-            </div>
+            <div>(Đã bán: {{ product.sold_count || 0 }})</div>
           </div>
 
-          <div class="price-section mb-4" v-if="activeVariant">
-            <span class="fs-2 fw-bold text-danger me-2">
-              {{ formatCurrency(activeVariant.price) }}
-            </span>
-            <span v-if="activeVariant.original_price > activeVariant.price"
-              class="text-muted text-decoration-line-through fs-5">
-              {{ formatCurrency(activeVariant.original_price) }}
-            </span>
+          <!-- HIỂN THỊ GIÁ -->
+          <div class="price-section mb-4">
+            <template v-if="availableVariant">
+                <span class="fs-2 fw-bold text-danger me-2">
+                  {{ formatCurrency(availableVariant.price) }}
+                </span>
+                <span v-if="availableVariant.original_price > availableVariant.price"
+                  class="text-muted text-decoration-line-through fs-5">
+                  {{ formatCurrency(availableVariant.original_price) }}
+                </span>
+            </template>
+            <template v-else>
+                <div v-if="product.min_price && product.max_price && product.min_price !== product.max_price">
+                     <span class="fs-2 fw-bold text-danger me-2">
+                      {{ formatCurrency(product.min_price) }} - {{ formatCurrency(product.max_price) }}
+                    </span>
+                </div>
+                <div v-else>
+                     <span class="fs-2 fw-bold text-danger me-2">
+                      {{ formatCurrency(product.min_price || product.price) }}
+                    </span>
+                </div>
+            </template>
           </div>
 
-          <div class="variant-section mb-4" v-if="product.variants && product.variants.length > 0">
-            <h5 class="fw-semibold fs-6">Chọn phiên bản:</h5>
-            <div class="variant-options">
-              <button v-for="(variant, index) in product.variants" :key="variant.id || index" class="btn variant-btn"
-                :class="{ active: selectedVariantIndex === index }" @click="selectVariant(index)">
-                {{ variant.name || `Phiên bản ${index + 1}` }}
-                <span class="variant-price">{{ formatCurrency(variant.price) }}</span>
-              </button>
-            </div>
+          <!-- PHẦN CHỌN ATTRIBUTES -->
+          <div class="attributes-section mb-4">
+             <div v-if="Object.keys(groupedAttributes).length === 0" class="text-muted fst-italic">
+                <!-- Không hiện gì nếu không có attribute -->
+             </div>
+
+             <div v-for="(values, attrName) in groupedAttributes" :key="attrName" class="attribute-group mb-4">
+                <label class="fw-bold mb-2 d-block text-dark">{{ attrName }}: 
+                    <span class="fw-normal text-primary ms-1" v-if="selectedOptions[attrName]">
+                        {{ values.find(v => v.id === selectedOptions[attrName])?.value }}
+                    </span>
+                </label>
+                <div class="d-flex flex-wrap gap-2">
+                    <button 
+                        v-for="val in values" 
+                        :key="val.id"
+                        class="btn chip-btn"
+                        :class="{ 
+                            'active': selectedOptions[attrName] === val.id,
+                            'disabled': isOptionDisabled(attrName, val.id)
+                        }"
+                        @click="selectAttribute(attrName, val.id)"
+                        :disabled="isOptionDisabled(attrName, val.id)"
+                    >
+                        {{ val.value }}
+                    </button>
+                </div>
+             </div>
           </div>
 
-          <div class="d-flex align-items-center mb-4" v-if="activeVariant">
+          <!-- SỐ LƯỢNG (Chỉ hiện khi đã chọn) -->
+          <div class="d-flex align-items-center mb-4" v-if="availableVariant">
             <span class="fw-semibold me-3 fs-6">Số lượng:</span>
-            <button class="btn btn-outline-secondary btn-qty" @click="decreaseQty">
-              <i class="bi bi-dash"></i>
-            </button>
-            <input type="number" v-model.number="quantity" min="1" :max="activeVariant.stock"
-              class="form-control text-center" style="width: 70px; margin: 0 5px;" @change="validateQty" />
-            <button class="btn btn-outline-secondary btn-qty" @click="increaseQty">
-              <i class="bi bi-plus"></i>
-            </button>
-            <span class="ms-3 text-success small fw-semibold">
-              (✅ Còn lại: {{ activeVariant.stock }})
+            <div class="input-group qty-group" style="width: 140px;">
+                <button class="btn btn-outline-secondary" @click="decreaseQty"><i class="bi bi-dash"></i></button>
+                <input type="number" v-model.number="quantity" class="form-control text-center border-secondary" @change="validateQty" />
+                <button class="btn btn-outline-secondary" @click="increaseQty"><i class="bi bi-plus"></i></button>
+            </div>
+            <span class="ms-3 small fw-semibold" :class="availableVariant.stock > 0 ? 'text-success' : 'text-danger'">
+              ({{ availableVariant.stock > 0 ? `Sẵn hàng: ${availableVariant.stock}` : 'Hết hàng' }})
             </span>
           </div>
 
-          <div class="action-buttons mt-4">
-            <!-- Nút thêm giỏ hàng đã gắn sự kiện onAddToCart dùng Vuex -->
-            <button class="btn btn-primary-green btn-lg me-3" @click="onAddToCart(product)" :disabled="!activeVariant || activeVariant.stock <= 0">
-              <i class="bi bi-cart-plus"></i> Thêm vào giỏ
+          <!-- KHU VỰC NÚT HÀNH ĐỘNG (DÀN NGANG) -->
+          <div class="action-buttons mt-4 gap-3">
+            <button class="btn btn-outline-danger icon-btn" @click="toggleFavorite(product)">
+              <i :class="['bi', isFavorite ? 'bi-heart-fill' : 'bi-heart']"></i> 
             </button>
-            <button class="btn btn-outline-danger btn-lg" @click="toggleFavorite(product)">
-              <i :class="['bi', isFavorite ? 'bi-heart-fill' : 'bi-heart']"></i>
-            </button>
-          </div>
 
-        </div>
-        <br>
-        
-        <!-- Ưu đãi thanh toán -->
-        <div class="payment-offers-section mb-4">
-          <h5 class="fw-semibold fs-6 mb-3 d-flex align-items-center">
-            <i class="bi bi-credit-card-2-front-fill text-primary-green me-2"></i>
-            Ưu đãi thanh toán
-          </h5>
-
-          <div class="offers-list">
-            <div v-for="offer in paymentOffers" :key="offer.id" class="offer-item d-flex align-items-start">
-              <img :src="offer.logo_url" :alt="offer.partner" class="offer-logo me-3" />
-              <div class="offer-text" v-html="offer.description"></div>
-            </div>
-
-            <button class="btn-view-all text-primary-green mt-3" @click="viewAllOffers">
-              Xem tất cả ưu đãi <i class="bi bi-chevron-right"></i>
+            <button class="btn btn-primary-green mt-4 btn-lg flex-grow-1" 
+                @click="onAddToCart(product)" 
+                :disabled="!availableVariant || availableVariant.stock <= 0">
+              <i class="bi bi-cart-plus me-2"></i> 
+              {{ !availableVariant ? 'Vui lòng chọn phân loại' : (availableVariant.stock > 0 ? 'Thêm vào giỏ hàng' : 'Tạm hết hàng') }}
             </button>
           </div>
+
         </div>
-
-        <!-- Khuyến mãi -->
-        <div class="promotion-section-box mb-4">
-          <h2><i class="fas fa-gift"></i> Khuyến mãi hấp dẫn</h2>
-            
-             <div class="promotion-list">
-                <div class="promo-item">
-                <span class="promo-badge-num">1</span>
-                <div class="promo-text">
-                    Giảm thêm 10% cho Pin dự phòng - Camera giám sát - Đồng hồ trẻ em - Gia dụng - Sức khỏe Làm đẹp khi mua
-                    Điện thoại/Laptop.
-                    <a href="#" class="promo-link" @click.prevent="viewAllOffers">Xem chi tiết</a>
-                </div>
-                </div>
-            </div>
-
-            <section class="bundle-deal-section" v-if="bundleDeals && bundleDeals.length">
-              <div class="bundle-header">
-                <h2><i class="fas fa-bolt"></i> Mua kèm giá sốc</h2>
-              </div>
-
-              <div class="bundle-products">
-                <div v-for="item in bundleDeals" :key="item.id" class="bundle-item">
-                  <img :src="getImageUrl(item.image)" :alt="item.name" />
-                  <h3>{{ item.name }}</h3>
-                  <div class="price">
-                    <span class="new-price">{{ formatCurrency(item.newPrice) }}</span>
-                    <span class="old-price">{{ formatCurrency(item.oldPrice) }}</span>
-                  </div>
-                  <button class="btn-buy-now">Mua ngay</button>
-                </div>
-              </div>
-            </section>
-        </div>
-
       </div>
     </div>
 
-    <!-- Phần mở rộng: Trade-in, Sản phẩm liên quan, Đánh giá -->
+    <!-- MÔ TẢ FULL WIDTH -->
+    <div v-if="!loading && product" class="row mt-4">
+        <div class="col-12">
+            <section class="product-description-full">
+                <h4 class="section-title">📄 Mô tả sản phẩm</h4>
+                <div class="description-content" v-html="product.description || 'Đang cập nhật...'"></div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Trade-in & Reviews -->
     <div v-if="!loading && product" class="row mt-5">
       <div class="col-12">
         
@@ -440,30 +421,17 @@ watchEffect(() => {
 
         <!-- Reviews -->
         <section class="product-reviews">
-          <h4 class="section-title">
-            💬 Đánh giá ({{ reviews.length }})
-          </h4>
-          <div v-if="reviews.length">
-            <div v-for="review in reviews" :key="review.id" class="review-item">
-              <div class="d-flex align-items-center mb-1">
-                <i class="bi bi-person-circle me-2 fs-5"></i>
-                <strong>Người dùng #{{ review.userId }}</strong>
-              </div>
-              <div class="text-warning small mb-1">
-                <i v-for="n in review.rating" :key="n" class="bi bi-star-fill"></i>
-              </div>
-              <p class="mb-0">{{ review.content }}</p>
-            </div>
+          <h4 class="section-title">💬 Đánh giá ({{ reviews.length }})</h4>
+          <p v-if="!reviews.length" class="text-muted">Chưa có đánh giá nào.</p>
+          <div v-else>
+             <div v-for="r in reviews" :key="r.id" class="review-item">
+                 <strong>{{ r.user_name || 'Người dùng' }}</strong>: {{ r.content }}
+             </div>
           </div>
-          <p v-else class="text-muted">Chưa có đánh giá nào cho sản phẩm này.</p>
         </section>
       </div>
     </div>
-
-    <div v-if="loading" class="text-center py-5 loading-spinner">
-      <div class="spinner-border text-primary" role="status"></div>
-      <p class="mt-3">Đang tải dữ liệu sản phẩm...</p>
-    </div>
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
   </div>
 </template>
 

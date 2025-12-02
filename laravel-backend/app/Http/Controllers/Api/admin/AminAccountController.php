@@ -25,7 +25,6 @@ class AminAccountController extends Controller
      */
     public function store(Request $request)
     {
-        // Sử dụng Validator facade để đồng bộ response lỗi
         $validator = Validator::make($request->all(), [
             'fullname' => 'required|string|max:255',
             'email' => 'required|email|max:100|unique:admins,email',
@@ -52,25 +51,31 @@ class AminAccountController extends Controller
             $admin->address = $request->address ?? null;
             $admin->role_id = $request->role_id;
             $admin->status = $request->status ?? 'active';
+            
+            // Lưu lần 1 để lấy ID trước (Chưa có ảnh)
+            $admin->save();
 
-            // --- XỬ LÝ UPLOAD ẢNH ---
+            // --- XỬ LÝ UPLOAD ẢNH SAU KHI CÓ ID ---
             if ($request->hasFile('avatar')) {
                 $file = $request->file('avatar');
-                // Tạo tên file unique
-                $fileName = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                
+                // Đặt tên file theo format: avatar_ID.extension (Ví dụ: avatar_15.jpg)
+                $extension = $file->getClientOriginalExtension();
+                $fileName = 'avatar_' . $admin->id . '.' . $extension; 
+                
                 $path = public_path('uploads/admins');
 
                 if (!File::exists($path)) {
                     File::makeDirectory($path, 0755, true);
                 }
 
+                // Di chuyển file
                 $file->move($path, $fileName);
+
+                // Cập nhật lại đường dẫn ảnh cho admin
                 $admin->avatar_url = '/uploads/admins/' . $fileName;
-            } else {
-                $admin->avatar_url = $request->avatar_url ?? '';
+                $admin->save(); // Lưu lần 2 để update avatar_url
             }
-            
-            $admin->save();
 
             return response()->json([
                 'success' => true,
@@ -79,6 +84,9 @@ class AminAccountController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            // Nếu lỗi, và đã lỡ tạo admin rồi nhưng lỗi upload thì nên xóa admin rác đi (tuỳ chọn)
+            // if (isset($admin->id)) $admin->delete();
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi khi tạo tài khoản: ' . $e->getMessage()
@@ -127,7 +135,7 @@ class AminAccountController extends Controller
 
             // --- XỬ LÝ UPLOAD ẢNH KHI UPDATE ---
             if ($request->hasFile('avatar')) {
-                // 1. Xóa ảnh cũ nếu tồn tại
+                // 1. Xóa ảnh cũ (bất kể tên gì) để tránh rác
                 if ($admin->avatar_url) {
                     $oldPath = public_path($admin->avatar_url);
                     if (File::exists($oldPath)) {
@@ -135,9 +143,11 @@ class AminAccountController extends Controller
                     }
                 }
 
-                // 2. Lưu ảnh mới
+                // 2. Lưu ảnh mới với tên là avatar_ID
                 $file = $request->file('avatar');
-                $fileName = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                $extension = $file->getClientOriginalExtension();
+                $fileName = 'avatar_' . $admin->id . '.' . $extension; // Ví dụ: avatar_15.jpg
+                
                 $path = public_path('uploads/admins');
 
                 if (!File::exists($path)) {
