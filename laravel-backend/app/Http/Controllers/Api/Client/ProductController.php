@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\Client;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Product;
+use App\Models\Product; // Đảm bảo Model Product đã được import
 
 class ProductController extends Controller
 {

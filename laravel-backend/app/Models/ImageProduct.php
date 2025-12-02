@@ -10,7 +10,6 @@ use App\Models\Product;
 
 class ImageProduct extends Model
 {
-    /** @use HasFactory<\Database\Factories\ImageProductFactory> */
     use HasFactory;
     use SoftDeletes;
 
@@ -18,9 +17,21 @@ class ImageProduct extends Model
 
     protected $fillable = [
         'product_id',
-        'image_url'
+        'image_url' // Tên trường lưu trữ đường dẫn ảnh thô trong DB
     ];
+    
+    // FIX CÚ PHÁP: Thêm dấu chấm phẩy sau mảng.
+    // Tùy chọn: Ẩn các trường không cần thiết khi trả về JSON
+    protected $hidden = [
+        'product_id', 
+        'created_at', 
+        'updated_at',
+        'deleted_at'
+    ]; // <<< ĐÃ THÊM DẤU CHẤM PHẨY
 
+    /**
+     * Định nghĩa quan hệ ngược: Một ảnh thuộc về một sản phẩm.
+     */
     public function product()
     {
         return $this->belongsTo(Product::class, 'product_id', 'id');
