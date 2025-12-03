@@ -368,7 +368,8 @@ onBeforeUnmount(stopAutoSlide);
                             <div class="news-content">
                                 <h3 class="news-title">{{ news.title }}</h3>
                                 <p class="news-excerpt">{{ getExcerpt(news.excerpt || news.content, 100) }}</p>
-                                <router-link :to="`/blog/${news.slug}`" class="read-more-link">Xem thêm &rarr;</router-link>
+                                <!-- SỬA Ở ĐÂY: Dùng news.id thay vì news.slug -->
+                                <router-link :to="`/PostDetail/${news.id}`" class="read-more-link">Xem thêm &rarr;</router-link>
                             </div>
                         </div>
                     </div>
