@@ -1,391 +1,500 @@
+<script setup>
+import { onMounted } from 'vue';
+
+// Đảm bảo cuộn mượt khi click mục lục
+onMounted(() => {
+  document.documentElement.style.scrollBehavior = 'smooth';
+});
+</script>
+
 <template>
-  <section class="policy-page-v2">
-    <header class="hero-v2">
-      <div class="hero-inner-v2">
-        <p class="hero-pre-title">Quy tắc kinh doanh minh bạch</p>
+  <section class="policy-page">
+    
+    <!-- HERO HEADER (Đồng bộ style) -->
+    <header class="policy-hero">
+      <div class="hero-inner">
+        <p class="hero-pre-title">QUY TẮC & QUYỀN LỢI</p>
         <h1>Chính sách cửa hàng</h1>
-        <p class="hero-subtitle-v2">
-          Các điều khoản chi tiết về Vận chuyển, Đổi trả, Bảo hành, và Quyền riêng tư, áp dụng cho tất cả sản phẩm công
-          nghệ của chúng tôi.
+        <p class="hero-subtitle">
+          Tổng hợp chi tiết về quy định Vận chuyển, Bảo hành, Đổi trả và Bảo mật thông tin nhằm đảm bảo quyền lợi tối đa cho khách hàng.
         </p>
       </div>
     </header>
 
-    <main class="container-v2">
-      <nav class="toc-v2">
-        <h3 class="toc-title">Mục lục</h3>
-        <ul>
-          <li><a href="#shipping-v2">Vận chuyển & Giao hàng</a></li>
-          <li><a href="#returns-v2">Đổi trả & Hoàn tiền</a></li>
-          <li><a href="#warranty-v2">Bảo hành sản phẩm</a></li>
-          <li><a href="#privacy-v2">Quyền riêng tư & Bảo mật</a></li>
-          <li><a href="#terms-v2">Điều khoản sử dụng</a></li>
-          <li><a href="#contact-v2">Thông tin Liên hệ</a></li>
-          <li><a href="#guide-v2">Hướng dẫn mua hàng</a></li>
-        </ul>
-      </nav>
-
-      <section class="policies-v2">
-        <article id="shipping-v2" class="policy-card-v2">
-          <h2 class="policy-heading-v2">🚚 Vận chuyển & Giao hàng</h2>
-          <p>
-            Chúng tôi cung cấp dịch vụ giao hàng tiêu chuẩn trên **toàn quốc**. Đơn hàng sẽ được xử lý trong vòng
-            <strong>1-2 ngày làm việc</strong>. Thời gian vận chuyển ước tính là <strong>1-5 ngày</strong> tùy thuộc vào
-            khu vực nhận hàng. Phí vận chuyển được tính cụ thể tại bước thanh toán.
-          </p>
-          <div class="highlight-box-v2">
-            <p><strong>Lưu ý quan trọng khi nhận hàng:</strong></p>
-            <ul>
-              <li>Kiểm tra kỹ lưỡng kiện hàng (ngoại quan, tem niêm phong) trước khi ký nhận.</li>
-              <li>Nếu phát hiện bất kỳ dấu hiệu hư hỏng hoặc thiếu niêm phong, vui lòng **từ chối nhận** và gọi ngay đến
-                Hotline để được hỗ trợ.</li>
-              <li>Đối với đơn hàng COD, nhân viên giao hàng có thể yêu cầu kiểm tra hàng trước khi thu tiền để đảm bảo
-                tính minh bạch.</li>
+    <main class="policy-container">
+      <div class="policy-layout">
+        
+        <!-- SIDEBAR TOC (Mục lục cố định) -->
+        <aside class="policy-sidebar">
+          <div class="sidebar-widget">
+            <h3><i class="bi bi-list-columns-reverse me-2"></i> Mục lục chính sách</h3>
+            <ul class="toc-links">
+              <li><a href="#shipping"><i class="bi bi-truck me-2"></i> Vận chuyển & Giao hàng</a></li>
+              <li><a href="#guide"><i class="bi bi-cart-check me-2"></i> Hướng dẫn mua hàng</a></li>
+              <li><a href="#returns"><i class="bi bi-arrow-repeat me-2"></i> Đổi trả & Hoàn tiền</a></li>
+              <li><a href="#warranty"><i class="bi bi-shield-check me-2"></i> Chính sách bảo hành</a></li>
+              <li><a href="#privacy"><i class="bi bi-lock me-2"></i> Bảo mật thông tin</a></li>
+              <li><a href="#terms"><i class="bi bi-file-earmark-text me-2"></i> Điều khoản sử dụng</a></li>
+              <li><a href="#contact"><i class="bi bi-headset me-2"></i> Liên hệ hỗ trợ</a></li>
             </ul>
           </div>
-        </article>
 
-        <article id="guide-v2" class="policy-card-v2">
-                    <h2 class="policy-heading-v2">🛒 Hướng dẫn Mua hàng</h2>
-                    <p>
-                        Để quý khách có trải nghiệm mua sắm tốt nhất, vui lòng làm theo các bước sau:
-                      </p>
-                    <ol>
-                        <li><strong>Chọn sản phẩm:</strong> Duyệt qua các danh mục và bấm vào sản phẩm bạn muốn mua để
-              xem chi tiết.</li>
-                        <li><strong>Thêm vào giỏ hàng:</strong> Chọn tùy chọn (màu sắc, phiên bản) và bấm nút **"Thêm
-              vào giỏ hàng"**. Bạn có thể tiếp tục mua sắm hoặc tiến hành thanh toán.</li>
-                        <li><strong>Điền thông tin:</strong> Truy cập giỏ hàng, kiểm tra lại đơn hàng. Nhập thông tin
-              giao hàng **chính xác** (tên, địa chỉ, số điện thoại).</li>
-                        <li><strong>Chọn Phương thức Thanh toán:</strong> Chọn một trong các phương thức thanh toán có
-              sẵn (COD, Chuyển khoản ngân hàng, Thẻ tín dụng/ghi nợ).</li>
-                        <li><strong>Hoàn tất Đơn hàng:</strong> Bấm **"Đặt hàng"**. Một email xác nhận đơn hàng sẽ được
-              gửi đến địa chỉ email của bạn. Chúng tôi sẽ liên hệ trong vòng 24 giờ để xác nhận lại đơn hàng trước khi
-              tiến hành giao.</li>
-                      </ol>
-                    <div class="highlight-box-v2">
-                        <p><strong>Hỗ trợ:</strong> Nếu gặp khó khăn trong quá trình đặt hàng, đừng ngần ngại gọi ngay
-              đến **Hotline 1900-0000** để được hỗ trợ trực tiếp.</p>
-                      </div>
-                  </article>
-        <article id="returns-v2" class="policy-card-v2">
-          <h2 class="policy-heading-v2">🔄 Đổi trả & Hoàn tiền</h2>
-          <p>
-            Chính sách đổi trả được áp dụng trong vòng **7 ngày** kể từ ngày khách hàng nhận hàng, chỉ áp dụng cho các
-            trường hợp: **lỗi kỹ thuật do nhà sản xuất** hoặc **giao sai sản phẩm/màu sắc** so với đơn hàng.
-          </p>
-          <p>
-            **Điều kiện đổi trả:** Sản phẩm phải còn nguyên vẹn tem, hộp, đầy đủ phụ kiện đi kèm và không có dấu hiệu
-            can thiệp vật lý (trừ trường hợp lỗi nhà sản xuất được xác nhận).
-          </p>
-          <ol>
-            <li>Liên hệ Bộ phận Chăm sóc Khách hàng (CSKH) qua Hotline hoặc Email để đăng ký và nhận Mã đổi trả.</li>
-            <li>Gửi sản phẩm kèm theo hóa đơn gốc, mô tả chi tiết lỗi và hình ảnh minh chứng (nếu cần).</li>
-            <li>Chúng tôi sẽ tiến hành kiểm tra. Sau khi xác nhận lỗi, quá trình hoàn tiền hoặc gửi sản phẩm thay thế sẽ
-              được thực hiện theo thỏa thuận.</li>
-          </ol>
-        </article>
-
-        <article id="warranty-v2" class="policy-card-v2">
-          <h2 class="policy-heading-v2">🛡️ Bảo hành sản phẩm</h2>
-          <p>
-            Tất cả sản phẩm chính hãng (Điện thoại, Laptop, Đồng hồ thông minh) đều được hưởng chế độ bảo hành theo quy
-            định của **Nhà sản xuất/Nhà phân phối chính thức** tại Việt Nam. Thời gian và điều kiện bảo hành cụ thể được
-            ghi rõ trong mô tả sản phẩm.
-          </p>
-          <p>
-            **Phụ kiện và Linh kiện:** Áp dụng chính sách bảo hành riêng (thông thường ngắn hơn). Vui lòng xem chi tiết
-            trong mô tả sản phẩm.
-          </p>
-          <p>
-            Trong thời gian bảo hành, nếu sản phẩm gặp lỗi kỹ thuật được xác nhận, chúng tôi cam kết hỗ trợ sửa chữa
-            miễn phí hoặc đổi mới theo đúng điều khoản bảo hành của Hãng.
-          </p>
-        </article>
-
-        <article id="privacy-v2" class="policy-card-v2">
-          <h2 class="policy-heading-v2">🔒 Quyền riêng tư & Bảo mật</h2>
-          <p>
-            Chúng tôi cam kết bảo mật tuyệt đối thông tin cá nhân của khách hàng, bao gồm: tên, địa chỉ, email, số điện
-            thoại, và thông tin giao dịch/thanh toán.
-          </p>
-          <p>
-            Thông tin chỉ được sử dụng với mục đích duy nhất là xử lý đơn hàng, giao nhận, và liên hệ hỗ trợ sau bán
-            hàng.
-          </p>
-          <p>
-            Chúng tôi **nghiêm cấm** việc chia sẻ, tiết lộ thông tin khách hàng cho bất kỳ bên thứ ba nào, trừ khi có sự
-            đồng ý rõ ràng của khách hàng hoặc theo yêu cầu của pháp luật.
-          </p>
-        </article>
-
-        <article id="terms-v2" class="policy-card-v2">
-          <h2 class="policy-heading-v2">⚖️ Điều khoản sử dụng</h2>
-          <p>
-            Bằng việc truy cập và thực hiện giao dịch trên website của chúng tôi, quý khách được xem là đã đồng ý tuân
-            thủ toàn bộ các điều kiện giao dịch, thanh toán và các quy định khác được công bố.
-          </p>
-          <p>
-            Chúng tôi bảo lưu quyền chỉnh sửa, cập nhật các chính sách này mà không cần thông báo trước. Các thay đổi sẽ
-            có hiệu lực ngay khi được đăng tải công khai trên trang web này.
-          </p>
-        </article>
-
-        <article id="contact-v2" class="policy-card-v2 contact-card-v2">
-          <h2 class="policy-heading-v2">☎️ Thông tin Liên hệ</h2>
-          <p>Quý khách cần hỗ trợ thêm thông tin hoặc có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi:</p>
-          <div class="contact-details-v2">
-            <div>
-              <strong>Hotline Hỗ trợ:</strong>
-              <p class="contact-value-v2">1900-0000 (Miễn phí)</p>
-            </div>
-            <div>
-              <strong>Email Hỗ trợ:</strong>
-              <p class="contact-value-v2">support@yourshop.com</p>
-            </div>
-            <div>
-              <strong>Địa chỉ Văn phòng:</strong>
-              <p class="contact-value-v2">123 Đường Công Nghệ, Quận Kỹ Thuật, TP.HCM</p>
-            </div>
+          <!-- Box hỗ trợ nhanh -->
+          <div class="sidebar-widget support-box mt-4">
+             <div class="d-flex align-items-center mb-3">
+                 <i class="bi bi-question-circle-fill text-primary fs-3 me-3"></i>
+                 <div>
+                     <h6 class="mb-0 fw-bold">Cần giải đáp gấp?</h6>
+                     <small class="text-muted">Chat ngay với tư vấn viên</small>
+                 </div>
+             </div>
+             <button class="btn btn-outline-primary w-100 btn-sm fw-bold">Chat Zalo/Messenger</button>
           </div>
-        </article>
-      </section>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <section class="policy-content">
+          
+          <!-- 1. VẬN CHUYỂN -->
+          <article id="shipping" class="policy-card">
+            <h2 class="policy-title">
+                <i class="bi bi-truck text-primary me-2"></i> Vận chuyển & Giao hàng
+            </h2>
+            <div class="policy-body">
+                <p>
+                  Chúng tôi hợp tác với các đơn vị vận chuyển uy tín (Giao Hàng Nhanh, Viettel Post) để cung cấp dịch vụ giao hàng tiêu chuẩn trên <strong>toàn quốc</strong>.
+                </p>
+                <ul class="info-list">
+                    <li><strong>Thời gian xử lý:</strong> 1 - 2 ngày làm việc.</li>
+                    <li><strong>Thời gian vận chuyển:</strong> 1 - 5 ngày tùy khu vực.</li>
+                    <li><strong>Phí vận chuyển:</strong> Tính tự động tại bước thanh toán dựa trên cân nặng và địa lý.</li>
+                </ul>
+                <div class="highlight-box">
+                  <p class="mb-2"><strong><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> Lưu ý quan trọng khi nhận hàng:</strong></p>
+                  <ul class="mb-0 ps-3">
+                    <li>Kiểm tra kỹ tình trạng ngoại quan (hộp, tem niêm phong) trước khi ký nhận.</li>
+                    <li>Nếu thấy dấu hiệu móp méo, rách hoặc bị bóc, vui lòng <strong>từ chối nhận hàng</strong> và liên hệ Hotline ngay lập tức.</li>
+                    <li>Khuyến khích quay video clip quá trình mở hộp để làm bằng chứng khiếu nại nếu có sai sót bên trong.</li>
+                  </ul>
+                </div>
+            </div>
+          </article>
+
+          <!-- 2. HƯỚNG DẪN MUA HÀNG -->
+          <article id="guide" class="policy-card">
+            <h2 class="policy-title">
+                <i class="bi bi-cart-check text-primary me-2"></i> Hướng dẫn Mua hàng
+            </h2>
+            <div class="policy-body">
+                <div class="steps-container">
+                    <div class="step-item">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <strong>Chọn sản phẩm</strong>
+                            <p>Xem chi tiết và chọn phiên bản phù hợp.</p>
+                        </div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <strong>Đặt hàng</strong>
+                            <p>Thêm vào giỏ & điền thông tin nhận hàng.</p>
+                        </div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <strong>Thanh toán</strong>
+                            <p>Chọn COD hoặc Chuyển khoản/Thẻ.</p>
+                        </div>
+                    </div>
+                     <div class="step-item">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <strong>Xác nhận</strong>
+                            <p>Nhận email và cuộc gọi xác nhận từ CSKH.</p>
+                        </div>
+                    </div>
+                </div>
+                <p class="mt-3 text-muted small fst-italic">
+                    * Nếu gặp khó khăn khi đặt hàng online, quý khách có thể gọi Hotline <strong>1900-0000</strong> để nhân viên hỗ trợ lên đơn trực tiếp.
+                </p>
+            </div>
+          </article>
+
+          <!-- 3. ĐỔI TRẢ -->
+          <article id="returns" class="policy-card">
+             <h2 class="policy-title">
+                <i class="bi bi-arrow-repeat text-primary me-2"></i> Đổi trả & Hoàn tiền
+            </h2>
+             <div class="policy-body">
+                <p>
+                  Chính sách đổi trả áp dụng trong vòng <strong>7 ngày</strong> (tính từ ngày nhận hàng) cho các trường hợp:
+                </p>
+                <ul class="check-list">
+                    <li>Sản phẩm gặp lỗi kỹ thuật do nhà sản xuất (nguồn, màn hình, mainboard...).</li>
+                    <li>Giao sai sản phẩm, sai màu sắc hoặc thiếu phụ kiện so với đơn hàng.</li>
+                </ul>
+                <p>
+                  <strong>Điều kiện đổi trả:</strong> Sản phẩm phải còn nguyên vẹn tem bảo hành, hộp, đầy đủ phụ kiện và quà tặng kèm (nếu có). Không có dấu hiệu trầy xước, cấn móp do tác động vật lý của người dùng.
+                </p>
+            </div>
+          </article>
+
+          <!-- 4. BẢO HÀNH -->
+          <article id="warranty" class="policy-card">
+             <h2 class="policy-title">
+                <i class="bi bi-shield-check text-primary me-2"></i> Bảo hành sản phẩm
+            </h2>
+             <div class="policy-body">
+                <p>
+                  Tất cả sản phẩm chính hãng (Apple, Samsung, Xiaomi, Laptop...) đều được hưởng chế độ bảo hành theo quy định của <strong>Nhà sản xuất/Nhà phân phối</strong> tại Việt Nam.
+                </p>
+                 <div class="row mt-3">
+                     <div class="col-md-6 mb-3">
+                         <div class="p-3 border rounded bg-light h-100">
+                             <h6 class="fw-bold text-dark"><i class="bi bi-phone me-1"></i> Thiết bị chính</h6>
+                             <p class="mb-0 small text-secondary">Bảo hành 12 - 24 tháng tùy hãng.</p>
+                         </div>
+                     </div>
+                     <div class="col-md-6 mb-3">
+                         <div class="p-3 border rounded bg-light h-100">
+                             <h6 class="fw-bold text-dark"><i class="bi bi-headphones me-1"></i> Phụ kiện kèm theo</h6>
+                             <p class="mb-0 small text-secondary">Bảo hành 3 - 6 tháng (Cáp, sạc, pin...).</p>
+                         </div>
+                     </div>
+                 </div>
+            </div>
+          </article>
+
+          <!-- 5. BẢO MẬT & ĐIỀU KHOẢN -->
+          <article id="privacy" class="policy-card">
+             <h2 class="policy-title">
+                <i class="bi bi-lock text-primary me-2"></i> Quyền riêng tư & Bảo mật
+            </h2>
+            <div class="policy-body">
+                <p>
+                  Chúng tôi cam kết bảo mật tuyệt đối thông tin cá nhân của khách hàng. Thông tin chỉ được sử dụng cho mục đích xử lý đơn hàng và chăm sóc khách hàng.
+                </p>
+                <p>
+                  Chúng tôi <strong>TUYỆT ĐỐI KHÔNG</strong> chia sẻ, bán hoặc tiết lộ thông tin của quý khách cho bên thứ ba vì mục đích thương mại. Mọi giao dịch thanh toán trực tuyến đều được mã hóa qua cổng thanh toán an toàn.
+                </p>
+            </div>
+          </article>
+
+           <article id="terms" class="policy-card">
+             <h2 class="policy-title">
+                <i class="bi bi-file-earmark-text text-primary me-2"></i> Điều khoản sử dụng
+            </h2>
+            <div class="policy-body">
+                <p>
+                  Khi truy cập website và đặt hàng, quý khách mặc nhiên đồng ý với các điều khoản hoạt động của chúng tôi. Chúng tôi bảo lưu quyền thay đổi chính sách bất cứ lúc nào để phù hợp với quy định pháp luật và hoạt động kinh doanh, thông báo sẽ được cập nhật tại trang này.
+                </p>
+            </div>
+          </article>
+
+          <!-- 6. LIÊN HỆ -->
+          <article id="contact" class="policy-card contact-section">
+             <h2 class="policy-title text-white border-0 mb-4">
+                <i class="bi bi-headset me-2"></i> Thông tin Liên hệ
+            </h2>
+            <div class="contact-grid">
+                <div class="contact-item">
+                    <i class="bi bi-telephone-fill fs-2 mb-2 opacity-75"></i>
+                    <h6>Hotline</h6>
+                    <p class="fw-bold fs-5">1900-0000</p>
+                </div>
+                 <div class="contact-item">
+                    <i class="bi bi-envelope-fill fs-2 mb-2 opacity-75"></i>
+                    <h6>Email</h6>
+                    <p class="fw-bold">support@shop.com</p>
+                </div>
+                 <div class="contact-item">
+                    <i class="bi bi-geo-alt-fill fs-2 mb-2 opacity-75"></i>
+                    <h6>Văn phòng</h6>
+                    <p class="fw-bold">Q.1, TP.HCM</p>
+                </div>
+            </div>
+          </article>
+
+        </section>
+      </div>
     </main>
+    
+    <!-- FOOTER -->
+    <footer class="policy-footer">
+        <div class="container text-center">
+            <p class="mb-0 text-muted small">© 2025 TechShop. Tất cả các chính sách trên đều tuân thủ pháp luật Việt Nam.</p>
+        </div>
+    </footer>
+
   </section>
 </template>
+
 <style scoped>
+/* --- VARIABLES (Đồng bộ) --- */
 :root {
-  --primary-v2: #00796B;
-  --accent-v2: #004D40;
-  --text-color-v2: #263238;
-  --heading-color-v2: var(--accent-v2);
-  --bg-light-v2: #F5F7F8;
-  --card-bg-v2: #FFFFFF;
+  --primary: #009981;
+  --primary-dark: #007a67;
+  --accent: #00483D;
+  --text-dark: #2c3e50;
+  --text-gray: #636e72;
+  --bg-light: #F8F9FA;
+  --white: #FFFFFF;
 }
 
-.policy-page-v2 {
-  font-family: 'Poppins', 'Inter', system-ui, -apple-system, sans-serif;
-  color: var(--text-color-v2);
-  background-color: var(--bg-light-v2);
+/* --- BASE --- */
+.policy-page {
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--text-dark);
+  background-color: var(--bg-light);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-.hero-v2 {
-  background: linear-gradient(135deg, rgba(0, 121, 107, 0.08), rgba(0, 77, 64, 0.04));
-  border-bottom: 3px solid var(--primary-v2);
-  padding: 64px 16px 40px 16px;
+/* --- HERO HEADER --- */
+.policy-hero {
+  background: linear-gradient(135deg, #e0f2f1 0%, #ffffff 100%);
+  border-bottom: 1px solid #e0e0e0;
+  padding: 60px 20px;
   text-align: center;
 }
-
-.hero-inner-v2 {
-  max-width: 960px;
+.hero-inner {
+  max-width: 800px;
   margin: 0 auto;
 }
-
 .hero-pre-title {
-  color: var(--primary-v2);
-  font-size: 0.85rem;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  font-weight: 500;
-  margin-bottom: 8px;
-}
-
-.hero-v2 h1 {
-  color: var(--heading-color-v2);
-  font-size: 2.5rem;
+  color: var(--primary);
   font-weight: 700;
-  margin: 0 0 12px 0;
+  letter-spacing: 2px;
+  font-size: 0.85rem;
+  margin-bottom: 10px;
 }
-
-.hero-subtitle-v2 {
-  color: #37474F;
+.policy-hero h1 {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--accent);
+  margin-bottom: 15px;
+}
+.hero-subtitle {
+  color: var(--text-gray);
   font-size: 1.1rem;
-  max-width: 700px;
-  margin: 0 auto;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
-.container-v2 {
-  max-width: 1200px;
-  margin: 40px auto;
-  padding: 0 24px;
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 40px;
+/* --- LAYOUT --- */
+.policy-container {
+  max-width: 1320px; /* Rộng chuẩn */
+  margin: 50px auto;
+  padding: 0 20px;
   flex-grow: 1;
 }
 
-.toc-v2 {
-  background: var(--card-bg-v2);
-  border: 1px solid #ECEFF1;
-  padding: 24px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  height: fit-content;
+.policy-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr; /* Sidebar 320px */
+  gap: 48px;
+  align-items: start;
+}
+
+/* --- SIDEBAR --- */
+.policy-sidebar {
   position: sticky;
   top: 20px;
 }
 
-.toc-title {
-  color: var(--heading-color-v2);
-  font-size: 1.1rem;
-  margin: 0 0 16px 0;
-  font-weight: 600;
-  border-bottom: 1px solid #CFD8DC;
-  padding-bottom: 8px;
+.sidebar-widget {
+  background: var(--white);
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.03);
+  border: 1px solid rgba(0,0,0,0.03);
 }
 
-.toc-v2 ul {
+.sidebar-widget h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px dashed #eee;
+  display: flex;
+  align-items: center;
+}
+
+.toc-links {
   list-style: none;
   padding: 0;
   margin: 0;
 }
-
-.toc-v2 li {
-  margin: 10px 0;
+.toc-links li {
+  margin-bottom: 5px;
 }
-
-.toc-v2 a {
-  color: var(--text-color-v2);
+.toc-links a {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  color: var(--text-dark);
   text-decoration: none;
   font-weight: 500;
-  display: block;
-  padding: 4px 0;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+.toc-links a:hover {
+  background-color: rgba(0, 153, 129, 0.08);
+  color: var(--primary);
+  transform: translateX(5px);
+}
+.toc-links i {
+  color: #999;
   transition: color 0.2s;
 }
-
-.toc-v2 a:hover {
-  color: var(--primary-v2);
-  padding-left: 4px;
+.toc-links a:hover i {
+  color: var(--primary);
 }
 
-.policies-v2 {
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
+/* --- CONTENT --- */
+.policy-content {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
 }
 
-.policy-card-v2 {
-  background: var(--card-bg-v2);
+.policy-card {
+  background: var(--white);
+  padding: 35px;
   border-radius: 12px;
-  padding: 32px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  border-left: 5px solid var(--primary-v2);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+  scroll-margin-top: 100px; /* Tránh bị che bởi header khi scroll */
 }
 
-.policy-heading-v2 {
-  margin-top: 0;
-  color: var(--heading-color-v2);
-  font-size: 1.6rem;
-  font-weight: 600;
-  border-bottom: 1px dashed #E0E0E0;
-  padding-bottom: 12px;
-  margin-bottom: 20px;
-}
-
-.policy-card-v2 p,
-.policy-card-v2 li {
-  color: var(--text-color-v2);
-  line-height: 1.7;
-  margin-bottom: 12px;
-  font-size: 1rem;
-}
-
-.policy-card-v2 ul,
-.policy-card-v2 ol {
-  padding-left: 20px;
-}
-
-.highlight-box-v2 {
-  background-color: #E0F2F1;
-  border-left: 4px solid var(--primary-v2);
-  padding: 16px;
-  margin-top: 20px;
-  border-radius: 4px;
-}
-
-.highlight-box-v2 p {
-  margin-top: 0;
-  font-weight: 500;
-}
-
-.highlight-box-v2 li {
-  font-size: 0.95rem;
-  color: #004D40;
-}
-
-.contact-card-v2 {
-  border-left-color: #FF9800;
-}
-
-.contact-details-v2 {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-top: 16px;
-}
-
-.contact-details-v2 strong {
-  display: block;
-  color: var(--primary-v2);
-  margin-bottom: 4px;
-  font-weight: 600;
-}
-
-.contact-value-v2 {
-  font-size: 1.1rem;
+.policy-title {
+  font-size: 1.5rem;
   font-weight: 700;
-  color: var(--accent-v2);
-  margin: 0;
+  color: var(--accent);
+  margin-top: 0;
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f0f0f0;
+  display: flex;
+  align-items: center;
 }
 
-.footer-v2 {
-  padding: 20px 16px;
-  border-top: 1px solid #ECEFF1;
-  background-color: var(--card-bg-v2);
-  text-align: center;
+.policy-body {
+    color: var(--text-dark);
+    line-height: 1.7;
+}
+.policy-body p {
+    margin-bottom: 15px;
 }
 
-.footer-inner-v2 {
-  max-width: 1200px;
-  margin: 0 auto;
-  color: #78909C;
-  font-size: 0.9rem;
-}
-
-@media (max-width: 1024px) {
-  .container-v2 {
-    grid-template-columns: 1fr;
-    padding: 0 16px;
-    margin: 30px auto;
-  }
-
-  .toc-v2 {
-    order: -1;
-    position: relative;
-    top: auto;
+/* --- UTILS & ELEMENTS --- */
+.info-list, .check-list {
     margin-bottom: 20px;
-  }
+    padding-left: 20px;
+}
+.info-list li {
+    margin-bottom: 8px;
+    list-style-type: disc;
+}
+.check-list li {
+    margin-bottom: 8px;
+    list-style-type: none;
+    position: relative;
+    padding-left: 5px;
+}
+.check-list li::before {
+    content: "✔";
+    color: var(--primary);
+    font-weight: bold;
+    margin-right: 8px;
 }
 
-@media (max-width: 600px) {
-  .hero-v2 h1 {
-    font-size: 2rem;
-  }
+.highlight-box {
+    background-color: #e0f2f1; /* Xanh rất nhạt */
+    border-left: 4px solid var(--primary);
+    padding: 20px;
+    border-radius: 6px;
+    margin-top: 20px;
+}
 
-  .policy-card-v2 {
-    padding: 24px;
-  }
+/* Steps Guide */
+.steps-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+.step-item {
+    text-align: center;
+    position: relative;
+}
+.step-number {
+    width: 40px;
+    height: 40px;
+    background-color: var(--primary);
+    color: white;
+    font-weight: 700;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 10px auto;
+    font-size: 1.1rem;
+}
+.step-content strong {
+    display: block;
+    color: var(--accent);
+    margin-bottom: 5px;
+}
+.step-content p {
+    font-size: 0.9rem;
+    color: var(--text-gray);
+    line-height: 1.4;
+    margin-bottom: 0;
+}
 
-  .policy-heading-v2 {
-    font-size: 1.4rem;
-  }
+/* Contact Card Special */
+.contact-section {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 100%);
+    color: white;
+}
+.contact-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    text-align: center;
+}
+.contact-item h6 {
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+    opacity: 0.9;
+}
 
-  .contact-details-v2 {
+/* --- FOOTER --- */
+.policy-footer {
+    border-top: 1px solid #eee;
+    padding: 30px 0;
+    margin-top: auto;
+    background: var(--white);
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 992px) {
+  .policy-layout {
     grid-template-columns: 1fr;
+  }
+  .policy-sidebar {
+      position: relative;
+      top: 0;
+      margin-bottom: 30px;
+  }
+  .contact-grid {
+      grid-template-columns: 1fr;
+      gap: 30px;
   }
 }
 </style>

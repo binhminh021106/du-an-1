@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Api\admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Slide;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;  // [NEW] Import Transaction
-use Illuminate\Support\Facades\Log; // [NEW] Import Log
+use Illuminate\Support\Facades\File; // [CHANGED] Dùng File thay vì Storage
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class AdminSlideController extends Controller
 {
@@ -16,16 +16,16 @@ class AdminSlideController extends Controller
      */
     public function index()
     {
-        // [UPDATE] Đảm bảo luôn sắp xếp theo order_number để hiển thị đúng thứ tự
+        // Luôn sắp xếp theo order_number
         $slides = Slide::orderBy('order_number', 'asc')->get();
 
-        // Map dữ liệu từ Database (snake_case) sang JSON cho Vue (camelCase)
         $data = $slides->map(function ($slide) {
             return [
                 'id'          => $slide->id,
                 'title'       => $slide->title,
                 'description' => $slide->description,
-                'imageUrl'    => $slide->image_url ? asset($slide->image_url) : null,
+                // Kiểm tra URL để hiển thị đúng
+                'imageUrl'    => $slide->image_url ? (filter_var($slide->image_url, FILTER_VALIDATE_URL) ? $slide->image_url : asset($slide->image_url)) : null,
                 'linkUrl'     => $slide->link_url,
                 'order'       => $slide->order_number,
                 'status'      => $slide->status,
@@ -41,7 +41,6 @@ class AdminSlideController extends Controller
      */
     public function store(Request $request)
     {
-        // 1. Validate dữ liệu
         $request->validate([
             'title' => 'required|string|max:255',
             'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120', 
@@ -54,39 +53,56 @@ class AdminSlideController extends Controller
             'image.max'       => 'Kích thước ảnh không được vượt quá 5MB.',
         ]);
 
-        // 2. Xử lý upload ảnh
-        $imagePath = null;
-        if ($request->hasFile('image')) {
-            // Lưu vào folder: storage/app/public/slides
-            $path = $request->file('image')->store('slides', 'public');
-            // Lưu đường dẫn tương đối vào DB: /storage/slides/ten_file.jpg
-            $imagePath = '/storage/' . $path;
-        }
-
-        // 3. Lưu vào Database (Map tên biến từ Vue sang cột DB)
+        DB::beginTransaction();
         try {
+            // 1. Tạo Slide trước để lấy ID (Chưa có ảnh)
             $slide = Slide::create([
                 'title'        => $request->title,
                 'description'  => $request->description,
-                'image_url'    => $imagePath,          // Cột DB: image_url
-                'link_url'     => $request->linkUrl,   // Vue gửi: linkUrl -> DB: link_url
-                'order_number' => $request->order ?? 0,// Vue gửi: order -> DB: order_number
+                'image_url'    => '', // Tạm thời để trống
+                'link_url'     => $request->linkUrl,
+                'order_number' => $request->order ?? 0,
                 'status'       => $request->status,
             ]);
+
+            // 2. Xử lý upload ảnh sau khi có ID -> Đổi tên thành slide_{ID}_{RANDOM}
+            if ($request->hasFile('image')) {
+                $file = $request->file('image');
+                $extension = $file->getClientOriginalExtension();
+                
+                // --- THAY ĐỔI: Thêm số random vào tên file ---
+                $randomNum = mt_rand(100000, 999999);
+                $fileName = 'slide_' . $slide->id . '_' . $randomNum . '.' . $extension;
+                
+                // Đường dẫn lưu: public/uploads/slides
+                $path = public_path('uploads/slides');
+
+                if (!File::exists($path)) {
+                    File::makeDirectory($path, 0755, true);
+                }
+
+                $file->move($path, $fileName);
+                
+                // Cập nhật lại đường dẫn
+                $slide->image_url = '/uploads/slides/' . $fileName;
+                $slide->save();
+            }
+
+            DB::commit();
 
             return response()->json([
                 'message' => 'Thêm slide thành công',
                 'data'    => $slide
             ], 201);
+
         } catch (\Exception $e) {
-            // Xóa ảnh nếu lưu DB thất bại để tránh rác
-            $this->deleteImageFromStorage($imagePath);
+            DB::rollBack();
             return response()->json(['message' => 'Lỗi server: ' . $e->getMessage()], 500);
         }
     }
 
     /**
-     * Xem chi tiết (Optional)
+     * Xem chi tiết
      */
     public function show(string $id)
     {
@@ -101,7 +117,6 @@ class AdminSlideController extends Controller
     {
         $slide = Slide::findOrFail($id);
 
-        // 1. Validate
         $request->validate([
             'title' => 'required|string|max:255',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
@@ -109,53 +124,62 @@ class AdminSlideController extends Controller
             'status' => 'required|in:published,draft',
         ]);
 
-        // 2. Cập nhật thông tin cơ bản
-        $slide->title = $request->title;
-        $slide->status = $request->status;
-
-        if ($request->has('description')) {
-            $slide->description = $request->description;
-        }
-
-        if ($request->has('linkUrl')) {
-            $slide->link_url = $request->linkUrl;
-        }
-
-        if ($request->has('order')) {
-            $slide->order_number = $request->order;
-        }
-
-        // 3. Xử lý ảnh mới (nếu có)
-        if ($request->hasFile('image')) {
-            // Xóa ảnh cũ
-            $this->deleteImageFromStorage($slide->image_url);
-
-            // Upload ảnh mới
-            $path = $request->file('image')->store('slides', 'public');
-            $slide->image_url = '/storage/' . $path;
-        }
-
-        // 4. Lưu
         try {
+            $slide->title = $request->title;
+            $slide->status = $request->status;
+
+            if ($request->has('description')) $slide->description = $request->description;
+            if ($request->has('linkUrl')) $slide->link_url = $request->linkUrl;
+            if ($request->has('order')) $slide->order_number = $request->order;
+
+            // Xử lý ảnh mới (nếu có)
+            if ($request->hasFile('image')) {
+                // 1. Xóa ảnh cũ
+                if ($slide->image_url) {
+                    $oldPath = public_path($slide->image_url);
+                    if (File::exists($oldPath)) {
+                        File::delete($oldPath);
+                    }
+                }
+
+                // 2. Upload ảnh mới chuẩn tên slide_{ID}_{RANDOM}
+                $file = $request->file('image');
+                $extension = $file->getClientOriginalExtension();
+                
+                // --- THAY ĐỔI: Thêm số random vào tên file ---
+                $randomNum = mt_rand(100000, 999999);
+                $fileName = 'slide_' . $slide->id . '_' . $randomNum . '.' . $extension;
+                
+                $path = public_path('uploads/slides');
+
+                if (!File::exists($path)) {
+                    File::makeDirectory($path, 0755, true);
+                }
+
+                $file->move($path, $fileName);
+                $slide->image_url = '/uploads/slides/' . $fileName;
+            }
+
             $slide->save();
+            
             return response()->json([
                 'message' => 'Cập nhật thành công',
                 'data'    => $slide
             ]);
+
         } catch (\Exception $e) {
             return response()->json(['message' => 'Lỗi cập nhật: ' . $e->getMessage()], 500);
         }
     }
 
     /**
-     * [NEW] Cập nhật thứ tự sắp xếp Slide (Drag & Drop)
+     * Cập nhật thứ tự sắp xếp Slide (Drag & Drop)
      */
     public function updateOrder(Request $request)
     {
-        // 1. Validate chặt chẽ
         $validated = $request->validate([
             'ids'   => ['required', 'array'],
-            'ids.*' => ['integer', 'exists:slides,id', 'distinct'], // Check tồn tại trong bảng slides
+            'ids.*' => ['integer', 'exists:slides,id', 'distinct'],
         ], [
             'ids.required'   => 'Danh sách sắp xếp không được để trống.',
             'ids.array'      => 'Dữ liệu phải là mảng ID.',
@@ -165,7 +189,6 @@ class AdminSlideController extends Controller
 
         $ids = $validated['ids'];
 
-        // 2. Transaction
         DB::beginTransaction();
 
         try {
@@ -198,26 +221,22 @@ class AdminSlideController extends Controller
      */
     public function destroy(string $id)
     {
-        $slide = Slide::findOrFail($id);
+        try {
+            $slide = Slide::findOrFail($id);
 
-        // Xóa file ảnh trong storage
-        $this->deleteImageFromStorage($slide->image_url);
-
-        $slide->delete();
-
-        return response()->json(['message' => 'Đã xóa slide thành công']);
-    }
-
-    /**
-     * Hàm phụ: Xóa file ảnh khỏi đĩa cứng
-     */
-    private function deleteImageFromStorage($path)
-    {
-        if ($path) {
-            $relativePath = str_replace('/storage/', '', $path);
-            if (Storage::disk('public')->exists($relativePath)) {
-                Storage::disk('public')->delete($relativePath);
+            // Xóa file ảnh vật lý
+            if ($slide->image_url) {
+                $path = public_path($slide->image_url);
+                if (File::exists($path)) {
+                    File::delete($path);
+                }
             }
+
+            $slide->delete();
+
+            return response()->json(['message' => 'Đã xóa slide thành công']);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi: ' . $e->getMessage()], 500);
         }
     }
-}   
+}

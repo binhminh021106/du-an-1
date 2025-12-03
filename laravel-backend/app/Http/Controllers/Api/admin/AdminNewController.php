@@ -35,8 +35,9 @@ class AdminNewController extends Controller
 
     /**
      * Helper: Xử lý upload ảnh (Private function)
+     * Đã thêm tham số $id để đặt tên file chuẩn: news_{id}_{random}.ext
      */
-    private function handleUploadImage(Request $request, $fieldName = 'image', $oldPath = null)
+    private function handleUploadImage(Request $request, $fieldName = 'image', $oldPath = null, $id = null)
     {
         if ($request->hasFile($fieldName)) {
             // 1. Nếu có ảnh cũ -> Xóa ảnh cũ đi để tránh rác
@@ -46,8 +47,14 @@ class AdminNewController extends Controller
 
             // 2. Upload ảnh mới
             $file = $request->file($fieldName);
-            // Tạo tên file unique: time_slug-ten-anh.jpg
-            $filename = time() . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $file->getClientOriginalExtension();
+            
+            // --- THAY ĐỔI: Tên file news_{ID}_{RANDOM}.ext ---
+            $randomNum = mt_rand(100000, 999999);
+            
+            // Nếu có ID thì dùng news_{ID}_..., nếu chưa có (hiếm) thì dùng news_temp_...
+            $prefix = $id ? 'news_' . $id : 'news_temp';
+            
+            $filename = $prefix . '_' . $randomNum . '.' . $file->getClientOriginalExtension();
             
             // Lưu vào thư mục 'news' trong disk 'public'
             $path = $file->storeAs('news', $filename, 'public');
@@ -104,21 +111,24 @@ class AdminNewController extends Controller
             'author_name.max' => 'Tên tác giả không được quá 100 ký tự.'
         ]);
 
-        // 2. Xử lý upload ảnh
-        $imagePath = $this->handleUploadImage($request, 'image');
-        
-        // Chuẩn bị dữ liệu create
+        // 2. Tạo record trước để lấy ID (chưa lưu ảnh)
         $data = $validated;
-        if ($imagePath) {
-            $data['image_url'] = $imagePath;
-        }
-        unset($data['image']);
+        unset($data['image']); // Bỏ field image ra khỏi mảng data vì chưa xử lý
+        $data['image_url'] = null;
+        $data['author_id'] = null; // Đảm bảo author_id là null
 
-        // Đảm bảo author_id là null
-        $data['author_id'] = null;
-
-        // 3. Tạo record
         $news = News::create($data);
+
+        // 3. Xử lý upload ảnh sau khi có ID
+        if ($request->hasFile('image')) {
+            // Gọi helper với ID vừa tạo
+            $imagePath = $this->handleUploadImage($request, 'image', null, $news->id);
+            
+            if ($imagePath) {
+                $news->image_url = $imagePath;
+                $news->save();
+            }
+        }
         
         return response()->json($news, 201);
     }
@@ -155,7 +165,9 @@ class AdminNewController extends Controller
         // Xử lý upload ảnh mới (nếu có gửi lên)
         if ($request->hasFile('image')) {
             // Hàm này sẽ tự động gọi deletePhysicalImage để xóa ảnh cũ của $news
-            $newImagePath = $this->handleUploadImage($request, 'image', $news->image_url);
+            // Truyền $news->id vào để đặt tên file chuẩn
+            $newImagePath = $this->handleUploadImage($request, 'image', $news->image_url, $news->id);
+            
             if ($newImagePath) {
                 $data['image_url'] = $newImagePath;
             }

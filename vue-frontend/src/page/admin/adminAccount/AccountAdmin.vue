@@ -4,16 +4,12 @@ import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-// ==========================================
 // CONFIGURATION
-// ==========================================
 const rawApiUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 const API_BASE_URL = rawApiUrl.replace(/\/api\/?$/, '');
 const MAX_FILE_SIZE_MB = 5;
 
-// ==========================================
 // AUTHENTICATION & PERMISSIONS
-// ==========================================
 const currentUser = ref({});
 
 const hasRole = (allowedRoles) => {
@@ -79,9 +75,7 @@ const requireLogin = () => {
     return true;
 };
 
-// ==========================================
 // STATE MANAGEMENT
-// ==========================================
 const admins = ref([]);
 const roles = ref([]);
 const allPermissions = ref({});
@@ -138,9 +132,7 @@ const roleFormData = reactive({
 });
 const roleErrors = reactive({ value: '', label: '' });
 
-// ==========================================
 // COMPUTED & LOGIC
-// ==========================================
 const getRoleObj = (roleId) => roles.value.find(r => r.id == roleId) || {};
 const getRoleLabel = (roleId) => getRoleObj(roleId).label || 'Chưa phân quyền';
 const getRoleBadge = (roleId) => getRoleObj(roleId).badgeClass || 'text-bg-secondary';
@@ -253,9 +245,7 @@ watch([searchQuery, selectedRoleFilter, sortOption], () => {
     for (const key in paginationState) paginationState[key] = 1;
 });
 
-// ==========================================
 // HELPER FUNCTIONS
-// ==========================================
 const changePage = (page) => {
     if (activeTab.value && paginationState[activeTab.value] !== undefined) {
         paginationState[activeTab.value] = page;
@@ -267,9 +257,7 @@ const getFormattedDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('vi-VN');
 };
 
-// ==========================================
 // ACTIONS & API
-// ==========================================
 async function fetchCurrentUser() {
     try {
         const response = await apiService.get('/user');
@@ -932,7 +920,7 @@ onMounted(async () => {
                 <div class="modal-body p-0 position-relative">
                     <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal"></button>
                     <div class="text-center bg-light p-5 rounded-top">
-                        <img :src="getAvatarUrl(viewingUser.avatar_url, viewingUser.fullname)" class="rounded-circle shadow mb-3 border border-3 border-white" width="120" height="120">
+                        <img :src="getAvatarUrl(viewingUser.avatar_url, viewingUser.fullname)" class="rounded-circle shadow mb-3 border border-3 border-white" style="width: 120px; height: 120px; object-fit: cover;">
                         <h4 class="fw-bold text-dark mb-1">{{ viewingUser.fullname }}</h4>
                         <div class="text-muted small mb-3">{{ viewingUser.email }}</div>
                         <div class="d-flex justify-content-center gap-2">

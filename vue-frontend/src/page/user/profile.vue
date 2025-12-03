@@ -2,7 +2,7 @@
 import { reactive, ref, onMounted, watch, computed } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
-import "@fortawesome/fontawesome-free/css/all.min.css";
+// import "@fortawesome/fontawesome-free/css/all.min.css";
 
 const fileInput = ref(null);
 const router = useRouter();
@@ -27,8 +27,8 @@ const editUser = reactive({
   avatar: "https://via.placeholder.com/150",
   name: "",
   email: "",
-  birthday: "",
-  sex: "Nam",
+  birthday: "", // Thay thế age bằng birthday
+  sex: "",   // Thay gender bằng sex cho khớp DB
   phone: "",
   addresses: [],
 });

@@ -5,14 +5,10 @@ import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 import draggable from 'vuedraggable'; // [NEW] Import thư viện kéo thả
 
-// ==========================================
 // CONFIGURATION
-// ==========================================
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
-// ==========================================
 // ICON LIBRARY (Giữ nguyên)
-// ==========================================
 const commonIcons = [
     { name: 'Điện thoại', code: '<i class="fa-solid fa-mobile-screen"></i>' },
     { name: 'Laptop', code: '<i class="fa-solid fa-laptop"></i>' },
@@ -53,9 +49,7 @@ const commonIcons = [
     { name: 'Bi Joystick', code: '<i class="bi bi-joystick"></i>' },
 ];
 
-// ==========================================
 // AUTHENTICATION & PERMISSIONS
-// ==========================================
 const currentUser = ref({});
 
 const hasRole = (allowedRoles) => {
@@ -119,9 +113,7 @@ const requireLogin = () => {
     return true;
 };
 
-// ==========================================
 // STATE MANAGEMENT
-// ==========================================
 const categories = ref([]);
 const sortableList = ref([]); // [NEW] Danh sách dùng riêng cho Drag & Drop
 const isLoading = ref(true);
@@ -162,9 +154,7 @@ const formData = reactive({
 
 const errors = reactive({ name: '', description: '', icon: '', order_number: '' });
 
-// ==========================================
 // COMPUTED & LOGIC
-// ==========================================
 
 // Filter Icon List
 const filteredIcons = computed(() => {
@@ -233,9 +223,7 @@ watch(searchQuery, () => {
     pagination.disabled.currentPage = 1;
 });
 
-// ==========================================
 // HELPER FUNCTIONS
-// ==========================================
 const changePage = (type, page) => { pagination[type].currentPage = page; };
 const setActiveTab = (tabName) => activeTab.value = tabName;
 
@@ -256,9 +244,7 @@ const resetForm = () => {
     Object.keys(errors).forEach(k => errors[k] = '');
 };
 
-// ==========================================
 // ACTIONS (API)
-// ==========================================
 async function fetchCategories() {
     if (categories.value.length === 0) isLoading.value = true;
     try {
