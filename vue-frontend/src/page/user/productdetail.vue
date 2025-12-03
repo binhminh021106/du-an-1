@@ -174,7 +174,7 @@ const processProductData = (data) => {
 
 const fetchAllProducts = async () => {
   try {
-    const res = await apiService.get(`/products`);
+ const res = await apiService.get(`/products`);
     allProducts.value = res.data.data || res.data || [];
   } catch (err) { console.error("Lỗi tải danh sách:", err); }
 };
@@ -186,10 +186,18 @@ const loadProductById = async (id) => {
     const data = productRes.data.data || productRes.data;
     if (!data) throw new Error("No data");
 
-    const extraImages = (data.images || []).map(img => {
-       if (typeof img === 'string') return img;
-       return img.url || img.image_url || img.path;
-    }).filter(Boolean);
+    // Chuẩn hóa dữ liệu variant
+    data.variants.forEach((v, i) => {
+      v.stock = Number(v.stock) || 0;
+      v.price = Number(v.price) || 0;
+      v.original_price = Number(v.original_price) || v.price;
+      v.id = v.id || i;
+    });
+
+    // Xử lý hình ảnh
+    const extraImages = (data.images || []).map(img => 
+       (typeof img === 'string') ? img : (img.url || img.image_url || img.path)
+    ).filter(Boolean);
 
     data.gallery_images = [data.image_url || data.thumbnail_url, ...extraImages].filter(Boolean);
     data.gallery_images = [...new Set(data.gallery_images)]; 
@@ -314,6 +322,7 @@ const submitComment = async () => {
     }
 };
 
+// --- WATCHERS & HOOKS ---
 onMounted(() => {
   const id = route.params.id;
   if (id) loadProductById(id);
@@ -324,6 +333,7 @@ watch(() => route.params.id, (newId) => {
   if (newId) loadProductById(newId);
 });
 
+// [FIX] Cải thiện logic lấy sản phẩm liên quan
 watchEffect(() => {
   if (product.value && allProducts.value.length > 0) {
     let related = [];
