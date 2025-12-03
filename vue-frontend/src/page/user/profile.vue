@@ -181,7 +181,6 @@ const deleteAddress = (index) => {
   });
 };
 
-
 const validateModal = () => {
   errors.modal = {};
   let isValid = true;
