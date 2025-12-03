@@ -3,6 +3,7 @@ import { onMounted, computed, watch } from "vue";
 import { useStore } from "vuex"; 
 import { useRouter } from "vue-router"; 
 
+
 const store = useStore(); 
 const router = useRouter();
 
@@ -71,6 +72,8 @@ watch(cart, (newVal) => {
 });
 
 // --- ACTIONS ---
+
+// Đã cập nhật: Hiển thị tên sản phẩm khi xóa 1 món
 const removeItem = (cartId) => {
     if(!confirm("Bạn muốn xóa sản phẩm này khỏi giỏ hàng?")) return;
     store.dispatch('removeItem', cartId);
@@ -91,7 +94,6 @@ const updateQty = (cartId, currentQty, change) => {
     store.dispatch('updateItemQty', { cartId, qty: newQty });
 }
 
-// --- XỬ LÝ THANH TOÁN ---
 const proceedToCheckout = () => {
     if (cart.value.length === 0) {
         alert("Giỏ hàng đang trống!");

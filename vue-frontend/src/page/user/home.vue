@@ -37,6 +37,7 @@ const getImageUrl = (path) => {
 
 const formatCurrency = (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 
+
 const getProductPrice = (product) => {
     if (!product) return 0;
     // Ưu tiên lấy giá nhỏ nhất từ biến thể nếu có
@@ -44,6 +45,7 @@ const getProductPrice = (product) => {
         const prices = product.variants.map(v => Number(v.price)).filter(p => !isNaN(p) && p > 0);
         if (prices.length > 0) return Math.min(...prices);
     }
+    // Fallback về giá gốc (nếu có)
     return Number(product.price) || 0;
 };
 
@@ -135,7 +137,8 @@ const scrollProducts = (direction) => {
 
 
 const onAddToCart = (product, specificVariant = null) => {
-    h
+    
+    // 1. Nếu đã có biến thể cụ thể (dùng trong danh sách quick-add variant)
     if (specificVariant) {
         store.dispatch('addToCart', {
             product: product,
@@ -146,24 +149,37 @@ const onAddToCart = (product, specificVariant = null) => {
         return;
     }
 
+    // 2. Nếu là nút "Thêm vào giỏ" tổng quát (chỉ dùng cho sản phẩm KHÔNG CÓ variants)
+    // Hoặc sản phẩm có variants nhưng không chọn biến thể cụ thể
     
-    if (currentPrice === 0) {
+    // Tìm giá hiển thị
+    const currentPrice = getProductPrice(product); 
+
+    if (currentPrice === 0 && (!product.variants || product.variants.length === 0)) {
         Toast.fire({ icon: 'info', title: 'Liên hệ để biết giá!' });
         return;
     }
 
-    
-    let variantToAdd = product.variants?.find(v => Number(v.price) === currentPrice) || product.variants?.[0];
+    // Logic: Nếu không có biến thể, ta giả định nó là một "biến thể gốc" với giá là giá sản phẩm
+    let variantToAdd;
 
-    // Nếu không có variants nào hết, tạo object tạm
-    if (!variantToAdd) {
-         variantToAdd = { id: product.id, product_id: product.id, name: product.name, price: currentPrice, stock: 100 };
+    if (product.variants && product.variants.length > 0) {
+        // Nếu có variants, lấy variant có giá MIN (đại diện cho nút Thêm vào giỏ nhanh)
+        variantToAdd = product.variants.reduce((min, v) => (Number(v.price) < Number(min.price) ? v : min), product.variants[0]);
+    } else {
+        // Nếu không có variants, tạo object tạm để dispatch vào giỏ hàng
+        variantToAdd = { 
+            id: product.id, 
+            product_id: product.id, 
+            name: product.name, 
+            price: currentPrice, 
+            stock: product.stock || 100 // Lấy stock gốc hoặc mặc định
+        };
     }
 
     store.dispatch('addToCart', { product: product, variant: variantToAdd, quantity: 1 });
     Toast.fire({ icon: 'success', title: `Đã thêm ${product.name} vào giỏ!` });
 };
-
 
 // yêu thích
 const wishlistIds = ref(new Set()); // Dùng Set để tra cứu cho nhanh
