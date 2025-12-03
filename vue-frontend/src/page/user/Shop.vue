@@ -65,13 +65,18 @@ const filters = reactive({
   keyword: route.query.search || '',
   categoryId: route.query.categoryId || null,
   priceMin: 0,
-  priceMax: 100000000,
+  priceMax: 50000000,
   brands: [], 
   minRating: 0, 
   inStockOnly: false,
   newArrivalsOnly: false, // MỚI: Lọc hàng mới về
   sortBy: 'default' 
 })
+const setPriceFilter = (min, max) => {
+filters.priceMin = min
+ filters.priceMax = max
+
+}
 
 const searchInput = ref(filters.keyword)
 
@@ -339,19 +344,46 @@ watch(() => route.query, (newQuery) => {
             </li>
           </ul>
 
-          <!-- 3. LỌC GIÁ -->
-          <div class="filter-price">
-            <h5><i class="fas fa-filter"></i> Lọc theo giá</h5>
-            <div class="price-range">
-              <label>Tối đa: {{ formatCurrency(filters.priceMax) }}</label>
-              <input type="range" min="0" max="50000000" step="500000" v-model.number="filters.priceMax" class="range-slider" />
-              <div class="price-inputs-row">
-                 <input type="number" v-model.number="filters.priceMin" placeholder="Min" class="small-input">
-                 <span>-</span>
-                 <input type="number" v-model.number="filters.priceMax" placeholder="Max" class="small-input">
-              </div>
-            </div>
-          </div>
+        <div class="filter-price-improved filter-section mt-4">
+    <h5><i class="fas fa-money-bill-wave"></i> Lọc theo giá</h5>
+    
+    <div class="price-display-range">
+        <span class="price-min">{{ formatCurrency(filters.priceMin) }}</span>
+        <span>&mdash;</span>
+        <span class="price-max">{{ formatCurrency(filters.priceMax) }}</span>
+    </div>
+
+    <div class="range-slider-container-mock">
+        <input 
+            type="range" 
+            min="0" 
+            max="50000000" 
+            step="500000" 
+            v-model.number="filters.priceMin" 
+            class="range-slider-min"
+        />
+        <input 
+            type="range" 
+            min="0" 
+            max="50000000" 
+            step="500000" 
+            v-model.number="filters.priceMax" 
+            class="range-slider-max"
+        />
+        <div class="range-progress" :style="{ 
+            left: `${filters.priceMin / 50000000 * 100}%`,
+            right: `${100 - filters.priceMax / 50000000 * 100}%`
+        }"></div>
+    </div>
+    
+    <div class="price-quick-filters">
+        <button @click="setPriceFilter(0, 5000000)" class="btn-quick-filter">Dưới 5 Tr</button>
+        <button @click="setPriceFilter(5000000, 10000000)" class="btn-quick-filter">5 - 10 Tr</button>
+        <button @click="setPriceFilter(10000000, 20000000)" class="btn-quick-filter">10 - 20 Tr</button>
+        <button @click="setPriceFilter(20000000, 50000000)" class="btn-quick-filter">Trên 20 Tr</button>
+        <button @click="setPriceFilter(0, 100000000)" class="btn-quick-filter btn-clear">Tất cả</button>
+    </div>
+</div>
 
           <!-- 4. THƯƠNG HIỆU -->
           <div class="filter-section mt-4" v-if="availableBrands.length > 0">
@@ -557,15 +589,6 @@ watch(() => route.query, (newQuery) => {
   padding-left: 10px;
 }
 
-.filter-section h3, .filter-price h5, .filter-section h5 {
-  font-size: 1.1em;
-  color: #222;
-  font-weight: 600;
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
 
 .category-list {
   list-style: none;
@@ -610,12 +633,180 @@ watch(() => route.query, (newQuery) => {
   background: none; border: none; color: #888; cursor: pointer;
 }
 
-/* Price Filter */
-.price-range { display: flex; flex-direction: column; gap: 8px; }
-.range-slider { width: 100%; accent-color: var(--primary-color); }
-.price-inputs-row { display: flex; gap: 5px; align-items: center; }
-.small-input {
-  width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.85em;
+/* Màu chính (dùng lại từ các phần khác, ví dụ: #009981) */
+:root { --primary-color: #009981; --text-color: #333; --border-color: #e5e7eb; }
+
+
+.filter-price-improved {
+    padding: 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: #f9f9f9;
+}
+
+.price-display-range {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.price-display-range span {
+    padding: 5px 8px;
+    background: white;
+    border: 1px solid var(--primary-color);
+    border-radius: 4px;
+    color: var(--primary-color);
+}
+.price-display-range span:first-child { margin-right: 5px; }
+.price-display-range span:last-child { margin-left: 5px; }
+
+/* --- Thanh trượt kép (Mô phỏng) --- */
+.range-slider-container-mock {
+    position: relative;
+    height: 30px;
+    margin-bottom: 25px;
+}
+
+.range-slider-min,
+.range-slider-max {
+    position: absolute;
+    width: 100%;
+    height: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #ccc;
+    pointer-events: none; /* Quan trọng: Cho phép click xuyên qua */
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    z-index: 10;
+}
+
+/* Thanh trượt điều khiển (thumbs) */
+.range-slider-min::-webkit-slider-thumb,
+.range-slider-max::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--primary-color);
+    border: 3px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+    pointer-events: all; /* Cho phép điều khiển */
+    cursor: grab;
+    margin-top: -6px; /* Điều chỉnh vị trí thumb */
+}
+
+/* Ẩn track mặc định cho 2 thanh trượt */
+.range-slider-min::-webkit-slider-runnable-track,
+.range-slider-max::-webkit-slider-runnable-track {
+    background: transparent;
+    height: 5px;
+}
+
+/* Thanh tiến trình (highlight) */
+.range-progress {
+    position: absolute;
+    height: 5px;
+    background: var(--primary-color);
+    top: 50%;
+    transform: translateY(-50%);
+    border-radius: 5px;
+    z-index: 5;
+}
+
+/* ------------------- SỬA LỖI LỌC GIÁ BỊ TRÀN ------------------- */
+
+.filter-price-improved {
+    padding: 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: #fff; /* Đổi về nền trắng để nổi bật hơn */
+    /* Đảm bảo khung ngoài không bị tràn */
+    overflow: hidden; 
+}
+
+/* --- Range Slider Mock (Chỉ cần đảm bảo không có margin/padding gây tràn) --- */
+.range-slider-container-mock {
+    position: relative;
+    height: 30px;
+    margin-bottom: 25px;
+    padding: 0 5px; /* Thêm padding nhẹ để các thumb không chạm mép */
+}
+
+/* Range inputs: cần width 100% của khung cha có padding */
+.range-slider-min,
+.range-slider-max {
+    width: calc(100% - 10px); /* Lấy 100% chiều rộng trừ padding đã đặt */
+    left: 5px; /* Bắt đầu từ vị trí padding */
+    /* ... (giữ nguyên các thuộc tính khác) ... */
+}
+
+/* ------------------- SỬA LỖI TRÀN KHUNG & CO GIÃN ------------------- */
+
+.price-quick-filters {
+    display: flex;
+    flex-wrap: wrap; 
+    /* Thay vì space-between, dùng flex-start để các nút ép sát về bên trái */
+    justify-content: flex-start; 
+    gap: 8px; /* Khoảng cách giữa các nút */
+    margin-top: 10px;
+}
+
+.btn-quick-filter {
+    /* Quan trọng: Định nghĩa kích thước cho 2 nút trên 1 hàng */
+    /* Tính toán 50% chiều rộng trừ đi 1 nửa gap */
+    flex: 0 0 calc(50% - 4px); /* flex-grow: 0, flex-shrink: 0, width: 50% - 4px */
+    
+    /* Đảm bảo chữ vừa vặn */
+    padding: 6px 5px; 
+    font-size: 11px;
+    text-align: center;
+    /* Loại bỏ min-width: 0 không cần thiết */
+}
+
+/* Nút "Tất cả" luôn chiếm trọn hàng */
+.btn-quick-filter.btn-clear {
+    flex: 0 0 100%; /* Chiếm 100% chiều rộng */
+    margin-top: 5px;
+}
+
+
+
+.price-display-range {
+    display: flex;
+    justify-content: space-between;
+    align-items: center; /* Căn giữa dọc */
+    margin-bottom: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.price-display-range span {
+   
+    display: block; 
+    flex-grow: 1; 
+    padding: 5px 18px;
+    background: white;
+    border: 1px solid var(--primary-color);
+    border-radius: 4px;
+    color: var(--primary-color);
+    text-align: center;
+    overflow: hidden; /* Tránh tràn chữ/số */
+}
+
+/* Sửa lỗi khoảng cách của dấu gạch ngang */
+.price-display-range span:nth-child(2) {
+    flex-grow: 0;
+    border: none;
+    background: transparent;
+    color: #666;
+    padding: 0 2px;
 }
 
 /* Brand & Other Filters */

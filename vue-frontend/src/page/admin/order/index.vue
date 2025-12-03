@@ -4,14 +4,10 @@ import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
-// ==========================================
 // CONFIGURATION
-// ==========================================
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
-// ==========================================
 // AUTHENTICATION & PERMISSIONS
-// ==========================================
 const currentUser = ref({});
 
 const hasRole = (allowedRoles) => {
@@ -76,9 +72,7 @@ const requireLogin = () => {
     return true;
 };
 
-// ==========================================
 // STATE MANAGEMENT
-// ==========================================
 const allOrders = ref([]);
 const isLoading = ref(true);
 const searchQuery = ref('');
@@ -102,9 +96,7 @@ const pagination = reactive({
     returns: { currentPage: 1, itemsPerPage: 10 },
 });
 
-// ==========================================
 // COMPUTED & LOGIC
-// ==========================================
 
 // 1. Filter & Sort Global
 const processedOrders = computed(() => {
@@ -177,9 +169,7 @@ watch([searchQuery, sortCriteria], () => {
     Object.keys(pagination).forEach(key => pagination[key].currentPage = 1);
 });
 
-// ==========================================
 // HELPER FUNCTIONS
-// ==========================================
 const changePage = (type, page) => { pagination[type].currentPage = page; };
 const setActiveTab = (tabName) => activeTab.value = tabName;
 
@@ -212,9 +202,7 @@ const openDetailModal = async (order) => {
     }
 };
 
-// ==========================================
 // ACTIONS (API)
-// ==========================================
 async function fetchOrders() {
     if (allOrders.value.length === 0) isLoading.value = true;
     try {

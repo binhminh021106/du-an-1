@@ -3,20 +3,17 @@ import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue';
 import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
+// Đã sửa lại dòng import đúng tên thư viện
 import { QuillEditor } from '@vueup/vue-quill';
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
 import html2pdf from 'html2pdf.js';
 
-// ==========================================
 // CONFIGURATION
-// ==========================================
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 const BACKEND_URL = API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
 const FRONTEND_URL = window.location.origin;
 
-// ==========================================
 // AUTHENTICATION & PERMISSIONS
-// ==========================================
 const currentUser = ref({});
 
 const hasRole = (allowedRoles) => {
@@ -91,9 +88,7 @@ const requireLogin = () => {
     return true;
 };
 
-// ==========================================
 // STATE MANAGEMENT
-// ==========================================
 const isLoading = ref(true);
 const isEditMode = ref(false);
 const news = ref([]);
@@ -137,9 +132,7 @@ const quillToolbar = [
     [{ 'font': [] }], [{ 'align': [] }], ['clean'], ['link', 'image', 'video']
 ];
 
-// ==========================================
 // COMPUTED & WATCHERS
-// ==========================================
 
 // [NEW] Tính toán số lượng bài viết cho từng trạng thái để hiện lên Tab
 const statusCounts = computed(() => {
@@ -202,9 +195,7 @@ watch(() => formData.title, (newTitle) => {
     if (!isEditMode.value && newTitle) formData.slug = slugify(newTitle);
 });
 
-// ==========================================
 // HELPER FUNCTIONS
-// ==========================================
 const getFullImage = (path) => {
     if (!path) return 'https://placehold.co/800x400?text=No+Image';
     if (path.startsWith('blob:') || path.startsWith('http')) return path;
@@ -282,9 +273,7 @@ function initializeModals() {
     });
 }
 
-// ==========================================
 // ACTIONS (HANDLERS)
-// ==========================================
 const handleFileChange = async (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -356,9 +345,7 @@ const goToPage = (page) => {
     if (page >= 1 && page <= totalPages.value) currentPage.value = page;
 };
 
-// ==========================================
 // API CALLS
-// ==========================================
 async function fetchNews() {
     isLoading.value = true;
     try {

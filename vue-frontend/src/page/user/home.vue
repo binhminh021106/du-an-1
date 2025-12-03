@@ -1,23 +1,20 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import apiService from '../../apiService.js';
-import { useRouter } from 'vue-router';
+import { useRouter } from 'vue-router'; // Fix lỗi thiếu router
 import { useStore } from "vuex"; 
-import Swal from 'sweetalert2';
-
-// --- CẬP NHẬT: Import toggleWishlist để đồng bộ với trang chi tiết ---
+import apiService from '../../apiService.js';
+import Swal from 'sweetalert2'; // Giữ lại SweetAlert đẹp của code cũ
 import { toggleWishlist } from "../../store/wishlistStore.js"; 
 
-// --- INIT STORE ---
 const store = useStore();
 const router = useRouter();
 
-// --- CONFIG ---
+// --- CẤU HÌNH ---
 const SERVER_URL = 'http://127.0.0.1:8000'; 
-const CHATBOT_API_URL = 'http://localhost:3000/api/chat-search';
+const CHATBOT_API_URL = 'http://localhost:3000/api/chat-search'; // Hoặc port 8000 tùy server bạn
 const USE_STORAGE = false; 
 
-// --- TOAST CONFIG ---
+// --- TOAST CONFIG (Giữ lại thông báo đẹp) ---
 const Toast = Swal.mixin({
     toast: true,
     position: 'bottom-end',
@@ -30,7 +27,29 @@ const Toast = Swal.mixin({
     }
 });
 
-// --- MAIN STATE ---
+
+const getImageUrl = (path) => {
+    if (!path) return 'https://placehold.co/400x300?text=No+Image';
+    if (path.startsWith('http') || path.startsWith('data:') || path.startsWith('blob:')) return path;
+    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    return USE_STORAGE ? `${SERVER_URL}/storage/${cleanPath}` : `${SERVER_URL}/${cleanPath}`;
+};
+
+const formatCurrency = (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+
+
+const getProductPrice = (product) => {
+    if (!product) return 0;
+    // Ưu tiên lấy giá nhỏ nhất từ biến thể nếu có
+    if (product.variants && Array.isArray(product.variants) && product.variants.length > 0) {
+        const prices = product.variants.map(v => Number(v.price)).filter(p => !isNaN(p) && p > 0);
+        if (prices.length > 0) return Math.min(...prices);
+    }
+    // Fallback về giá gốc (nếu có)
+    return Number(product.price) || 0;
+};
+
+
 const categories = ref([]);
 const brands = ref([]);
 const slides = ref([]);
@@ -47,79 +66,41 @@ const isChatOpen = ref(false);
 const chatInput = ref("");
 const isChatLoading = ref(false);
 const chatMessages = ref([
-    { 
-        role: 'ai', 
-        text: 'Xin chào! Tôi là trợ lý AI. Bạn muốn tìm gì? (VD: "Tìm giày" hoặc "Điện thoại Samsung")',
-        products: [] 
-    }
+    { role: 'ai', text: 'Xin chào! Bạn cần tìm sản phẩm gì?', products: [] }
 ]);
 const chatBodyRef = ref(null);
 
-// --- HELPER FUNCTIONS ---
-const getImageUrl = (path) => {
-    if (!path) return 'https://placehold.co/400x300?text=No+Image';
-    if (path.startsWith('http') || path.startsWith('data:') || path.startsWith('blob:')) return path;
-    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    return USE_STORAGE ? `${SERVER_URL}/storage/${cleanPath}` : `${SERVER_URL}/${cleanPath}`;
-};
-
-const formatCurrency = (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-
-const setActiveCategory = (id) => { activeCategoryId.value = String(id); };
-
-const getProductPrice = (product) => {
-    if (!product) return 0;
-    if (product.variants && Array.isArray(product.variants) && product.variants.length > 0) {
-        const prices = product.variants.map(v => Number(v.price)).filter(p => !isNaN(p) && p > 0);
-        if (prices.length > 0) return Math.min(...prices);
-    }
-    return Number(product.price) || 0;
-};
-
-const getExcerpt = (htmlContent, maxLength = 120) => {
-    if (!htmlContent) return '';
-    const tmp = document.createElement("DIV");
-    tmp.innerHTML = htmlContent;
-    let plainText = tmp.textContent || tmp.innerText || "";
-    if (plainText.length > maxLength) return plainText.substring(0, maxLength) + '...';
-    return plainText;
-};
-
-// --- FETCH DATA ---
+// --- FETCH DATA (QUAN TRỌNG: Đã sửa để không bị mất dữ liệu) ---
 const fetchData = async () => {
     try {
-        const [catRes, slideRes, prodRes, userRes, brandRes, couponRes] = await Promise.all([
-            apiService.get(`/categories`).catch(() => null),
-            apiService.get(`/slides`).catch(() => null),
-            apiService.get(`/products`).catch(() => null),
-            apiService.get(`/users`).catch(() => null),
-            apiService.get(`/brands`).catch(() => null),
-            apiService.get(`/coupons`).catch(() => null),
+        // Sử dụng .catch(() => null) để nếu 1 API lỗi thì các API khác vẫn chạy (Tránh trắng trang)
+        const [catRes, slideRes, prodRes, brandRes, couponRes, newsRes] = await Promise.all([
+            apiService.get(`/categories`).catch(e => null),
+            apiService.get(`/slides`).catch(e => null),
+            apiService.get(`/products?include=variants`).catch(e => null), // Lấy thêm variants để tính giá đúng
+            apiService.get(`/brands`).catch(e => null),
+            apiService.get(`/coupons`).catch(e => null),
+            apiService.get(`/news`).catch(e => null),
         ]);
 
-        categories.value = catRes?.data || [];
-        slides.value = slideRes?.data || [];
-        products.value = prodRes?.data || [];
-        brands.value = brandRes?.data || [];
+        // Xử lý dữ liệu linh hoạt (chấp nhận cả data.data hoặc data)
+        categories.value = catRes?.data?.data || catRes?.data || [];
+        slides.value = slideRes?.data?.data || slideRes?.data || [];
+        
+        // FIX LỖI KHÔNG HIỆN SẢN PHẨM: Kiểm tra kỹ cấu trúc trả về
+        products.value = prodRes?.data?.data || prodRes?.data || [];
+        
+        brands.value = brandRes?.data?.data || brandRes?.data || [];
+        newsList.value = newsRes?.data?.data || newsRes?.data || [];
 
-        if (couponRes && couponRes.data && Array.isArray(couponRes.data)) {
-            vouchers.value = couponRes.data.map(c => ({
-                id: c.id,
-                code: c.code,
-                name: c.name,
-                min_spend: c.min_spend,
-                value: c.value,
-                desc: `Giảm ${formatCurrency(c.value)} cho đơn từ ${formatCurrency(c.min_spend)}`
+        const rawVouchers = couponRes?.data?.data || couponRes?.data || [];
+        if (Array.isArray(rawVouchers)) {
+            vouchers.value = rawVouchers.map(c => ({
+                id: c.id, code: c.code, name: c.name, min_spend: c.min_spend, value: c.value,
+                desc: `Giảm ${formatCurrency(c.value)} đơn ${formatCurrency(c.min_spend)}`
             }));
         } else {
             vouchers.value = [];
-        }
-
-        try {
-            const newsRes = await apiService.get(`/news`);
-            newsList.value = newsRes?.data || [];
-        } catch (newsError) {
-            newsList.value = [];
         }
 
     } catch (err) {
@@ -127,13 +108,12 @@ const fetchData = async () => {
     }
 };
 
-// --- COMPUTED ---
-const newProducts = computed(() => {
-    if (!Array.isArray(products.value)) return [];
-    return [...products.value].slice(0, 15);
-});
+// --- LOGIC SLIDER & NAV ---
+const navigateToCategory = (id) => {
+    activeCategoryId.value = String(id);
+    router.push({ path: '/Shop', query: { categoryId: id } });
+};
 
-// --- SLIDER LOGIC ---
 const startAutoSlide = () => {
     if (!slides.value.length) return;
     clearInterval(interval);
@@ -154,54 +134,100 @@ const scrollProducts = (direction) => {
         : productContainer.value.scrollBy({ left: scrollAmount, behavior: 'smooth' });
 };
 
-// --- ACTIONS ---
-const onAddToCart = (product) => {
-    const currentPrice = getProductPrice(product);
-    if (currentPrice === 0) {
-        Toast.fire({ icon: 'info', title: 'Sản phẩm đang cập nhật giá!' });
+
+
+const onAddToCart = (product, specificVariant = null) => {
+    
+    // 1. Nếu đã có biến thể cụ thể (dùng trong danh sách quick-add variant)
+    if (specificVariant) {
+        store.dispatch('addToCart', {
+            product: product,
+            variant: specificVariant,
+            quantity: 1
+        });
+        Toast.fire({ icon: 'success', title: `Đã thêm ${product.name} (${specificVariant.name}) vào giỏ!` });
         return;
     }
-    let variantToAdd = null;
+
+    // 2. Nếu là nút "Thêm vào giỏ" tổng quát (chỉ dùng cho sản phẩm KHÔNG CÓ variants)
+    // Hoặc sản phẩm có variants nhưng không chọn biến thể cụ thể
+    
+    // Tìm giá hiển thị
+    const currentPrice = getProductPrice(product); 
+
+    if (currentPrice === 0 && (!product.variants || product.variants.length === 0)) {
+        Toast.fire({ icon: 'info', title: 'Liên hệ để biết giá!' });
+        return;
+    }
+
+    // Logic: Nếu không có biến thể, ta giả định nó là một "biến thể gốc" với giá là giá sản phẩm
+    let variantToAdd;
+
     if (product.variants && product.variants.length > 0) {
-        variantToAdd = product.variants.find(v => Number(v.price) === currentPrice) || product.variants[0];
+        // Nếu có variants, lấy variant có giá MIN (đại diện cho nút Thêm vào giỏ nhanh)
+        variantToAdd = product.variants.reduce((min, v) => (Number(v.price) < Number(min.price) ? v : min), product.variants[0]);
     } else {
+        // Nếu không có variants, tạo object tạm để dispatch vào giỏ hàng
         variantToAdd = { 
-            id: product.id, product_id: product.id, name: product.name, price: currentPrice, stock: product.stock || 100 
+            id: product.id, 
+            product_id: product.id, 
+            name: product.name, 
+            price: currentPrice, 
+            stock: product.stock || 100 // Lấy stock gốc hoặc mặc định
         };
     }
+
     store.dispatch('addToCart', { product: product, variant: variantToAdd, quantity: 1 });
     Toast.fire({ icon: 'success', title: `Đã thêm ${product.name} vào giỏ!` });
 };
 
-// --- CẬP NHẬT: Xử lý Thêm/Xóa yêu thích ---
-const onAddToWishlist = (product) => {
-    // Gọi hàm toggleWishlist từ store (trả về true nếu thêm, false nếu xóa)
-    const isAdded = toggleWishlist(product);
-    
-    if (isAdded) {
-        Toast.fire({ icon: 'success', title: `Đã thêm ${product.name} vào yêu thích ❤️` });
-    } else {
-        Toast.fire({ icon: 'info', title: `Đã xóa ${product.name} khỏi yêu thích` });
+// yêu thích
+const wishlistIds = ref(new Set()); // Dùng Set để tra cứu cho nhanh
+
+// Hàm cập nhật danh sách ID đã thích từ LocalStorage
+const updateWishlistState = () => {
+    try {
+        const stored = JSON.parse(localStorage.getItem('wishlist') || '[]');
+        // Giả sử stored là mảng object sản phẩm, ta chỉ lấy ID
+        wishlistIds.value = new Set(stored.map(p => p.id));
+    } catch (e) {
+        wishlistIds.value = new Set();
     }
 };
 
+// Hàm kiểm tra xem sản phẩm có trong wishlist không
+const isLiked = (product) => wishlistIds.value.has(product.id);
+
+
+// ... giữ nguyên logic cũ ...
+
+const onAddToWishlist = (product) => {
+    const isAdded = toggleWishlist(product);
+    
+    // CẬP NHẬT NGAY LẬP TỨC CHO GIAO DIỆN
+    if (isAdded) {
+        wishlistIds.value.add(product.id); // Thêm ID vào Set
+        Toast.fire({ icon: 'success', title: `Đã thích ${product.name} ❤️` });
+    } else {
+        wishlistIds.value.delete(product.id); // Xóa ID khỏi Set
+        Toast.fire({ icon: 'info', title: `Đã bỏ thích ${product.name}` });
+    }
+    
+    // Mẹo nhỏ: Gán lại Set mới để Vue nhận biết sự thay đổi (Reactivity)
+    wishlistIds.value = new Set(wishlistIds.value);
+};
+
+// ... giữ nguyên logic cũ ...
+
 const saveVoucher = (code) => {
     navigator.clipboard.writeText(code).then(() => {
-        Toast.fire({ icon: 'success', title: `Đã sao chép mã: ${code}` });
+        Toast.fire({ icon: 'success', title: `Đã copy mã: ${code}` });
     });
 };
 
-// --- CHATBOT FUNCTIONS ---
-const toggleChat = () => {
-    isChatOpen.value = !isChatOpen.value;
-    if (isChatOpen.value) scrollToBottom();
-};
-
-const scrollToBottom = () => {
-    nextTick(() => {
-        if (chatBodyRef.value) chatBodyRef.value.scrollTop = chatBodyRef.value.scrollHeight;
-    });
-};
+// --- CHATBOT ---
+const toggleChat = () => { isChatOpen.value = !isChatOpen.value; if (isChatOpen.value) scrollToBottom(); };
+const scrollToBottom = () => { nextTick(() => { if (chatBodyRef.value) chatBodyRef.value.scrollTop = chatBodyRef.value.scrollHeight; }); };
 
 const sendChatMessage = async () => {
     if (!chatInput.value.trim()) return;
@@ -217,26 +243,15 @@ const sendChatMessage = async () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: userText })
         });
-
-        if (!response.ok) throw new Error("Lỗi kết nối Server AI");
+        if (!response.ok) throw new Error("AI Error");
         const data = await response.json();
         const filters = data.ai_data || {}; 
         
         let realProducts = products.value;
-
-        // --- CẬP NHẬT LOGIC TÌM KIẾM ---
         if (filters.keyword) {
             const k = filters.keyword.toLowerCase();
-            realProducts = realProducts.filter(p => {
-                const nameMatch = (p.name || '').toLowerCase().includes(k);
-                const category = categories.value.find(c => String(c.id) === String(p.category_id || p.category?.id));
-                const catMatch = category ? category.name.toLowerCase().includes(k) : false;
-                const brand = brands.value.find(b => String(b.id) === String(p.brand_id || p.brand?.id));
-                const brandMatch = brand ? brand.name.toLowerCase().includes(k) : false;
-                return nameMatch || catMatch || brandMatch;
-            });
+            realProducts = realProducts.filter(p => (p.name || '').toLowerCase().includes(k));
         }
-        
         if (filters.min_price) realProducts = realProducts.filter(p => getProductPrice(p) >= filters.min_price);
         if (filters.max_price) realProducts = realProducts.filter(p => getProductPrice(p) <= filters.max_price);
 
@@ -245,10 +260,8 @@ const sendChatMessage = async () => {
             text: realProducts.length > 0 ? `Tìm thấy ${realProducts.length} sản phẩm:` : "Không tìm thấy sản phẩm phù hợp.",
             products: realProducts 
         });
-
     } catch (error) {
-        console.error(error);
-        chatMessages.value.push({ role: 'ai', text: "Lỗi kết nối Server AI hoặc xử lý dữ liệu.", products: [] });
+        chatMessages.value.push({ role: 'ai', text: "Đang gặp sự cố kết nối AI.", products: [] });
     } finally {
         isChatLoading.value = false;
         scrollToBottom();
@@ -257,6 +270,7 @@ const sendChatMessage = async () => {
 
 onMounted(async () => {
     await fetchData();
+    updateWishlistState(); 
     startAutoSlide();
 });
 onBeforeUnmount(stopAutoSlide);
@@ -272,14 +286,15 @@ onBeforeUnmount(stopAutoSlide);
                 <nav class="categories-sidebar">
                     <h3 class="sidebar-title">DANH MỤC</h3>
                     <div class="category-list">
-                        <router-link v-for="category in categories" :key="category.id"
-                            :to="{ path: '/Shop', query: { categoryId: category.id } }"
+                        <div v-for="category in categories" :key="category.id"
                             class="category-item-clean text-uppercase"
-                            :class="{ active: String(category.id) === String(activeCategoryId) }"
-                            @click="setActiveCategory(category.id)">
+                            @click="navigateToCategory(category.id)" 
+                            style="cursor: pointer;">
                             <span v-if="category.icon" v-html="category.icon" class="cat-icon"></span>
+                            <span v-else class="cat-icon"><i class="fas fa-box"></i></span>
                             <span>{{ category.name }}</span>
-                        </router-link>
+                            <i class="fas fa-chevron-right ms-auto" style="font-size: 10px; color: #ccc; margin-left: auto;"></i>
+                        </div>
                     </div>
                 </nav>
 
@@ -310,15 +325,15 @@ onBeforeUnmount(stopAutoSlide);
 
             <section class="brand-banner" v-if="brands.length > 0">
                 <a :href="brands[0].linkUrl || '#'">
-                    <img :src="getImageUrl(brands[0].imageUrl)" alt="Brand Banner">
+                    <img :src="getImageUrl(brands[0].imageUrl || brands[0].image)" alt="Brand Banner">
                 </a>
             </section>
 
             <section class="trust-block">
                 <div class="trust-item"><i class="fas fa-check-circle"></i> Chính hãng 100%</div>
                 <div class="trust-item"><i class="fas fa-truck"></i> Miễn phí vận chuyển</div>
-                <div class="trust-item"><i class="fas fa-sync-alt"></i> Đổi trả trong 30 ngày</div>
-                <div class="trust-item"><i class="fas fa-headset"></i> Hỗ trợ kỹ thuật 24/7</div>
+                <div class="trust-item"><i class="fas fa-sync-alt"></i> Đổi trả 30 ngày</div>
+                <div class="trust-item"><i class="fas fa-headset"></i> Hỗ trợ 24/7</div>
             </section>
 
             <section class="product-section-container">
@@ -332,28 +347,56 @@ onBeforeUnmount(stopAutoSlide);
                     </div>
 
                     <div class="product-carousel-wrapper" ref="productContainer">
-                        <div class="product-card-basic" v-for="product in newProducts" :key="product.id">
-                            <div class="image-wrapper">
-                                <img :src="getImageUrl(product.thumbnail_url)" :alt="product.name"
-                                    onerror="this.src='https://placehold.co/400x300?text=Lỗi+Ảnh'">
-                                <div class="hover-overlay">
-                                    <button class="action-btn view" @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })"><i class="fas fa-eye"></i></button>
-                                    
-                                    <!-- Nút thêm yêu thích gọi hàm onAddToWishlist -->
-                                    <button class="action-btn heart" @click="onAddToWishlist(product)"><i class="fas fa-heart"></i></button>
-                                    
-                                    <button class="action-btn cart" @click="onAddToCart(product)"><i class="fas fa-shopping-cart"></i></button>
-                                </div>
-                                <div class="badge-new">New</div>
-                            </div>
-                            <div class="product-info">
-                                <h3 class="product-name">{{ product.name }}</h3>
-                                <div class="price-row">
-                                    <span class="price">{{ formatCurrency(getProductPrice(product)) }}</span>
-                                    <span class="sold">Đã bán {{ product.sold_count || 0 }}</span>
-                                </div>
-                            </div>
-                        </div>
+              <div class="product-card-basic" v-for="product in products" :key="product.id">
+    <div class="image-wrapper">
+        <span class="badge-new">NEW</span>
+        <img :src="getImageUrl(product.thumbnail_url || product.image_url || product.image)" :alt="product.name">
+
+        <div class="hover-overlay" :class="{ 'has-variants-layout': product.variants && product.variants.length > 0 }">
+
+            <button class="action-btn" @click="$router.push(`/products/${product.id}`)" title="Xem chi tiết">
+                <i class="fas fa-eye"></i>
+            </button>
+
+      <button 
+    class="action-btn" 
+    :class="{ 'active': isLiked(product) }" 
+    @click="onAddToWishlist(product)" 
+    title="Yêu thích">
+    <i class="fas fa-heart"></i>
+</button>
+
+            <button v-if="!product.variants || product.variants.length === 0" class="action-btn" @click="onAddToCart(product)" title="Thêm vào giỏ">
+                <i class="fas fa-cart-plus"></i>
+            </button>
+
+            <div v-else class="variant-quick-list">
+                <div class="variant-scroll-container">
+                    <button
+                        v-for="variant in product.variants"
+                        :key="variant.id"
+                        class="variant-mini-btn"
+                        @click.stop="onAddToCart(product, variant)"
+                        :title="`${variant.name} - ${formatCurrency(variant.price)}`"
+                    >
+                        {{ variant.name ? variant.name : 'Mẫu ' + variant.id }}
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="product-info">
+        <h3 class="product-name" @click="$router.push(`/products/${product.id}`)" style="cursor: pointer;">
+            {{ product.name }}
+        </h3>
+        <div class="price-row">
+            <span class="price">{{ formatCurrency(getProductPrice(product)) }}</span>
+            <span class="sold" v-if="product.sold_count">Đã bán {{ product.sold_count }}</span>
+        </div>
+    </div>
+</div>
                     </div>
                 </section>
 
@@ -362,8 +405,7 @@ onBeforeUnmount(stopAutoSlide);
                     <div class="news-grid">
                         <div class="news-card-basic" v-for="news in newsList" :key="news.id">
                             <div class="news-img-wrap">
-                                <img :src="getImageUrl(news.image_url || news.image)" :alt="news.title"
-                                    onerror="this.src='https://placehold.co/400x300?text=Lỗi+Ảnh'">
+                                <img :src="getImageUrl(news.image_url || news.image)" :alt="news.title" onerror="this.src='https://placehold.co/400x300?text=News'">
                             </div>
                             <div class="news-content">
                                 <h3 class="news-title">{{ news.title }}</h3>
@@ -377,7 +419,6 @@ onBeforeUnmount(stopAutoSlide);
             </section>
         </main>
 
-        <!-- CHATBOT UI -->
         <div class="chatbot-wrapper">
             <button class="chat-toggle-btn" @click="toggleChat"><i class="fas" :class="isChatOpen ? 'fa-times' : 'fa-comment-dots'"></i></button>
             <div class="chat-window" v-if="isChatOpen">
@@ -389,7 +430,7 @@ onBeforeUnmount(stopAutoSlide);
                             <div class="msg-content"><p>{{ msg.text }}</p></div>
                             <div v-if="msg.products && msg.products.length > 0" class="chat-product-list">
                                 <div v-for="p in msg.products" :key="p.id" class="chat-product-item" @click="$router.push({ name: 'ProductDetail', params: { id: p.id } })">
-                                    <img :src="getImageUrl(p.thumbnail_url)" alt="img">
+                                    <img :src="getImageUrl(p.thumbnail_url || p.image)" alt="img">
                                     <div class="cp-info"><div class="cp-name">{{ p.name }}</div><div class="cp-price">{{ formatCurrency(getProductPrice(p)) }}</div></div>
                                 </div>
                             </div>
@@ -397,14 +438,14 @@ onBeforeUnmount(stopAutoSlide);
                     </div>
                     <div v-if="isChatLoading" class="chat-message ai"><div class="chat-avatar"><i class="fas fa-robot"></i></div><div class="msg-content typing"><span>.</span><span>.</span><span>.</span></div></div>
                 </div>
-                <div class="chat-footer"><input type="text" v-model="chatInput" placeholder="Nhập yêu cầu..." @keyup.enter="sendChatMessage"><button @click="sendChatMessage" :disabled="isChatLoading"><i class="fas fa-paper-plane"></i></button></div>
+                <div class="chat-footer"><input type="text" v-model="chatInput" placeholder="Hỏi AI (VD: Tìm laptop dưới 20tr)..." @keyup.enter="sendChatMessage"><button @click="sendChatMessage" :disabled="isChatLoading"><i class="fas fa-paper-plane"></i></button></div>
             </div>
         </div>
     </div>
 </template>
 
 <style scoped>
-/* (Giữ nguyên phần CSS của bạn vì không có lỗi ở đây) */
+/* Code CSS cũ của bạn rất ổn định, giữ nguyên */
 :root { --primary-color: #009981; --text-color: #333; --border-color: #e5e7eb; }
 * { box-sizing: border-box; font-family: 'Montserrat', sans-serif; }
 .text-uppercase { text-transform: uppercase; }
@@ -447,8 +488,174 @@ onBeforeUnmount(stopAutoSlide);
 .product-card-basic { background: transparent; transition: 0.3s ease; flex: 0 0 calc(20% - 12px); min-width: 200px; }
 .product-grid .product-card-basic { flex: unset; min-width: unset; width: 100%; }
 .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
-.image-wrapper { position: relative; width: 100%; padding-top: 100%; background: #fff; overflow: hidden; border-radius: 6px; margin-bottom: 15px; border: 1px solid #eee; }
-.image-wrapper img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; padding: 10px; transition: transform 0.5s ease; }
+/* Container hình ảnh */
+/* --- GIỮ NGUYÊN HOẶC CẬP NHẬT CÁC CLASS CŨ --- */
+.image-wrapper {
+    position: relative;
+    width: 100%;
+    padding-top: 100%;
+    background: #fff;
+    overflow: hidden;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    border: 1px solid #eee;
+    /* Thêm cái này để lớp mờ không bị tràn ra ngoài góc bo tròn */
+    isolation: isolate;
+}
+
+/* Hiệu ứng zoom ảnh khi hover */
+.product-card-basic:hover .image-wrapper img {
+    transform: scale(1.15); /* Zoom vừa phải cho đẹp */
+}
+
+.image-wrapper img {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    object-fit: contain;
+    padding: 10px;
+    transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    z-index: 1;
+}
+
+/* --- CẤU HÌNH LỚP PHỦ MỚI (QUAN TRỌNG) --- */
+.hover-overlay {
+    position: absolute;
+    bottom: 0; left: 0;
+    width: 100%;
+    padding: 15px;
+    display: flex;
+    justify-content: center; /* Căn giữa các nút */
+    align-items: center; /* Căn giữa theo chiều dọc */
+    gap: 10px; /* Khoảng cách giữa các nút/khối */
+
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+    z-index: 2;
+
+    /* HIỆU ỨNG KÍNH MỜ (FROSTED GLASS) */
+    /* Màu trắng có độ trong suốt 60% để thấy ảnh bên dưới */
+    background: rgba(255, 255, 255, 0.6);
+    /* Hiệu ứng làm mờ ảnh phía sau lớp nền này */
+    backdrop-filter: blur(8px);
+    /* Border nhẹ để làm nổi bật lớp kính */
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.product-card-basic:hover .hover-overlay {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Style cho các nút tròn cũ (action-btn) - Giữ nguyên để đảm bảo nút Mắt và Tim đẹp như cũ */
+.action-btn {
+    width: 35px; height: 35px;
+    border-radius: 50%; border: none;
+    background: #fff; color: #333;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: 0.2s; font-size: 14px;
+    flex-shrink: 0; /* Không bị co lại khi không gian hẹp */
+}
+.action-btn:hover {
+    background: var(--primary-color); color: #fff;
+}
+
+
+
+/* Mặc định (Chưa thích): Hover vào sẽ màu xanh (theo var(--primary-color) cũ) */
+.action-btn:hover {
+    background: var(--primary-color); 
+    color: #fff;
+    border-color: var(--primary-color);
+}
+
+/* ĐÃ THÍCH: Icon màu đỏ, viền đỏ */
+.action-btn.active {
+    color: #d0021b; /* Màu đỏ */
+    border-color: #d0021b;
+    background: #fff; /* Nền trắng để nổi bật icon đỏ */
+}
+
+/* Hiệu ứng khi Hover vào sản phẩm ĐÃ THÍCH */
+.action-btn.active:hover {
+    background: #d0021b; /* Nền chuyển đỏ */
+    color: #fff; /* Icon chuyển trắng */
+    border-color: #d0021b;
+}
+
+.variant-quick-list {
+    display: flex;
+    flex-direction: column;
+    position: relative; /* Quan trọng để làm mốc cho danh sách con */
+    flex-grow: 1; /* Chiếm hết khoảng trống còn lại */
+    min-width: 110px; 
+    max-width: 160px; 
+    height: 35px; /* Chiều cao bằng với nút Tim/Mắt bên cạnh */
+}
+
+/* 2. Container chứa danh sách biến thể */
+.variant-scroll-container {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+    
+    /* CẤU HÌNH TỰ BUNG RA LUÔN */
+    position: absolute; /* Nổi lên trên */
+    bottom: 0; /* Neo ở đáy của khung cha */
+    left: 0;
+    
+    max-height: 150px; /* Chiều cao tối đa (tương đương 4-5 dòng) */
+    overflow-y: auto; /* Cho phép cuộn nếu danh sách dài hơn chiều cao */
+    
+    /* Giao diện nền trắng nổi bật */
+    background: #fff;
+    padding: 5px;
+    border-radius: 8px;
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.15); /* Đổ bóng đậm hơn chút để nổi */
+    z-index: 100; /* Đè lên mọi thứ */
+    border: 1px solid #e5e7eb;
+}
+
+/* Tùy chỉnh thanh cuộn cho đẹp và nhỏ gọn */
+.variant-scroll-container::-webkit-scrollbar {
+    width: 3px;
+}
+.variant-scroll-container::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 10px;
+}
+
+/* 3. Nút biến thể con */
+.variant-mini-btn {
+    background: #f3f4f6; /* Xám nhạt */
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    
+    /* Cấu hình chữ */
+    color: #333 !important; /* Luôn màu đen */
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+    padding: 6px 4px;
+    
+    width: 100%;
+    cursor: pointer;
+    transition: all 0.2s;
+    
+    /* Xử lý chữ dài */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.variant-mini-btn:hover {
+    background: var(--primary-color);
+    color: #fff !important;
+    border-color: var(--primary-color);
+}
 .product-card-basic:hover .image-wrapper img { transform: scale(1.05); }
 .badge-new { position: absolute; top: 10px; left: 10px; background: var(--primary-color); color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 2px; text-transform: uppercase; }
 .hover-overlay { position: absolute; bottom: 0; left: 0; width: 100%; padding: 15px; display: flex; justify-content: center; gap: 10px; opacity: 0; transform: translateY(20px); transition: all 0.3s ease; background: linear-gradient(to top, rgba(0, 0, 0, 0.05), transparent); }
