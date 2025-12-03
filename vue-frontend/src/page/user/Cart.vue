@@ -1,16 +1,21 @@
 <script setup>
 import { onMounted, computed, watch } from "vue";
-import { useStore } from "vuex"; 
+// import { useStore } from "vuex"; // Đã XÓA Vuex
 import { useRouter } from "vue-router"; 
 
+// === IMPORT TỪ STORE ĐỘC LẬP (cartStore.js) ===
+import { 
+    cart,
+    total, 
+    removeItem as removeItemStore, 
+    updateItemQty as updateItemQtyStore, 
+} from '../../store/cartStore'; 
 
-const store = useStore(); 
+
+
 const router = useRouter();
 
-// Lấy cart từ getter
-const cart = computed(() => store.getters.cartItems);
 
-// Hàm tiện ích: Xử lý giá an toàn (chuyển string "1.000.000" -> number 1000000)
 const parsePrice = (value) => {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
@@ -19,39 +24,27 @@ const parsePrice = (value) => {
     return 0;
 };
 
-// Tính tổng tiền: Luôn tính tất cả sản phẩm trong giỏ
-const total = computed(() => {
-    return cart.value.reduce((sum, item) => sum + (parsePrice(item.price) * Number(item.qty)), 0);
-});
 
-// --- HELPER: LẤY TÊN BIẾN THỂ AN TOÀN ---
 const getVariantLabel = (item) => {
-    // Ưu tiên 1: Check variantName (camelCase)
+    // ... logic giữ nguyên ...
     if (item.variantName && item.variantName !== 'Mặc định') return item.variantName;
-    
-    // Ưu tiên 2: Check variant_name (snake_case - thường gặp ở Laravel)
     if (item.variant_name && item.variant_name !== 'Mặc định') return item.variant_name;
-    
-    // Ưu tiên 3: Nếu có SKU thì hiển thị SKU để phân biệt
     if (item.sku) return `SKU: ${item.sku}`;
-
-    // Ưu tiên 4: Nếu backend trả về mảng attributes (ví dụ: [{name: 'Màu', value: 'Đen'}])
     if (Array.isArray(item.attributes) && item.attributes.length > 0) {
         return item.attributes.map(a => `${a.name || ''}: ${a.value || ''}`).join(' - ');
     }
-    
     return null;
 };
 
-// --- CẤU HÌNH API ---
+// --- CẤU HÌNH API --- (GIỮ NGUYÊN)
 const SERVER_URL = 'http://127.0.0.1:8000'; 
 const USE_STORAGE = false; 
 
 const getImageUrl = (path) => {
-  if (!path) return 'https://placehold.co/100x100?text=No+Img';
-  if (path.startsWith('http')) return path;
-  const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-  return USE_STORAGE ? `${SERVER_URL}/storage/${cleanPath}` : `${SERVER_URL}/${cleanPath}`;
+    if (!path) return 'https://placehold.co/100x100?text=No+Img';
+    if (path.startsWith('http')) return path;
+    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    return USE_STORAGE ? `${SERVER_URL}/storage/${cleanPath}` : `${SERVER_URL}/${cleanPath}`;
 };
 
 const formatPrice = (v) => {
@@ -61,37 +54,37 @@ const formatPrice = (v) => {
 }
 
 onMounted(() => {
-  store.dispatch('enrichCartData');
+    // XÓA ACTION VEUEX
 });
 
-// Debug: Log dữ liệu cart khi thay đổi để kiểm tra cấu trúc API trả về
+
 watch(cart, (newVal) => {
     if(newVal && newVal.length > 0) {
         console.log("🛒 Dữ liệu Giỏ hàng hiện tại:", newVal);
     }
 });
 
-// --- ACTIONS ---
 
-// Đã cập nhật: Hiển thị tên sản phẩm khi xóa 1 món
+
 const removeItem = (cartId) => {
     if(!confirm("Bạn muốn xóa sản phẩm này khỏi giỏ hàng?")) return;
-    store.dispatch('removeItem', cartId);
+    removeItemStore(cartId); 
 }
 
 const updateQty = (cartId, currentQty, change) => {
     let newQty = parseInt(currentQty) + change;
-    // Tìm item để check stock
-    const item = cart.value.find(i => i.cartId === cartId);
+    
+ 
+    const item = cart.value.find(i => i.cartId === cartId); 
     const maxStock = item ? (item.stock || 999) : 999;
 
-    if (newQty < 1) return; // Không cho giảm dưới 1
+    if (newQty < 1) return;
     if (newQty > maxStock) {
         alert(`Sản phẩm này chỉ còn ${maxStock} món trong kho!`);
         return;
     }
     
-    store.dispatch('updateItemQty', { cartId, qty: newQty });
+    updateItemQtyStore(cartId, newQty); // <--- GỌI HÀM ĐÃ ĐỔI TÊN
 }
 
 const proceedToCheckout = () => {
@@ -100,13 +93,12 @@ const proceedToCheckout = () => {
         return;
     }
     
-    // Lấy toàn bộ sản phẩm để thanh toán
+   
     const itemsToCheckout = cart.value.map(item => item.cartId);
     localStorage.setItem('checkout_items', JSON.stringify(itemsToCheckout));
     router.push('/checkout');
 }
 </script>
-
 <template>
   <div class="cart-page">
     <div class="container">
@@ -223,7 +215,7 @@ const proceedToCheckout = () => {
 </template>
 
 <style scoped>
-/* Reset & Base */
+
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 

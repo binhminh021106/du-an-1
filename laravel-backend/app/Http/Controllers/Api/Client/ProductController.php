@@ -14,19 +14,15 @@ class ProductController extends Controller
      */
    public function index()
     {
-        // Vẫn giữ load variants để có thể tính toán giá hiển thị
+       
         $products = Product::with(['variants', 'category'])
-            ->where('status', 'active') // Chỉ lấy sản phẩm đang hoạt động
+            ->where('status', 'active') 
             ->latest()
             ->get();
 
-        // Xử lý dữ liệu hiển thị cho danh sách
         $products->transform(function ($product) {
             
-            // --- Cải thiện Logic (Không cần thiết phải tính ở Backend nếu Frontend đã tính) ---
-            // GIỮ LẠI variants. Nếu bạn muốn tối ưu response, có thể chỉ lấy min/max price
-            
-            // Lấy giá thấp nhất/cao nhất từ các biến thể (variants)
+           
             $minPrice = $product->variants->min('price');
             $maxPrice = $product->variants->max('price');
 
@@ -34,14 +30,7 @@ class ProductController extends Controller
             $product->display_price = $minPrice ?: ($product->price ?? 0);
             $product->display_price_max = $maxPrice ?: ($product->price ?? 0);
             
-            // BỎ DÒNG UNSET NÀY ĐI HOÀN TOÀN:
-            // unset($product->variants); // <--- LOẠI BỎ DÒNG NÀY
-
-            // Nếu muốn response NHẸ HƠN, hãy chọn cột cụ thể thay vì dùng unset:
-            // $product->variants->each(function ($variant) {
-            //     $variant->makeHidden(['created_at', 'updated_at', 'stock']); 
-            // });
-
+           
             return $product;
         });
 
@@ -57,8 +46,7 @@ class ProductController extends Controller
      */
     public function show(string $id)
     {
-        // Eager Loading sâu (Nested Relations) để lấy Attribute (Màu, Size...)
-        // variants.attributeValues.attribute: Đi từ Biến thể -> Giá trị thuộc tính (Đỏ) -> Tên thuộc tính (Màu sắc)
+        
         $product = Product::with([
             'variants.attributeValues.attribute', // Cốt lõi để Frontend vẽ nút chọn
             'images',                             // Ảnh phụ (Gallery)
