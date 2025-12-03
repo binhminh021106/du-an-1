@@ -22,7 +22,7 @@ const removeAccents = (str) => {
 }
 
 const formatCurrency = (value) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
+  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
 
 const getImageUrl = (path) => {
   if (!path) return 'https://placehold.co/300x300?text=No+Img'
@@ -61,15 +61,35 @@ const categories = ref([])
 const hotSaleProducts = ref([])
 const loading = ref(false)
 
+// --- KHU VỰC LỌC GIÁ NHANH (QUICK TAGS) ---
+const priceRanges = [
+  { label: 'Dưới 1 triệu', min: 0, max: 1000000 },
+  { label: '1 - 5 triệu', min: 1000000, max: 5000000 },
+  { label: '5 - 10 triệu', min: 5000000, max: 10000000 },
+  { label: '10 - 20 triệu', min: 10000000, max: 20000000 },
+  { label: 'Trên 20 triệu', min: 20000000, max: 1000000000 } // Max số lớn
+];
+
+const selectPriceRange = (range) => {
+  filters.priceMin = range.min;
+  filters.priceMax = range.max;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+const isActivePriceRange = (range) => {
+  return filters.priceMin === range.min && filters.priceMax === range.max;
+};
+
+// --- FILTERS STATE ---
 const filters = reactive({
   keyword: route.query.search || '',
   categoryId: route.query.categoryId || null,
   priceMin: 0,
-  priceMax: 100000000,
+  priceMax: 100000000, // Giá trị mặc định lớn
   brands: [], 
   minRating: 0, 
   inStockOnly: false,
-  newArrivalsOnly: false, // MỚI: Lọc hàng mới về
+  newArrivalsOnly: false,
   sortBy: 'default' 
 })
 
@@ -111,24 +131,19 @@ const filteredProducts = computed(() => {
     })
   }
 
-  // 2. Tìm kiếm (Mở rộng phạm vi tìm kiếm: Tên, Mô tả, Danh mục)
+  // 2. Tìm kiếm (Có dấu hoặc Không dấu)
   if (filters.keyword.trim()) {
     const keywordRaw = filters.keyword.toLowerCase().trim()
     const keywordNoAccent = removeAccents(keywordRaw)
 
     result = result.filter(p => {
-      // Chuẩn bị dữ liệu để so sánh
       const name = p.name ? p.name.toLowerCase() : ''
       const desc = p.description ? p.description.toLowerCase() : ''
-      const catName = p.category ? p.category.name.toLowerCase() : ''
-      
       const nameNoAccent = removeAccents(name)
       const descNoAccent = removeAccents(desc)
 
-      // Kiểm tra khớp từ khóa ở bất kỳ đâu (Có dấu hoặc Không dấu)
       return name.includes(keywordRaw) || nameNoAccent.includes(keywordNoAccent) ||
-             desc.includes(keywordRaw) || descNoAccent.includes(keywordNoAccent) ||
-             catName.includes(keywordRaw)
+             desc.includes(keywordRaw) || descNoAccent.includes(keywordNoAccent)
     })
   }
 
@@ -159,7 +174,7 @@ const filteredProducts = computed(() => {
     result = result.filter(p => getProductStock(p) > 0)
   }
 
-  // 7. MỚI: Lọc hàng mới về (Checkbox)
+  // 7. Hàng mới về
   if (filters.newArrivalsOnly) {
     result = result.filter(p => isNewProduct(p))
   }
@@ -200,15 +215,15 @@ const fetchData = async () => {
       apiService.get(`/products`),
       apiService.get(`/categories?status=active`)
     ])
-    allProducts.value = prodRes.data.data || prodRes.data || []
-    categories.value = catRes.data.data || catRes.data || []
-    
-    hotSaleProducts.value = allProducts.value.slice(0, 5).map(p => ({
-      ...p,
-      sale_price: getProductPrice(p) * 0.85,
-      old_price: getProductPrice(p),
-      discount: 15
-    }))
+   allProducts.value = prodRes.data.data || prodRes.data || []
+ categories.value = catRes.data.data || catRes.data || []
+ 
+ hotSaleProducts.value = allProducts.value.slice(0, 5).map(p => ({
+      ...p,
+      sale_price: getProductPrice(p) * 0.85, // Giảm 15%
+      old_price: getProductPrice(p),
+      discount: 15
+    }))
   } catch (err) {
     console.error('Error fetching data:', err)
   } finally {
@@ -232,7 +247,6 @@ const onAddToCart = async (product) => {
   }
 }
 
-// Điều hướng đến chi tiết sản phẩm
 const goToProduct = (productId) => {
   if (!productId) return
   router.push(`/products/${productId}`)
@@ -339,19 +353,48 @@ watch(() => route.query, (newQuery) => {
             </li>
           </ul>
 
-          <!-- 3. LỌC GIÁ -->
-          <div class="filter-price">
-            <h5><i class="fas fa-filter"></i> Lọc theo giá</h5>
-            <div class="price-range">
-              <label>Tối đa: {{ formatCurrency(filters.priceMax) }}</label>
-              <input type="range" min="0" max="50000000" step="500000" v-model.number="filters.priceMax" class="range-slider" />
-              <div class="price-inputs-row">
-                 <input type="number" v-model.number="filters.priceMin" placeholder="Min" class="small-input">
-                 <span>-</span>
-                 <input type="number" v-model.number="filters.priceMax" placeholder="Max" class="small-input">
+          <!-- 3. LỌC THEO GIÁ (QUICK TAGS + MANUAL INPUT) -->
+          <div class="filter-section mt-4">
+            <h5><i class="fas fa-wallet"></i> Khoảng giá</h5>
+            
+            <!-- Các mức giá định sẵn (Chips) -->
+            <div class="price-tags">
+              <span 
+                v-for="(range, index) in priceRanges" 
+                :key="index"
+                class="price-tag"
+                :class="{ active: isActivePriceRange(range) }"
+                @click="selectPriceRange(range)"
+              >
+                {{ range.label }}
+              </span>
+            </div>
+
+            <!-- Nhập thủ công -->
+            <div class="price-manual-input">
+              <div class="manual-row">
+                <input 
+                  type="number" 
+                  v-model.number="filters.priceMin" 
+                  placeholder="Từ" 
+                  min="0"
+                  @change="applyFiltersToRoute"
+                >
+                <span class="sep">-</span>
+                <input 
+                  type="number" 
+                  v-model.number="filters.priceMax" 
+                  placeholder="Đến" 
+                  min="0"
+                  @change="applyFiltersToRoute"
+                >
               </div>
             </div>
+            <div class="current-range-display" v-if="filters.priceMax < 100000000">
+                Đang lọc: {{ formatCurrency(filters.priceMin) }} - {{ formatCurrency(filters.priceMax) }}
+            </div>
           </div>
+
 
           <!-- 4. THƯƠNG HIỆU -->
           <div class="filter-section mt-4" v-if="availableBrands.length > 0">
@@ -366,26 +409,24 @@ watch(() => route.query, (newQuery) => {
 
           <!-- 5. LỌC KHÁC -->
           <div class="filter-section mt-4">
-             <h5><i class="fas fa-sliders-h"></i> Bộ lọc khác</h5>
-             <div class="other-filters">
-                <select v-model.number="filters.minRating" class="search-box mb-2">
-                   <option value="0">Tất cả đánh giá</option>
-                   <option value="5">5 sao</option>
-                   <option value="4">4 sao trở lên</option>
-                </select>
-                
-                <!-- CHECKBOX: HÀNG MỚI VỀ -->
-                <label class="stock-check">
-                   <input type="checkbox" v-model="filters.newArrivalsOnly"> 
-                   <span class="ml-2">🆕 Hàng mới về</span>
-                </label>
+            <h5><i class="fas fa-sliders-h"></i> Bộ lọc khác</h5>
+            <div class="other-filters">
+              <select v-model.number="filters.minRating" class="search-box mb-2">
+                  <option value="0">Tất cả đánh giá</option>
+                  <option value="5">5 sao</option>
+                  <option value="4">4 sao trở lên</option>
+              </select>
+              
+              <label class="stock-check">
+                  <input type="checkbox" v-model="filters.newArrivalsOnly"> 
+                  <span class="ml-2">🆕 Hàng mới về</span>
+              </label>
 
-                <!-- CHECKBOX: HÀNG CÓ SẴN -->
-                <label class="stock-check mt-2">
-                   <input type="checkbox" v-model="filters.inStockOnly"> 
-                   <span class="ml-2">📦 Chỉ hiện hàng có sẵn</span>
-                </label>
-             </div>
+              <label class="stock-check mt-2">
+                  <input type="checkbox" v-model="filters.inStockOnly"> 
+                  <span class="ml-2">📦 Chỉ hiện hàng có sẵn</span>
+              </label>
+            </div>
           </div>
 
           <button @click="clearAllFilters" class="btn-reset-all">
@@ -433,15 +474,14 @@ watch(() => route.query, (newQuery) => {
                     :alt="product.name" 
                     @error="$event.target.src='https://placehold.co/300x300?text=Product'"
                   />
-                  <!-- Logic hiển thị badge NEW hoặc DISCOUNT -->
                   <span v-if="isNewProduct(product)" class="new-tag">NEW</span>
                   <span v-else-if="product.discount" class="discount-tag">-{{ product.discount }}%</span>
                 </div>
                 <div class="product-info">
-                  <h3 class="product-name" :title="product.name">{{ product.name }}</h3>
-                  <p class="product-price">
-                    {{ formatCurrency(getProductPrice(product)) }}
-                  </p>
+ <h3 class="product-name" :title="product.name">{{ product.name }}</h3>
+<p class="product-price">
+ {{ formatCurrency(getProductPrice(product)) }}
+ </p>
                   
                   <button class="btn-add-cart" 
                     @click.stop="onAddToCart(product)" 
@@ -449,7 +489,6 @@ watch(() => route.query, (newQuery) => {
                     <i class="fas fa-cart-plus"></i> 
                     {{ getProductStock(product) > 0 ? 'Thêm vào giỏ' : 'Hết hàng' }}
                   </button>
-
                 </div>
               </div>
             </div>
@@ -477,8 +516,8 @@ watch(() => route.query, (newQuery) => {
                 <img :src="getImageUrl(product.thumbnail_url || product.image_url)" @error="$event.target.src='https://placehold.co/250x250?text=Sale'" />
               </div>
               <h3 class="hot-sale-name">{{ product.name }}</h3>
-              <p class="hot-sale-price">{{ formatCurrency(product.sale_price) }}</p>
-              <p class="hot-sale-old-price">{{ formatCurrency(product.old_price) }}</p>
+ <p class="hot-sale-price">{{ formatCurrency(product.sale_price) }}</p>
+ <p class="hot-sale-old-price">{{ formatCurrency(product.old_price) }}</p>
               <div class="hot-sale-actions">
                 <button class="btn-love hot-sale-btn"><i class="fas fa-heart"></i></button>
                 <button class="btn-cart hot-sale-btn" @click.stop="onAddToCart(product)"> <i class="fas fa-cart-plus"></i></button>
@@ -557,7 +596,7 @@ watch(() => route.query, (newQuery) => {
   padding-left: 10px;
 }
 
-.filter-section h3, .filter-price h5, .filter-section h5 {
+.filter-section h3, .filter-section h5 {
   font-size: 1.1em;
   color: #222;
   font-weight: 600;
@@ -610,14 +649,6 @@ watch(() => route.query, (newQuery) => {
   background: none; border: none; color: #888; cursor: pointer;
 }
 
-/* Price Filter */
-.price-range { display: flex; flex-direction: column; gap: 8px; }
-.range-slider { width: 100%; accent-color: var(--primary-color); }
-.price-inputs-row { display: flex; gap: 5px; align-items: center; }
-.small-input {
-  width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.85em;
-}
-
 /* Brand & Other Filters */
 .brand-list-container {
   max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px;
@@ -638,6 +669,89 @@ watch(() => route.query, (newQuery) => {
 }
 .btn-reset-all:hover { background: #dce7e4; }
 
+/* --- CSS LỌC GIÁ QUICK TAGS (ĐÃ TỐI ƯU) --- */
+.price-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.price-tag {
+  font-size: 13px;
+  background: #f5f5f5;
+  color: #555;
+  padding: 6px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  display: inline-block;
+  white-space: nowrap; /* Giữ các tag không bị vỡ dòng */
+}
+
+.price-tag:hover {
+  background: #e0e0e0;
+  color: #333;
+}
+
+/* Trạng thái đang chọn */
+.price-tag.active {
+  background: var(--primary-color); 
+  color: white;
+  border-color: var(--primary-color);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 153, 129, 0.3);
+}
+
+/* Phần nhập thủ công */
+.price-manual-input {
+  background: #f9f9f9;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  margin-top: 10px;
+}
+
+.manual-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.manual-row input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  transition: border 0.2s;
+  text-align: center;
+}
+
+.manual-row input:focus {
+  border-color: var(--primary-color);
+  background: #fff;
+}
+
+.manual-row .sep {
+  color: #999;
+  font-weight: bold;
+}
+
+.current-range-display {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--primary-color);
+  text-align: center;
+  font-weight: 600;
+  background: #fff;
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px dashed var(--primary-color);
+}
 /* --- MAIN CONTENT --- */
 .main-content {
   background: white; border-radius: 12px; padding: 25px;
