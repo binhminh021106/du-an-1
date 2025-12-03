@@ -3,7 +3,8 @@ import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue';
 import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
-import { QuillEditor } from '@vueup/vue- ';
+// Đã sửa lại dòng import đúng tên thư viện
+import { QuillEditor } from '@vueup/vue-quill';
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
 import html2pdf from 'html2pdf.js';
 
