@@ -12,9 +12,9 @@ class ProductController extends Controller
      * Display a listing of the resource.
      * API hiển thị danh sách sản phẩm (cho trang chủ, trang danh mục)
      */
-    public function index()
+   public function index()
     {
-        // Load nhẹ: Chỉ cần lấy variants để tính giá min, và ảnh thumbnail
+        // Vẫn giữ load variants để có thể tính toán giá hiển thị
         $products = Product::with(['variants', 'category'])
             ->where('status', 'active') // Chỉ lấy sản phẩm đang hoạt động
             ->latest()
@@ -22,18 +22,26 @@ class ProductController extends Controller
 
         // Xử lý dữ liệu hiển thị cho danh sách
         $products->transform(function ($product) {
-            // Logic lấy giá hiển thị:
-            // Nếu có biến thể -> Lấy giá thấp nhất của biến thể
-            // Nếu không -> Lấy giá gốc của product (nếu cột price tồn tại ở bảng product)
+            
+            // --- Cải thiện Logic (Không cần thiết phải tính ở Backend nếu Frontend đã tính) ---
+            // GIỮ LẠI variants. Nếu bạn muốn tối ưu response, có thể chỉ lấy min/max price
+            
+            // Lấy giá thấp nhất/cao nhất từ các biến thể (variants)
             $minPrice = $product->variants->min('price');
             $maxPrice = $product->variants->max('price');
 
-            $product->display_price = $minPrice ?: $product->price;
-            $product->display_price_max = $maxPrice ?: $product->price;
+            // Gán giá hiển thị (để Frontend tiện dùng hoặc fallback)
+            $product->display_price = $minPrice ?: ($product->price ?? 0);
+            $product->display_price_max = $maxPrice ?: ($product->price ?? 0);
             
-            // Ẩn bớt quan hệ variants nặng nề để response nhẹ hơn
-            unset($product->variants);
-            
+            // BỎ DÒNG UNSET NÀY ĐI HOÀN TOÀN:
+            // unset($product->variants); // <--- LOẠI BỎ DÒNG NÀY
+
+            // Nếu muốn response NHẸ HƠN, hãy chọn cột cụ thể thay vì dùng unset:
+            // $product->variants->each(function ($variant) {
+            //     $variant->makeHidden(['created_at', 'updated_at', 'stock']); 
+            // });
+
             return $product;
         });
 

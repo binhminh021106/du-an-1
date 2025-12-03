@@ -1,15 +1,15 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
-import apiService from '../../../apiService.js';
+import apiService from '../../../apiService.js'; // Đảm bảo đường dẫn này đúng với cấu trúc dự án của bạn
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
-import draggable from 'vuedraggable'; // [NEW] Import thư viện kéo thả
+import draggable from 'vuedraggable'; 
 
 // --- STATE CHUNG ---
 const isLoading = ref(true);
 const isLoadingBrands = ref(true);
 const isUploading = ref(false); // Trạng thái đang upload ảnh
-const drag = ref(false); // [NEW] Trạng thái đang kéo
+const drag = ref(false); // Trạng thái đang kéo
 
 // --- STATE SLIDES ---
 const allSlides = ref([]); // Dữ liệu gốc
@@ -69,7 +69,6 @@ onMounted(() => {
 });
 
 // --- LOGIC TÌM KIẾM (SLIDES) ---
-// [UPDATE] Bỏ phân trang để hỗ trợ Drag & Drop toàn bộ danh sách
 const filteredSlides = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
   // Nếu đang tìm kiếm, trả về kết quả lọc (không support drag)
@@ -80,7 +79,7 @@ const filteredSlides = computed(() => {
     ).sort((a, b) => a.order - b.order);
   }
   // Mặc định trả về toàn bộ list đã sort (support drag trực tiếp vào allSlides)
-  return allSlides.value; // Sort đã được xử lý khi fetch
+  return allSlides.value; 
 });
 
 // Check xem có đang tìm kiếm không để ẩn chức năng kéo thả
@@ -105,7 +104,7 @@ async function fetchAllSlides() {
   isLoading.value = true;
   try {
     const response = await apiService.get(`admin/slides`);
-    // [UPDATE] Map và sort ngay khi nhận dữ liệu
+    // Map và sort ngay khi nhận dữ liệu
     allSlides.value = response.data
         .map(s => ({ ...s, created_at: s.created_at || new Date().toISOString() }))
         .sort((a, b) => a.order - b.order);
@@ -119,7 +118,8 @@ async function fetchAllSlides() {
 async function fetchAllBrands() {
   isLoadingBrands.value = true;
   try {
-    const response = await apiService.get(`admin/brands`);
+    // [FIX] Đổi endpoint từ admin/brands (Brand sản phẩm) sang admin/brand-slides (Brand Banner)
+    const response = await apiService.get(`admin/brand-slides`);
     allBrands.value = response.data
         .map(b => ({ ...b, status: b.status || 'published' }))
         .sort((a, b) => a.order - b.order);
@@ -130,7 +130,7 @@ async function fetchAllBrands() {
   }
 }
 
-// --- [NEW] XỬ LÝ DRAG & DROP (SLIDES) ---
+// --- XỬ LÝ DRAG & DROP (SLIDES) ---
 async function onSlideDragEnd(event) {
     drag.value = false;
     if (event.newIndex === event.oldIndex) return; // Không thay đổi vị trí
@@ -159,7 +159,7 @@ async function onSlideDragEnd(event) {
     }
 }
 
-// --- [NEW] XỬ LÝ DRAG & DROP (BRANDS) ---
+// --- XỬ LÝ DRAG & DROP (BRANDS) ---
 async function onBrandDragEnd(event) {
     drag.value = false;
     if (event.newIndex === event.oldIndex) return;
@@ -167,8 +167,8 @@ async function onBrandDragEnd(event) {
     const orderedIds = allBrands.value.map(item => item.id);
 
     try {
-        // [NOTE] Đảm bảo bạn đã có API admin/brands/update-order nhé!
-        await apiService.post('admin/brands/update-order', { ids: orderedIds });
+        // [FIX] Đổi endpoint sang admin/brand-slides/update-order
+        await apiService.post('admin/brand-slides/update-order', { ids: orderedIds });
         
         allBrands.value.forEach((item, index) => {
             item.order = index + 1;
@@ -467,12 +467,14 @@ async function handleSaveBrand() {
 
     if (isBrandEditMode.value) {
       formData.append('_method', 'PUT');
-      await apiService.post(`admin/brands/${brandFormData.id}`, formData, {
+      // [FIX] Đổi endpoint sang admin/brand-slides
+      await apiService.post(`admin/brand-slides/${brandFormData.id}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       Swal.fire('Thành công', 'Đã cập nhật brand!', 'success');
     } else {
-      await apiService.post(`admin/brands`, formData, {
+      // [FIX] Đổi endpoint sang admin/brand-slides
+      await apiService.post(`admin/brand-slides`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       Swal.fire('Thành công', 'Đã tạo brand mới!', 'success');
@@ -500,7 +502,8 @@ async function handleBrandToggleStatus(brand) {
     formData.append('status', newStatus);
     formData.append('_method', 'PUT');
 
-    await apiService.post(`admin/brands/${brand.id}`, formData);
+    // [FIX] Đổi endpoint sang admin/brand-slides
+    await apiService.post(`admin/brand-slides/${brand.id}`, formData);
     Swal.fire('Thành công', `Đã ${actionText} brand "${brand.name}"!`, 'success');
   } catch (error) {
     console.error("Lỗi cập nhật trạng thái brand:", error);
@@ -522,7 +525,8 @@ async function handleDeleteBrand(brand) {
   });
   if (result.isConfirmed) {
     try {
-      await apiService.delete(`admin/brands/${brand.id}`);
+      // [FIX] Đổi endpoint sang admin/brand-slides
+      await apiService.delete(`admin/brand-slides/${brand.id}`);
       Swal.fire('Đã xóa!', 'Brand đã được xóa.', 'success');
       fetchAllBrands();
     } catch (error) {
@@ -615,7 +619,8 @@ async function handleDeleteBrand(brand) {
                           </td>
                           <td>
                             <img :src="slide.imageUrl || 'https://placehold.co/100x50?text=N/A'" alt="Ảnh slide"
-                              class="img-thumbnail" style="height: 60px; object-fit: cover;">
+                              class="img-thumbnail" style="height: 60px; object-fit: cover;"
+                              @error="(e) => e.target.src = 'https://placehold.co/100x50?text=Image+Error'">
                           </td>
                           <td>
                             <strong>{{ slide.title }}</strong>
@@ -660,7 +665,10 @@ async function handleDeleteBrand(brand) {
                       <tr v-if="filteredSlides.length === 0"><td colspan="6" class="text-center">Không tìm thấy slide nào.</td></tr>
                       <tr v-for="slide in filteredSlides" :key="slide.id">
                           <td class="text-center text-muted">{{ slide.order }}</td>
-                          <td><img :src="slide.imageUrl || 'https://placehold.co/100x50?text=N/A'" class="img-thumbnail" style="height: 60px;"></td>
+                          <td>
+                            <img :src="slide.imageUrl || 'https://placehold.co/100x50?text=N/A'" class="img-thumbnail" style="height: 60px;" 
+                            @error="(e) => e.target.src = 'https://placehold.co/100x50?text=Image+Error'">
+                          </td>
                           <td><strong>{{ slide.title }}</strong></td>
                           <td>{{ slide.linkUrl || 'N/A' }}</td>
                           <td><span class="badge" :class="getStatusBadge(slide.status).class">{{ getStatusBadge(slide.status).text }}</span></td>
@@ -749,7 +757,8 @@ async function handleDeleteBrand(brand) {
                           </td>
                           <td>
                             <img :src="brand.imageUrl || 'https://placehold.co/100x50?text=N/A'" alt="Ảnh brand"
-                              class="img-thumbnail" width="120">
+                              class="img-thumbnail" width="120"
+                              @error="(e) => e.target.src = 'https://placehold.co/100x50?text=Image+Error'">
                           </td>
                           <td><strong>{{ brand.name }}</strong></td>
                           <td>
@@ -787,7 +796,10 @@ async function handleDeleteBrand(brand) {
                       <tr v-if="filteredBrands.length === 0"><td colspan="6" class="text-center">Không tìm thấy brand nào.</td></tr>
                       <tr v-for="brand in filteredBrands" :key="brand.id">
                           <td class="text-center text-muted">{{ brand.order }}</td>
-                          <td><img :src="brand.imageUrl || 'https://placehold.co/100x50?text=N/A'" class="img-thumbnail" width="120"></td>
+                          <td>
+                            <img :src="brand.imageUrl || 'https://placehold.co/100x50?text=N/A'" class="img-thumbnail" width="120"
+                            @error="(e) => e.target.src = 'https://placehold.co/100x50?text=Image+Error'">
+                          </td>
                           <td><strong>{{ brand.name }}</strong></td>
                           <td>{{ brand.linkUrl || 'N/A' }}</td>
                           <td><span class="badge" :class="getStatusBadge(brand.status).class">{{ getStatusBadge(brand.status).text }}</span></td>
@@ -815,232 +827,235 @@ async function handleDeleteBrand(brand) {
     </div>
   </div>
 
-  <!-- MODALS (Giữ nguyên như cũ) -->
-  <div class="modal fade" id="slideModal" ref="slideModalRef" tabindex="-1" aria-labelledby="slideModalLabel"
-    aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="slideModalLabel">
-            {{ isEditMode ? 'Chỉnh sửa Slide' : 'Tạo Slide mới' }}
-          </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="handleSaveSlide" id="slideForm">
-            <div class="row">
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label for="title" class="form-label required">Tiêu đề</label>
-                  <input type="text" class="form-control" :class="{ 'is-invalid': slideErrors.title }" id="title"
-                    v-model="slideFormData.title">
-                  <div class="invalid-feedback" v-if="slideErrors.title">{{ slideErrors.title }}</div>
-                </div>
+  <!-- MODALS -->
+  <Teleport to="body">
+    <div class="modal fade" id="slideModal" ref="slideModalRef" tabindex="-1" aria-labelledby="slideModalLabel"
+      aria-hidden="true" data-bs-backdrop="static">
+      <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="slideModalLabel">
+              {{ isEditMode ? 'Chỉnh sửa Slide' : 'Tạo Slide mới' }}
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form @submit.prevent="handleSaveSlide" id="slideForm">
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="title" class="form-label required">Tiêu đề</label>
+                    <input type="text" class="form-control" :class="{ 'is-invalid': slideErrors.title }" id="title"
+                      v-model="slideFormData.title">
+                    <div class="invalid-feedback" v-if="slideErrors.title">{{ slideErrors.title }}</div>
+                  </div>
 
-                <div class="mb-3">
-                  <label for="description" class="form-label">Mô tả ngắn</label>
-                  <textarea class="form-control" id="description" rows="3"
-                    v-model="slideFormData.description"></textarea>
-                </div>
+                  <div class="mb-3">
+                    <label for="description" class="form-label">Mô tả ngắn</label>
+                    <textarea class="form-control" id="description" rows="3"
+                      v-model="slideFormData.description"></textarea>
+                  </div>
 
-                <div class="mb-3">
-                  <label for="linkUrl" class="form-label">Link liên kết</label>
-                  <input type="text" class="form-control" id="linkUrl" v-model="slideFormData.linkUrl"
-                    placeholder="ví dụ: /san-pham/ao-thun">
-                </div>
+                  <div class="mb-3">
+                    <label for="linkUrl" class="form-label">Link liên kết</label>
+                    <input type="text" class="form-control" id="linkUrl" v-model="slideFormData.linkUrl"
+                      placeholder="ví dụ: /san-pham/ao-thun">
+                  </div>
 
-                <div class="row">
-                  <div class="col-md-6">
-                    <div class="mb-3">
-                      <label for="order" class="form-label required">Thứ tự</label>
-                      <input type="number" class="form-control" :class="{ 'is-invalid': slideErrors.order }" id="order"
-                        v-model.number="slideFormData.order" min="0">
-                      <div class="invalid-feedback" v-if="slideErrors.order">{{ slideErrors.order }}</div>
+                  <div class="row">
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label for="order" class="form-label required">Thứ tự</label>
+                        <input type="number" class="form-control" :class="{ 'is-invalid': slideErrors.order }" id="order"
+                          v-model.number="slideFormData.order" min="0">
+                        <div class="invalid-feedback" v-if="slideErrors.order">{{ slideErrors.order }}</div>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label for="status" class="form-label">Trạng thái</label>
+                        <select class="form-select" id="status" v-model="slideFormData.status">
+                          <option value="published">Hiển thị (Published)</option>
+                          <option value="draft">Ẩn (Hidden)</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
-                  <div class="col-md-6">
-                    <div class="mb-3">
-                      <label for="status" class="form-label">Trạng thái</label>
-                      <select class="form-select" id="status" v-model="slideFormData.status">
-                        <option value="published">Hiển thị (Published)</option>
-                        <option value="draft">Ẩn (Hidden)</option>
-                      </select>
+                </div>
+
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="slideFile" class="form-label required">Hình ảnh</label>
+                    <input type="file" class="form-control" :class="{ 'is-invalid': slideErrors.imageUrl }" id="slideFile"
+                      ref="slideFileInputRef" accept="image/*" @change="onSlideFileChange">
+                    <div class="invalid-feedback" v-if="slideErrors.imageUrl">{{ slideErrors.imageUrl }}</div>
+                    <small class="text-muted" v-if="isEditMode">Để trống nếu không muốn thay đổi ảnh.</small>
+                  </div>
+
+                  <label class="form-label">Xem trước:</label>
+                  <div class="image-preview-container-lg position-relative">
+                    <div v-if="isUploading"
+                      class="position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center bg-light bg-opacity-75"
+                      style="z-index: 5;">
+                      <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Uploading...</span>
+                      </div>
                     </div>
+
+                    <img v-if="slidePreviewImage" :src="slidePreviewImage" class="img-thumbnail" alt="Preview"
+                      @error="(e) => e.target.src = 'https://placehold.co/600x300?text=Image+Error'">
+                    <img v-else src="https://placehold.co/600x300?text=Chưa+có+ảnh" class="img-thumbnail"
+                      alt="Chưa có ảnh">
                   </div>
                 </div>
               </div>
-
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label for="slideFile" class="form-label required">Hình ảnh</label>
-                  <input type="file" class="form-control" :class="{ 'is-invalid': slideErrors.imageUrl }" id="slideFile"
-                    ref="slideFileInputRef" accept="image/*" @change="onSlideFileChange">
-                  <div class="invalid-feedback" v-if="slideErrors.imageUrl">{{ slideErrors.imageUrl }}</div>
-                  <small class="text-muted" v-if="isEditMode">Để trống nếu không muốn thay đổi ảnh.</small>
-                </div>
-
-                <label class="form-label">Xem trước:</label>
-                <div class="image-preview-container-lg position-relative">
-                  <div v-if="isUploading"
-                    class="position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center bg-light bg-opacity-75"
-                    style="z-index: 5;">
-                    <div class="spinner-border text-primary" role="status">
-                      <span class="visually-hidden">Uploading...</span>
-                    </div>
-                  </div>
-
-                  <img v-if="slidePreviewImage" :src="slidePreviewImage" class="img-thumbnail" alt="Preview"
-                    @error="(e) => e.target.src = 'https://placehold.co/600x300?text=Image+Error'">
-                  <img v-else src="https://placehold.co/600x300?text=Chưa+có+ảnh" class="img-thumbnail"
-                    alt="Chưa có ảnh">
-                </div>
-              </div>
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer bg-light">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
-          <button type="submit" form="slideForm" class="btn btn-primary" :disabled="isLoading || isUploading">
-            <span v-if="isLoading || isUploading" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-            {{ isUploading ? 'Đang tải ảnh...' : 'Lưu lại' }}
-          </button>
+            </form>
+          </div>
+          <div class="modal-footer bg-light">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
+            <button type="submit" form="slideForm" class="btn btn-primary" :disabled="isLoading || isUploading">
+              <span v-if="isLoading || isUploading" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+              {{ isUploading ? 'Đang tải ảnh...' : 'Lưu lại' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="modal fade" id="brandModal" ref="brandModalRef" tabindex="-1" aria-labelledby="brandModalLabel"
-    aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="brandModalLabel">
-            {{ isBrandEditMode ? 'Chỉnh sửa Brand' : 'Tạo Brand mới' }}
-          </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="handleSaveBrand" id="brandForm">
-            <div class="row">
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label for="brandName" class="form-label required">Tên Brand</label>
-                  <input type="text" class="form-control" :class="{ 'is-invalid': brandErrors.name }" id="brandName"
-                    v-model="brandFormData.name">
-                  <div class="invalid-feedback" v-if="brandErrors.name">{{ brandErrors.name }}</div>
-                </div>
+    <div class="modal fade" id="brandModal" ref="brandModalRef" tabindex="-1" aria-labelledby="brandModalLabel"
+      aria-hidden="true" data-bs-backdrop="static">
+      <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="brandModalLabel">
+              {{ isBrandEditMode ? 'Chỉnh sửa Brand' : 'Tạo Brand mới' }}
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form @submit.prevent="handleSaveBrand" id="brandForm">
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="brandName" class="form-label required">Tên Brand</label>
+                    <input type="text" class="form-control" :class="{ 'is-invalid': brandErrors.name }" id="brandName"
+                      v-model="brandFormData.name">
+                    <div class="invalid-feedback" v-if="brandErrors.name">{{ brandErrors.name }}</div>
+                  </div>
 
-                <div class="mb-3">
-                  <label for="brandLinkUrl" class="form-label">Link liên kết</label>
-                  <input type="text" class="form-control" id="brandLinkUrl" v-model="brandFormData.linkUrl"
-                    placeholder="ví dụ: /thuong-hieu/apple">
-                </div>
+                  <div class="mb-3">
+                    <label for="brandLinkUrl" class="form-label">Link liên kết</label>
+                    <input type="text" class="form-control" id="brandLinkUrl" v-model="brandFormData.linkUrl"
+                      placeholder="ví dụ: /thuong-hieu/apple">
+                  </div>
 
-                <div class="row">
-                  <div class="col-md-6">
-                    <div class="mb-3">
-                      <label for="brandOrder" class="form-label required">Thứ tự</label>
-                      <input type="number" class="form-control" :class="{ 'is-invalid': brandErrors.order }"
-                        id="brandOrder" v-model.number="brandFormData.order" min="0">
-                      <div class="invalid-feedback" v-if="brandErrors.order">{{ brandErrors.order }}</div>
+                  <div class="row">
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label for="brandOrder" class="form-label required">Thứ tự</label>
+                        <input type="number" class="form-control" :class="{ 'is-invalid': brandErrors.order }"
+                          id="brandOrder" v-model.number="brandFormData.order" min="0">
+                        <div class="invalid-feedback" v-if="brandErrors.order">{{ brandErrors.order }}</div>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label for="brandStatus" class="form-label">Trạng thái</label>
+                        <select class="form-select" id="brandStatus" v-model="brandFormData.status">
+                          <option value="published">Hiển thị (Published)</option>
+                          <option value="draft">Ẩn (Hidden)</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
-                  <div class="col-md-6">
-                    <div class="mb-3">
-                      <label for="brandStatus" class="form-label">Trạng thái</label>
-                      <select class="form-select" id="brandStatus" v-model="brandFormData.status">
-                        <option value="published">Hiển thị (Published)</option>
-                        <option value="draft">Ẩn (Hidden)</option>
-                      </select>
-                    </div>
+                </div>
+
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="brandFile" class="form-label required">Hình ảnh</label>
+                    <input type="file" class="form-control" :class="{ 'is-invalid': brandErrors.imageUrl }" id="brandFile"
+                      ref="brandFileInputRef" accept="image/*" @change="onBrandFileChange">
+                    <div class="invalid-feedback" v-if="brandErrors.imageUrl">{{ brandErrors.imageUrl }}</div>
+                    <small class="text-muted" v-if="isBrandEditMode">Để trống nếu không muốn thay đổi ảnh.</small>
+                  </div>
+
+                  <label class="form-label">Xem trước:</label>
+                  <div class="image-preview-container-lg">
+                    <img v-if="brandPreviewImage" :src="brandPreviewImage" class="img-thumbnail" alt="Preview"
+                      @error="(e) => e.target.src = 'https://placehold.co/600x300?text=Image+Error'">
+                    <img v-else src="https://placehold.co/600x300?text=Chưa+có+ảnh" class="img-thumbnail"
+                      alt="Chưa có ảnh">
                   </div>
                 </div>
               </div>
-
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label for="brandFile" class="form-label required">Hình ảnh</label>
-                  <input type="file" class="form-control" :class="{ 'is-invalid': brandErrors.imageUrl }" id="brandFile"
-                    ref="brandFileInputRef" accept="image/*" @change="onBrandFileChange">
-                  <div class="invalid-feedback" v-if="brandErrors.imageUrl">{{ brandErrors.imageUrl }}</div>
-                  <small class="text-muted" v-if="isBrandEditMode">Để trống nếu không muốn thay đổi ảnh.</small>
-                </div>
-
-                <label class="form-label">Xem trước:</label>
-                <div class="image-preview-container-lg">
-                  <img v-if="brandPreviewImage" :src="brandPreviewImage" class="img-thumbnail" alt="Preview"
-                    @error="(e) => e.target.src = 'https://placehold.co/600x300?text=Image+Error'">
-                  <img v-else src="https://placehold.co/600x300?text=Chưa+có+ảnh" class="img-thumbnail"
-                    alt="Chưa có ảnh">
-                </div>
-              </div>
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer bg-light">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
-          <button type="submit" form="brandForm" class="btn btn-primary" :disabled="isLoadingBrands">
-            <span v-if="isLoadingBrands" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-            Lưu lại
-          </button>
+            </form>
+          </div>
+          <div class="modal-footer bg-light">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
+            <button type="submit" form="brandForm" class="btn btn-primary" :disabled="isLoadingBrands">
+              <span v-if="isLoadingBrands" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+              Lưu lại
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="modal fade" id="slideViewModal" ref="viewModalRef" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-body p-4 position-relative">
-          <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal"
-            aria-label="Close"></button>
+    <div class="modal fade" id="slideViewModal" ref="viewModalRef" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-body p-4 position-relative">
+            <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal"
+              aria-label="Close"></button>
 
-          <div class="position-absolute top-0 start-0 m-3">
-            <span class="badge" :class="getStatusBadge(viewingSlide.status).class">
-              {{ getStatusBadge(viewingSlide.status).text }}
-            </span>
-          </div>
+            <div class="position-absolute top-0 start-0 m-3">
+              <span class="badge" :class="getStatusBadge(viewingSlide.status).class">
+                {{ getStatusBadge(viewingSlide.status).text }}
+              </span>
+            </div>
 
-          <div class="text-center mb-4 mt-3">
-            <img :src="viewingSlide.imageUrl || 'https://placehold.co/600x300?text=N/A'" class="img-thumbnail shadow-sm"
-              alt="Slide Image"
-              style="width: 100%; height: auto; max-height: 300px; object-fit: cover; border-radius: 8px;">
-            <h4 class="mt-3 mb-1">{{ viewingSlide.title }}</h4>
-            <p class="text-muted mb-0">ID: {{ viewingSlide.id }}</p>
-          </div>
+            <div class="text-center mb-4 mt-3">
+              <img :src="viewingSlide.imageUrl || 'https://placehold.co/600x300?text=N/A'" class="img-thumbnail shadow-sm"
+                alt="Slide Image"
+                style="width: 100%; height: auto; max-height: 300px; object-fit: cover; border-radius: 8px;"
+                @error="(e) => e.target.src = 'https://placehold.co/600x300?text=Image+Error'">
+              <h4 class="mt-3 mb-1">{{ viewingSlide.title }}</h4>
+              <p class="text-muted mb-0">ID: {{ viewingSlide.id }}</p>
+            </div>
 
-          <div class="list-group list-group-flush">
-            <div class="list-group-item px-0">
-              <div class="d-flex w-100 justify-content-between">
-                <h6 class="mb-1"><i class="bi bi-list-ol me-3 text-primary"></i>Thứ tự</h6>
-                <span class="badge bg-primary rounded-pill">{{ viewingSlide.order }}</span>
+            <div class="list-group list-group-flush">
+              <div class="list-group-item px-0">
+                <div class="d-flex w-100 justify-content-between">
+                  <h6 class="mb-1"><i class="bi bi-list-ol me-3 text-primary"></i>Thứ tự</h6>
+                  <span class="badge bg-primary rounded-pill">{{ viewingSlide.order }}</span>
+                </div>
+              </div>
+              <div class="list-group-item px-0">
+                <h6 class="mb-2"><i class="bi bi-card-text me-3 text-muted"></i>Mô tả</h6>
+                <p class="mb-1 text-muted small">{{ viewingSlide.description || 'Không có mô tả.' }}</p>
+              </div>
+              <div class="list-group-item px-0">
+                <h6 class="mb-2"><i class="bi bi-link-45deg me-3 text-info"></i>Link liên kết</h6>
+                <a :href="viewingSlide.linkUrl" target="_blank" class="mb-1 text-info small"
+                  v-if="viewingSlide.linkUrl">{{ viewingSlide.linkUrl }}</a>
+                <p v-else class="mb-1 text-muted small">Không có.</p>
+              </div>
+              <div class="list-group-item px-0">
+                <h6 class="mb-2"><i class="bi bi-calendar-event me-3 text-muted"></i>Ngày tạo</h6>
+                <p class="mb-1 text-muted small">{{ getFormattedDate(viewingSlide.created_at) }}</p>
               </div>
             </div>
-            <div class="list-group-item px-0">
-              <h6 class="mb-2"><i class="bi bi-card-text me-3 text-muted"></i>Mô tả</h6>
-              <p class="mb-1 text-muted small">{{ viewingSlide.description || 'Không có mô tả.' }}</p>
-            </div>
-            <div class="list-group-item px-0">
-              <h6 class="mb-2"><i class="bi bi-link-45deg me-3 text-info"></i>Link liên kết</h6>
-              <a :href="viewingSlide.linkUrl" target="_blank" class="mb-1 text-info small"
-                v-if="viewingSlide.linkUrl">{{ viewingSlide.linkUrl }}</a>
-              <p v-else class="mb-1 text-muted small">Không có.</p>
-            </div>
-            <div class="list-group-item px-0">
-              <h6 class="mb-2"><i class="bi bi-calendar-event me-3 text-muted"></i>Ngày tạo</h6>
-              <p class="mb-1 text-muted small">{{ getFormattedDate(viewingSlide.created_at) }}</p>
-            </div>
           </div>
-        </div>
-        <div class="modal-footer bg-light justify-content-center">
-          <button type="button" class="btn btn-primary px-4"
-            @click="() => { viewModalInstance.hide(); openEditSlideModal(viewingSlide); }">
-            <i class="bi bi-pencil me-2"></i> Chỉnh sửa Slide
-          </button>
+          <div class="modal-footer bg-light justify-content-center">
+            <button type="button" class="btn btn-primary px-4"
+              @click="() => { viewModalInstance.hide(); openEditSlideModal(viewingSlide); }">
+              <i class="bi bi-pencil me-2"></i> Chỉnh sửa Slide
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>

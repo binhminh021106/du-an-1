@@ -8,53 +8,45 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Comment extends Model
 {
-    /** @use HasFactory<\Database\Factories\CommentFactory> */
-    use HasFactory;
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
 
     protected $table = 'comments';
 
+    /**
+     * KHẮC PHỤC LỖI 500 MASS ASSIGNMENT:
+     * Khai báo danh sách các cột được phép thêm dữ liệu qua hàm ::create()
+     */
     protected $fillable = [
-        'product_id',
         'user_id',
+        'product_id',
         'content',
-        'parent_id', // Trả lời
-        'status'
+        'parent_id', // <-- QUAN TRỌNG: Để lưu ID bình luận cha khi reply
+        'status',    // <-- QUAN TRỌNG: Để lưu trạng thái 'pending'
     ];
 
-    // --- CÁC "LỆNH NỐI" (RELATIONSHIP) RẤT QUAN TRỌNG ---
-
     /**
-     * "Nối" để biết bình luận này THUỘC VỀ User nào.
+     * Relationship: Lấy thông tin người bình luận
      */
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     /**
-     * "Nối" để biết bình luận này THUỘC VỀ Product nào.
+     * Relationship: Lấy thông tin sản phẩm
+     * Lưu ý: Laravel sẽ dựa vào Model Product để tìm bảng. 
+     * Vì bạn đã sửa Model Product có $table = 'product', nên hàm này sẽ chạy đúng.
      */
     public function product()
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Product::class, 'product_id');
     }
 
     /**
-     * "Nối" để lấy TẤT CẢ các bình luận con (trả lời) của nó.
-     * (Quan hệ 1-Nhiều: Một bình luận "cha" có nhiều "replies")
+     * Relationship: Lấy danh sách các câu trả lời (con)
      */
     public function replies()
     {
-        // Nối tới chính nó (Comment::class) qua cột 'parent_id'
         return $this->hasMany(Comment::class, 'parent_id');
-    }
-
-    /**
-     * "Nối" để lấy bình luận "cha" (nếu nó là bình luận trả lời).
-     */
-    public function parent()
-    {
-        return $this->belongsTo(Comment::class, 'parent_id');
     }
 }
