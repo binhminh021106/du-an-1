@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted, computed, watchEffect } from "vue";
+import { ref, watch, onMounted, computed, watchEffect, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useStore } from "vuex"; 
 import apiService from '../../apiService.js';
@@ -11,15 +11,85 @@ const route = useRoute();
 const router = useRouter();
 const store = useStore();
 
+const SERVER_URL = 'http://127.0.0.1:8000';    
+const USE_STORAGE = false; 
+
+// Lấy thông tin User hiện tại (từ Vuex hoặc LocalStorage) để check quyền xóa
+const currentUser = computed(() => {
+    // Ưu tiên lấy từ store auth module, fallback về localStorage nếu store chưa sync kịp
+    return store.state.auth?.user || store.state.user || JSON.parse(localStorage.getItem('user') || 'null');
+});
+
 const formatDate = (dateString) => {
     if (!dateString) return new Date().toLocaleDateString('vi-VN');
-    return new Date(dateString).toLocaleDateString('vi-VN');
+    const date = new Date(dateString);
+    // Format: 14:30 20/10/2023
+    return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')} ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
 };
 
-const getInitials = (name) => {
-    if (!name) return 'U';
-    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+// Hàm tạo màu ngẫu nhiên cho avatar placeholder dựa trên tên
+const getAvatarColor = (name) => {
+    if (!name) return '#6c757d'; 
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+    return '#' + '00000'.substring(0, 6 - c.length) + c;
 };
+
+// Lấy chữ cái đầu của tên để làm Avatar chữ
+const getInitials = (name) => {
+    if (!name) return '?';
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) return parts[0][0].toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+// --- FIX CORE: XỬ LÝ HIỂN THỊ USER INFO ---
+
+/**
+ * Lấy tên hiển thị ưu tiên từ bảng Users kết nối qua user_id
+ * Logic: User Object (fullName) -> User Object (name) -> user_name (fallback cũ) -> "Khách hàng"
+ */
+const getUserDisplayName = (userObj, fallbackName) => {
+    // 1. Nếu có object user từ quan hệ with('user')
+    if (userObj) {
+        if (userObj.fullName) return userObj.fullName; // Chuẩn schema của bạn
+        if (userObj.full_name) return userObj.full_name;
+        if (userObj.name) return userObj.name;
+    }
+    
+    // 2. Nếu không có object user, dùng tên lưu tạm trong comment (nếu có)
+    if (fallbackName) return fallbackName;
+
+    // 3. Fallback cuối cùng
+    return "Khách hàng";
+};
+
+/**
+ * Lấy URL Avatar
+ * Logic: Nếu là link ngoài (Google/FB) -> dùng luôn. Nếu là link local -> nối thêm SERVER_URL
+ */
+const getUserAvatar = (userObj) => {
+    if (!userObj || !userObj.avatar_url) return null;
+    
+    const url = userObj.avatar_url;
+    
+    // Trường hợp 1: Link tuyệt đối (https://...)
+    if (url.startsWith('http')) return url;
+    
+    // Trường hợp 2: Link tương đối (storage/uploads/...)
+    const cleanPath = url.startsWith('/') ? url.substring(1) : url;
+    
+    // Kiểm tra xem path đã có chữ 'storage' chưa để tránh duplicate
+    if (cleanPath.startsWith('storage/')) {
+        return `${SERVER_URL}/${cleanPath}`;
+    }
+    return `${SERVER_URL}/storage/${cleanPath}`;
+};
+
+// --- END FIX ---
 
 // --- NOTIFICATION SYSTEM ---
 const Toast = Swal.mixin({
@@ -50,30 +120,58 @@ const notify = (type, message, title = '') => {
     }
 };
 
-const SERVER_URL = 'http://127.0.0.1:8000';    
-const USE_STORAGE = false; 
-
 const getImageUrl = (path) => {
   if (!path) return 'https://placehold.co/500x500?text=No+Img';
   if (path.startsWith('http')) return path;
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-  return USE_STORAGE ? `${SERVER_URL}/storage/${cleanPath}` : `${SERVER_URL}/${cleanPath}`;
+  // Cấu hình lại logic lấy ảnh sản phẩm
+  return `${SERVER_URL}/${cleanPath}`; 
 };
 
 // --- STATE ---
 const product = ref(null);
-const reviews = ref([]);    // List đánh giá (có sao)
-const comments = ref([]);   // List bình luận (không sao)
+const reviews = ref([]);    
+const comments = ref([]);   
+const rawCommentsList = ref([]); 
 const quantity = ref(1);
 const loading = ref(true);
 const isFavorite = ref(false);
 const activeTab = ref('desc'); // 'desc' | 'review' | 'comment'
 
-// Comment Form State (Bình luận - Không sao)
-const newComment = ref({
-    content: ''
+// --- PAGINATION STATE ---
+const ITEMS_PER_PAGE = 5; 
+
+// Review Pagination
+const reviewPage = ref(1);
+const totalReviewPages = computed(() => Math.ceil(reviews.value.length / ITEMS_PER_PAGE));
+const paginatedReviews = computed(() => {
+    const start = (reviewPage.value - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return reviews.value.slice(start, end);
 });
+const changeReviewPage = (page) => {
+    if (page >= 1 && page <= totalReviewPages.value) reviewPage.value = page;
+};
+
+// Comment Pagination
+const commentPage = ref(1);
+const totalCommentPages = computed(() => Math.ceil(comments.value.length / ITEMS_PER_PAGE));
+const paginatedComments = computed(() => {
+    const start = (commentPage.value - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return comments.value.slice(start, end);
+});
+const changeCommentPage = (page) => {
+    if (page >= 1 && page <= totalCommentPages.value) commentPage.value = page;
+};
+
+// --- COMMENT & REPLY STATE ---
+const newCommentContent = ref(''); 
 const isSubmittingComment = ref(false);
+
+const activeReplyId = ref(null); 
+const replyContent = ref('');
+const isSubmittingReply = ref(false);
 
 // Variants State
 const groupedAttributes = ref({}); 
@@ -209,6 +307,9 @@ const loadProductById = async (id) => {
 
     if (typeof isInWishlist === 'function') isFavorite.value = isInWishlist(product.value.id);
     
+    reviewPage.value = 1;
+    commentPage.value = 1;
+
     loadReviews(id);
     loadComments(id);
 
@@ -229,13 +330,69 @@ const loadReviews = async (productId) => {
     }
 };
 
+// --- LOGIC XỬ LÝ COMMENT QUAN TRỌNG ---
+const buildCommentTree = (flatList) => {
+    const map = {};
+    const roots = [];
+    // Deep copy để tránh biến đổi mảng gốc
+    const list = JSON.parse(JSON.stringify(flatList)); 
+
+    list.forEach((comment, index) => {
+        map[comment.id] = index;
+        comment.replies = []; 
+    });
+
+    list.forEach(comment => {
+        if (comment.parent_id !== null && map[comment.parent_id] !== undefined) {
+            list[map[comment.parent_id]].replies.push(comment);
+        } else {
+            roots.push(comment);
+        }
+    });
+
+    // Sort replies: Cũ nhất lên đầu (đọc theo dòng thời gian)
+    roots.forEach(root => {
+        if (root.replies.length > 0) {
+            root.replies.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        }
+    });
+    
+    // Sort roots: Mới nhất lên đầu
+    return roots.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+};
+
 const loadComments = async (productId) => {
     try {
-        // Giả lập load comments hoặc gọi API thật nếu có
-        // const commentRes = await apiService.get(`/comments?productId=${productId}`);
-        // comments.value = ...
-        comments.value = []; // Tạm thời để trống
+        // Gọi API lấy comment. Yêu cầu Backend phải có .with('user')
+        const commentRes = await apiService.get(`/comments?product_id=${productId}`);
+        
+        let rawData = [];
+        if (Array.isArray(commentRes.data)) {
+            rawData = commentRes.data;
+        } else if (commentRes.data?.data && Array.isArray(commentRes.data.data)) {
+            rawData = commentRes.data.data;
+        }
+
+        // Lọc client-side cho chắc chắn
+        if (productId) {
+            rawData = rawData.filter(c => String(c.product_id) === String(productId));
+        }
+
+        // --- DEBUG: Kiểm tra xem có user info không ---
+        if (rawData.length > 0) {
+            const sample = rawData[0];
+            if (!sample.user) {
+                console.warn("[Frontend Warning] Dữ liệu comment thiếu thông tin 'user'. Hãy kiểm tra Controller Backend đã thêm ->with('user') chưa.");
+            } else {
+                console.log("[Frontend Success] Đã nhận được thông tin user:", sample.user);
+            }
+        }
+
+        rawCommentsList.value = rawData;
+        comments.value = buildCommentTree(rawData);
+
     } catch (e) {
+        console.error("Lỗi tải bình luận:", e);
         comments.value = [];
     }
 };
@@ -290,35 +447,98 @@ const toggleFavorite = (productItem) => {
     else notify('info', 'Đã xóa khỏi danh sách yêu thích.');
 };
 
-// --- COMMENT ACTIONS (BÌNH LUẬN - KHÔNG SAO) ---
-const submitComment = async () => {
-    if (!newComment.value.content.trim()) {
-        notify('warning', 'Vui lòng nhập nội dung bình luận!', 'Thiếu nội dung');
+// --- COMMENT ACTIONS ---
+const openReplyForm = async (comment) => {
+    if (activeReplyId.value === comment.id) {
+        closeReplyForm();
         return;
     }
+    
+    activeReplyId.value = comment.id;
+    const replyToName = getUserDisplayName(comment.user, comment.user_name);
+    replyContent.value = `@${replyToName} `;
+    
+    await nextTick();
+    const textarea = document.getElementById(`reply-input-${comment.id}`);
+    if (textarea) textarea.focus();
+};
+
+const closeReplyForm = () => {
+    activeReplyId.value = null;
+    replyContent.value = '';
+};
+
+const submitNewComment = async () => {
+    if (!newCommentContent.value.trim()) {
+        notify('warning', 'Vui lòng nhập nội dung!');
+        return;
+    }
+    await postComment(newCommentContent.value, null, 'new');
+};
+
+const submitReply = async (parentCommentId) => {
+    if (!replyContent.value.trim()) {
+        notify('warning', 'Vui lòng nhập nội dung trả lời!');
+        return;
+    }
+    await postComment(replyContent.value, parentCommentId, 'reply');
+};
+
+const deleteComment = async (commentId) => {
+    const result = await Swal.fire({
+        title: 'Bạn chắc chắn?',
+        text: "Bạn có muốn xóa bình luận này không?",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Xóa ngay',
+        cancelButtonText: 'Hủy'
+    });
+
+    if (result.isConfirmed) {
+        try {
+            await apiService.delete(`/comments/${commentId}`);
+            notify('success', 'Đã xóa bình luận thành công');
+            await loadComments(product.value.id);
+        } catch (error) {
+            console.error("Lỗi xóa bình luận:", error);
+            notify('error', 'Không thể xóa bình luận này.', 'Lỗi');
+        }
+    }
+};
+
+const postComment = async (content, parentId, type) => {
+    const loadingState = type === 'new' ? isSubmittingComment : isSubmittingReply;
+    loadingState.value = true;
 
     try {
-        isSubmittingComment.value = true;
-        
-        // Giả lập API call cho comment
-        await new Promise(resolve => setTimeout(resolve, 800)); 
-        
-        const newCommentItem = {
-            id: Date.now(),
-            user_name: 'Bạn (Vừa xong)',
-            content: newComment.value.content,
-            created_at: new Date().toISOString()
+        const payload = {
+            product_id: product.value.id,
+            content: content,
+            parent_id: parentId
         };
-        
-        comments.value.unshift(newCommentItem); 
-        newComment.value.content = '';
-        
-        notify('success', 'Gửi bình luận thành công!');
+
+        await apiService.post('/comments', payload);
+
+        if (type === 'new') {
+            newCommentContent.value = '';
+        } else {
+            closeReplyForm();
+        }
+
+        await loadComments(product.value.id);
+        notify('success', type === 'new' ? 'Gửi câu hỏi thành công!' : 'Đã gửi câu trả lời!');
         
     } catch (error) {
-        notify('error', 'Có lỗi xảy ra khi gửi bình luận.');
+        console.error("Lỗi gửi bình luận:", error);
+        if (error.response?.status === 401) {
+             notify('warning', 'Vui lòng đăng nhập để bình luận.');
+        } else {
+             notify('error', 'Có lỗi xảy ra. Vui lòng thử lại.');
+        }
     } finally {
-        isSubmittingComment.value = false;
+        loadingState.value = false;
     }
 };
 
@@ -404,13 +624,13 @@ watchEffect(() => {
             <template v-else>
                 <div v-if="product.min_price && product.max_price && product.min_price !== product.max_price">
                       <span class="fs-2 fw-bold text-danger me-2">
-                       {{ formatCurrency(product.min_price) }} - {{ formatCurrency(product.max_price) }}
-                     </span>
+                        {{ formatCurrency(product.min_price) }} - {{ formatCurrency(product.max_price) }}
+                      </span>
                 </div>
                 <div v-else>
                       <span class="fs-2 fw-bold text-danger me-2">
-                       {{ formatCurrency(product.min_price || product.price) }}
-                     </span>
+                        {{ formatCurrency(product.min_price || product.price) }}
+                      </span>
                 </div>
             </template>
           </div>
@@ -471,7 +691,7 @@ watchEffect(() => {
       </div>
     </div>
 
-    <!-- 3 TABS: DESCRIPTION | REVIEWS | COMMENTS -->
+    <!-- 3 TABS -->
     <div v-if="!loading && product" class="row mt-4">
         <div class="col-12">
             <div class="bg-white rounded shadow-sm p-4">
@@ -485,13 +705,13 @@ watchEffect(() => {
                     <li class="nav-item">
                         <button class="nav-link fw-bold px-4" :class="{ active: activeTab === 'review' }" 
                             @click="activeTab = 'review'">
-                            Đánh giá từ người mua ({{ reviews.length }})
+                            Đánh giá ({{ reviews.length }})
                         </button>
                     </li>
                     <li class="nav-item">
                         <button class="nav-link fw-bold px-4" :class="{ active: activeTab === 'comment' }" 
                             @click="activeTab = 'comment'">
-                            Hỏi đáp & Bình luận ({{ comments.length }})
+                            Hỏi đáp ({{ rawCommentsList.length }})
                         </button>
                     </li>
                 </ul>
@@ -502,52 +722,78 @@ watchEffect(() => {
                         <div class="description-content" v-html="product.description || '<p class=text-muted>Đang cập nhật mô tả...</p>'"></div>
                     </div>
 
-                    <!-- Tab Đánh giá (Review - Chỉ hiện list, dành cho Buyer) -->
+                    <!-- Tab Đánh giá (Review) -->
                     <div v-show="activeTab === 'review'" class="fade-in">
                         <div v-if="reviews.length === 0" class="text-center py-5">
                             <i class="bi bi-star fs-1 text-muted opacity-50"></i>
                             <p class="mt-3 text-muted">Chưa có đánh giá nào từ người mua.</p>
                         </div>
-                        <div v-else class="review-list mt-3">
-                            <div v-for="r in reviews" :key="r.id" class="review-card p-3 mb-3 border rounded">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <div class="d-flex align-items-center">
-                                        <div class="avatar-placeholder me-3 bg-success">
-                                            {{ getInitials(r.user_name || r.user?.name) }}
-                                        </div>
-                                        <div>
-                                            <h6 class="mb-0 fw-bold">{{ r.user_name || r.user?.name || 'Người mua ẩn danh' }}</h6>
-                                            <div class="text-warning small mt-1">
-                                                <i v-for="n in 5" :key="n" :class="n <= (r.rating || 5) ? 'bi-star-fill' : 'bi-star'" class="me-1"></i>
-                                                <span class="text-success ms-2 small fw-semibold"><i class="bi bi-check-circle-fill"></i> Đã mua hàng</span>
+                        <div v-else>
+                            <div class="review-list mt-3">
+                                <div v-for="r in paginatedReviews" :key="r.id" class="review-card p-3 mb-3 border rounded">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div class="d-flex align-items-center">
+                                            <!-- Reviewer Avatar -->
+                                            <div class="me-3">
+                                                 <img v-if="getUserAvatar(r.user)" 
+                                                      :src="getUserAvatar(r.user)" 
+                                                      class="rounded-circle"
+                                                      style="width: 45px; height: 45px; object-fit: cover;"
+                                                      @error="$event.target.style.display='none'"
+                                                 />
+                                                 <div v-else class="avatar-circle text-white" 
+                                                      :style="{ backgroundColor: getAvatarColor(getUserDisplayName(r.user, r.user_name)) }">
+                                                     {{ getInitials(getUserDisplayName(r.user, r.user_name)) }}
+                                                 </div>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-0 fw-bold">{{ getUserDisplayName(r.user, r.user_name) }}</h6>
+                                                <div class="text-warning small mt-1">
+                                                    <i v-for="n in 5" :key="n" :class="n <= (r.rating || 5) ? 'bi-star-fill' : 'bi-star'" class="me-1"></i>
+                                                    <span class="text-success ms-2 small fw-semibold"><i class="bi bi-check-circle-fill"></i> Đã mua hàng</span>
+                                                </div>
                                             </div>
                                         </div>
+                                        <small class="text-muted fst-italic">{{ formatDate(r.created_at || r.createdAt) }}</small>
                                     </div>
-                                    <small class="text-muted fst-italic">{{ formatDate(r.created_at || r.createdAt) }}</small>
-                                </div>
-                                <div class="review-content ps-2 ms-5 border-start border-3 ps-3">
-                                    <p class="mb-0 text-dark">{{ r.content || r.comment }}</p>
+                                    <div class="review-content ps-2 ms-5 border-start border-3 ps-3">
+                                        <p class="mb-0 text-dark">{{ r.content || r.comment }}</p>
+                                    </div>
                                 </div>
                             </div>
+                            <!-- Pagination Reviews -->
+                            <nav v-if="totalReviewPages > 1" class="mt-4">
+                              <ul class="pagination justify-content-center">
+                                <li class="page-item" :class="{ disabled: reviewPage === 1 }">
+                                  <button class="page-link" @click="changeReviewPage(reviewPage - 1)"><i class="bi bi-chevron-left"></i></button>
+                                </li>
+                                <li v-for="page in totalReviewPages" :key="page" class="page-item" :class="{ active: reviewPage === page }">
+                                  <button class="page-link" @click="changeReviewPage(page)">{{ page }}</button>
+                                </li>
+                                <li class="page-item" :class="{ disabled: reviewPage === totalReviewPages }">
+                                  <button class="page-link" @click="changeReviewPage(reviewPage + 1)"><i class="bi bi-chevron-right"></i></button>
+                                </li>
+                              </ul>
+                            </nav>
                         </div>
                     </div>
 
-                    <!-- Tab Bình luận (Comments - Form Hỏi Đáp - Không Sao) -->
+                    <!-- Tab Bình luận (Comments) -->
                     <div v-show="activeTab === 'comment'" class="fade-in">
-                        <!-- Form Viết Bình Luận Mới -->
+                        <!-- Form Viết Bình Luận Chính -->
                         <div class="card mb-4 border-0 shadow-sm bg-light">
                             <div class="card-body p-4">
                                 <h5 class="fw-bold mb-3">Hỏi đáp & Bình luận</h5>
                                 <div class="mb-3">
-                                    <textarea v-model="newComment.content" class="form-control" rows="3" 
+                                    <textarea v-model="newCommentContent" class="form-control" rows="3" 
                                               placeholder="Bạn có thắc mắc gì về sản phẩm? Hãy đặt câu hỏi..."></textarea>
                                 </div>
                                 <div class="text-end">
                                     <button class="btn btn-primary btn-add-cart px-4" 
-                                            @click="submitComment" 
+                                            @click="submitNewComment" 
                                             :disabled="isSubmittingComment">
-                                        <span v-if="isSubmittingComment" class="spinner-border spinner-border-sm me-2"></span>
-                                        {{ isSubmittingComment ? 'Đang gửi...' : 'Gửi câu hỏi / Bình luận' }}
+                                            <span v-if="isSubmittingComment" class="spinner-border spinner-border-sm me-2"></span>
+                                            {{ isSubmittingComment ? 'Đang gửi...' : 'Gửi câu hỏi' }}
                                     </button>
                                 </div>
                             </div>
@@ -559,24 +805,140 @@ watchEffect(() => {
                             <p class="mt-3 text-muted">Chưa có bình luận nào. Hãy là người đầu tiên đặt câu hỏi!</p>
                         </div>
 
-                        <div v-else class="comment-list mt-4">
-                            <div v-for="c in comments" :key="c.id" class="comment-card p-3 mb-3 border rounded bg-white">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <div class="d-flex align-items-center">
-                                        <div class="avatar-placeholder me-3 bg-secondary">
-                                            {{ getInitials(c.user_name) }}
+                        <div v-else>
+                            <div class="comment-list mt-4">
+                                <!-- VÒNG LẶP CHA -->
+                                <div v-for="c in paginatedComments" :key="c.id" class="comment-wrapper mb-4">
+                                    <!-- Comment Gốc -->
+                                    <div class="comment-card p-3 border rounded bg-white">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div class="d-flex align-items-center">
+                                                <!-- Avatar tự tạo hoặc Ảnh -->
+                                                <div class="me-3">
+                                                     <img v-if="getUserAvatar(c.user)" 
+                                                          :src="getUserAvatar(c.user)" 
+                                                          class="rounded-circle"
+                                                          style="width: 45px; height: 45px; object-fit: cover;"
+                                                          @error="$event.target.style.display='none'"
+                                                     />
+                                                     <div v-else class="avatar-circle text-white" 
+                                                          :style="{ backgroundColor: getAvatarColor(getUserDisplayName(c.user, c.user_name)) }">
+                                                         {{ getInitials(getUserDisplayName(c.user, c.user_name)) }}
+                                                     </div>
+                                                </div>
+                                                <div>
+                                                    <h6 class="mb-0 fw-bold">
+                                                        {{ getUserDisplayName(c.user, c.user_name) }}
+                                                        <span v-if="c.user?.role === 'admin'" class="badge bg-danger ms-1" style="font-size:0.6rem">QTV</span>
+                                                    </h6>
+                                                    <span class="badge bg-light text-dark border mt-1">Khách hàng</span>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <small class="text-muted fst-italic">{{ formatDate(c.created_at) }}</small>
+                                                <!-- Nút Xóa (Fix: Ép kiểu String để so sánh an toàn) -->
+                                                <button v-if="currentUser && (String(currentUser.id) === String(c.user_id) || currentUser.role === 'admin')" 
+                                                        class="btn btn-link text-danger p-0 ms-2 small text-decoration-none"
+                                                        @click="deleteComment(c.id)">
+                                                    <i class="bi bi-trash"></i> Xóa
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h6 class="mb-0 fw-bold">{{ c.user_name || 'Khách' }}</h6>
-                                            <span class="badge bg-light text-dark border mt-1">Khách hàng</span>
+                                        <div class="comment-content ps-2 ms-5">
+                                            <p class="mb-2 text-dark">{{ c.content }}</p>
+                                            
+                                            <!-- Nút Trả lời -->
+                                            <button class="btn btn-link p-0 text-decoration-none small fw-bold text-primary" @click="openReplyForm(c)">
+                                                <i class="bi bi-reply-fill"></i> Trả lời
+                                            </button>
+
+                                            <!-- FORM REPLY INLINE -->
+                                            <div v-if="activeReplyId === c.id" class="reply-form mt-3 p-3 bg-light rounded fade-in">
+                                                <textarea :id="`reply-input-${c.id}`" v-model="replyContent" class="form-control mb-2" rows="2"></textarea>
+                                                <div class="d-flex gap-2 justify-content-end">
+                                                    <button class="btn btn-sm btn-secondary" @click="closeReplyForm">Hủy</button>
+                                                    <button class="btn btn-sm btn-primary" @click="submitReply(c.id)" :disabled="isSubmittingReply">
+                                                        {{ isSubmittingReply ? 'Đang gửi...' : 'Gửi' }}
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <small class="text-muted fst-italic">{{ formatDate(c.created_at) }}</small>
-                                </div>
-                                <div class="comment-content ps-2 ms-5">
-                                    <p class="mb-0 text-dark">{{ c.content }}</p>
-                                </div>
+
+                                    <!-- VÒNG LẶP CON (REPLIES) -->
+                                    <div v-if="c.replies && c.replies.length > 0" class="replies-list ms-5 mt-2 ps-3 border-start border-3 border-light">
+                                        <div v-for="reply in c.replies" :key="reply.id" class="comment-card p-3 mb-2 border rounded bg-light">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <div class="d-flex align-items-center">
+                                                    <!-- Avatar Reply -->
+                                                    <div class="me-2">
+                                                         <img v-if="getUserAvatar(reply.user)" 
+                                                              :src="getUserAvatar(reply.user)" 
+                                                              class="rounded-circle"
+                                                              style="width: 35px; height: 35px; object-fit: cover;"
+                                                              @error="$event.target.style.display='none'"
+                                                         />
+                                                         <div v-else class="avatar-circle small text-white" 
+                                                              style="width: 35px; height: 35px; font-size: 0.9rem;"
+                                                              :style="{ backgroundColor: getAvatarColor(getUserDisplayName(reply.user, reply.user_name)) }">
+                                                             {{ getInitials(getUserDisplayName(reply.user, reply.user_name)) }}
+                                                         </div>
+                                                    </div>
+                                                    <div>
+                                                        <h6 class="mb-0 fw-bold" style="font-size: 0.95rem;">
+                                                            {{ getUserDisplayName(reply.user, reply.user_name) }}
+                                                            <span v-if="reply.user?.role === 'admin'" class="badge bg-danger ms-1" style="font-size:0.6rem">QTV</span>
+                                                        </h6>
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <small class="text-muted fst-italic" style="font-size: 0.8rem;">{{ formatDate(reply.created_at) }}</small>
+                                                    <!-- Nút Xóa (Reply) Fix String -->
+                                                    <button v-if="currentUser && (String(currentUser.id) === String(reply.user_id) || currentUser.role === 'admin')" 
+                                                            class="btn btn-link text-danger p-0 ms-2 small text-decoration-none"
+                                                            style="font-size: 0.8rem;"
+                                                            @click="deleteComment(reply.id)">
+                                                        <i class="bi bi-trash"></i> Xóa
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="comment-content ps-2 ms-5">
+                                                <p class="mb-1 text-dark">{{ reply.content }}</p>
+                                                
+                                                <button class="btn btn-link p-0 text-decoration-none small fw-bold text-primary" @click="openReplyForm(reply)">
+                                                    <i class="bi bi-reply-fill"></i> Trả lời
+                                                </button>
+
+                                                <!-- FORM REPLY INLINE (Con) -->
+                                                <div v-if="activeReplyId === reply.id" class="reply-form mt-2 p-2 bg-white border rounded fade-in">
+                                                    <textarea :id="`reply-input-${reply.id}`" v-model="replyContent" class="form-control mb-2" rows="2"></textarea>
+                                                    <div class="d-flex gap-2 justify-content-end">
+                                                        <button class="btn btn-sm btn-secondary" @click="closeReplyForm">Hủy</button>
+                                                        <button class="btn btn-sm btn-primary" @click="submitReply(reply.id)" :disabled="isSubmittingReply">
+                                                            {{ isSubmittingReply ? 'Đang gửi...' : 'Gửi' }}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div> 
                             </div>
+
+                            <!-- Pagination Comments -->
+                            <nav v-if="totalCommentPages > 1" class="mt-4">
+                              <ul class="pagination justify-content-center">
+                                <li class="page-item" :class="{ disabled: commentPage === 1 }">
+                                  <button class="page-link" @click="changeCommentPage(commentPage - 1)"><i class="bi bi-chevron-left"></i></button>
+                                </li>
+                                <li v-for="page in totalCommentPages" :key="page" class="page-item" :class="{ active: commentPage === page }">
+                                  <button class="page-link" @click="changeCommentPage(page)">{{ page }}</button>
+                                </li>
+                                <li class="page-item" :class="{ disabled: commentPage === totalCommentPages }">
+                                  <button class="page-link" @click="changeCommentPage(commentPage + 1)"><i class="bi bi-chevron-right"></i></button>
+                                </li>
+                              </ul>
+                            </nav>
                         </div>
                     </div>
 
@@ -659,13 +1021,48 @@ watchEffect(() => {
 .comment-card { transition: all 0.2s; }
 .comment-card:hover { box-shadow: 0 4px 10px rgba(0,0,0,0.03); }
 
-.avatar-placeholder { width: 45px; height: 45px; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-.bg-success { background: linear-gradient(135deg, #42e695 0%, #3bb2b8 100%); }
-.bg-secondary { background: linear-gradient(135deg, #a8c0ff 0%, #3f2b96 100%); }
+/* Updated Avatar Style */
+.avatar-circle {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    text-transform: uppercase;
+}
+.avatar-circle.small { width: 35px; height: 35px; font-size: 0.9rem; }
 
 .horizontal-scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 5px; scrollbar-width: thin; }
 .product-card-simple { flex: 0 0 180px; background: #fff; border-radius: 10px; overflow: hidden; cursor: pointer; transition: transform 0.2s; border: 1px solid rgba(0,0,0,0.05); }
 .product-card-simple:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important; }
 .card-img-wrapper { height: 140px; padding: 10px; display: flex; align-items: center; justify-content: center; }
 .card-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* PAGINATION STYLES */
+.page-link {
+    color: var(--primary-color);
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    margin: 0 3px;
+    transition: all 0.2s;
+}
+.page-link:hover {
+    background-color: #e9ecef;
+    color: var(--primary-hover);
+}
+.page-item.active .page-link {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+.page-item.disabled .page-link {
+    color: #6c757d;
+    pointer-events: none;
+    background-color: #fff;
+    border-color: #dee2e6;
+}
 </style>
