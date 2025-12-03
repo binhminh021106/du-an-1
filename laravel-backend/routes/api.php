@@ -174,8 +174,13 @@ Route::group([
     
     Route::apiResource('admins', AminAccountController::class); 
     
-    // --- QUẢN LÝ THƯƠNG HIỆU ---
-    // Route này dùng AdminBrandController (Quản lý CRUD đầy đủ) thay vì AdminBrandSlideController (chỉ slide)
+    // --- QUẢN LÝ THƯƠNG HIỆU (BRAND SLIDE) ---
+    // [ADD] Bổ sung route cho Brand Slide (dùng bảng brand_slides)
+    Route::post('brand-slides/update-order', [AdminBrandSlideController::class, 'updateOrder']);
+    Route::apiResource('brand-slides', AdminBrandSlideController::class);
+
+    // --- QUẢN LÝ THƯƠNG HIỆU SẢN PHẨM (BRAND PRODUCT) ---
+    // [KEEP] Giữ lại route này nếu bạn vẫn cần quản lý Brand cho sản phẩm (dùng bảng brands)
     Route::get('brands/trashed', [AdminBrandController::class, 'trashed']); // Thùng rác
     Route::post('brands/{id}/restore', [AdminBrandController::class, 'restore']); // Khôi phục
     Route::delete('brands/{id}/force', [AdminBrandController::class, 'forceDelete']); // Xóa vĩnh viễn

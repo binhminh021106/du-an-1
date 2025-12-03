@@ -66,8 +66,8 @@ onMounted(() => {
   <aside class="app-sidebar shadow custom-sidebar" data-bs-theme="dark">
     <div class="sidebar-brand">
       <router-link to="/admin" class="brand-link">
-        <!-- Đảm bảo đường dẫn ảnh đúng -->
-        <img src="../img/logo.png" alt="Logo" class="brand-image opacity-75 shadow" onError="this.style.display='none'">
+        <!-- [FIX] Đổi onError thành @error="$event.target..." để đúng chuẩn Vue 3 -->
+        <img src="../img/logo.png" alt="Logo" class="brand-image opacity-75 shadow" @error="$event.target.style.display='none'">
         <span class="brand-text fw-bold text-white">ThinkHub</span>
       </router-link>
     </div>

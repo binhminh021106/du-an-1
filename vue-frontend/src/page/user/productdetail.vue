@@ -4,14 +4,53 @@ import { useRoute, useRouter } from "vue-router";
 import { useStore } from "vuex"; 
 import apiService from '../../apiService.js';
 import { isInWishlist, toggleWishlist } from "../../store/wishlistStore.js";
-// Import SweetAlert2 (Đảm bảo project đã cài: npm install sweetalert2)
 import Swal from 'sweetalert2';
 
+// --- CONFIG & UTILS ---
 const route = useRoute();
 const router = useRouter();
-const store = useStore(); 
+const store = useStore();
 
-const SERVER_URL = 'http://127.0.0.1:8000'; 
+const formatDate = (dateString) => {
+    if (!dateString) return new Date().toLocaleDateString('vi-VN');
+    return new Date(dateString).toLocaleDateString('vi-VN');
+};
+
+const getInitials = (name) => {
+    if (!name) return 'U';
+    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+};
+
+// --- NOTIFICATION SYSTEM ---
+const Toast = Swal.mixin({
+  toast: true,
+  position: 'top-end',
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  didOpen: (toast) => {
+    toast.addEventListener('mouseenter', Swal.stopTimer)
+    toast.addEventListener('mouseleave', Swal.resumeTimer)
+  }
+});
+
+const notify = (type, message, title = '') => {
+    if (type === 'success') {
+        Toast.fire({ icon: 'success', title: message });
+    } else if (type === 'error' || type === 'warning') {
+        Swal.fire({
+            icon: type,
+            title: title || (type === 'error' ? 'Lỗi!' : 'Chú ý!'),
+            text: message,
+            confirmButtonText: 'Đã hiểu',
+            confirmButtonColor: 'var(--primary-color)',
+        });
+    } else {
+        Toast.fire({ icon: 'info', title: message });
+    }
+};
+
+const SERVER_URL = 'http://127.0.0.1:8000';    
 const USE_STORAGE = false; 
 
 const getImageUrl = (path) => {
@@ -23,104 +62,121 @@ const getImageUrl = (path) => {
 
 // --- STATE ---
 const product = ref(null);
-const reviews = ref([]);
+const reviews = ref([]);    // List đánh giá (có sao)
+const comments = ref([]);   // List bình luận (không sao)
 const quantity = ref(1);
 const loading = ref(true);
 const isFavorite = ref(false);
+const activeTab = ref('desc'); // 'desc' | 'review' | 'comment'
 
-// [FIX] Khai báo biến bundleDeals để tránh lỗi template
-const bundleDeals = ref([]); 
+// Comment Form State (Bình luận - Không sao)
+const newComment = ref({
+    content: ''
+});
+const isSubmittingComment = ref(false);
+
+// Variants State
+const groupedAttributes = ref({}); 
+const selectedOptions = ref({});   
+const availableVariant = ref(null); 
 
 const selectedImage = ref('');
 const allProducts = ref([]);
 const relatedProducts = ref([]);
-const tradeInSearchTerm = ref('');
-const tradeInResultsVisible = ref(false);
 
-// --- DATA MẪU ---
-const paymentOffers = ref([
-  { id: 1, partner: "HSBC", logo_url: "https://upload.wikimedia.org/wikipedia/commons/5/5a/HSBC_logo_%282018%29.svg", description: "Giảm <b>2 triệu</b> khi thanh toán bằng thẻ tín dụng HSBC." },
-  { id: 2, partner: "Home Credit", logo_url: "https://upload.wikimedia.org/wikipedia/commons/8/86/Home_Credit_logo.svg", description: "Ưu đãi <b>0% lãi suất</b> khi trả góp qua Home Credit." },
-  { id: 3, partner: "MOMO", logo_url: "https://upload.wikimedia.org/wikipedia/commons/0/0c/MoMo_Logo.png", description: "Giảm <b>200K</b> khi thanh toán qua ví MOMO." },
-  { id: 4, partner: "TPBank", logo_url: "https://upload.wikimedia.org/wikipedia/commons/4/4d/TPBank_logo.svg", description: "Nhận <b>50K hoàn tiền</b> khi thanh toán bằng thẻ TPBank EVO." }
-]);
-
-// --- COMPUTED ---
-const activeVariant = computed(() => {
-  if (!product.value || !product.value.variants || !product.value.variants.length) return null;
-  return product.value.variants[selectedVariantIndex.value];
-});
-
-// Logic lọc gợi ý tìm kiếm Trade-in
-const tradeInSearchResults = computed(() => {
-  if (!tradeInSearchTerm.value || tradeInSearchTerm.value.length < 2) return [];
-  const term = tradeInSearchTerm.value.toLowerCase();
-  return allProducts.value
-    .filter(p => (p.name || '').toLowerCase().includes(term))
-    .slice(0, 6);
-});
-
-// --- HELPER FUNCTIONS ---
-const formatCurrency = (num) => {
-  if (num === null || num === undefined || isNaN(num)) return "0 ₫";
-  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+// --- CORE LOGIC: VARIANTS ---
+const isOptionDisabled = (attributeName, valueId) => {
+  if (!product.value || !product.value.variants) return true;
+  const currentSelectionCheck = { ...selectedOptions.value, [attributeName]: valueId };
+  const exists = product.value.variants.some(variant => {
+    if (!variant.attributesMap) return false;
+    return Object.keys(currentSelectionCheck).every(key => {
+        if (!currentSelectionCheck[key]) return true;
+        return String(variant.attributesMap[key]) === String(currentSelectionCheck[key]);
+    });
+  });
+  return !exists; 
 };
 
-// Hàm tính giá hiển thị (Lấy giá min của variants)
-const getProductDisplayPrice = (productItem) => {
-  if (productItem.variants && productItem.variants.length > 0) {
-    return Math.min(...productItem.variants.map(v => Number(v.price)));
-  }
-  return Number(productItem.price || 0);
+const selectAttribute = (attributeName, valueId) => {
+    if (selectedOptions.value[attributeName] === valueId) {
+        const newSelection = { ...selectedOptions.value };
+        delete newSelection[attributeName];
+        selectedOptions.value = newSelection;
+        availableVariant.value = null; 
+        return;
+    }
+    let nextSelection = { ...selectedOptions.value, [attributeName]: valueId };
+    Object.keys(nextSelection).forEach(key => {
+        if (key === attributeName) return; 
+        const isCompatible = product.value.variants.some(v => 
+            v.attributesMap && 
+            String(v.attributesMap[attributeName]) === String(valueId) &&
+            String(v.attributesMap[key]) === String(nextSelection[key])
+        );
+        if (!isCompatible) delete nextSelection[key];
+    });
+    selectedOptions.value = nextSelection;
+    quantity.value = 1; 
+    findMatchingVariant();
 };
 
-// [FIX] Tạo alias để Template gọi getProductPrice không bị lỗi
-const getProductPrice = getProductDisplayPrice;
-
-const validateQty = () => {
-  if (!activeVariant.value) return;
-  const max = activeVariant.value.stock ?? 1;
-  if (quantity.value > max) quantity.value = max;
-  if (quantity.value < 1) quantity.value = 1;
-  quantity.value = Number(quantity.value);
+const findMatchingVariant = () => {
+    if(!product.value || !product.value.variants) return;
+    const totalKeys = Object.keys(groupedAttributes.value).length;
+    const selectedKeys = Object.keys(selectedOptions.value).length;
+    if (selectedKeys < totalKeys) {
+        availableVariant.value = null;
+        return;
+    }
+    const match = product.value.variants.find(variant => {
+        if (!variant.attributesMap) return false;
+        return Object.keys(groupedAttributes.value).every(attrName => {
+            return String(variant.attributesMap[attrName]) === String(selectedOptions.value[attrName]);
+        });
+    });
+    availableVariant.value = match || null;
 };
 
-const decreaseQty = () => { if (quantity.value > 1) quantity.value--; };
-const increaseQty = () => { 
-    if (activeVariant.value && quantity.value < activeVariant.value.stock) quantity.value++; 
+const processProductData = (data) => {
+    if (!data.variants || data.variants.length === 0) {
+        const defaultVariant = { 
+            id: 'default', price: data.price || 0, stock: data.stock || 0, 
+            original_price: data.original_price || 0, attributesMap: {} 
+        };
+        data.variants = [defaultVariant];
+        groupedAttributes.value = {};
+        selectedOptions.value = {};
+        availableVariant.value = defaultVariant;
+        return;
+    }
+    let groups = {};
+    data.variants.forEach(variant => {
+        variant.attributesMap = {}; 
+        const attrs = variant.attribute_values || variant.attributeValues || [];
+        if(attrs.length > 0) {
+            attrs.forEach(av => {
+                const attrName = av.attribute ? av.attribute.name : (av.attribute_name || 'Thuộc tính');
+                const valId = av.id;
+                const valName = av.value;
+                if (!groups[attrName]) groups[attrName] = [];
+                if (!groups[attrName].find(x => x.id === valId)) {
+                    groups[attrName].push({ id: valId, value: valName });
+                }
+                variant.attributesMap[attrName] = valId;
+            });
+        }
+    });
+    groupedAttributes.value = groups;
+    selectedOptions.value = {};
+    availableVariant.value = null;
 };
 
-// --- ACTIONS ---
-const viewAllOffers = () => alert("Tính năng đang cập nhật");
-
-const selectVariant = (index) => {
-  selectedVariantIndex.value = index;
-  validateQty();
-};
-
-const selectImage = (imageUrl) => { selectedImage.value = imageUrl; };
-
-// Chuyển hướng khi click vào sản phẩm liên quan
-const navigateToProduct = (productId) => {
-  router.push(`/products/${productId}`);
-  window.scrollTo(0, 0); // Cuộn lên đầu trang
-};
-
-// [FIX] Hàm xử lý khi chọn sản phẩm gợi ý Trade-in
-const selectTradeInProduct = (productId) => {
-    router.push(`/products/${productId}`);
-    tradeInResultsVisible.value = false;
-    tradeInSearchTerm.value = '';
-};
-
-// --- API CALLS ---
 const fetchAllProducts = async () => {
   try {
  const res = await apiService.get(`/products`);
     allProducts.value = res.data.data || res.data || [];
-  } catch (err) {
-    console.error("Lỗi tải danh sách:", err);
-  }
+  } catch (err) { console.error("Lỗi tải danh sách:", err); }
 };
 
 const loadProductById = async (id) => {
@@ -128,13 +184,7 @@ const loadProductById = async (id) => {
     loading.value = true;
     const productRes = await apiService.get(`/product/${id}`);
     const data = productRes.data.data || productRes.data;
-
-    if (!data) throw new Error("Không có dữ liệu sản phẩm");
-
-    // Xử lý variants nếu rỗng
-    if (!data.variants || !data.variants.length) {
-      data.variants = [{ id: 'default', price: data.price || 0, original_price: 0, stock: data.stock || 0, name: 'Tiêu chuẩn' }];
-    }
+    if (!data) throw new Error("No data");
 
     // Chuẩn hóa dữ liệu variant
     data.variants.forEach((v, i) => {
@@ -150,22 +200,17 @@ const loadProductById = async (id) => {
     ).filter(Boolean);
 
     data.gallery_images = [data.image_url || data.thumbnail_url, ...extraImages].filter(Boolean);
-    data.gallery_images = [...new Set(data.gallery_images)]; // Unique
-    if (data.gallery_images.length === 0) data.gallery_images = ['https://placehold.co/500x500/009981/white?text=No+Image'];
+    data.gallery_images = [...new Set(data.gallery_images)]; 
+    if (data.gallery_images.length === 0) data.gallery_images = ['https://placehold.co/500x500?text=No+Img'];
 
     product.value = data;
-    selectedVariantIndex.value = 0;
-    selectedImage.value = data.gallery_images[0];
-    quantity.value = 1;
+    selectedImage.value = product.value.gallery_images[0];
+    processProductData(data);
 
-    // Check wishlist
-    if (typeof isInWishlist === 'function') {
-        isFavorite.value = isInWishlist(product.value.id);
-    }
-
-    // Load reviews
-    const reviewRes = await apiService.get(`/reviews?productId=${id}`);
-    reviews.value = reviewRes.data.data || reviewRes.data || [];
+    if (typeof isInWishlist === 'function') isFavorite.value = isInWishlist(product.value.id);
+    
+    loadReviews(id);
+    loadComments(id);
 
   } catch (error) {
     console.error("Lỗi:", error);
@@ -175,23 +220,106 @@ const loadProductById = async (id) => {
   }
 };
 
+const loadReviews = async (productId) => {
+    try {
+        const reviewRes = await apiService.get(`/reviews?productId=${productId}`);
+        reviews.value = Array.isArray(reviewRes.data) ? reviewRes.data : (reviewRes.data?.data || []);
+    } catch (e) {
+        reviews.value = [];
+    }
+};
+
+const loadComments = async (productId) => {
+    try {
+        // Giả lập load comments hoặc gọi API thật nếu có
+        // const commentRes = await apiService.get(`/comments?productId=${productId}`);
+        // comments.value = ...
+        comments.value = []; // Tạm thời để trống
+    } catch (e) {
+        comments.value = [];
+    }
+};
+
+const selectImage = (imageUrl) => selectedImage.value = imageUrl;
+
+const navigateToProduct = (productId) => {
+  router.push(`/products/${productId}`);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+const formatCurrency = (num) => {
+  if (num === null || num === undefined || isNaN(num)) return "0 ₫";
+  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+};
+
+const decreaseQty = () => { if (quantity.value > 1) quantity.value--; };
+const increaseQty = () => {
+  if (!availableVariant.value) return;
+  const max = availableVariant.value.stock ?? 1;
+  if (quantity.value < max) quantity.value++;
+};
+const validateQty = () => {
+  if (!availableVariant.value) return;
+  const max = availableVariant.value.stock ?? 1;
+  if (quantity.value > max) quantity.value = max;
+  if (quantity.value < 1) quantity.value = 1;
+};
+
 const onAddToCart = (productItem) => {
-  if (!activeVariant.value) return alert("Vui lòng chọn phiên bản sản phẩm.");
-  
+  if (!availableVariant.value) {
+    notify('warning', 'Vui lòng chọn đầy đủ phân loại (Màu sắc, kích thước...)', 'Chưa chọn phân loại');
+    return;
+  }
+  if (availableVariant.value.stock <= 0) {
+    notify('error', 'Sản phẩm này tạm hết hàng.', 'Hết hàng');
+    return;
+  }
   store.dispatch('addToCart', { 
     product: productItem, 
     variant: availableVariant.value, 
     quantity: quantity.value 
   });
-  alert(`Đã thêm ${quantity.value} x ${productItem.name} vào giỏ hàng!`);
+  notify('success', `Đã thêm ${quantity.value} sản phẩm vào giỏ!`);
 };
 
-// --- ACTION YÊU THÍCH (ĐÃ CẬP NHẬT THÔNG BÁO) ---
 const toggleFavorite = (productItem) => {
     if (!productItem || typeof toggleWishlist !== 'function') return;
     const added = toggleWishlist(productItem);
     isFavorite.value = added;
-    alert(added ? `Đã thêm ${productItem.name} vào Wishlist! ❤️` : `Đã xóa ${productItem.name} khỏi Wishlist!`);
+    if (added) notify('success', 'Đã thêm vào danh sách yêu thích!');
+    else notify('info', 'Đã xóa khỏi danh sách yêu thích.');
+};
+
+// --- COMMENT ACTIONS (BÌNH LUẬN - KHÔNG SAO) ---
+const submitComment = async () => {
+    if (!newComment.value.content.trim()) {
+        notify('warning', 'Vui lòng nhập nội dung bình luận!', 'Thiếu nội dung');
+        return;
+    }
+
+    try {
+        isSubmittingComment.value = true;
+        
+        // Giả lập API call cho comment
+        await new Promise(resolve => setTimeout(resolve, 800)); 
+        
+        const newCommentItem = {
+            id: Date.now(),
+            user_name: 'Bạn (Vừa xong)',
+            content: newComment.value.content,
+            created_at: new Date().toISOString()
+        };
+        
+        comments.value.unshift(newCommentItem); 
+        newComment.value.content = '';
+        
+        notify('success', 'Gửi bình luận thành công!');
+        
+    } catch (error) {
+        notify('error', 'Có lỗi xảy ra khi gửi bình luận.');
+    } finally {
+        isSubmittingComment.value = false;
+    }
 };
 
 // --- WATCHERS & HOOKS ---
@@ -208,95 +336,96 @@ watch(() => route.params.id, (newId) => {
 // [FIX] Cải thiện logic lấy sản phẩm liên quan
 watchEffect(() => {
   if (product.value && allProducts.value.length > 0) {
-    const currentId = product.value.id;
-    // Lấy ID danh mục an toàn (xử lý cả trường hợp object hoặc id phẳng)
-    const catId = product.value.category?.id || product.value.category_id;
-
-    if (catId) {
-      relatedProducts.value = allProducts.value
-        .filter(p => {
-            const pCatId = p.category?.id || p.category_id;
-            return String(pCatId) === String(catId) && p.id !== currentId;
-        })
-        .slice(0, 5);
+    let related = [];
+    if (product.value.category_id) {
+        related = allProducts.value.filter(p => p.category_id === product.value.category_id && p.id !== product.value.id);
     }
+    if (related.length < 5) {
+        const others = allProducts.value.filter(p => p.id !== product.value.id && !related.includes(p));
+        related = [...related, ...others];
+    }
+    relatedProducts.value = related.slice(0, 5);
   }
 });
 </script>
 
 <template>
   <div class="container py-5 product-detail-page">
-    <div v-if="!loading && product" class="row g-4 mb-5">
+    <div v-if="loading" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 text-muted">Đang tải sản phẩm...</p>
+    </div>
 
-      <!-- Cột Trái: Hình ảnh -->
+    <div v-if="!loading && product" class="row g-5 mb-5 fade-in-up">
+      <!-- Cột Trái: Gallery -->
       <div class="col-lg-5">
-        <div class="main-image-wrapper mb-3">
-    <img :src="getImageUrl(selectedImage)" :alt="product.name" class="img-fluid rounded main-product-image" 
-        @error="$event.target.src='https://placehold.co/500x500?text=No+Image'"/>
-</div>
-
+        <div class="main-image-wrapper mb-3 shadow-sm">
+          <img :src="getImageUrl(selectedImage)" :alt="product.name" class="main-product-image" 
+           @error="$event.target.src='https://placehold.co/500x500?text=No+Image'"/>
+        </div>
         <div class="thumbnail-gallery" v-if="product.gallery_images && product.gallery_images.length > 1">
-          <img v-for="(image, index) in product.gallery_images" :key="index" 
-             :src="getImageUrl(image)"
-             class="thumbnail-item" :class="{ active: selectedImage === image }"
-             @click="selectImage(image)" />
+          <div v-for="(image, index) in product.gallery_images" :key="index" 
+               class="thumbnail-wrapper"
+               :class="{ active: selectedImage === image }"
+               @click="selectImage(image)">
+             <img :src="getImageUrl(image)" class="thumbnail-img" />
+          </div>
         </div>
       </div>
 
-      <!-- Cột Phải: Thông tin & Options -->
+      <!-- Cột Phải: Info -->
       <div class="col-lg-7">
         <div class="product-info-box h-100">
+          <h2 class="fw-bold mb-2 product-title text-dark">{{ product.name }}</h2>
 
-          <h2 class="fw-bold mb-3 product-title">{{ product.name }}</h2>
-
-          <div class="d-flex align-items-center mb-3 text-muted small">
-            <div class="me-3">
-              <i class="bi bi-star-fill text-warning"></i> {{ product.average_rating || 5 }} / 5
+          <div class="d-flex align-items-center mb-4 text-muted small">
+            <div class="me-3 d-flex align-items-center">
+              <span class="text-warning me-1">{{ product.average_rating || 5 }}</span>
+              <i class="bi bi-star-fill text-warning me-1"></i>
             </div>
-            <div>(Đã bán: {{ product.sold_count || 0 }})</div>
+            <div class="border-start ps-3">Đã bán: <strong>{{ product.sold_count || 0 }}</strong></div>
+            <div class="border-start ps-3 ms-3">Đánh giá: <strong>{{ reviews.length }}</strong></div>
           </div>
 
-          <!-- HIỂN THỊ GIÁ -->
-          <div class="price-section mb-4">
+          <!-- PRICE DISPLAY -->
+          <div class="price-section mb-4 p-3 rounded bg-light">
             <template v-if="availableVariant">
                 <span class="fs-2 fw-bold text-danger me-2">
                   {{ formatCurrency(availableVariant.price) }}
                 </span>
                 <span v-if="availableVariant.original_price > availableVariant.price"
-                  class="text-muted text-decoration-line-through fs-5">
+                  class="text-muted text-decoration-line-through fs-6">
                   {{ formatCurrency(availableVariant.original_price) }}
+                </span>
+                <span v-if="availableVariant.original_price > availableVariant.price" class="badge bg-danger ms-2">
+                    -{{ Math.round((1 - availableVariant.price/availableVariant.original_price)*100) }}%
                 </span>
             </template>
             <template v-else>
                 <div v-if="product.min_price && product.max_price && product.min_price !== product.max_price">
-                     <span class="fs-2 fw-bold text-danger me-2">
-                      {{ formatCurrency(product.min_price) }} - {{ formatCurrency(product.max_price) }}
-                    </span>
+                      <span class="fs-2 fw-bold text-danger me-2">
+                       {{ formatCurrency(product.min_price) }} - {{ formatCurrency(product.max_price) }}
+                     </span>
                 </div>
                 <div v-else>
-                     <span class="fs-2 fw-bold text-danger me-2">
-                      {{ formatCurrency(product.min_price || product.price) }}
-                    </span>
+                      <span class="fs-2 fw-bold text-danger me-2">
+                       {{ formatCurrency(product.min_price || product.price) }}
+                     </span>
                 </div>
             </template>
           </div>
 
-          <!-- PHẦN CHỌN ATTRIBUTES -->
+          <!-- ATTRIBUTES -->
           <div class="attributes-section mb-4">
-             <div v-if="Object.keys(groupedAttributes).length === 0" class="text-muted fst-italic">
-                <!-- Không hiện gì nếu không có attribute -->
-             </div>
-
              <div v-for="(values, attrName) in groupedAttributes" :key="attrName" class="attribute-group mb-4">
-                <label class="fw-bold mb-2 d-block text-dark">{{ attrName }}: 
-                    <span class="fw-normal text-primary ms-1" v-if="selectedOptions[attrName]">
+                <label class="fw-bold mb-2 d-block text-secondary small text-uppercase">{{ attrName }}: 
+                    <span class="fw-bold text-dark ms-1" v-if="selectedOptions[attrName]">
                         {{ values.find(v => v.id === selectedOptions[attrName])?.value }}
                     </span>
                 </label>
                 <div class="d-flex flex-wrap gap-2">
                     <button 
-                        v-for="val in values" 
-                        :key="val.id"
+                        v-for="val in values" :key="val.id"
                         class="btn chip-btn"
                         :class="{ 
                             'active': selectedOptions[attrName] === val.id,
@@ -311,726 +440,232 @@ watchEffect(() => {
              </div>
           </div>
 
-          <!-- SỐ LƯỢNG (Chỉ hiện khi đã chọn) -->
-          <div class="d-flex align-items-center mb-4" v-if="availableVariant">
-            <span class="fw-semibold me-3 fs-6">Số lượng:</span>
-            <div class="input-group qty-group" style="width: 140px;">
-                <button class="btn btn-outline-secondary" @click="decreaseQty"><i class="bi bi-dash"></i></button>
-                <input type="number" v-model.number="quantity" class="form-control text-center border-secondary" @change="validateQty" />
-                <button class="btn btn-outline-secondary" @click="increaseQty"><i class="bi bi-plus"></i></button>
-            </div>
-            <span class="ms-3 small fw-semibold" :class="availableVariant.stock > 0 ? 'text-success' : 'text-danger'">
-              ({{ availableVariant.stock > 0 ? `Sẵn hàng: ${availableVariant.stock}` : 'Hết hàng' }})
-            </span>
+          <!-- QUANTITY & ACTIONS -->
+          <div class="action-wrapper border-top pt-4">
+              <div class="d-flex align-items-center mb-4" v-if="availableVariant">
+                <span class="fw-semibold me-3">Số lượng:</span>
+                <div class="input-group qty-group shadow-sm" style="width: 140px;">
+                    <button class="btn btn-white border-end-0" @click="decreaseQty"><i class="bi bi-dash"></i></button>
+                    <input type="number" v-model.number="quantity" class="form-control text-center border-start-0 border-end-0 fw-bold" @change="validateQty" />
+                    <button class="btn btn-white border-start-0" @click="increaseQty"><i class="bi bi-plus"></i></button>
+                </div>
+                <span class="ms-3 small" :class="availableVariant.stock > 0 ? 'text-success' : 'text-danger'">
+                  {{ availableVariant.stock > 0 ? `Còn ${availableVariant.stock} sản phẩm` : 'Tạm hết hàng' }}
+                </span>
+              </div>
+
+              <div class="d-flex gap-3">
+                <button class="btn btn-lg flex-grow-1 btn-add-cart shadow-sm" 
+                    @click="onAddToCart(product)" 
+                    :disabled="!availableVariant || availableVariant.stock <= 0">
+                  <i class="bi bi-bag-plus me-2"></i> 
+                  {{ !availableVariant ? 'Chọn phân loại hàng' : (availableVariant.stock > 0 ? 'Thêm vào giỏ hàng' : 'Hết hàng') }}
+                </button>
+                
+                <button class="btn btn-outline-danger icon-btn" @click="toggleFavorite(product)" title="Yêu thích">
+                  <i :class="['bi', isFavorite ? 'bi-heart-fill' : 'bi-heart']"></i> 
+                </button>
+              </div>
           </div>
-
-          <!-- KHU VỰC NÚT HÀNH ĐỘNG (DÀN NGANG) -->
-          <div class="action-buttons mt-4 gap-3">
-            <button class="btn btn-outline-danger icon-btn" @click="toggleFavorite(product)">
-              <i :class="['bi', isFavorite ? 'bi-heart-fill' : 'bi-heart']"></i> 
-            </button>
-
-            <button class="btn btn-primary-green mt-4 btn-lg flex-grow-1" 
-                @click="onAddToCart(product)" 
-                :disabled="!availableVariant || availableVariant.stock <= 0">
-              <i class="bi bi-cart-plus me-2"></i> 
-              {{ !availableVariant ? 'Vui lòng chọn phân loại' : (availableVariant.stock > 0 ? 'Thêm vào giỏ hàng' : 'Tạm hết hàng') }}
-            </button>
-          </div>
-
         </div>
       </div>
     </div>
 
-    <!-- MÔ TẢ FULL WIDTH -->
+    <!-- 3 TABS: DESCRIPTION | REVIEWS | COMMENTS -->
     <div v-if="!loading && product" class="row mt-4">
         <div class="col-12">
-            <section class="product-description-full">
-                <h4 class="section-title">📄 Mô tả sản phẩm</h4>
-                <div class="description-content" v-html="product.description || 'Đang cập nhật...'"></div>
-            </section>
-        </div>
-    </div>
+            <div class="bg-white rounded shadow-sm p-4">
+                <ul class="nav nav-pills mb-4 border-bottom pb-3 gap-3" id="pills-tab" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link fw-bold px-4" :class="{ active: activeTab === 'desc' }" 
+                            @click="activeTab = 'desc'">
+                            Chi tiết sản phẩm
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link fw-bold px-4" :class="{ active: activeTab === 'review' }" 
+                            @click="activeTab = 'review'">
+                            Đánh giá từ người mua ({{ reviews.length }})
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link fw-bold px-4" :class="{ active: activeTab === 'comment' }" 
+                            @click="activeTab = 'comment'">
+                            Hỏi đáp & Bình luận ({{ comments.length }})
+                        </button>
+                    </li>
+                </ul>
 
-    <!-- Trade-in & Reviews -->
-    <div v-if="!loading && product" class="row mt-5">
-      <div class="col-12">
-        
-       <section class="trade-in-section mb-5">
-    <h3 class="fw-bold">Iphone - Giảm giá tới 50% </h3>
-    <p class="subtitle">(Giá độc quyền)</p>
-
-    <div class="trade-in-features">
-        <div class="feature-item">
-            <div class="icon-wrapper"><i class="bi bi-cash-coin"></i></div>
-            Giá thu tốt nhất<br>thị trường
-        </div>
-        <div class="feature-item">
-            <div class="icon-wrapper"><i class="bi bi-pencil-square"></i></div>
-            Định giá nhanh chóng<br>Thủ tục đơn giản
-        </div>
-        <div class="feature-item">
-            <div class="icon-wrapper"><i class="bi bi-gift"></i></div>
-            Trợ giá thêm đến 1 triệu<br>cho thành viên
-        </div>
-    </div>
-
-    <div class="trade-in-search-wrapper">
-        <div class="trade-in-searchbar">
-            <button class="upload-btn"><i class="bi bi-arrow-up"></i></button>
-            <input type="text" class="search-input" 
-                placeholder="Tìm sản phẩm bạn muốn lên đời..." 
-                v-model="tradeInSearchTerm"
-                @focus="tradeInResultsVisible = true" 
-                @blur="setTimeout(() => tradeInResultsVisible = false, 200)" 
-            />
-        </div>
-
-        <div class="trade-in-results" v-if="tradeInResultsVisible && tradeInSearchResults.length > 0">
-            <ul>
-                <li v-for="item in tradeInSearchResults" :key="item.id" @click="selectTradeInProduct(item.id)">
-                    <img :src="getImageUrl(item.thumbnail_url || item.image_url)" alt="img" class="suggest-img">
-                    <div class="suggest-info">
-                        <span class="suggest-name">{{ item.name }}</span>
-                        <span class="suggest-price">{{ formatCurrency(getProductPrice(item)) }}</span>
+                <div class="tab-content">
+                    <!-- Tab Mô tả -->
+                    <div v-show="activeTab === 'desc'" class="fade-in">
+                        <div class="description-content" v-html="product.description || '<p class=text-muted>Đang cập nhật mô tả...</p>'"></div>
                     </div>
-                </li>
-            </ul>
+
+                    <!-- Tab Đánh giá (Review - Chỉ hiện list, dành cho Buyer) -->
+                    <div v-show="activeTab === 'review'" class="fade-in">
+                        <div v-if="reviews.length === 0" class="text-center py-5">
+                            <i class="bi bi-star fs-1 text-muted opacity-50"></i>
+                            <p class="mt-3 text-muted">Chưa có đánh giá nào từ người mua.</p>
+                        </div>
+                        <div v-else class="review-list mt-3">
+                            <div v-for="r in reviews" :key="r.id" class="review-card p-3 mb-3 border rounded">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-placeholder me-3 bg-success">
+                                            {{ getInitials(r.user_name || r.user?.name) }}
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0 fw-bold">{{ r.user_name || r.user?.name || 'Người mua ẩn danh' }}</h6>
+                                            <div class="text-warning small mt-1">
+                                                <i v-for="n in 5" :key="n" :class="n <= (r.rating || 5) ? 'bi-star-fill' : 'bi-star'" class="me-1"></i>
+                                                <span class="text-success ms-2 small fw-semibold"><i class="bi bi-check-circle-fill"></i> Đã mua hàng</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <small class="text-muted fst-italic">{{ formatDate(r.created_at || r.createdAt) }}</small>
+                                </div>
+                                <div class="review-content ps-2 ms-5 border-start border-3 ps-3">
+                                    <p class="mb-0 text-dark">{{ r.content || r.comment }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Bình luận (Comments - Form Hỏi Đáp - Không Sao) -->
+                    <div v-show="activeTab === 'comment'" class="fade-in">
+                        <!-- Form Viết Bình Luận Mới -->
+                        <div class="card mb-4 border-0 shadow-sm bg-light">
+                            <div class="card-body p-4">
+                                <h5 class="fw-bold mb-3">Hỏi đáp & Bình luận</h5>
+                                <div class="mb-3">
+                                    <textarea v-model="newComment.content" class="form-control" rows="3" 
+                                              placeholder="Bạn có thắc mắc gì về sản phẩm? Hãy đặt câu hỏi..."></textarea>
+                                </div>
+                                <div class="text-end">
+                                    <button class="btn btn-primary btn-add-cart px-4" 
+                                            @click="submitComment" 
+                                            :disabled="isSubmittingComment">
+                                        <span v-if="isSubmittingComment" class="spinner-border spinner-border-sm me-2"></span>
+                                        {{ isSubmittingComment ? 'Đang gửi...' : 'Gửi câu hỏi / Bình luận' }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Danh sách Bình Luận -->
+                        <div v-if="comments.length === 0" class="text-center py-5">
+                            <i class="bi bi-chat-dots fs-1 text-muted opacity-50"></i>
+                            <p class="mt-3 text-muted">Chưa có bình luận nào. Hãy là người đầu tiên đặt câu hỏi!</p>
+                        </div>
+
+                        <div v-else class="comment-list mt-4">
+                            <div v-for="c in comments" :key="c.id" class="comment-card p-3 mb-3 border rounded bg-white">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-placeholder me-3 bg-secondary">
+                                            {{ getInitials(c.user_name) }}
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0 fw-bold">{{ c.user_name || 'Khách' }}</h6>
+                                            <span class="badge bg-light text-dark border mt-1">Khách hàng</span>
+                                        </div>
+                                    </div>
+                                    <small class="text-muted fst-italic">{{ formatDate(c.created_at) }}</small>
+                                </div>
+                                <div class="comment-content ps-2 ms-5">
+                                    <p class="mb-0 text-dark">{{ c.content }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
         </div>
     </div>
-</section>
 
-<section class="related-products-section mb-5" v-if="relatedProducts.length > 0">
-  <h4 class="section-title">Sản phẩm liên quan</h4>
-  <div class="horizontal-scroll-container">
-    <div v-for="relatedProduct in relatedProducts" :key="relatedProduct.id" class="product-card-simple"
-      @click="navigateToProduct(relatedProduct.id)">
-      
-
-      <img :src="getImageUrl(relatedProduct.thumbnail_url || relatedProduct.image_url)" 
-           :alt="relatedProduct.name" class="card-img" 
-           @error="$event.target.src='https://placehold.co/150x150?text=Product'"/>
-      
-      <h5 class="card-name" :title="relatedProduct.name">{{ relatedProduct.name }}</h5>
-      
-      <p class="card-price">{{ formatCurrency(getProductDisplayPrice(relatedProduct)) }}</p>
-      
-    </div>
-  </div>
-</section>
-
-        <!-- Reviews -->
-        <section class="product-reviews">
-          <h4 class="section-title">💬 Đánh giá ({{ reviews.length }})</h4>
-          <p v-if="!reviews.length" class="text-muted">Chưa có đánh giá nào.</p>
-          <div v-else>
-             <div v-for="r in reviews" :key="r.id" class="review-item">
-                 <strong>{{ r.user_name || 'Người dùng' }}</strong>: {{ r.content }}
-             </div>
-          </div>
-        </section>
+    <!-- RELATED PRODUCTS -->
+    <div v-if="!loading && relatedProducts.length > 0" class="row mt-5">
+      <div class="col-12">
+         <h4 class="fw-bold mb-4 text-uppercase border-start border-4 border-success ps-3">Sản phẩm liên quan</h4>
+         <div class="horizontal-scroll-container pb-4">
+            <div v-for="rp in relatedProducts" :key="rp.id" class="product-card-simple shadow-sm" @click="navigateToProduct(rp.id)">
+              <div class="card-img-wrapper">
+                  <img :src="getImageUrl(rp.image_url)" class="card-img"/>
+              </div>
+              <div class="p-2">
+                  <h6 class="card-name text-truncate">{{ rp.name }}</h6>
+                  <p class="card-price text-danger fw-bold mb-0">{{ formatCurrency(rp.price) }}</p>
+              </div>
+            </div>
+         </div>
       </div>
     </div>
-    <div v-if="loading" class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
   </div>
 </template>
 
 <style scoped>
-:root {
-  --primary-color: rgb(0, 153, 129);
-  --primary-hover: rgb(0, 117, 99);
-  --primary-light: rgba(0, 153, 129, 0.1);
-  --trade-in-red: #d70018;
-  --text-dark: #222;
-  --text-gray: #666;
-  --border-color: #eee;
-}
-
-/* --- LAYOUT CHUNG --- */
 .product-detail-page {
-  background-color: #f9f9f9;
-  border-radius: 8px;
-  padding: 16px;
-}
-
-.section-title {
-  border-bottom: 2px solid var(--primary-color);
-  padding-bottom: 10px;
-  margin-bottom: 20px;
-  font-weight: 600;
-  color: var(--primary-color);
-}
-
-/* --- CỘT TRÁI: ẢNH SẢN PHẨM --- */
-.main-image-wrapper {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.main-product-image {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: contain;
-  transition: transform 0.3s ease;
-}
-
-.main-product-image:hover {
-  transform: scale(1.05);
-}
-
-.thumbnail-gallery {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.thumbnail-item {
-  width: 70px;
-  height: 70px;
-  border: 2px solid #ddd;
-  border-radius: 8px;
-  object-fit: cover;
-  cursor: pointer;
-  opacity: 0.7;
-  transition: all 0.2s ease;
-}
-
-.thumbnail-item:hover {
-  opacity: 1;
-  border-color: #aaa;
-}
-
-.thumbnail-item.active {
-  opacity: 1;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 5px var(--primary-light);
-}
-
-.product-description {
-  background-color: #fff;
-  padding: 25px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-}
-
-/* --- CỘT PHẢI: THÔNG TIN SẢN PHẨM --- */
-.product-info-box {
-  background-color: #fff;
-  padding: 25px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-.product-title {
-  color: var(--text-dark);
-}
-
-.price-section {
-  background-color: #fdfdfd;
-  border-bottom: 1px solid #f0f0f0;
-  padding-bottom: 15px;
-}
-
-/* Variant Buttons */
-.variant-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.variant-btn {
-  border: 2px solid #ddd;
-  background-color: #fff;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  padding: 5px 15px;
-  text-align: left;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.variant-btn:hover {
-  border-color: #aaa;
-}
-
-.variant-btn.active {
-  border-color: var(--primary-color);
-  background-color: var(--primary-light);
-  box-shadow: 0 0 0 2px var(--primary-color);
-}
-
-.variant-price {
-  font-size: 0.85em;
-  font-weight: bold;
-  color: var(--primary-color);
-}
-
-/* Quantity & Action Buttons */
-.btn-qty {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  line-height: 40px;
-}
-
-.btn-primary-green {
-  background-color: var(--primary-color);
-  border-color: var(--primary-color);
-  color: white;
-  font-weight: 600;
-  padding: 10px 20px;
-  transition: all 0.3s ease;
-}
-
-.btn-primary-green:hover {
-  border-radius: 8px;
-  box-shadow: 0 4px 10px rgba(0, 153, 129, 0.4);
-  transform: translateY(-2px);
-}
-
-.btn-primary-green:disabled {
-  background-color: #ccc;
-  border-color: #ccc;
-  cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
-}
-
-/* --- ƯU ĐÃI THANH TOÁN --- */
-.payment-offers-section {
-  background-color: #fff;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 20px 25px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
-}
-
-.offers-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.offer-item {
-  background-color: #f9fdfc;
-  border: 1px solid #e0f2ef;
-  border-radius: 10px;
-  padding: 10px 15px;
-  transition: all 0.2s ease;
-}
-
-.offer-item:hover {
-  background-color: #f3fbf9;
-  border-color: var(--primary-color);
-  transform: translateX(3px);
-}
-
-.offer-logo {
-  width: 38px;
-  height: 38px;
-  object-fit: contain;
-  border-radius: 6px;
-  background-color: white;
-  padding: 4px;
-  border: 1px solid #eee;
-}
-
-.offer-text {
-  flex: 1;
-  font-size: 0.9rem;
-  color: #333;
-  line-height: 1.5;
-}
-
-.btn-view-all {
-  border: none;
-  background: none;
-  font-weight: 600;
-  font-size: 0.9rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-  color: var(--primary-color);
-}
-
-.btn-view-all:hover {
-  text-decoration: underline;
-}
-
-/* --- KHUYẾN MÃI & BUNDLE --- */
-.promotion-section-box {
-  background-color: #f3f9ff;
-  border: 1px solid #d0e6ff;
-  border-radius: 10px;
-  padding: 20px 25px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
-}
-
-.promotion-section-box h2 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #0056b3;
-  margin-bottom: 15px;
-}
-
-.promotion-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.promo-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.promo-badge-num {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  background-color: #007bff;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.8rem;
-  font-weight: bold;
-  margin-top: 3px;
-}
-
-.promo-text {
-  flex: 1;
-  font-size: 0.9rem;
-  color: #333;
-  line-height: 1.5;
-}
-
-.promo-link {
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-decoration: none;
-  color: var(--primary-color);
-  margin-left: 5px;
-}
-
-.promo-link:hover {
-  text-decoration: underline;
-}
-
-.bundle-deal-section {
-  background: #fff8f8;
-  border: 1px solid #ffe0e0;
-  border-radius: 10px;
-  padding: 20px;
-  margin-top: 20px;
-}
-
-.bundle-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-.bundle-header h2 {
-  font-size: 1.25rem;
-  color: var(--trade-in-red);
-  font-weight: 700;
-}
-
-.bundle-products {
-  display: flex;
-  gap: 15px;
-  overflow-x: auto;
-  padding-bottom: 15px;
-}
-
-.bundle-item {
-  flex: 0 0 160px;
-  background: #fff;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 10px;
-  text-align: center;
-  transition: all 0.2s ease;
-}
-
-.bundle-item:hover {
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
-  transform: translateY(-3px);
-}
-
-.bundle-item img {
-  width: 100%;
-  height: 120px;
-  object-fit: contain;
-  border-radius: 6px;
-  margin-bottom: 8px;
-}
-
-.bundle-item h3 {
-  font-size: 0.9rem;
-  font-weight: 600;
-  height: 2.5em;
-  overflow: hidden;
-  margin-bottom: 5px;
-}
-
-.bundle-item .price {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.bundle-item .new-price {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--trade-in-red);
-}
-
-.bundle-item .old-price {
-  font-size: 0.8rem;
-  color: #888;
-  text-decoration: line-through;
-}
-
-.btn-buy-now {
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.btn-buy-now:hover {
-  background: var(--primary-hover);
-}
-
-/* --- TRADE-IN & SEARCH --- */
-.trade-in-section {
-  background-color: #222;
-  color: #fff;
-  border-radius: 12px;
-  padding: 25px 30px;
-  text-align: center;
-}
-
-.trade-in-section h3 {
-  font-size: 1.75rem;
-  font-weight: 700;
-}
-
-.trade-in-section .subtitle {
-  color: #ccc;
-  font-size: 0.95rem;
-  margin-bottom: 25px;
-}
-
-.trade-in-features {
-  display: flex;
-  justify-content: space-around;
-  align-items: flex-start;
-  gap: 15px;
-  margin-bottom: 25px;
-}
-
-.feature-item {
-  flex: 1;
-  font-size: 0.9rem;
-  line-height: 1.4;
-}
-
-.feature-item .icon-wrapper {
-  background-color: var(--trade-in-red);
-  width: 50px;
-  height: 50px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 12px;
-  font-size: 1.6rem;
-}
-
-/* Search Wrapper & Dropdown */
-.trade-in-search-wrapper {
-  position: relative;
-  max-width: 600px;
-  margin: 0 auto;
-  z-index: 100;
-}
-
-.trade-in-searchbar {
-  background-color: #555;
-  border-radius: 12px;
-  padding: 8px;
-  display: flex;
-  align-items: center;
-}
-
-.trade-in-searchbar .upload-btn {
-  background-color: var(--trade-in-red);
-  border: none;
-  border-radius: 8px;
-  color: white;
-  width: 45px;
-  height: 45px;
-  font-size: 1.3rem;
-  margin-right: 10px;
-  flex-shrink: 0;
-}
-
-.trade-in-searchbar .search-input {
-  flex: 1;
-  background-color: #fff;
-  color: #222;
-  border-radius: 8px;
-  padding: 12px 15px;
-  border: none;
-  width: 100%;
-  font-size: 0.9rem;
-  outline: none;
-}
-
-.trade-in-results {
-  position: absolute;
-  top: 105%;
-  left: 0;
-  right: 0;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-  z-index: 101;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.trade-in-results ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.trade-in-results li {
-  display: flex;
-  align-items: center;
-  padding: 10px 15px;
-  cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
-  transition: background 0.2s;
-}
-
-.trade-in-results li:hover {
-  background-color: #f8f9fa;
-}
-
-.suggest-img {
-  width: 45px;
-  height: 45px;
-  object-fit: cover;
-  border-radius: 4px;
-  margin-right: 12px;
-  border: 1px solid #eee;
-}
-
-.suggest-info {
-  display: flex;
-  flex-direction: column;
-  text-align: left;
-}
-
-.suggest-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.suggest-price {
-  font-size: 13px;
-  color: var(--trade-in-red);
-  font-weight: bold;
-}
-
-/* --- SẢN PHẨM LIÊN QUAN --- */
-.related-products-section {
-  background-color: #fff;
-  padding: 25px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-}
-
-.horizontal-scroll-container {
-  display: flex;
-  overflow-x: auto;
-  gap: 16px;
-  padding-bottom: 10px;
-}
-
-.product-card-simple {
-  flex: 0 0 180px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 10px;
-  text-align: center;
-  cursor: pointer;
-  transition: box-shadow 0.2s;
-}
-
-.product-card-simple:hover {
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
-}
-
-.product-card-simple .card-img {
-  width: 100%;
-  height: 150px;
-  object-fit: contain;
-  margin-bottom: 10px;
-}
-
-.product-card-simple .card-name {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #333;
-  height: 2.5em;
-  overflow: hidden;
-}
-
-.product-card-simple .card-price {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--primary-color);
-}
-
-/* --- REVIEWS --- */
-.product-reviews {
-  background-color: #fff;
-  padding: 25px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-}
-
-.review-item {
-  border-bottom: 1px solid #f0f0f0;
-  padding: 15px 0;
-}
-
-.review-item:last-child {
-  border-bottom: none;
-}
+    --primary-color: #009981;
+    --primary-hover: #007a67;
+    background-color: #f4f6f8;
+    min-height: 100vh;
+}
+.fade-in-up { animation: fadeInUp 0.5s ease-out; }
+.fade-in { animation: fadeIn 0.3s ease-in; }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* IMAGES */
+.main-image-wrapper { 
+    background: #fff; border-radius: 12px; overflow: hidden; padding: 20px; 
+    height: 500px; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; border: 1px solid rgba(0,0,0,0.05);
+}
+.main-product-image { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; border-radius: 8px; }
+.main-product-image:hover { transform: scale(1.05); }
+@media (max-width: 768px) { .main-image-wrapper { height: 350px; } }
+
+.thumbnail-gallery { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.thumbnail-wrapper { width: 70px; height: 70px; border-radius: 8px; overflow: hidden; border: 2px solid transparent; cursor: pointer; transition: all 0.2s; background: #fff; padding: 2px; }
+.thumbnail-wrapper.active { border-color: var(--primary-color); transform: translateY(-2px); }
+.thumbnail-img { width: 100%; height: 100%; object-fit: contain; }
+
+/* INFO & CHIPS */
+.product-info-box { padding: 0 10px; }
+.chip-btn { border: 1px solid #dee2e6; background: #fff; color: #495057; min-width: 60px; transition: all 0.2s; border-radius: 6px; font-size: 0.9rem; }
+.chip-btn:hover:not(.disabled) { border-color: var(--primary-color); color: var(--primary-color); background: rgba(0, 153, 129, 0.05); }
+.chip-btn.active { border-color: var(--primary-color); background-color: var(--primary-color); color: #fff; box-shadow: 0 4px 6px rgba(0, 153, 129, 0.2); }
+.chip-btn.disabled { opacity: 0.5; background: #f8f9fa; color: #adb5bd; text-decoration: line-through; cursor: not-allowed; border-style: dashed; }
+
+.qty-group button { background: #fff; color: #333; border-color: #ced4da; }
+.qty-group button:hover { background: #f8f9fa; }
+.qty-group input { background: #fff; border-color: #ced4da; color: #333; }
+
+.btn-add-cart { background-color: var(--primary-color); color: white; border: none; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.3s; }
+.btn-add-cart:hover:not(:disabled) { background-color: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 8px 15px rgba(0, 153, 129, 0.2); }
+.btn-add-cart:disabled { background-color: #a0c4be; cursor: not-allowed; }
+
+.icon-btn { width: 50px; height: 50px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+.icon-btn:hover { background-color: #ffebee; border-color: #ef5350; }
+
+/* TABS & CARDS */
+.nav-pills .nav-link { color: #555; border-radius: 30px; border: 1px solid #e9ecef; transition: all 0.2s; }
+.nav-pills .nav-link:hover { background: #f8f9fa; }
+.nav-pills .nav-link.active { background-color: var(--primary-color); color: #fff; border-color: var(--primary-color); box-shadow: 0 4px 8px rgba(0, 153, 129, 0.25); }
+
+.review-card { background: #fff; border-color: #f1f1f1 !important; transition: all 0.2s; }
+.review-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+.comment-card { transition: all 0.2s; }
+.comment-card:hover { box-shadow: 0 4px 10px rgba(0,0,0,0.03); }
+
+.avatar-placeholder { width: 45px; height: 45px; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+.bg-success { background: linear-gradient(135deg, #42e695 0%, #3bb2b8 100%); }
+.bg-secondary { background: linear-gradient(135deg, #a8c0ff 0%, #3f2b96 100%); }
+
+.horizontal-scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 5px; scrollbar-width: thin; }
+.product-card-simple { flex: 0 0 180px; background: #fff; border-radius: 10px; overflow: hidden; cursor: pointer; transition: transform 0.2s; border: 1px solid rgba(0,0,0,0.05); }
+.product-card-simple:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important; }
+.card-img-wrapper { height: 140px; padding: 10px; display: flex; align-items: center; justify-content: center; }
+.card-img { max-width: 100%; max-height: 100%; object-fit: contain; }
 </style>
