@@ -44,13 +44,6 @@ const fetchUserData = async () => {
             currentUser.value = JSON.parse(storedAdmin);
             if (currentUser.value.role_id === 1) return;
 
-            // Mock call hoặc gọi API thật
-            // if (currentUser.value.role_id) {
-            //     const response = await apiService.get(`admin/roles/${currentUser.value.role_id}`);
-            //     if (response.data && response.data.permissions) {
-            //         userPermissions.value = response.data.permissions.map(p => p.slug);
-            //     }
-            // }
         } catch (e) {
             console.error("Lỗi tải thông tin quyền hạn:", e);
         }

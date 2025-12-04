@@ -3,9 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// ==============================================================================
 // 1. IMPORT CONTROLLERS (CLIENT & ADMIN)
-// ==============================================================================
 
 // --- CLIENT CONTROLLERS ---
 use App\Http\Controllers\Api\Client\ProductController;
@@ -48,9 +46,7 @@ use App\Http\Controllers\Api\admin\AdminPermissionController;
 use App\Http\Controllers\Api\admin\AdminBrandController;
 use App\Http\Controllers\Api\admin\AdminOrderItemController;
 
-// ==============================================================================
 // 2. AUTHENTICATION ROUTES (PUBLIC)
-// ==============================================================================
 
 // --- CLIENT AUTH ---
 Route::post('/register', [AuthController::class, 'register']);
@@ -67,9 +63,7 @@ Route::get('/login', function () {
     return response()->json(['message' => 'Unauthenticated.'], 401);
 })->name('login');
 
-// ==============================================================================
 // 3. PUBLIC DATA ROUTES (CLIENT - KHÔNG CẦN ĐĂNG NHẬP)
-// ==============================================================================
 
 // --- PRODUCTS ---
 Route::get('/products', [ProductController::class, 'index']);
@@ -122,9 +116,7 @@ Route::get('/roles', [RoleController::class, 'index']);
 Route::get('/brands', [BrandSlideController::class, 'index']);
 Route::get('/brand/{id}', [BrandSlideController::class, 'show']);
 
-// ==============================================================================
 // 4. CLIENT PROTECTED ROUTES (YÊU CẦU ĐĂNG NHẬP - auth:sanctum)
-// ==============================================================================
 Route::middleware(['auth:sanctum'])->group(function () {
     
     // --- USER INFO ---
@@ -168,9 +160,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('/review/{id}', [ReviewController::class, 'destroy']);
 });
 
-// ==============================================================================
 // 5. ADMIN PROTECTED ROUTES (YÊU CẦU QUYỀN ADMIN + PREFIX 'admin')
-// ==============================================================================
 Route::group([
     'prefix' => 'admin',
     'middleware' => ['auth:sanctum', 'admin']
