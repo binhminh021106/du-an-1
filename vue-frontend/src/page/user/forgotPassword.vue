@@ -1,35 +1,69 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, reactive } from 'vue';
 import { useRouter } from 'vue-router';
-// import Swal from 'sweetalert2'; 
-// import apiService from '../../apiService'; 
-// (Giữ nguyên phần logic script của bạn, chỉ thay đổi CSS bên dưới)
+import Swal from 'sweetalert2';
+import apiService from '../../apiService';
 
 const router = useRouter();
-
 const email = ref('');
 const error = ref('');
 const isLoading = ref(false);
-
 const goHome = () => {
     router.push({ name: 'home' });
 };
 
 const sendLink = async () => {
-    // Giả lập logic để test giao diện
+
+    // Reset lỗi
     error.value = '';
+
     if (!email.value) {
         error.value = 'Vui lòng nhập email của bạn';
         return;
     }
+
     isLoading.value = true;
-    setTimeout(() => {
+
+    try {
+        // Gọi API Backend
+        const res = await apiService.post('/forgot-password', { email: email.value });
+
+        if (res.status === 200) {
+            // Hiển thị SweetAlert thành công
+            await Swal.fire({
+                icon: 'success',
+                title: 'Đã gửi email!',
+                text: 'Vui lòng kiểm tra hộp thư đến (hoặc spam) để lấy link đặt lại mật khẩu.',
+                confirmButtonColor: '#009981',
+            });
+            // Có thể chuyển hướng về login hoặc giữ nguyên
+            // router.push({ name: 'login' });
+        }
+
+    } catch (apiError) {
+        console.log(apiError);
+        const response = apiError.response;
+        let msg = 'Có lỗi xảy ra, vui lòng thử lại.';
+
+        if (response?.data?.errors?.email) {
+            msg = response.data.errors.email[0];
+        } else if (response?.data?.message) {
+            msg = response.data.message;
+        }
+
+        error.value = msg;
+
+        Swal.fire({
+            icon: 'error',
+            title: 'Gửi thất bại',
+            text: msg,
+            confirmButtonColor: '#009981',
+        });
+    } finally {
         isLoading.value = false;
-        alert('Đã gửi link (Test Mode)');
-    }, 1000);
-    
-    // Logic thực tế của bạn giữ nguyên ở đây...
+    }
 };
+
 </script>
 
 <template>

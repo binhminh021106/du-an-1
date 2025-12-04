@@ -8,45 +8,46 @@ use Illuminate\Support\Facades\Route;
 // ==============================================================================
 
 // --- CLIENT CONTROLLERS ---
-use App\Http\Controllers\Api\Client\ProductController;
-use App\Http\Controllers\Api\Client\CategoryController;
-use App\Http\Controllers\Api\Client\VariantController;
-use App\Http\Controllers\Api\Client\SlideController;
-use App\Http\Controllers\Api\Client\CommentController;
-use App\Http\Controllers\Api\Client\CouponController;
-use App\Http\Controllers\Api\Client\ImageProductController;
 use App\Http\Controllers\Api\Client\NewController;
-use App\Http\Controllers\Api\Client\ReviewController;
-use App\Http\Controllers\Api\Client\UserController;
-use App\Http\Controllers\Api\Client\UserAddressController;
-use App\Http\Controllers\Api\Client\RoleController;
-use App\Http\Controllers\Api\Client\CartController;
-use App\Http\Controllers\Api\Client\OrderController;
 use App\Http\Controllers\Api\Client\AuthController;
-use App\Http\Controllers\Api\Client\BrandSlideController;
-use App\Http\Controllers\Api\Client\WishlistController;
+use App\Http\Controllers\Api\Client\CartController;
+use App\Http\Controllers\Api\Client\RoleController;
+use App\Http\Controllers\Api\Client\UserController;
+use App\Http\Controllers\Api\Client\OrderController;
+use App\Http\Controllers\Api\Client\SlideController;
+use App\Http\Controllers\Api\Client\CouponController;
+use App\Http\Controllers\Api\Client\ReviewController;
+use App\Http\Controllers\Api\admin\AdminNewController;
+use App\Http\Controllers\Api\Client\CommentController;
+use App\Http\Controllers\Api\Client\ProductController;
+use App\Http\Controllers\Api\Client\VariantController;
+use App\Http\Controllers\Api\admin\AdminAuthController;
+use App\Http\Controllers\Api\admin\AdminRoleController;
+use App\Http\Controllers\Api\admin\AdminUserController;
+use App\Http\Controllers\Api\Client\CategoryController;
 use App\Http\Controllers\Api\Client\CheckoutController;
 
 // --- ADMIN CONTROLLERS ---
-use App\Http\Controllers\Api\admin\AdminAuthController;
-use App\Http\Controllers\Api\admin\AdminProductController;
-use App\Http\Controllers\Api\admin\AdminCategoryController;
-use App\Http\Controllers\Api\admin\AdminUserController;
-use App\Http\Controllers\Api\admin\AdminVariantController;
-use App\Http\Controllers\Api\admin\AdminCommentController;
-use App\Http\Controllers\Api\admin\AdminCouponController;
-use App\Http\Controllers\Api\admin\AdminImageProductController;
-use App\Http\Controllers\Api\admin\AdminNewController;
-use App\Http\Controllers\Api\admin\AdminOrderController;
-use App\Http\Controllers\Api\admin\AdminReviewController;
-use App\Http\Controllers\Api\admin\AdminRoleController;
-use App\Http\Controllers\Api\admin\AdminSlideController;
-use App\Http\Controllers\Api\admin\AminAccountController;
-use App\Http\Controllers\Api\admin\AdminBrandSlideController;
-use App\Http\Controllers\Api\admin\AdminAttributeController;
-use App\Http\Controllers\Api\admin\AdminPermissionController;
+use App\Http\Controllers\Api\Client\WishlistController;
 use App\Http\Controllers\Api\admin\AdminBrandController;
+use App\Http\Controllers\Api\admin\AdminOrderController;
+use App\Http\Controllers\Api\admin\AdminSlideController;
+use App\Http\Controllers\Api\admin\AdminCouponController;
+use App\Http\Controllers\Api\admin\AdminReviewController;
+use App\Http\Controllers\Api\admin\AminAccountController;
+use App\Http\Controllers\Api\Client\BrandSlideController;
+use App\Http\Controllers\Api\admin\AdminCommentController;
+use App\Http\Controllers\Api\admin\AdminProductController;
+use App\Http\Controllers\Api\admin\AdminVariantController;
+use App\Http\Controllers\Api\Client\NewPasswordController;
+use App\Http\Controllers\Api\Client\UserAddressController;
+use App\Http\Controllers\Api\admin\AdminCategoryController;
+use App\Http\Controllers\Api\Client\ImageProductController;
+use App\Http\Controllers\Api\admin\AdminAttributeController;
 use App\Http\Controllers\Api\admin\AdminOrderItemController;
+use App\Http\Controllers\Api\admin\AdminBrandSlideController;
+use App\Http\Controllers\Api\admin\AdminPermissionController;
+use App\Http\Controllers\Api\admin\AdminImageProductController;
 
 // ==============================================================================
 // 2. AUTHENTICATION ROUTES (PUBLIC)
@@ -74,6 +75,12 @@ Route::get('/login', function () {
 // --- PRODUCTS ---
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/product/{id}', [ProductController::class, 'show']);
+
+Route::post('/forgot-password', [NewPasswordController::class, 'store'])
+    ->name('password.email');
+
+Route::post('/reset-password', [NewPasswordController::class, 'update'])
+    ->name('password.update');
 
 // --- CATEGORIES ---
 Route::get('/categories', [CategoryController::class, 'index']);
@@ -126,7 +133,7 @@ Route::get('/brand/{id}', [BrandSlideController::class, 'show']);
 // 4. CLIENT PROTECTED ROUTES (YÊU CẦU ĐĂNG NHẬP - auth:sanctum)
 // ==============================================================================
 Route::middleware(['auth:sanctum'])->group(function () {
-    
+
     // --- USER INFO ---
     Route::get('/user', function (Request $request) {
         return $request->user();
@@ -135,8 +142,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // --- CART (GIỎ HÀNG DATABASE) ---
     Route::get('/carts', [CartController::class, 'index']);
     Route::post('/cart/add', [CartController::class, 'addToCart']);
-    Route::put('/cart/{id}', [CartController::class, 'update']); 
-    Route::delete('/cart/{id}', [CartController::class, 'destroy']); 
+    Route::put('/cart/{id}', [CartController::class, 'update']);
+    Route::delete('/cart/{id}', [CartController::class, 'destroy']);
 
     // --- WISHLIST (YÊU THÍCH) ---
     Route::get('/wishlist', [WishlistController::class, 'index']);
@@ -147,10 +154,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
 
     // --- ORDERS (ĐƠN HÀNG CỦA USER) ---
-    Route::get('/orders', [OrderController::class, 'index']); 
-    Route::get('/order/{id}', [OrderController::class, 'show']); 
-    
-    Route::post('/orders', [CheckoutController::class, 'store']); 
+    Route::get('/orders', [OrderController::class, 'index']);
+    Route::get('/order/{id}', [OrderController::class, 'show']);
+
+    Route::post('/orders', [CheckoutController::class, 'store']);
     Route::post('/orders/{id}/repurchase', [OrderController::class, 'repurchase']);
 
     // Route của client dùng từ khóa 'order' (số ít)
@@ -175,14 +182,14 @@ Route::group([
     'prefix' => 'admin',
     'middleware' => ['auth:sanctum', 'admin']
 ], function () {
-    
+
     // --- PRODUCTS ---
     Route::apiResource('products', AdminProductController::class);
 
     // --- CATEGORIES ---
     Route::post('categories/update-order', [AdminCategoryController::class, 'updateOrder']);
     Route::apiResource('categories', AdminCategoryController::class);
-    
+
     // --- USERS ---
     Route::apiResource('users', AdminUserController::class);
 
@@ -205,15 +212,15 @@ Route::group([
 
     // --- NEWS ---
     Route::apiResource('news', AdminNewController::class);
-    
+
     // --- ORDERS (Chuẩn RESTful của Admin) ---
     Route::apiResource('orders', AdminOrderController::class);
     // [FIX] Di chuyển route order_items vào đây để có prefix /admin/
     Route::get('/order_items', [AdminOrderItemController::class, 'index']);
-    
+
     // --- REVIEWS ---
     Route::apiResource('reviews', AdminReviewController::class);
-    
+
     // --- ROLES & PERMISSIONS ---
     Route::get('permissions', [AdminPermissionController::class, 'index']);
     Route::post('roles/{id}/permissions', [AdminRoleController::class, 'assignPermissions']);
@@ -222,10 +229,10 @@ Route::group([
     // --- SLIDES ---
     Route::post('slides/update-order', [AdminSlideController::class, 'updateOrder']);
     Route::apiResource('slides', AdminSlideController::class);
-    
+
     // --- ADMIN ACCOUNTS ---
-    Route::apiResource('admins', AminAccountController::class); 
-    
+    Route::apiResource('admins', AminAccountController::class);
+
     // --- BRAND SLIDES ---
     Route::post('brand-slides/update-order', [AdminBrandSlideController::class, 'updateOrder']);
     Route::apiResource('brand-slides', AdminBrandSlideController::class);
@@ -234,7 +241,7 @@ Route::group([
     Route::get('brands/trashed', [AdminBrandController::class, 'trashed']);
     Route::post('brands/{id}/restore', [AdminBrandController::class, 'restore']);
     Route::delete('brands/{id}/force', [AdminBrandController::class, 'forceDelete']);
-    Route::apiResource('brands', AdminBrandController::class); 
+    Route::apiResource('brands', AdminBrandController::class);
 
     // --- ATTRIBUTES ---
     Route::apiResource('attributes', AdminAttributeController::class);
