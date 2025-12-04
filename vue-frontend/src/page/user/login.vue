@@ -123,7 +123,7 @@ const togglePasswordVisibility = () => {
 <template>
     <div class="login-page-wrapper">
         <div class="login-container">
-            
+
             <!-- NÚT X ĐỂ VỀ TRANG CHỦ -->
             <button class="close-btn" @click="goHome" title="Về trang chủ">
                 <i class="fa-solid fa-xmark"></i> <!-- Sử dụng icon Xmark -->
@@ -176,7 +176,7 @@ const togglePasswordVisibility = () => {
                     </button>
                 </form>
 
-                <a href="#" class="forgot-password">Quên mật khẩu?</a>
+                <router-link :to="{ name: 'forgot-password' }" class="forgot-password">Quên mật khẩu?</router-link>
 
                 <div class="separator">Hoặc đăng nhập bằng</div>
 
@@ -186,7 +186,7 @@ const togglePasswordVisibility = () => {
                             alt="Google">
                         Google
                     </button>
-                    
+
                     <button class="social-btn" type="button">
                         <img src="../../assets/facebook-svgrepo-com.svg" width="500px">
                         Facebook
@@ -204,14 +204,13 @@ const togglePasswordVisibility = () => {
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
-:root {
+/* [FIX LỖI MẤT MÀU] Đổi :root thành .login-page-wrapper để biến CSS không bị mất khi chuyển trang */
+.login-page-wrapper {
     --primary-color: #009981;
     --text-color: #333;
     --border-color: #ddd;
     --bg-light: #f9f9f9;
-}
 
-.login-page-wrapper {
     font-family: 'Roboto', sans-serif;
     background-color: var(--bg-light);
     display: flex;
@@ -234,7 +233,7 @@ const togglePasswordVisibility = () => {
     overflow: hidden;
     margin: 20px;
     /* QUAN TRỌNG: Để nút Close định vị tuyệt đối theo khung này */
-    position: relative; 
+    position: relative;
 }
 
 /* --- STYLE CHO NÚT CLOSE (DẤU X) --- */
@@ -260,7 +259,8 @@ const togglePasswordVisibility = () => {
 .close-btn:hover {
     background-color: #f0f0f0;
     color: #333;
-    transform: rotate(90deg); /* Hiệu ứng xoay nhẹ khi hover */
+    transform: rotate(90deg);
+    /* Hiệu ứng xoay nhẹ khi hover */
 }
 
 /* --- END STYLE CLOSE BTN --- */
@@ -348,10 +348,17 @@ const togglePasswordVisibility = () => {
 .login-form input {
     width: 100%;
     padding: 12px 15px;
-    border: 1px solid black;
+    /* [FIX LỖI VIỀN ĐEN] Đổi từ 'black' sang biến màu viền để nó xám nhẹ đẹp như cũ */
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     font-size: 1rem;
     box-sizing: border-box;
+}
+
+/* Thêm hiệu ứng focus để khi bấm vào nó sáng xanh lên giống app xịn */
+.login-form input:focus {
+    outline: none;
+    border-color: var(--primary-color);
 }
 
 .password-wrapper {
@@ -482,7 +489,8 @@ const togglePasswordVisibility = () => {
 
     .login-section {
         border-left: none;
-        padding-top: 60px; /* Thêm padding top để tránh đè lên nút X trên mobile */
+        padding-top: 60px;
+        /* Thêm padding top để tránh đè lên nút X trên mobile */
     }
 }
 </style>
