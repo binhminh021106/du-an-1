@@ -7,14 +7,24 @@ import { Modal } from 'bootstrap';
 // CONFIGURATION
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
+// --- CẤU HÌNH ENDPOINT ---
+const RESOURCE_ENDPOINT = '/admin/orders'; 
+const RESOURCE_ITEMS_ENDPOINT = '/admin/order_items'; 
+
 // AUTHENTICATION & PERMISSIONS
 const currentUser = ref({});
 
-const hasRole = (allowedRoles) => {
-    const userRoleId = Number(currentUser.value?.role_id);
+// Hàm kiểm tra quyền hạn (Pure Function)
+function hasRole(allowedRoles) {
+    // Kiểm tra an toàn: nếu currentUser chưa có giá trị hoặc không có role_id
+    if (!currentUser.value || !currentUser.value.role_id) {
+        return false;
+    }
+    
+    const userRoleId = Number(currentUser.value.role_id);
     let userRoleName = '';
 
-    if (userRoleId === 11) userRoleName = 'admin';
+    if (userRoleId === 1) userRoleName = 'admin';
     else if (userRoleId === 12) userRoleName = 'staff';
     else if (userRoleId === 13) userRoleName = 'blogger';
 
@@ -22,55 +32,70 @@ const hasRole = (allowedRoles) => {
     if (userRoleName === 'admin') return true;
 
     return allowedRoles.includes(userRoleName);
-};
+}
 
-const checkAuthState = async () => {
+// --- HÀM CHECK AUTH ---
+async function checkAuthState() {
     const token = localStorage.getItem('adminToken');
-    if (token) apiService.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    if (!token) return false;
+
+    // Set token cho request tiếp theo
+    apiService.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
     const storedAdmin = localStorage.getItem('adminData');
-    const storedUser = localStorage.getItem('user_info');
     let userData = null;
 
     try {
         if (storedAdmin) userData = JSON.parse(storedAdmin);
-        else if (storedUser) userData = JSON.parse(storedUser);
-    } catch (e) { console.error("Parse error", e); }
+    } catch (e) { console.error("Parse adminData error", e); }
 
     if (userData) {
         currentUser.value = { ...userData, role_id: Number(userData.role_id) };
         return true;
     }
 
-    if (token) {
-        try {
-            const response = await apiService.get('/user');
-            let data = response.data;
-            if (data.data && !data.id) data = data.data;
-            
-            currentUser.value = { ...data, role_id: Number(data.role_id) };
-            localStorage.setItem('adminData', JSON.stringify(currentUser.value));
-            return true;
-        } catch (error) {
-            console.error("Auth API Error:", error);
-            return false;
+    try {
+        const response = await apiService.get('/user'); 
+        let data = response.data;
+        // Xử lý response bọc trong data.data nếu có
+        if (data.data && !data.id) data = data.data;
+        
+        const roleId = Number(data.role_id);
+        // Chỉ chấp nhận admin/staff
+        if (roleId !== 1 && roleId !== 12) {
+             console.warn("Token hợp lệ nhưng không phải quyền Admin/Staff");
+             return false;
         }
-    }
-    return false;
-};
 
-const requireLogin = () => {
-    if (!currentUser.value.id) {
-        Swal.fire({ icon: 'error', title: 'Truy cập bị từ chối', text: 'Phiên làm việc hết hạn.', confirmButtonText: 'Đăng nhập ngay' });
+        currentUser.value = { ...data, role_id: roleId };
+        localStorage.setItem('adminData', JSON.stringify(currentUser.value));
+        return true;
+    } catch (error) {
+        console.error("Auth API Error:", error);
         return false;
     }
-    // Chỉ Admin và Staff được quản lý đơn hàng
+}
+
+function requireLogin() {
+    if (!currentUser.value || !currentUser.value.id) {
+        Swal.fire({ 
+            icon: 'error', 
+            title: 'Truy cập bị từ chối', 
+            text: 'Phiên làm việc hết hạn hoặc bạn không có quyền Admin.', 
+            confirmButtonText: 'Đăng nhập lại' 
+        });
+        return false;
+    }
     if (!hasRole(['admin', 'staff'])) {
-        Swal.fire({ icon: 'warning', title: 'Quyền hạn', text: 'Bạn không có quyền quản lý đơn hàng.' });
+        Swal.fire({ 
+            icon: 'warning', 
+            title: 'Quyền hạn', 
+            text: 'Tài khoản này không có quyền quản lý đơn hàng.' 
+        });
         return false;
     }
     return true;
-};
+}
 
 // STATE MANAGEMENT
 const allOrders = ref([]);
@@ -86,7 +111,7 @@ const selectedOrder = ref({});
 const selectedOrderItems = ref([]);
 const isLoadingDetails = ref(false);
 
-// Pagination State (Separate for each tab)
+// Pagination State
 const pagination = reactive({
     pending: { currentPage: 1, itemsPerPage: 10 },
     approved: { currentPage: 1, itemsPerPage: 10 },
@@ -97,12 +122,9 @@ const pagination = reactive({
 });
 
 // COMPUTED & LOGIC
-
-// 1. Filter & Sort Global
 const processedOrders = computed(() => {
-    let result = [...allOrders.value];
+    let result = Array.isArray(allOrders.value) ? [...allOrders.value] : [];
 
-    // Search
     const query = searchQuery.value.toLowerCase().trim();
     if (query) {
         result = result.filter(order =>
@@ -112,7 +134,6 @@ const processedOrders = computed(() => {
         );
     }
 
-    // Sort
     const [key, order] = sortCriteria.value.split('-');
     result.sort((a, b) => {
         let valA, valB;
@@ -126,7 +147,6 @@ const processedOrders = computed(() => {
     return result;
 });
 
-// 2. Split Lists
 const pendingList = computed(() => processedOrders.value.filter(o => o.status === 'pending'));
 const approvedList = computed(() => processedOrders.value.filter(o => o.status === 'approved'));
 const shippingList = computed(() => processedOrders.value.filter(o => o.status === 'shipping'));
@@ -134,7 +154,6 @@ const completedList = computed(() => processedOrders.value.filter(o => o.status 
 const cancelledList = computed(() => processedOrders.value.filter(o => o.status === 'cancelled'));
 const returnsList = computed(() => processedOrders.value.filter(o => ['returning', 'returned'].includes(o.status)));
 
-// 3. Status Counts
 const statusCounts = computed(() => ({
     pending: pendingList.value.length,
     approved: approvedList.value.length,
@@ -144,7 +163,6 @@ const statusCounts = computed(() => ({
     returns: returnsList.value.length
 }));
 
-// 4. Pagination Helper
 function getPaginatedData(list, type) {
     const pageInfo = pagination[type];
     const totalPages = Math.max(1, Math.ceil(list.length / pageInfo.itemsPerPage));
@@ -164,7 +182,6 @@ const pagedCompleted = computed(() => getPaginatedData(completedList.value, 'com
 const pagedCancelled = computed(() => getPaginatedData(cancelledList.value, 'cancelled'));
 const pagedReturns = computed(() => getPaginatedData(returnsList.value, 'returns'));
 
-// Watchers
 watch([searchQuery, sortCriteria], () => {
     Object.keys(pagination).forEach(key => pagination[key].currentPage = 1);
 });
@@ -185,32 +202,96 @@ const formatDate = (dateString) => {
     });
 };
 
-const openDetailModal = async (order) => {
+async function openDetailModal(order) {
     selectedOrder.value = order;
     selectedOrderItems.value = [];
     isLoadingDetails.value = true;
-    detailModalInstance.value.show();
+    
+    if (!detailModalInstance.value && detailModalRef.value) {
+        detailModalInstance.value = new Modal(detailModalRef.value);
+    }
+
+    if (detailModalInstance.value) {
+        detailModalInstance.value.show();
+    }
 
     try {
-        const response = await apiService.get(`/order_items?orderId=${order.id}&_expand=product`);
-        selectedOrderItems.value = response.data;
+        const response = await apiService.get(`${RESOURCE_ITEMS_ENDPOINT}?orderId=${order.id}&_expand=product`);
+        
+        const itemsData = response.data.data || response.data; 
+
+        if (Array.isArray(itemsData)) {
+            selectedOrderItems.value = itemsData.map(item => ({
+                id: item.id,
+                variantId: item.variant_id, 
+                quantity: item.quantity,
+                price: item.price,
+                product: item.variant?.product || item.product, 
+                color: item.variant?.attribute_values?.find(val => val.attribute?.name?.toLowerCase().includes('màu'))?.value,
+                size: item.variant?.attribute_values?.find(val => val.attribute?.name?.toLowerCase().includes('kích thước'))?.value,
+            }));
+        } else {
+             console.error("Order items data structure error: Expected array.", response.data);
+             selectedOrderItems.value = [];
+        }
+
     } catch (error) {
         console.error("Error details:", error);
-        Swal.fire('Lỗi', 'Không thể tải chi tiết sản phẩm.', 'error');
+        Swal.fire('Lỗi', `Không thể tải chi tiết. Vui lòng kiểm tra API Backend (${RESOURCE_ITEMS_ENDPOINT}).`, 'error');
     } finally {
         isLoadingDetails.value = false;
     }
-};
+}
 
 // ACTIONS (API)
 async function fetchOrders() {
     if (allOrders.value.length === 0) isLoading.value = true;
     try {
-        const response = await apiService.get('/orders');
-        allOrders.value = response.data;
+        const response = await apiService.get(RESOURCE_ENDPOINT);
+        const apiData = response.data; 
+
+        let ordersArray = [];
+
+        if (Array.isArray(apiData)) {
+            ordersArray = apiData;
+        } else if (apiData && Array.isArray(apiData.data)) {
+             ordersArray = apiData.data;
+        } else {
+            console.error("Orders API: Returned non-array data:", apiData);
+        }
+        
+        const mappedOrders = ordersArray.map(order => ({
+            id: order.id,
+            customerName: order.customerName || order.customer_name, 
+            customerPhone: order.customerPhone || order.customer_phone, 
+            customerAddress: order.customerAddress || order.shipping_address, 
+            status: order.status,
+            totalAmount: order.totalAmount || order.total_amount, 
+            createdAt: order.createdAt || order.created_at, 
+            note: order.note || '', 
+        }));
+
+        allOrders.value = mappedOrders;
+
     } catch (error) {
-        console.error("Error orders:", error);
-        Swal.fire('Lỗi', 'Không thể tải danh sách đơn hàng.', 'error');
+        console.error("Error fetching orders:", error);
+        allOrders.value = []; 
+        
+        if (error.code === 'ERR_NETWORK') {
+             Swal.fire({
+                icon: 'error',
+                title: 'Lỗi Kết Nối (CORS)',
+                text: 'Không thể kết nối đến Server Backend. Vui lòng kiểm tra Server.'
+            });
+        } else if (error.response && error.response.status === 500) {
+             Swal.fire({
+                icon: 'error',
+                title: 'Lỗi Server (500)',
+                text: 'Backend gặp lỗi nội bộ. Vui lòng kiểm tra log Laravel.'
+            });
+        } else {
+            Swal.fire('Lỗi', `Không thể tải danh sách đơn hàng. Kiểm tra API (${RESOURCE_ENDPOINT}).`, 'error');
+        }
     } finally {
         isLoading.value = false;
     }
@@ -229,7 +310,6 @@ async function handleUpdateStatus(order, newStatus) {
         'returned': 'Xác nhận đã nhận hàng hoàn'
     };
 
-    // Xác nhận cho hành động quan trọng
     if (['cancelled', 'returning'].includes(newStatus)) {
         const confirmResult = await Swal.fire({
             title: 'Xác nhận?',
@@ -242,7 +322,6 @@ async function handleUpdateStatus(order, newStatus) {
         if (!confirmResult.isConfirmed) return;
     }
 
-    // Optimistic Update
     order.status = newStatus;
 
     const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
@@ -250,10 +329,19 @@ async function handleUpdateStatus(order, newStatus) {
     Toast.fire({ icon: icon, title: statusMessages[newStatus] || 'Cập nhật thành công' });
 
     try {
-        await apiService.patch(`/orders/${order.id}`, { status: newStatus });
+        await apiService.patch(`${RESOURCE_ENDPOINT}/${order.id}`, { status: newStatus });
     } catch (error) {
         order.status = oldStatus;
-        Swal.fire('Lỗi', 'Cập nhật thất bại, đã hoàn tác.', 'error');
+        
+        let errorMsg = 'Cập nhật thất bại.';
+        if (error.response && error.response.status === 404) {
+            errorMsg = `Lỗi 404: API không tồn tại (${RESOURCE_ENDPOINT}/${order.id}).`;
+        } else if (error.code === 'ERR_NETWORK') {
+            errorMsg = 'Lỗi kết nối mạng (CORS).';
+        }
+
+        console.error("Update Status Error:", error);
+        Swal.fire('Lỗi', errorMsg, 'error');
     }
 }
 
@@ -271,19 +359,27 @@ async function handleDelete(order) {
 
     if (result.isConfirmed) {
         try {
-            // Giả lập xóa cascade nếu API không tự xử lý
-            // await apiService.delete(`/order_items?orderId=${order.id}`);
-            await apiService.delete(`/orders/${order.id}`);
+            await apiService.delete(`${RESOURCE_ENDPOINT}/${order.id}`);
             allOrders.value = allOrders.value.filter(o => o.id !== order.id);
             Swal.fire('Đã xóa!', 'Đơn hàng đã được xóa.', 'success');
         } catch (error) {
-            Swal.fire('Lỗi', 'Không thể xóa đơn hàng.', 'error');
+            let errorMsg = 'Không thể xóa đơn hàng.';
+            if (error.response && error.response.status === 404) {
+                errorMsg = `Lỗi 404: API không tồn tại (${RESOURCE_ENDPOINT}/${order.id}).`;
+            }
+            console.error("Delete Error:", error);
+            Swal.fire('Lỗi', errorMsg, 'error');
         }
     }
 }
 
 onMounted(async () => {
-    await checkAuthState();
+    const isAuthenticated = await checkAuthState();
+    if (!isAuthenticated) {
+         isLoading.value = false;
+         return; 
+    }
+    
     if (!requireLogin()) { isLoading.value = false; return; }
     
     nextTick(() => {
@@ -419,29 +515,29 @@ onMounted(async () => {
                                                         
                                                         <!-- Status Actions -->
                                                         <template v-if="order.status === 'pending'">
-                                                            <button class="btn btn-sm btn-success text-white" @click="handleUpdateStatus(order, 'approved')" title="Duyệt"><i class="bi bi-check-lg"></i></button>
-                                                            <button class="btn btn-sm btn-light text-danger border" @click="handleUpdateStatus(order, 'cancelled')" title="Hủy"><i class="bi bi-x-lg"></i></button>
+                                                            <button class="btn btn-sm btn-success text-white" @click="handleUpdateStatus(order, 'approved')" title="Duyệt"><i class="bi bi-check-lg"></i> Duyệt đơn</button>
+                                                            <button class="btn btn-sm btn-light text-danger border" @click="handleUpdateStatus(order, 'cancelled')" title="Hủy"><i class="bi bi-x-lg"> Hủy</i></button>
                                                         </template>
 
                                                         <template v-if="order.status === 'approved'">
-                                                            <button class="btn btn-sm btn-primary text-white" @click="handleUpdateStatus(order, 'shipping')" title="Giao hàng"><i class="bi bi-truck"></i></button>
-                                                            <button class="btn btn-sm btn-light text-danger border" @click="handleUpdateStatus(order, 'cancelled')" title="Hủy"><i class="bi bi-x-lg"></i></button>
+                                                            <button class="btn btn-sm btn-primary text-white" @click="handleUpdateStatus(order, 'shipping')" title="Giao hàng"><i class="bi bi-truck"></i> Giao hàng</button>
+                                                            <button class="btn btn-sm btn-light text-danger border" @click="handleUpdateStatus(order, 'cancelled')" title="Hủy"><i class="bi bi-x-lg"></i> Hủy</button>
                                                         </template>
 
                                                         <template v-if="order.status === 'shipping'">
-                                                            <button class="btn btn-sm btn-success text-white" @click="handleUpdateStatus(order, 'completed')" title="Hoàn thành"><i class="bi bi-check2-circle"></i></button>
-                                                            <button class="btn btn-sm btn-light text-secondary border" @click="handleUpdateStatus(order, 'returning')" title="Hoàn hàng"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                                            <button class="btn btn-sm btn-success text-white" @click="handleUpdateStatus(order, 'completed')" title="Hoàn thành"><i class="bi bi-check2-circle"></i> Hoàn Thành</button>
+                                                            <button class="btn btn-sm btn-light text-secondary border" @click="handleUpdateStatus(order, 'returning')" title="Hoàn hàng"><i class="bi bi-arrow-counterclockwise"></i> Hoàn Hàng</button>
                                                         </template>
 
                                                         <template v-if="order.status === 'completed'">
-                                                             <button class="btn btn-sm btn-light text-secondary border" @click="handleUpdateStatus(order, 'returning')" title="Hoàn hàng"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                                            <button class="btn btn-sm btn-light text-secondary border" @click="handleUpdateStatus(order, 'returning')" title="Hoàn hàng"><i class="bi bi-arrow-counterclockwise"></i> Hoàn thành</button>
                                                         </template>
 
                                                         <template v-if="order.status === 'returning'">
-                                                             <button class="btn btn-sm btn-dark text-white" @click="handleUpdateStatus(order, 'returned')" title="Xác nhận đã nhận"><i class="bi bi-box-seam"></i></button>
+                                                            <button class="btn btn-sm btn-dark text-white" @click="handleUpdateStatus(order, 'returned')" title="Xác nhận đã nhận"><i class="bi bi-box-seam"></i>Xác nhận đã nhận</button>
                                                         </template>
 
-                                                        <button v-if="['cancelled', 'returned'].includes(order.status)" class="btn btn-sm btn-light text-danger border" @click="handleDelete(order)" title="Xóa"><i class="bi bi-trash"></i></button>
+                                                        <button v-if="['cancelled', 'returned'].includes(order.status)" class="btn btn-sm btn-light text-danger border" @click="handleDelete(order)" title="Xóa"><i class="bi bi-trash"></i> Xoá</button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -531,7 +627,7 @@ onMounted(async () => {
                             <tbody>
                                 <tr v-for="item in selectedOrderItems" :key="item.id">
                                     <td class="ps-3">
-                                        <div class="fw-bold text-dark">{{ item.product?.name || `Product ID: ${item.productId}` }}</div>
+                                        <div class="fw-bold text-dark">{{ item.product?.name || `Product ID: ${item.variantId}` }}</div>
                                         <div class="small text-muted" v-if="item.color || item.size">Phân loại: {{ item.color }} / {{ item.size }}</div>
                                     </td>
                                     <td class="text-center">{{ item.quantity }}</td>

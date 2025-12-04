@@ -25,9 +25,7 @@ use App\Http\Controllers\Api\Client\OrderController;
 use App\Http\Controllers\Api\Client\AuthController;
 use App\Http\Controllers\Api\Client\BrandSlideController;
 use App\Http\Controllers\Api\Client\WishlistController;
-
-// [UPDATED] Import CheckoutController từ đúng thư mục Api/Client
-use App\Http\Controllers\Api\Client\CheckoutController; 
+use App\Http\Controllers\Api\Client\CheckoutController;
 
 // --- ADMIN CONTROLLERS ---
 use App\Http\Controllers\Api\admin\AdminAuthController;
@@ -48,6 +46,7 @@ use App\Http\Controllers\Api\admin\AdminBrandSlideController;
 use App\Http\Controllers\Api\admin\AdminAttributeController;
 use App\Http\Controllers\Api\admin\AdminPermissionController;
 use App\Http\Controllers\Api\admin\AdminBrandController;
+use App\Http\Controllers\Api\admin\AdminOrderItemController;
 
 // ==============================================================================
 // 2. AUTHENTICATION ROUTES (PUBLIC)
@@ -63,7 +62,7 @@ Route::get('auth/google/callback', [AuthController::class, 'handleGoogleCallback
 Route::post('/admin/register', [AdminAuthController::class, 'register']);
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
-// [FIX] Route fallback cho unauthenticated request
+// Route fallback cho unauthenticated request
 Route::get('/login', function () {
     return response()->json(['message' => 'Unauthenticated.'], 401);
 })->name('login');
@@ -136,8 +135,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // --- CART (GIỎ HÀNG DATABASE) ---
     Route::get('/carts', [CartController::class, 'index']);
     Route::post('/cart/add', [CartController::class, 'addToCart']);
-    Route::put('/cart/{id}', [CartController::class, 'update']); // Cập nhật số lượng
-    Route::delete('/cart/{id}', [CartController::class, 'destroy']); // Xóa item
+    Route::put('/cart/{id}', [CartController::class, 'update']); 
+    Route::delete('/cart/{id}', [CartController::class, 'destroy']); 
 
     // --- WISHLIST (YÊU THÍCH) ---
     Route::get('/wishlist', [WishlistController::class, 'index']);
@@ -147,32 +146,30 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/comments', [CommentController::class, 'store']);
     Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
 
-    // --- ORDERS (ĐƠN HÀNG) ---
-    Route::get('/orders', [OrderController::class, 'index']); // Xem danh sách (vẫn dùng OrderController)
-    Route::get('/order/{id}', [OrderController::class, 'show']); // Xem chi tiết (vẫn dùng OrderController)
+    // --- ORDERS (ĐƠN HÀNG CỦA USER) ---
+    Route::get('/orders', [OrderController::class, 'index']); 
+    Route::get('/order/{id}', [OrderController::class, 'show']); 
     
-    // [UPDATED] SỬ DỤNG CHECKOUT CONTROLLER CHO VIỆC TẠO ĐƠN
     Route::post('/orders', [CheckoutController::class, 'store']); 
-    
-    // [UPDATED] Route Mua Lại Đơn Hàng (Repurchase)
     Route::post('/orders/{id}/repurchase', [OrderController::class, 'repurchase']);
 
-    Route::put('/order/{id}', [OrderController::class, 'update']); // Cập nhật đơn hàng (nếu khách đc phép sửa)
-    Route::delete('/order/{id}', [OrderController::class, 'destroy']); // Hủy đơn hàng
+    // Route của client dùng từ khóa 'order' (số ít)
+    Route::put('/order/{id}', [OrderController::class, 'update']);
+    Route::delete('/order/{id}', [OrderController::class, 'destroy']);
 
     // --- USER ADDRESS ---
     Route::post('/useraddress', [UserAddressController::class, 'store']);
     Route::put('/useraddress/{id}', [UserAddressController::class, 'update']);
     Route::delete('/useraddress/{id}', [UserAddressController::class, 'destroy']);
 
-    // --- REVIEWS (ĐÁNH GIÁ SẢN PHẨM) ---
+    // --- REVIEWS ---
     Route::post('/reviews', [ReviewController::class, 'store']);
     Route::put('/review/{id}', [ReviewController::class, 'update']);
     Route::delete('/review/{id}', [ReviewController::class, 'destroy']);
 });
 
 // ==============================================================================
-// 5. ADMIN PROTECTED ROUTES (YÊU CẦU QUYỀN ADMIN)
+// 5. ADMIN PROTECTED ROUTES (YÊU CẦU QUYỀN ADMIN + PREFIX 'admin')
 // ==============================================================================
 Route::group([
     'prefix' => 'admin',
@@ -209,8 +206,10 @@ Route::group([
     // --- NEWS ---
     Route::apiResource('news', AdminNewController::class);
     
-    // --- ORDERS ---
+    // --- ORDERS (Chuẩn RESTful của Admin) ---
     Route::apiResource('orders', AdminOrderController::class);
+    // [FIX] Di chuyển route order_items vào đây để có prefix /admin/
+    Route::get('/order_items', [AdminOrderItemController::class, 'index']);
     
     // --- REVIEWS ---
     Route::apiResource('reviews', AdminReviewController::class);

@@ -27,12 +27,12 @@ const toggleMenu = (menu) => {
 
 // --- CHECK QUYỀN ---
 const can = (permissionSlug) => {
-    if (currentUser.value.role_id === 11) return true;
+    if (currentUser.value.role_id === 1) return true;
     return userPermissions.value.includes(permissionSlug);
 };
 
 const canAny = (permissionsArray) => {
-    if (currentUser.value.role_id === 11) return true;
+    if (currentUser.value.role_id === 1) return true;
     return permissionsArray.some(slug => userPermissions.value.includes(slug));
 };
 
@@ -42,7 +42,7 @@ const fetchUserData = async () => {
     if (storedAdmin) {
         try {
             currentUser.value = JSON.parse(storedAdmin);
-            if (currentUser.value.role_id === 11) return;
+            if (currentUser.value.role_id === 1) return;
 
             // Mock call hoặc gọi API thật
             // if (currentUser.value.role_id) {

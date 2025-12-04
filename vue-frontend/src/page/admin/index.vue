@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, nextTick, watch } from 'vue';
 import apiService from '../../apiService.js';
-// import Swal from 'sweetalert2'; // Uncomment nếu cần dùng
+// import Swal from 'sweetalert2'; 
 
 // ==========================================
 // CONFIG & STATE
@@ -59,9 +59,24 @@ const STATUS_CONFIG = {
 // ==========================================
 // DATA FETCHING
 // ==========================================
+
+// Helper để lấy data array an toàn từ nhiều cấu trúc response khác nhau
+const getApiData = (response) => {
+    if (!response || !response.data) return [];
+    // Trường hợp 1: { status: 'success', data: [...] } (Code backend mới)
+    if (Array.isArray(response.data.data)) return response.data.data;
+    // Trường hợp 2: { data: [...] } (Paginated mặc định Laravel)
+    if (response.data.data && Array.isArray(response.data.data)) return response.data.data;
+    // Trường hợp 3: [...] (Trả về mảng trực tiếp)
+    if (Array.isArray(response.data)) return response.data;
+    
+    return [];
+};
+
 const fetchData = async () => {
     isLoading.value = true;
     try {
+        // Fetch all data parallel
         const [ordersRes, usersRes, productsRes, reviewsRes, commentsRes] = await Promise.all([
             apiService.get('/admin/orders'),
             apiService.get('/admin/users'),
@@ -70,36 +85,46 @@ const fetchData = async () => {
             apiService.get('/admin/comments')
         ]);
 
-        allOrders.value = ordersRes.data || [];
-        const users = usersRes.data || [];
-        const products = productsRes.data || [];
-        const reviews = reviewsRes.data || [];
-        const comments = commentsRes.data || [];
+        // Sử dụng helper để lấy data an toàn
+        allOrders.value = getApiData(ordersRes);
+        const users = getApiData(usersRes);
+        const products = getApiData(productsRes);
+        const reviews = getApiData(reviewsRes);
+        const comments = getApiData(commentsRes);
 
-        // 1. Calc Basic Stats
+        // --- 1. Calc Basic Stats ---
         stats.value.totalOrders = allOrders.value.length;
-        stats.value.totalCustomers = users.filter(u => u.role_id !== 11 && u.role_id !== 12).length;
+        // Lọc user (trừ admin/staff nếu cần, giả sử role 11,12 là admin)
+        stats.value.totalCustomers = users.filter(u => u.role_id !== 1 && u.role_id !== 12).length; 
         stats.value.totalProducts = products.length;
         
         const completedOrders = allOrders.value.filter(o => o.status === 'completed');
-        stats.value.totalRevenue = completedOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
+        stats.value.totalRevenue = completedOrders.reduce((sum, o) => sum + Number(o.totalAmount || o.total_amount || 0), 0);
         
         if (completedOrders.length > 0) {
             stats.value.avgOrderValue = stats.value.totalRevenue / completedOrders.length;
         }
 
-        // 2. Latest Lists
-        latestOrders.value = [...allOrders.value].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
+        // --- 2. Latest Lists ---
+        // Sắp xếp theo ID hoặc CreatedAt giảm dần
+        latestOrders.value = [...allOrders.value]
+            .sort((a, b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at))
+            .slice(0, 5);
         
         newMembers.value = users
-            .filter(u => u.role_id !== 11 && u.role_id !== 12)
+            .filter(u => u.role_id !== 1 && u.role_id !== 12)
             .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
             .slice(0, 5);
 
-        latestReviews.value = reviews.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
-        latestComments.value = comments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
+        latestReviews.value = reviews
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(0, 5);
+            
+        latestComments.value = comments
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(0, 5);
 
-        // 3. Pie Chart Data
+        // --- 3. Pie Chart Data ---
         const counts = {};
         Object.keys(STATUS_CONFIG).forEach(k => counts[k] = 0);
         allOrders.value.forEach(o => {
@@ -108,12 +133,11 @@ const fetchData = async () => {
         });
         orderStatusCounts.value = counts;
 
-        // 4. Process Revenue Data
+        // --- 4. Process Revenue Data ---
         processRevenueData(completedOrders);
 
-        // Initial Load Library
+        // Initial Load Library & Render Chart
         await loadChartJs();
-        // Render chart ngay nếu đang ở tab overview
         if (activeDashboardTab.value === 'overview') {
             renderStatusChart();
         }
@@ -131,10 +155,13 @@ const processRevenueData = (orders) => {
     const currentYear = new Date().getFullYear();
 
     orders.forEach(order => {
-        const date = new Date(order.createdAt);
-        const month = date.getMonth();
+        const dateStr = order.createdAt || order.created_at;
+        if (!dateStr) return;
+
+        const date = new Date(dateStr);
+        const month = date.getMonth(); // 0-11
         const year = date.getFullYear();
-        const amount = Number(order.totalAmount);
+        const amount = Number(order.totalAmount || order.total_amount || 0);
 
         if (!yearlyRevenue.value[year]) yearlyRevenue.value[year] = 0;
         yearlyRevenue.value[year] += amount;
@@ -146,25 +173,34 @@ const processRevenueData = (orders) => {
 
     const maxVal = Math.max(...monthlyRevenue.value);
     const maxIdx = monthlyRevenue.value.indexOf(maxVal);
-    stats.value.bestMonth = maxVal > 0 ? `Tháng ${maxIdx + 1}` : 'Chưa có';
+    stats.value.bestMonth = maxVal > 0 ? `Tháng ${maxIdx + 1}` : '-';
 };
 
 // ==========================================
 // CHARTS
 // ==========================================
 const loadChartJs = () => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         if (window.Chart) return resolve();
+        
         const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
-        script.onload = resolve;
+        // Sử dụng phiên bản UMD để đảm bảo window.Chart khả dụng
+        script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+        script.onload = () => {
+            console.log("ChartJS Loaded");
+            resolve();
+        };
+        script.onerror = (e) => {
+            console.error("Failed to load ChartJS", e);
+            reject(e);
+        };
         document.head.appendChild(script);
     });
 };
 
 // --- STATUS PIE CHART ---
 const renderStatusChart = () => {
-    if (!chartCanvas.value) return;
+    if (!chartCanvas.value || !window.Chart) return;
     if (chartInstance.value) chartInstance.value.destroy();
 
     chartConfigKeys.value = Object.keys(STATUS_CONFIG);
@@ -174,45 +210,44 @@ const renderStatusChart = () => {
 
     const ctx = chartCanvas.value.getContext('2d');
     chartInstance.value = new window.Chart(ctx, {
-        type: 'pie', // Quay lại 'pie' như cũ
+        type: 'doughnut', // Doughnut nhìn hiện đại hơn Pie một chút
         data: {
             labels: labels,
             datasets: [{
                 data: data,
                 backgroundColor: colors,
                 borderWidth: 0,
-                hoverOffset: 30, // Pop out effect
+                hoverOffset: 15,
+                cutout: '65%' // Tạo lỗ giữa cho Doughnut
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            layout: { padding: 20 },
+            layout: { padding: 10 },
             plugins: {
                 legend: { display: false },
                 tooltip: {
                     enabled: true,
-                    backgroundColor: 'rgba(0,0,0,0.9)',
-                    padding: 12,
                     callbacks: {
                         label: function(context) {
                             const value = context.raw;
                             const total = context.chart._metasets[context.datasetIndex].total;
                             const percentage = total > 0 ? Math.round((value / total) * 100) + '%' : '0%';
-                            return ` ${context.label}: ${value} (${percentage})`;
+                            return ` ${context.label}: ${value} đơn (${percentage})`;
                         }
                     }
                 }
             },
             interaction: { mode: 'nearest', intersect: true },
-            hover: { mode: 'nearest', intersect: true }
         }
     });
 };
 
 // --- REVENUE CHARTS ---
 const renderRevenueCharts = () => {
-    if (!revenueBarCanvas.value || !revenueLineCanvas.value) return;
+    if (!revenueBarCanvas.value || !revenueLineCanvas.value || !window.Chart) return;
+    
     if (revenueBarInstance.value) revenueBarInstance.value.destroy();
     if (revenueLineInstance.value) revenueLineInstance.value.destroy();
 
@@ -222,14 +257,29 @@ const renderRevenueCharts = () => {
         type: 'bar',
         data: {
             labels: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'],
-            datasets: [{ label: 'Doanh thu', data: monthlyRevenue.value, backgroundColor: '#009981', borderRadius: 4 }]
+            datasets: [{ 
+                label: 'Doanh thu', 
+                data: monthlyRevenue.value, 
+                backgroundColor: '#009981', 
+                borderRadius: 4,
+                barPercentage: 0.6
+            }]
         },
         options: { 
             responsive: true, 
             maintainAspectRatio: false, 
             plugins: { legend: { display: false } },
             scales: {
-                y: { ticks: { callback: (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumSignificantDigits: 3 }).format(value) } }
+                y: { 
+                    beginAtZero: true,
+                    ticks: { callback: (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumSignificantDigits: 3 }).format(value) },
+                    grid: { color: '#f0f0f0' },
+                    border: { display: false }
+                },
+                x: {
+                    grid: { display: false },
+                    border: { display: false }
+                }
             }
         }
     });
@@ -237,18 +287,38 @@ const renderRevenueCharts = () => {
     // Line Chart
     const years = Object.keys(yearlyRevenue.value).sort();
     const yearlyData = years.map(y => yearlyRevenue.value[y]);
+    
     const ctxLine = revenueLineCanvas.value.getContext('2d');
     revenueLineInstance.value = new window.Chart(ctxLine, {
         type: 'line',
         data: {
-            labels: years,
-            datasets: [{ label: 'Tổng doanh thu', data: yearlyData, borderColor: '#0dcaf0', backgroundColor: 'rgba(13, 202, 240, 0.2)', fill: true, tension: 0.3 }]
+            labels: years.length > 0 ? years : [new Date().getFullYear()],
+            datasets: [{ 
+                label: 'Tổng doanh thu', 
+                data: yearlyData.length > 0 ? yearlyData : [0], 
+                borderColor: '#0dcaf0', 
+                backgroundColor: 'rgba(13, 202, 240, 0.1)', 
+                fill: true, 
+                tension: 0.4,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
         },
         options: { 
             responsive: true, 
             maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
             scales: {
-                y: { ticks: { callback: (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumSignificantDigits: 3 }).format(value) } }
+                y: { 
+                    beginAtZero: true,
+                    ticks: { callback: (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumSignificantDigits: 3 }).format(value) },
+                    grid: { color: '#f0f0f0' },
+                    border: { display: false }
+                },
+                x: {
+                    grid: { display: false },
+                    border: { display: false }
+                }
             }
         }
     });
@@ -275,21 +345,32 @@ const onLegendLeave = () => {
 // Watch tabs change to render charts
 watch(activeDashboardTab, async (newTab) => {
     await nextTick();
-    if (newTab === 'overview') renderStatusChart();
-    else if (newTab === 'revenue') renderRevenueCharts();
+    if (newTab === 'overview') {
+        setTimeout(renderStatusChart, 100); // Delay nhẹ để DOM ổn định
+    } else if (newTab === 'revenue') {
+        setTimeout(renderRevenueCharts, 100);
+    }
 });
 
 // ==========================================
 // HELPERS
 // ==========================================
-const formatCurrency = (v) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v);
-const formatDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) : 'N/A';
+const formatCurrency = (v) => {
+    if (!v && v !== 0) return '0 ₫';
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v);
+};
+
+const formatDate = (d) => {
+    if (!d) return 'N/A';
+    return new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+};
+
 const getStatusLabel = (s) => STATUS_CONFIG[s]?.label || s;
 const getStatusClass = (s) => {
     const map = { 'pending': 'bg-warning text-dark', 'approved': 'bg-info text-dark', 'shipping': 'bg-primary', 'completed': 'bg-success', 'cancelled': 'bg-danger', 'returning': 'bg-secondary', 'returned': 'bg-dark' };
     return map[s] || 'bg-light text-dark';
 };
-const renderStars = (r) => '★'.repeat(Math.floor(r)) + '☆'.repeat(5 - Math.floor(r));
+const renderStars = (r) => '★'.repeat(Math.floor(r || 5)) + '☆'.repeat(5 - Math.floor(r || 5));
 const getAvatar = (url, name) => url && url.startsWith('http') ? url : url ? `${BACKEND_URL}${url}` : `https://placehold.co/40x40/009981/ffffff?text=${name ? name.charAt(0).toUpperCase() : 'U'}`;
 
 onMounted(() => { fetchData(); });
@@ -369,9 +450,9 @@ onMounted(() => { fetchData(); });
                                     <tr v-if="latestOrders.length === 0"><td colspan="4" class="text-center py-4 text-muted">Chưa có đơn hàng nào.</td></tr>
                                     <tr v-for="order in latestOrders" :key="order.id">
                                         <td class="ps-3 fw-bold text-primary">#{{ order.id }}</td>
-                                        <td><div class="fw-medium text-dark">{{ order.customerName }}</div><div class="small text-muted">{{ formatDate(order.createdAt) }}</div></td>
+                                        <td><div class="fw-medium text-dark">{{ order.customerName || order.customer_name }}</div><div class="small text-muted">{{ formatDate(order.createdAt || order.created_at) }}</div></td>
                                         <td><span class="badge rounded-pill" :class="getStatusClass(order.status)">{{ getStatusLabel(order.status) }}</span></td>
-                                        <td class="text-end pe-3 fw-bold text-danger">{{ formatCurrency(order.totalAmount) }}</td>
+                                        <td class="text-end pe-3 fw-bold text-danger">{{ formatCurrency(order.totalAmount || order.total_amount) }}</td>
                                     </tr>
                                 </tbody>
                             </table>
