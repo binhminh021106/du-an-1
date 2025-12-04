@@ -1,12 +1,14 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRouter } from 'vue-router'; // Fix lỗi thiếu router
-import { useStore } from "vuex"; 
+// import { useStore } from "vuex"; 
 import apiService from '../../apiService.js';
 import Swal from 'sweetalert2'; // Giữ lại SweetAlert đẹp của code cũ
 import { toggleWishlist } from "../../store/wishlistStore.js"; 
+import { addToCart } from '../../store/cartStore.js';
 
-const store = useStore();
+
+// const store = useStore();
 const router = useRouter();
 
 // --- CẤU HÌNH ---
@@ -49,6 +51,12 @@ const getProductPrice = (product) => {
     return Number(product.price) || 0;
 };
 
+const getExcerpt = (text, limit = 100) => {
+    if (!text) return '';
+    const cleanText = String(text).replace(/<[^>]*>?/gm, '');
+    if (cleanText.length <= limit) return cleanText;
+    return cleanText.substring(0, limit) + '...';
+};
 
 const categories = ref([]);
 const brands = ref([]);
@@ -137,22 +145,18 @@ const scrollProducts = (direction) => {
 
 
 const onAddToCart = (product, specificVariant = null) => {
-    
-    // 1. Nếu đã có biến thể cụ thể (dùng trong danh sách quick-add variant)
-    if (specificVariant) {
-        store.dispatch('addToCart', {
-            product: product,
-            variant: specificVariant,
-            quantity: 1
-        });
-        Toast.fire({ icon: 'success', title: `Đã thêm ${product.name} (${specificVariant.name}) vào giỏ!` });
-        return;
-    }
+ 
+ // 1. Nếu đã có biến thể cụ thể
+ if (specificVariant) {
+ // SỬA: Gọi hàm trực tiếp từ cartStore.js
+ addToCart(product, specificVariant, 1);
+        
+ const variantName = specificVariant.name || `Mẫu ${specificVariant.id}`;
+ Toast.fire({ icon: 'success', title: `Đã thêm ${product.name} (${variantName}) vào giỏ!` });
+ return;
+ }
 
-    // 2. Nếu là nút "Thêm vào giỏ" tổng quát (chỉ dùng cho sản phẩm KHÔNG CÓ variants)
-    // Hoặc sản phẩm có variants nhưng không chọn biến thể cụ thể
-    
-    // Tìm giá hiển thị
+    // 2. Xử lý logic khi bấm nút chung (sản phẩm không có variants)
     const currentPrice = getProductPrice(product); 
 
     if (currentPrice === 0 && (!product.variants || product.variants.length === 0)) {
@@ -160,24 +164,24 @@ const onAddToCart = (product, specificVariant = null) => {
         return;
     }
 
-    // Logic: Nếu không có biến thể, ta giả định nó là một "biến thể gốc" với giá là giá sản phẩm
     let variantToAdd;
-
     if (product.variants && product.variants.length > 0) {
-        // Nếu có variants, lấy variant có giá MIN (đại diện cho nút Thêm vào giỏ nhanh)
+        // Lấy variant có giá MIN
         variantToAdd = product.variants.reduce((min, v) => (Number(v.price) < Number(min.price) ? v : min), product.variants[0]);
     } else {
-        // Nếu không có variants, tạo object tạm để dispatch vào giỏ hàng
+        // Tạo object tạm để dispatch vào giỏ hàng
         variantToAdd = { 
             id: product.id, 
             product_id: product.id, 
-            name: product.name, 
+            name: 'Mặc định', // Tên biến thể mặc định
             price: currentPrice, 
-            stock: product.stock || 100 // Lấy stock gốc hoặc mặc định
+            stock: product.stock || 100 
         };
     }
+    
+    // SỬA: Gọi hàm trực tiếp từ cartStore.js
+    addToCart(product, variantToAdd, 1);
 
-    store.dispatch('addToCart', { product: product, variant: variantToAdd, quantity: 1 });
     Toast.fire({ icon: 'success', title: `Đã thêm ${product.name} vào giỏ!` });
 };
 
@@ -376,8 +380,8 @@ onBeforeUnmount(stopAutoSlide);
                         v-for="variant in product.variants"
                         :key="variant.id"
                         class="variant-mini-btn"
-                        @click.stop="onAddToCart(product, variant)"
-                        :title="`${variant.name} - ${formatCurrency(variant.price)}`"
+                      @click.stop="onAddToCart(product, variant)"
+            :title="`${variant.name} - ${formatCurrency(variant.price)}`"
                     >
                         {{ variant.name ? variant.name : 'Mẫu ' + variant.id }}
                     </button>
@@ -409,8 +413,9 @@ onBeforeUnmount(stopAutoSlide);
                             </div>
                             <div class="news-content">
                                 <h3 class="news-title">{{ news.title }}</h3>
-                                <p class="news-excerpt">{{ (news.excerpt || news.content || '').replace(/<[^>]*>?/gm, '').slice(0, 100) }}...</p>
-                                <router-link :to="`/blog/${news.slug}`" class="read-more-link">Xem thêm &rarr;</router-link>
+                                <p class="news-excerpt">{{ getExcerpt(news.excerpt || news.content, 100) }}</p>
+                                <!-- SỬA Ở ĐÂY: Dùng news.id thay vì news.slug -->
+                                <router-link :to="`/PostDetail/${news.id}`" class="read-more-link">Xem thêm &rarr;</router-link>
                             </div>
                         </div>
                     </div>
