@@ -56,7 +56,7 @@ const hasRole = (allowedRoles) => {
     const userRoleId = Number(currentUser.value?.role_id);
     let userRoleName = '';
 
-    if (userRoleId === 11) userRoleName = 'admin';
+    if (userRoleId === 1) userRoleName = 'admin';
     else if (userRoleId === 12) userRoleName = 'staff';
     else if (userRoleId === 13) userRoleName = 'blogger';
 
