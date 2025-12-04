@@ -26,6 +26,9 @@ use App\Http\Controllers\Api\Client\AuthController;
 use App\Http\Controllers\Api\Client\BrandSlideController;
 use App\Http\Controllers\Api\Client\WishlistController;
 
+// [UPDATED] Import CheckoutController từ đúng thư mục Api/Client
+use App\Http\Controllers\Api\Client\CheckoutController; 
+
 // --- ADMIN CONTROLLERS ---
 use App\Http\Controllers\Api\admin\AdminAuthController;
 use App\Http\Controllers\Api\admin\AdminProductController;
@@ -141,14 +144,20 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/wishlist/toggle', [WishlistController::class, 'toggle']);
 
     // --- COMMENTS (BÌNH LUẬN) ---
-    // [FIX CRITICAL] Route POST /api/comments cho user gửi bình luận
-    Route::post('/comments', [AdminCommentController::class, 'store']);
+    Route::post('/comments', [CommentController::class, 'store']);
+    Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
 
-    // --- ORDERS (ĐỔN HÀNG) ---
-    Route::get('/orders', [OrderController::class, 'index']);
-    Route::get('/order/{id}', [OrderController::class, 'show']);
-    Route::post('/orders', [OrderController::class, 'store']); // Tạo đơn hàng mới
-    Route::put('/order/{id}', [OrderController::class, 'update']); // Cập nhật đơn hàng
+    // --- ORDERS (ĐƠN HÀNG) ---
+    Route::get('/orders', [OrderController::class, 'index']); // Xem danh sách (vẫn dùng OrderController)
+    Route::get('/order/{id}', [OrderController::class, 'show']); // Xem chi tiết (vẫn dùng OrderController)
+    
+    // [UPDATED] SỬ DỤNG CHECKOUT CONTROLLER CHO VIỆC TẠO ĐƠN
+    Route::post('/orders', [CheckoutController::class, 'store']); 
+    
+    // [UPDATED] Route Mua Lại Đơn Hàng (Repurchase)
+    Route::post('/orders/{id}/repurchase', [OrderController::class, 'repurchase']);
+
+    Route::put('/order/{id}', [OrderController::class, 'update']); // Cập nhật đơn hàng (nếu khách đc phép sửa)
     Route::delete('/order/{id}', [OrderController::class, 'destroy']); // Hủy đơn hàng
 
     // --- USER ADDRESS ---
@@ -187,7 +196,7 @@ Route::group([
     // --- COMMENTS ---
     Route::apiResource('comments', AdminCommentController::class);
 
-    // --- COUPONS (Có soft delete) ---
+    // --- COUPONS ---
     Route::get('coupons/trashed', [AdminCouponController::class, 'trashed']);
     Route::post('coupons/{id}/restore', [AdminCouponController::class, 'restore']);
     Route::delete('coupons/{id}/force', [AdminCouponController::class, 'forceDelete']);
@@ -206,7 +215,7 @@ Route::group([
     // --- REVIEWS ---
     Route::apiResource('reviews', AdminReviewController::class);
     
-    // --- ROLES & PERMISSIONS (RBAC) ---
+    // --- ROLES & PERMISSIONS ---
     Route::get('permissions', [AdminPermissionController::class, 'index']);
     Route::post('roles/{id}/permissions', [AdminRoleController::class, 'assignPermissions']);
     Route::apiResource('roles', AdminRoleController::class);
@@ -218,11 +227,11 @@ Route::group([
     // --- ADMIN ACCOUNTS ---
     Route::apiResource('admins', AminAccountController::class); 
     
-    // --- BRAND SLIDES (Thương hiệu slide trang chủ) ---
+    // --- BRAND SLIDES ---
     Route::post('brand-slides/update-order', [AdminBrandSlideController::class, 'updateOrder']);
     Route::apiResource('brand-slides', AdminBrandSlideController::class);
 
-    // --- BRANDS (Thương hiệu sản phẩm - Có soft delete) ---
+    // --- BRANDS ---
     Route::get('brands/trashed', [AdminBrandController::class, 'trashed']);
     Route::post('brands/{id}/restore', [AdminBrandController::class, 'restore']);
     Route::delete('brands/{id}/force', [AdminBrandController::class, 'forceDelete']);

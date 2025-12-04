@@ -13,6 +13,10 @@ class OrderItem extends Model
     /** @use HasFactory<\Database\Factories\OrderItemFactory> */
     use HasFactory;
 
+    /**
+     * Tên bảng trong Database.
+     * Khớp với schema: 'order_items' (số nhiều).
+     */
     protected $table = 'order_items';
 
     protected $fillable = [
@@ -22,10 +26,15 @@ class OrderItem extends Model
         'price',
     ];
 
+    /**
+     * Ép kiểu dữ liệu.
+     * QUAN TRỌNG: 'price' trong DB là bigint -> ép về 'integer'.
+     * Tránh dùng 'decimal:2' cho tiền VNĐ để đảm bảo tính toán chính xác.
+     */
     protected $casts = [
-        'price' => 'decimal:2',
-        'quantity' => 'integer',
-        'order_id' => 'integer',
+        'price'      => 'integer',
+        'quantity'   => 'integer',
+        'order_id'   => 'integer',
         'variant_id' => 'integer',
     ];
 
@@ -41,11 +50,11 @@ class OrderItem extends Model
 
     /**
      * Chi tiết này là của biến thể sản phẩm nào.
-     * (Giả sử bạn có model ProductVariant)
+     * Liên kết với Model Variant.
      */
     public function variant()
     {
-        // 'variant_id' là khoá ngoại, liên kết với 'id' của bảng 'product_variants'
+        // 'variant_id' là khoá ngoại, liên kết với 'id' của bảng variants
         return $this->belongsTo(Variant::class, 'variant_id', 'id');
     }
 }

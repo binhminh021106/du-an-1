@@ -4,13 +4,36 @@ import apiService from "../../../apiService.js";
 import Swal from "sweetalert2";
 import { Modal } from "bootstrap";
 
-const rawApiUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const rawApiUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
 const API_BASE_URL = rawApiUrl.replace(/\/api\/?$/, "");
+
+// --- Validation Constants ---
 const MIN_IMAGE_WIDTH = 500;
 const MIN_IMAGE_HEIGHT = 500;
-const MAX_FILE_SIZE_MB = 5; // Giới hạn 5MB cho tối ưu
-const MIN_PRICE = 1000; // Giá tối thiểu 1k
+const MAX_FILE_SIZE_MB = 5;
+const MIN_PRICE = 1000;
 const MAX_PRICE = 100000000;
+const MIN_NAME_LENGTH = 5;
+const MAX_NAME_LENGTH = 255;
+const MAX_DESC_LENGTH = 5000;
+
+// --- UX Helper: Toast Notification ---
+const Toast = Swal.mixin({
+  toast: true,
+  position: "top-end",
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  didOpen: (toast) => {
+    toast.onmouseenter = Swal.stopTimer;
+    toast.onmouseleave = Swal.resumeTimer;
+  }
+});
+
+const showToast = (icon, title) => {
+  Toast.fire({ icon, title });
+};
+// --------------------------------------
 
 const currentUser = ref({});
 
@@ -92,7 +115,7 @@ const requireLogin = () => {
 // ==========================================
 const products = ref([]);
 const categories = ref([]);
-const brands = ref([]); // [ADDED] State cho brands
+const brands = ref([]);
 const attributesList = ref([]);
 const isLoading = ref(true);
 const isSaving = ref(false);
@@ -101,6 +124,7 @@ const activeTab = ref("active");
 
 // Spinner States
 const isCreatingAttr = ref(false);
+const isManagingAttr = ref(false); // [NEW] Spinner for managing update/delete
 const deletingImageIds = ref([]);
 const processingStatusIds = ref([]);
 const isBulkDeleting = ref(false);
@@ -113,6 +137,8 @@ const attrModalInstance = ref(null);
 const attrModalRef = ref(null);
 const viewModalInstance = ref(null);
 const viewModalRef = ref(null);
+const manageAttrModalRef = ref(null); // [NEW]
+const manageAttrModalInstance = ref(null); // [NEW]
 
 // Form Data & Helpers
 const newQuickAttrName = ref("");
@@ -121,13 +147,18 @@ const thumbnailFile = ref(null);
 const thumbnailPreview = ref(null);
 const galleryFiles = ref([]);
 const galleryPreviews = ref([]);
+const duplicateRowIndices = ref([]);
+
+// [NEW] Manage Attributes State
+const managingAttrId = ref("");
+const managingAttrName = ref("");
 
 // Viewing Product
 const viewingProduct = ref({
   name: "",
   description: "",
   categoryName: "",
-  brandName: "", // [ADDED]
+  brandName: "",
   status: "",
   thumbnail_url: "",
   images: [],
@@ -135,7 +166,10 @@ const viewingProduct = ref({
   attributeNames: [],
   priceRange: "",
   totalStock: 0,
+  average_rating: 0, // [NEW]
+  review_count: 0 // [NEW]
 });
+const selectedViewImage = ref(""); // [NEW] For image gallery in view modal
 
 // Search & Sort & Pagination
 const searchQuery = ref("");
@@ -150,7 +184,7 @@ const formData = reactive({
   name: "",
   description: "",
   category_id: null,
-  brand_id: null, // [ADDED] Thêm brand_id
+  brand_id: null,
   status: "inactive",
   attribute_definitions: reactive([]),
   variants: reactive([]),
@@ -159,6 +193,7 @@ const formData = reactive({
 
 const errors = reactive({
   name: "",
+  description: "",
   category_id: "",
   brand_id: "",
   variants: "",
@@ -170,6 +205,7 @@ const generateShortId = () => Math.random().toString(36).substring(2, 8);
 function getImageUrl(path) {
   if (!path) return "https://placehold.co/150x150?text=No+Img";
   if (path.startsWith("blob:") || path.startsWith("http")) return path;
+
   const baseUrl = API_BASE_URL.endsWith("/")
     ? API_BASE_URL.slice(0, -1)
     : API_BASE_URL;
@@ -282,6 +318,18 @@ watch([searchQuery, selectedCategory, sortCriteria, activeTab], () => {
   currentPage.value = 1;
 });
 
+// Watch for Managing Attribute Selection
+watch(managingAttrId, (newId) => {
+  if (!newId) {
+    managingAttrName.value = "";
+    return;
+  }
+  const attr = attributesList.value.find(a => a.id == newId);
+  if (attr) {
+    managingAttrName.value = attr.name;
+  }
+});
+
 // ==========================================
 // HELPERS
 // ==========================================
@@ -289,9 +337,9 @@ const formatCurrency = (value) =>
   value == null || isNaN(value)
     ? "N/A"
     : new Intl.NumberFormat("vi-VN", {
-        style: "currency",
-        currency: "VND",
-      }).format(value);
+      style: "currency",
+      currency: "VND",
+    }).format(value);
 const getMinPrice = (variants) => {
   if (!variants?.length) return 0;
   const prices = variants
@@ -319,27 +367,23 @@ const goToPage = (p) => {
 };
 
 // ==========================================
-// VALIDATE IMAGE (ADVANCED)
+// VALIDATE IMAGE
 // ==========================================
 const validateImageFile = async (file) => {
-  // 1. Check Size
   if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
     return { valid: false, msg: `Dung lượng tối đa ${MAX_FILE_SIZE_MB}MB.` };
   }
-
-  // 2. Check Magic Number (Basic Format)
   const isFormatValid = await new Promise((resolve) => {
     const reader = new FileReader();
     reader.onloadend = (e) => {
       const arr = new Uint8Array(e.target.result).subarray(0, 4);
       let header = "";
       for (let i = 0; i < arr.length; i++) header += arr[i].toString(16);
-      // JPG/PNG/GIF/WEBP
       resolve(
         header.startsWith("ffd8ff") ||
-          header.startsWith("89504e47") ||
-          header.startsWith("47494638") ||
-          header.startsWith("52494646")
+        header.startsWith("89504e47") ||
+        header.startsWith("47494638") ||
+        header.startsWith("52494646")
       );
     };
     reader.readAsArrayBuffer(file.slice(0, 4));
@@ -348,7 +392,6 @@ const validateImageFile = async (file) => {
   if (!isFormatValid)
     return { valid: false, msg: "Định dạng file không hợp lệ (Chỉ nhận ảnh)." };
 
-  // 3. Check Dimensions (Width/Height)
   return new Promise((resolve) => {
     const img = new Image();
     img.src = URL.createObjectURL(file);
@@ -395,11 +438,9 @@ async function fetchCategories() {
   }
 }
 
-// [ADDED] Hàm lấy danh sách thương hiệu
 async function fetchBrands() {
   try {
     const response = await apiService.get("/admin/brands");
-    // Lọc brand active nếu cần, ở đây lấy hết
     brands.value = response.data || [];
   } catch (error) {
     console.error("Lỗi tải thương hiệu:", error);
@@ -444,7 +485,7 @@ async function fetchProducts() {
         ...p,
         product_id: p.product_id || p.id,
         category: category || null,
-        brand_id: p.brand_id, // Map brand_id từ API
+        brand_id: p.brand_id,
         variants: productVariants,
         images: productImages,
         thumbnail_url: getImageUrl(thumbPath),
@@ -462,13 +503,13 @@ async function fetchProducts() {
 // ==========================================
 async function handleCreateQuickAttribute() {
   if (!newQuickAttrName.value.trim())
-    return Swal.fire("Lỗi", "Vui lòng nhập tên thuộc tính", "warning");
+    return showToast("warning", "Vui lòng nhập tên thuộc tính");
   isCreatingAttr.value = true;
   try {
     const res = await apiService.post("/admin/attributes", {
       name: newQuickAttrName.value,
     });
-    Swal.fire("Thành công", "Đã tạo thuộc tính mới!", "success");
+    showToast("success", "Đã tạo thuộc tính mới!");
     await fetchAttributes();
     if (res.data && res.data.id) selectedAttributeId.value = res.data.id;
     newQuickAttrName.value = "";
@@ -485,13 +526,92 @@ async function handleCreateQuickAttribute() {
   }
 }
 
+// [NEW] Handle Update Attribute (Global CRUD)
+async function handleUpdateGlobalAttribute() {
+  if (!managingAttrId.value || !managingAttrName.value.trim()) {
+    return showToast("warning", "Vui lòng chọn và nhập tên thuộc tính");
+  }
+  isManagingAttr.value = true;
+  try {
+    const oldAttr = attributesList.value.find(a => a.id == managingAttrId.value);
+    const oldName = oldAttr ? oldAttr.name : "";
+
+    await apiService.put(`/admin/attributes/${managingAttrId.value}`, {
+      name: managingAttrName.value
+    });
+
+    showToast("success", "Cập nhật thành công!");
+    await fetchAttributes();
+
+    // UX: Nếu sản phẩm đang mở modal có dùng thuộc tính này, cập nhật tên luôn để người dùng không bị lú
+    if (oldName) {
+      const def = formData.attribute_definitions.find(d => d.id == managingAttrId.value);
+      if (def) {
+        def.name = managingAttrName.value;
+        // Update key in variants
+        formData.variants.forEach(v => {
+          if (v.attributes.hasOwnProperty(oldName)) {
+            v.attributes[managingAttrName.value] = v.attributes[oldName];
+            delete v.attributes[oldName];
+          }
+        });
+      }
+    }
+
+    managingAttrId.value = ""; // Reset
+  } catch (error) {
+    showToast("error", error.response?.data?.message || "Lỗi cập nhật");
+  } finally {
+    isManagingAttr.value = false;
+  }
+}
+
+// [NEW] Handle Delete Attribute (Global CRUD)
+async function handleDeleteGlobalAttribute() {
+  if (!managingAttrId.value) return;
+
+  if (!(await Swal.fire({
+    title: 'Xóa vĩnh viễn?',
+    text: 'Hành động này sẽ xóa thuộc tính khỏi hệ thống!',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    confirmButtonText: 'Xóa ngay'
+  })).isConfirmed) return;
+
+  isManagingAttr.value = true;
+  try {
+    const oldAttr = attributesList.value.find(a => a.id == managingAttrId.value);
+    await apiService.delete(`/admin/attributes/${managingAttrId.value}`);
+
+    showToast("success", "Đã xóa thuộc tính!");
+    await fetchAttributes();
+
+    // UX: Nếu đang dùng trong form thì xóa cột đó đi
+    if (oldAttr) {
+      const index = formData.attribute_definitions.findIndex(d => d.id == oldAttr.id);
+      if (index > -1) {
+        formData.attribute_definitions.splice(index, 1);
+        formData.variants.forEach(v => {
+          delete v.attributes[oldAttr.name];
+        });
+      }
+    }
+    managingAttrId.value = "";
+  } catch (error) {
+    showToast("error", "Không thể xóa (có thể đang được sử dụng)");
+  } finally {
+    isManagingAttr.value = false;
+  }
+}
+
 // Image Handlers
 async function handleThumbnailChange(event) {
   const file = event.target.files[0];
   if (file) {
     const check = await validateImageFile(file);
     if (!check.valid) {
-      Swal.fire("Ảnh không đạt chuẩn", check.msg, "warning");
+      showToast("warning", check.msg);
       event.target.value = null;
       return;
     }
@@ -511,16 +631,9 @@ async function handleGalleryChange(event) {
       galleryFiles.value.push(file);
       galleryPreviews.value.push(URL.createObjectURL(file));
     } else {
-      // Thông báo lỗi cho từng file không đạt
-      Swal.fire({
-        toast: true,
-        position: "top-end",
-        icon: "warning",
-        title: `Bỏ qua ${file.name}: ${check.msg}`,
-      });
+      showToast("warning", `Bỏ qua ${file.name}: ${check.msg}`);
     }
   }
-  // Reset input nếu không file nào hợp lệ để cho phép chọn lại
   if (validFiles.length === 0) event.target.value = null;
 }
 
@@ -530,11 +643,25 @@ function removeNewGalleryImage(index) {
   galleryFiles.value.splice(index, 1);
 }
 
+// [NEW] Xử lý chọn ảnh cho biến thể
+async function handleVariantImageChange(event, index) {
+  const file = event.target.files[0];
+  if (file) {
+    const check = await validateImageFile(file);
+    if (!check.valid) {
+      showToast("warning", check.msg);
+      event.target.value = null;
+      return;
+    }
+    formData.variants[index].imageFile = file;
+    formData.variants[index].imagePreview = URL.createObjectURL(file);
+  }
+}
+
 // Form & Variants
 function addSelectedAttributeToForm() {
   if (!selectedAttributeId.value) {
-    errors.attributes = "Vui lòng chọn một thuộc tính.";
-    return;
+    return showToast("warning", "Vui lòng chọn một thuộc tính.");
   }
   const attrObj = attributesList.value.find(
     (a) => a.id == selectedAttributeId.value
@@ -544,7 +671,7 @@ function addSelectedAttributeToForm() {
     (a) => a.id == attrObj.id || a.name === attrObj.name
   );
   if (exists) {
-    errors.attributes = `Thuộc tính "${attrObj.name}" đã có.`;
+    showToast("info", `Thuộc tính "${attrObj.name}" đã được thêm.`);
     return;
   }
   errors.attributes = "";
@@ -554,7 +681,9 @@ function addSelectedAttributeToForm() {
     v.attributes[attrObj.name] = "";
   });
   selectedAttributeId.value = "";
+  showToast("success", `Đã thêm cột "${attrObj.name}"`);
 }
+
 function removeAttributeDefinition(attrToRemove) {
   const index = formData.attribute_definitions.findIndex(
     (attr) => attr.id === attrToRemove.id
@@ -564,8 +693,10 @@ function removeAttributeDefinition(attrToRemove) {
     formData.variants.forEach((v) => {
       delete v.attributes[attrToRemove.name];
     });
+    showToast("success", "Đã xóa cột thuộc tính khỏi bảng.");
   }
 }
+
 function addVariantRow() {
   const newAttributes = reactive({});
   formData.attribute_definitions.forEach((def) => {
@@ -578,11 +709,14 @@ function addVariantRow() {
       price: 0,
       stock: 0,
       attributes: newAttributes,
+      imageFile: null,
+      imagePreview: null,
     })
   );
 }
 function removeVariantRow(index) {
   formData.variants.splice(index, 1);
+  duplicateRowIndices.value = duplicateRowIndices.value.filter(i => i !== index);
 }
 
 function resetForm() {
@@ -591,7 +725,7 @@ function resetForm() {
     name: "",
     description: "",
     category_id: null,
-    brand_id: null, // Reset brand
+    brand_id: null,
     status: "inactive",
     attribute_definitions: reactive([]),
     variants: reactive([]),
@@ -604,6 +738,7 @@ function resetForm() {
   galleryPreviews.value = [];
   selectedAttributeId.value = "";
   selectedImageIds.value = [];
+  duplicateRowIndices.value = [];
   Object.keys(errors).forEach((k) => (errors[k] = ""));
 }
 
@@ -619,6 +754,12 @@ function openCreateAttrModal() {
   errors.attributes = "";
   attrModalInstance.value?.show();
 }
+// [NEW] Open Manage Modal
+function openManageAttrModal() {
+  managingAttrId.value = "";
+  managingAttrName.value = "";
+  manageAttrModalInstance.value?.show();
+}
 
 async function openVariantConfigModal(productItem) {
   if (!requireLogin()) return;
@@ -632,7 +773,7 @@ async function openVariantConfigModal(productItem) {
     formData.name = product.name;
     formData.description = product.description;
     formData.category_id = product.category_id || product.category?.id;
-    formData.brand_id = product.brand_id || product.brand?.id; // [ADDED] Map brand khi edit
+    formData.brand_id = product.brand_id || product.brand?.id;
     formData.status = product.status;
     thumbnailPreview.value = getImageUrl(product.thumbnail_url);
     formData.existing_images = reactive(
@@ -673,6 +814,9 @@ async function openVariantConfigModal(productItem) {
             price: v.price || 0,
             stock: v.stock || 0,
             attributes: variantAttributes,
+            image: v.image,
+            imagePreview: v.image ? getImageUrl(v.image) : null,
+            imageFile: null,
           };
         })
       );
@@ -691,26 +835,35 @@ async function openViewModal(productItem) {
     const processedVariants = (product.variants || []).map((v) => ({
       ...v,
       attributes: flattenVariantAttributes(v),
+      imageUrl: v.image ? getImageUrl(v.image) : null
     }));
     const keys = new Set();
     processedVariants.forEach((v) =>
       Object.keys(v.attributes).forEach((k) => keys.add(k))
     );
 
-    // [ADDED] Tìm tên brand để hiển thị
     const brandName = brands.value.find(b => b.id === product.brand_id)?.name || "N/A";
+
+    // [NEW] Set view image default
+    const thumb = getImageUrl(product.thumbnail_url);
+    const gallery = (product.images || []).map((img) => getImageUrl(img.image_url));
 
     viewingProduct.value = {
       ...product,
       categoryName: product.category?.name || "N/A",
-      brandName: brandName, // [ADDED]
+      brandName: brandName,
       attributeNames: Array.from(keys),
-      images: (product.images || []).map((img) => getImageUrl(img.image_url)),
-      thumbnail_url: getImageUrl(product.thumbnail_url),
+      images: gallery,
+      thumbnail_url: thumb,
       priceRange: getPriceRange(product.variants),
       totalStock: calculateTotalStock(product.variants),
       variants: processedVariants,
+      average_rating: parseFloat(product.average_rating || 0), // [NEW]
+      review_count: parseInt(product.review_count || 0) // [NEW]
     };
+
+    selectedViewImage.value = thumb; // [NEW]
+
     viewModalInstance.value?.show();
   } catch (e) {
     Swal.fire("Lỗi", "Không thể xem chi tiết.", "error");
@@ -739,14 +892,7 @@ async function deleteExistingImage(imgId, index) {
     selectedImageIds.value = selectedImageIds.value.filter(
       (id) => id !== imgId
     );
-    Swal.fire({
-      icon: "success",
-      title: "Đã xóa ảnh",
-      toast: true,
-      position: "top-end",
-      showConfirmButton: false,
-      timer: 3000,
-    });
+    showToast("success", "Đã xóa ảnh");
   } catch (e) {
     Swal.fire("Lỗi", "Không thể xóa ảnh", "error");
   } finally {
@@ -779,14 +925,7 @@ async function handleBulkDeleteImages() {
       (img) => !selectedImageIds.value.includes(img.id)
     );
     selectedImageIds.value = [];
-    Swal.fire({
-      icon: "success",
-      title: "Đã xóa ảnh",
-      toast: true,
-      position: "top-end",
-      showConfirmButton: false,
-      timer: 3000,
-    });
+    showToast("success", "Đã xóa ảnh");
   } catch (e) {
     Swal.fire("Lỗi", "Không thể xóa ảnh", "error");
   } finally {
@@ -798,10 +937,7 @@ async function handleQuickStatusToggle(product) {
   if (!requireLogin()) return;
   if (processingStatusIds.value.includes(product.id)) return;
 
-  // [NEW] Validate before activating
   if (product.status !== "active") {
-    // Nếu đang muốn chuyển sang active, kiểm tra điều kiện
-    // 1. Phải có biến thể
     if (!product.variants || product.variants.length === 0) {
       return Swal.fire(
         "Chưa hoàn thiện",
@@ -809,7 +945,6 @@ async function handleQuickStatusToggle(product) {
         "warning"
       );
     }
-    // 2. Phải có giá bán hợp lệ
     const hasValidPrice = product.variants.some(
       (v) => parseFloat(v.price) >= MIN_PRICE
     );
@@ -830,6 +965,7 @@ async function handleQuickStatusToggle(product) {
         title: `Xác nhận ${actionText}?`,
         icon: "question",
         showCancelButton: true,
+        confirmButtonColor: "#009981",
       })
     ).isConfirmed
   )
@@ -841,12 +977,7 @@ async function handleQuickStatusToggle(product) {
     payload.append("status", newStatus);
     await apiService.post(`/admin/products/${product.id}`, payload);
     product.status = newStatus;
-    Swal.fire({
-      icon: "success",
-      title: "Cập nhật thành công!",
-      timer: 1500,
-      showConfirmButton: false,
-    });
+    showToast("success", "Cập nhật thành công!");
   } catch (e) {
     Swal.fire("Lỗi", "Không thể cập nhật trạng thái.", "error");
   } finally {
@@ -859,19 +990,34 @@ async function handleQuickStatusToggle(product) {
 // [UPDATED] Advanced Validation
 function validateForm() {
   Object.keys(errors).forEach((k) => (errors[k] = ""));
+  duplicateRowIndices.value = []; // Reset highlights
   let isValid = true;
 
-  // Basic Info
+  // 1. Validate Product Name
   if (!formData.name.trim()) {
     errors.name = "Nhập tên SP";
     isValid = false;
+  } else if (formData.name.trim().length < MIN_NAME_LENGTH) {
+    errors.name = `Tên SP tối thiểu ${MIN_NAME_LENGTH} ký tự.`;
+    isValid = false;
+  } else if (formData.name.trim().length > MAX_NAME_LENGTH) {
+    errors.name = `Tên SP tối đa ${MAX_NAME_LENGTH} ký tự.`;
+    isValid = false;
   }
+
+  // 2. Validate Description
+  if (formData.description && formData.description.length > MAX_DESC_LENGTH) {
+    errors.description = `Mô tả quá dài (Tối đa ${MAX_DESC_LENGTH} ký tự).`;
+    isValid = false;
+  }
+
+  // 3. Validate Category & Brand
   if (!formData.category_id) {
     errors.category_id = "Chọn danh mục";
     isValid = false;
   }
 
-  // [NEW] Validate logic cho việc Đăng bán (Active)
+  // 4. Validate Logic for Active Status
   if (isEditMode.value && formData.status === "active") {
     if (!formData.variants || formData.variants.length === 0) {
       errors.variants = "Phải có ít nhất 1 biến thể để đăng bán.";
@@ -879,51 +1025,74 @@ function validateForm() {
     }
   }
 
-  // [NEW] Validate Variant Details
+  // 5. Validate Variant Details
   if (isEditMode.value && formData.variants.length > 0) {
-    for (const v of formData.variants) {
-      // Validate Price
+    const signatureMap = new Map(); // Use Map to track index
+
+    formData.variants.forEach((v, index) => {
       const price = parseFloat(v.price);
+      const originalPrice = parseFloat(v.original_price);
+
+      // Price Validation
       if (isNaN(price) || price < 0) {
         errors.variants = "Giá bán không được âm.";
         isValid = false;
-        break;
       }
-      if (price > 0 && price < MIN_PRICE) {
+      else if (price > 0 && price < MIN_PRICE) {
         errors.variants = `Giá bán tối thiểu là ${formatCurrency(MIN_PRICE)}.`;
         isValid = false;
-        break;
       }
-      if (price > MAX_PRICE) {
-        errors.variants = `Giá bán quá lớn (> ${formatCurrency(
-          MAX_PRICE
-        )}). Vui lòng kiểm tra lại.`;
+      else if (price > MAX_PRICE) {
+        errors.variants = `Giá bán quá lớn (> ${formatCurrency(MAX_PRICE)}).`;
         isValid = false;
-        break;
       }
 
-      // Validate Stock
-      const stock = parseInt(v.stock);
+      // Logic: Price vs Original Price
+      if (!isNaN(originalPrice) && originalPrice > 0) {
+        if (price > originalPrice) {
+          errors.variants = `Giá bán (${formatCurrency(price)}) không được cao hơn giá gốc (${formatCurrency(originalPrice)}).`;
+          isValid = false;
+        }
+      }
+
+      // Stock Validation
+      const stock = Number(v.stock);
       if (isNaN(stock) || stock < 0) {
         errors.variants = "Số lượng kho không được âm.";
         isValid = false;
-        break;
+      }
+      else if (!Number.isInteger(stock)) {
+        errors.variants = "Số lượng kho phải là số nguyên.";
+        isValid = false;
       }
 
-      // Validate Attributes
+      // Attribute Completeness & Duplication Check
+      const currentAttributes = [];
       for (const def of formData.attribute_definitions) {
-        if (
-          !v.attributes[def.name] ||
-          !v.attributes[def.name].toString().trim()
-        ) {
+        const val = v.attributes[def.name];
+        if (!val || !val.toString().trim()) {
           errors.variants = `Vui lòng điền giá trị cho "${def.name}"`;
           isValid = false;
-          break;
         }
+        currentAttributes.push(`${def.name}:${val ? val.toString().trim().toLowerCase() : ''}`);
       }
-      if (!isValid) break;
-    }
+
+      // Duplicate Check Logic
+      const variantSignature = currentAttributes.sort().join("|");
+      if (signatureMap.has(variantSignature)) {
+        // Found a duplicate! Highlight BOTH rows
+        duplicateRowIndices.value.push(index);
+        duplicateRowIndices.value.push(signatureMap.get(variantSignature));
+        errors.variants = "Phát hiện các dòng biến thể trùng lặp (được tô đỏ).";
+        isValid = false;
+      } else {
+        signatureMap.set(variantSignature, index);
+      }
+    });
   }
+
+  // Unique the highlight array
+  duplicateRowIndices.value = [...new Set(duplicateRowIndices.value)];
 
   return isValid;
 }
@@ -931,23 +1100,18 @@ function validateForm() {
 async function handleSave() {
   if (!requireLogin()) return;
   if (!validateForm()) {
-    Swal.fire(
-      "Thông tin chưa hợp lệ",
-      "Vui lòng kiểm tra lại các trường báo đỏ.",
-      "warning"
-    );
+    showToast("error", "Vui lòng kiểm tra lại thông tin!"); // UX: Toast instead of big modal
     return;
   }
   isSaving.value = true;
   try {
     let savedProductId = formData.id;
     const productData = new FormData();
-    productData.append("name", formData.name);
+    productData.append("name", formData.name.trim());
     productData.append("description", formData.description || "");
     productData.append("category_id", formData.category_id);
-    // [ADDED] Append brand_id (nếu có)
     if (formData.brand_id) {
-        productData.append("brand_id", formData.brand_id);
+      productData.append("brand_id", formData.brand_id);
     }
     productData.append(
       "status",
@@ -960,7 +1124,7 @@ async function handleSave() {
       const res = await apiService.post("/admin/products", productData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      Swal.fire("Thành công", "Đã tạo nháp. Hãy thêm biến thể!", "success");
+      showToast("success", "Đã tạo nháp. Hãy thêm biến thể!");
       savedProductId = res.data.id || res.data.product_id;
     } else {
       productData.append("_method", "PATCH");
@@ -983,20 +1147,29 @@ async function handleSave() {
 
     if (isEditMode.value) {
       for (const variant of formData.variants) {
-        const variantPayload = {
-          product_id: savedProductId,
-          original_price: variant.original_price,
-          price: variant.price,
-          stock: variant.stock,
-        };
+        const variantData = new FormData();
+        variantData.append("product_id", savedProductId);
+        variantData.append("original_price", variant.original_price);
+        variantData.append("price", variant.price);
+        variantData.append("stock", variant.stock);
+
+        if (variant.imageFile) {
+          variantData.append("image", variant.imageFile);
+        }
+
         let savedVariantId = variant.variant_id;
+
         if (isNaN(Number(savedVariantId))) {
-          const res = await apiService.post("/admin/variants", variantPayload);
+          const res = await apiService.post("/admin/variants", variantData, {
+            headers: { "Content-Type": "multipart/form-data" }
+          });
           savedVariantId = res.data.id;
         } else {
-          await apiService.patch(
+          variantData.append("_method", "PUT");
+          await apiService.post(
             `/admin/variants/${savedVariantId}`,
-            variantPayload
+            variantData,
+            { headers: { "Content-Type": "multipart/form-data" } }
           );
         }
 
@@ -1007,7 +1180,7 @@ async function handleSave() {
           );
         }
       }
-      Swal.fire("Thành công", "Đã cập nhật!", "success");
+      showToast("success", "Đã lưu thay đổi thành công!");
     }
     modalInstance.value?.hide();
     fetchProducts();
@@ -1034,7 +1207,7 @@ async function handleDelete(product) {
     try {
       await apiService.delete(`/admin/products/${product.id}`);
       fetchProducts();
-      Swal.fire("Đã xóa", "", "success");
+      showToast("success", "Đã xóa sản phẩm");
     } catch (e) {
       Swal.fire("Lỗi", "Không thể xóa", "error");
     }
@@ -1048,18 +1221,20 @@ onMounted(async () => {
     return;
   }
 
-  await Promise.all([fetchCategories(), fetchAttributes(), fetchBrands()]); // [ADDED] fetchBrands
+  await Promise.all([fetchCategories(), fetchAttributes(), fetchBrands()]);
   fetchProducts();
 
   nextTick(() => {
+    // [FIXED] Disable focus trap for nested SweetAlert
     if (modalRef.value)
-      modalInstance.value = new Modal(modalRef.value, { backdrop: "static" });
+      modalInstance.value = new Modal(modalRef.value, { backdrop: "static", keyboard: false, focus: false });
     if (viewModalRef.value)
       viewModalInstance.value = new Modal(viewModalRef.value);
     if (attrModalRef.value)
-      attrModalInstance.value = new Modal(attrModalRef.value, {
-        backdrop: "static",
-      });
+      attrModalInstance.value = new Modal(attrModalRef.value, { backdrop: "static" });
+    // [NEW] Manage Modal
+    if (manageAttrModalRef.value)
+      manageAttrModalInstance.value = new Modal(manageAttrModalRef.value, { backdrop: "static" });
   });
 });
 </script>
@@ -1090,12 +1265,8 @@ onMounted(async () => {
         <div class="card-header border-bottom-0 pb-0 bg-white">
           <ul class="nav nav-tabs card-header-tabs custom-tabs">
             <li class="nav-item">
-              <a
-                class="nav-link d-flex align-items-center"
-                :class="{ active: activeTab === 'active' }"
-                href="#"
-                @click.prevent="setActiveTab('active')"
-              >
+              <a class="nav-link d-flex align-items-center" :class="{ active: activeTab === 'active' }" href="#"
+                @click.prevent="setActiveTab('active')">
                 <i class="bi bi-check-circle me-1 text-success"></i> Đang bán
                 <span class="badge rounded-pill bg-success ms-2">{{
                   statusCounts.active
@@ -1103,12 +1274,8 @@ onMounted(async () => {
               </a>
             </li>
             <li class="nav-item">
-              <a
-                class="nav-link d-flex align-items-center"
-                :class="{ active: activeTab === 'inactive' }"
-                href="#"
-                @click.prevent="setActiveTab('inactive')"
-              >
+              <a class="nav-link d-flex align-items-center" :class="{ active: activeTab === 'inactive' }" href="#"
+                @click.prevent="setActiveTab('inactive')">
                 <i class="bi bi-eye-slash me-1 text-secondary"></i> Ẩn/Nháp
                 <span class="badge rounded-pill bg-secondary ms-2">{{
                   statusCounts.inactive
@@ -1123,15 +1290,9 @@ onMounted(async () => {
           <div class="row align-items-center g-3">
             <div class="col-md-4 col-12">
               <div class="input-group">
-                <span class="input-group-text bg-white border-end-0"
-                  ><i class="bi bi-search"></i
-                ></span>
-                <input
-                  type="text"
-                  class="form-control border-start-0 ps-0"
-                  placeholder="Tìm kiếm sản phẩm..."
-                  v-model="searchQuery"
-                />
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control border-start-0 ps-0" placeholder="Tìm kiếm sản phẩm..."
+                  v-model="searchQuery" />
               </div>
             </div>
             <div class="col-md-3 col-6">
@@ -1150,10 +1311,7 @@ onMounted(async () => {
               </select>
             </div>
             <div class="col-md-2 col-12 text-end">
-              <button
-                class="btn btn-primary w-100 text-nowrap shadow-sm"
-                @click="openCreateModal"
-              >
+              <button class="btn btn-primary w-100 text-nowrap shadow-sm" @click="openCreateModal">
                 <i class="bi bi-plus-lg me-1"></i> Thêm mới
               </button>
             </div>
@@ -1183,34 +1341,21 @@ onMounted(async () => {
                   </td>
                 </tr>
                 <tr v-else-if="paginatedProducts.length === 0">
-                  <td
-                    colspan="8"
-                    class="text-center py-5 text-muted fst-italic"
-                  >
+                  <td colspan="8" class="text-center py-5 text-muted fst-italic">
                     Không tìm thấy sản phẩm nào.
                   </td>
                 </tr>
                 <tr v-else v-for="p in paginatedProducts" :key="p.id">
                   <td class="ps-3 text-muted fw-bold">#{{ p.product_id }}</td>
                   <td>
-                    <div
-                      class="ratio ratio-1x1 rounded overflow-hidden shadow-sm"
-                      style="width: 50px"
-                    >
-                      <img
-                        :src="p.thumbnail_url"
-                        class="object-fit-cover"
-                        onerror="this.src='https://placehold.co/50?text=Err'"
-                      />
+                    <div class="ratio ratio-1x1 rounded overflow-hidden shadow-sm" style="width: 50px">
+                      <img :src="p.thumbnail_url" class="object-fit-cover"
+                        onerror="this.src='https://placehold.co/50?text=Err'" />
                     </div>
                   </td>
                   <td>
-                    <span
-                      class="fw-bold text-dark d-block text-truncate"
-                      style="max-width: 250px"
-                      :title="p.name"
-                      >{{ p.name }}</span
-                    >
+                    <span class="fw-bold text-dark d-block text-truncate" style="max-width: 250px" :title="p.name">{{
+                      p.name }}</span>
                   </td>
                   <td>
                     <span class="badge bg-light text-dark border">{{
@@ -1222,46 +1367,23 @@ onMounted(async () => {
                   </td>
                   <td>{{ calculateTotalStock(p.variants) }}</td>
                   <td>
-                    <div
-                      class="form-check form-switch d-flex align-items-center"
-                      title="Bật/Tắt trạng thái"
-                    >
-                      <div
-                        v-if="processingStatusIds.includes(p.id)"
-                        class="spinner-border spinner-border-sm text-primary"
-                        role="status"
-                      ></div>
-                      <input
-                        v-else
-                        class="form-check-input custom-switch cursor-pointer"
-                        type="checkbox"
-                        role="switch"
-                        :checked="p.status === 'active'"
-                        @click.prevent="handleQuickStatusToggle(p)"
-                      />
+                    <div class="form-check form-switch d-flex align-items-center" title="Bật/Tắt trạng thái">
+                      <div v-if="processingStatusIds.includes(p.id)"
+                        class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                      <input v-else class="form-check-input custom-switch cursor-pointer" type="checkbox" role="switch"
+                        :checked="p.status === 'active'" @click.prevent="handleQuickStatusToggle(p)" />
                     </div>
                   </td>
                   <td class="text-center pe-3">
                     <div class="d-flex justify-content-center gap-1">
-                      <button
-                        class="btn btn-sm btn-light text-secondary border"
-                        @click="openViewModal(p)"
-                        title="Xem"
-                      >
+                      <button class="btn btn-sm btn-light text-secondary border" @click="openViewModal(p)" title="Xem">
                         <i class="bi bi-eye"></i>
                       </button>
-                      <button
-                        class="btn btn-sm btn-light text-primary border"
-                        @click="openVariantConfigModal(p)"
-                        title="Sửa"
-                      >
+                      <button class="btn btn-sm btn-light text-primary border" @click="openVariantConfigModal(p)"
+                        title="Sửa">
                         <i class="bi bi-pencil"></i>
                       </button>
-                      <button
-                        class="btn btn-sm btn-light text-danger border"
-                        @click="handleDelete(p)"
-                        title="Xóa"
-                      >
+                      <button class="btn btn-sm btn-light text-danger border" @click="handleDelete(p)" title="Xóa">
                         <i class="bi bi-trash"></i>
                       </button>
                     </div>
@@ -1272,36 +1394,20 @@ onMounted(async () => {
           </div>
 
           <!-- Pagination -->
-          <div
-            class="card-footer bg-white border-top-0 py-3"
-            v-if="totalPages > 1"
-          >
+          <div class="card-footer bg-white border-top-0 py-3" v-if="totalPages > 1">
             <div class="d-flex justify-content-between align-items-center">
-              <small class="text-muted"
-                >Hiển thị {{ paginatedProducts.length }} sản phẩm</small
-              >
+              <small class="text-muted">Hiển thị {{ paginatedProducts.length }} sản phẩm</small>
               <ul class="pagination pagination-sm m-0">
                 <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                  <button
-                    class="page-link border-0"
-                    @click="goToPage(currentPage - 1)"
-                  >
+                  <button class="page-link border-0" @click="goToPage(currentPage - 1)">
                     <i class="bi bi-chevron-left"></i>
                   </button>
                 </li>
                 <li class="page-item disabled">
-                  <span class="page-link border-0 text-dark"
-                    >{{ currentPage }} / {{ totalPages }}</span
-                  >
+                  <span class="page-link border-0 text-dark">{{ currentPage }} / {{ totalPages }}</span>
                 </li>
-                <li
-                  class="page-item"
-                  :class="{ disabled: currentPage === totalPages }"
-                >
-                  <button
-                    class="page-link border-0"
-                    @click="goToPage(currentPage + 1)"
-                  >
+                <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                  <button class="page-link border-0" @click="goToPage(currentPage + 1)">
                     <i class="bi bi-chevron-right"></i>
                   </button>
                 </li>
@@ -1314,13 +1420,9 @@ onMounted(async () => {
   </div>
 
   <!-- Modal Product (Create/Edit) -->
-  <div
-    class="modal fade"
-    id="productModal"
-    ref="modalRef"
-    tabindex="-1"
-    data-bs-backdrop="static"
-  >
+  <!-- [FIXED] data-bs-focus="false" prevents focus trapping -->
+  <div class="modal fade" id="productModal" ref="modalRef" data-bs-backdrop="static" data-bs-keyboard="false"
+    data-bs-focus="false">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header bg-light">
@@ -1340,24 +1442,16 @@ onMounted(async () => {
               </h6>
               <div class="mb-3">
                 <label class="form-label required fw-bold">Tên sản phẩm</label>
-                <input
-                  type="text"
-                  class="form-control"
-                  v-model="formData.name"
-                  :class="{ 'is-invalid': errors.name }"
-                  placeholder="Nhập tên sản phẩm..."
-                />
+                <input type="text" class="form-control" v-model="formData.name" :class="{ 'is-invalid': errors.name }"
+                  placeholder="Nhập tên sản phẩm..." />
                 <div class="invalid-feedback">{{ errors.name }}</div>
               </div>
-              
+
               <!-- CATEGORY SELECT -->
               <div class="mb-3">
                 <label class="form-label required fw-bold">Danh mục</label>
-                <select
-                  class="form-select"
-                  v-model="formData.category_id"
-                  :class="{ 'is-invalid': errors.category_id }"
-                >
+                <select class="form-select" v-model="formData.category_id"
+                  :class="{ 'is-invalid': errors.category_id }">
                   <option :value="null">-- Chọn danh mục --</option>
                   <option v-for="c in categories" :key="c.id" :value="c.id">
                     {{ c.name }}
@@ -1369,25 +1463,20 @@ onMounted(async () => {
               <!-- [ADDED] BRAND SELECT -->
               <div class="mb-3">
                 <label class="form-label fw-bold">Thương hiệu</label>
-                <select
-                  class="form-select"
-                  v-model="formData.brand_id"
-                >
+                <select class="form-select" v-model="formData.brand_id" :class="{ 'is-invalid': errors.brand_id }">
                   <option :value="null">-- Không chọn --</option>
                   <option v-for="b in brands" :key="b.id" :value="b.id">
                     {{ b.name }}
                   </option>
                 </select>
+                <div class="invalid-feedback">{{ errors.brand_id }}</div>
               </div>
 
               <div class="mb-3">
                 <label class="form-label fw-bold">Mô tả</label>
-                <textarea
-                  class="form-control"
-                  rows="4"
-                  v-model="formData.description"
-                  placeholder="Mô tả chi tiết..."
-                ></textarea>
+                <textarea class="form-control" :class="{ 'is-invalid': errors.description }" rows="4"
+                  v-model="formData.description" placeholder="Mô tả chi tiết..."></textarea>
+                <div class="invalid-feedback">{{ errors.description }}</div>
               </div>
               <div class="mb-3" v-if="isEditMode">
                 <label class="form-label fw-bold">Trạng thái</label>
@@ -1396,26 +1485,13 @@ onMounted(async () => {
                   <option value="inactive">Ẩn / Nháp</option>
                 </select>
               </div>
-              <div
-                class="p-3 bg-light rounded border border-dashed text-center"
-              >
+              <div class="p-3 bg-light rounded border border-dashed text-center">
                 <label class="form-label fw-bold mb-2">Ảnh đại diện</label>
-                <div
-                  v-if="thumbnailPreview"
-                  class="mb-2 position-relative d-inline-block"
-                >
-                  <img
-                    :src="thumbnailPreview"
-                    class="img-thumbnail"
-                    style="height: 150px; object-fit: contain"
-                  />
+                <div v-if="thumbnailPreview" class="mb-2 position-relative d-inline-block">
+                  <img :src="thumbnailPreview" class="img-thumbnail" style="height: 150px; object-fit: contain" />
                 </div>
-                <input
-                  type="file"
-                  class="form-control form-control-sm mt-2"
-                  accept="image/*"
-                  @change="handleThumbnailChange"
-                />
+                <input type="file" class="form-control form-control-sm mt-2" accept="image/*"
+                  @change="handleThumbnailChange" />
                 <div class="form-text small mt-1">
                   Tối thiểu 500x500px, Max 5MB.
                 </div>
@@ -1433,27 +1509,18 @@ onMounted(async () => {
                     </h6>
                   </div>
                   <div
-                    class="card-body d-flex flex-column justify-content-center align-items-center bg-light m-3 rounded border border-dashed"
-                  >
+                    class="card-body d-flex flex-column justify-content-center align-items-center bg-light m-3 rounded border border-dashed">
                     <!-- Actual Card Preview -->
-                    <div
-                      class="card shadow-sm border-0"
-                      style="width: 18rem; overflow: hidden"
-                    >
+                    <div class="card shadow-sm border-0" style="width: 18rem; overflow: hidden">
                       <div class="ratio ratio-4x3 bg-white">
-                        <img
-                          :src="
-                            thumbnailPreview ||
-                            'https://placehold.co/300x200?text=Sản+Phẩm'
-                          "
-                          class="card-img-top object-fit-contain p-3"
-                        />
+                        <img :src="thumbnailPreview ||
+                          'https://placehold.co/300x200?text=Sản+Phẩm'
+                          " class="card-img-top object-fit-contain p-3" />
                       </div>
                       <div class="card-body text-start">
                         <div class="mb-2">
                           <span
-                            class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-10"
-                          >
+                            class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-10">
                             {{
                               categories.find(
                                 (c) => c.id == formData.category_id
@@ -1461,35 +1528,21 @@ onMounted(async () => {
                             }}
                           </span>
                           <!-- [ADDED] Preview Brand -->
-                          <span v-if="formData.brand_id" class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-10 ms-1">
-                            {{ brands.find(b => b.id == formData.brand_id)?.name }}
+                          <span v-if="formData.brand_id"
+                            class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-10 ms-1">
+                            {{brands.find(b => b.id == formData.brand_id)?.name}}
                           </span>
                         </div>
-                        <h5
-                          class="card-title fw-bold text-dark mb-1 d-block text-truncate w-100"
-                          :title="formData.name"
-                        >
+                        <h5 class="card-title fw-bold text-dark mb-1 d-block text-truncate w-100"
+                          :title="formData.name">
                           {{ formData.name || "Tên sản phẩm..." }}
                         </h5>
-                        <p
-                          class="card-text small text-muted mb-3 d-block text-truncate w-100"
-                        >
+                        <p class="card-text small text-muted mb-3 d-block text-truncate w-100">
                           {{
                             formData.description ||
                             "Mô tả ngắn của sản phẩm sẽ hiển thị tại đây..."
                           }}
                         </p>
-                        <div
-                          class="d-flex justify-content-between align-items-center"
-                        >
-                          <span class="text-danger fw-bold fs-5">0 đ</span>
-                          <button
-                            class="btn btn-sm btn-primary rounded-circle shadow-sm"
-                            style="width: 32px; height: 32px; padding: 0"
-                          >
-                            <i class="bi bi-cart-plus"></i>
-                          </button>
-                        </div>
                       </div>
                     </div>
 
@@ -1498,15 +1551,8 @@ onMounted(async () => {
                         <i class="bi bi-info-circle me-1"></i> Sau khi lưu, bạn
                         có thể thêm biến thể màu sắc, size...
                       </p>
-                      <button
-                        class="btn btn-primary px-4 shadow-sm"
-                        @click="handleSave"
-                        :disabled="isSaving"
-                      >
-                        <span
-                          v-if="isSaving"
-                          class="spinner-border spinner-border-sm me-1"
-                        ></span>
+                      <button class="btn btn-primary px-4 shadow-sm" @click="handleSave" :disabled="isSaving">
+                        <span v-if="isSaving" class="spinner-border spinner-border-sm me-1"></span>
                         Lưu & Tiếp tục
                       </button>
                     </div>
@@ -1518,32 +1564,16 @@ onMounted(async () => {
               <div v-else>
                 <!-- Gallery -->
                 <div class="mb-4">
-                  <div
-                    class="d-flex justify-content-between align-items-center mb-2"
-                  >
-                    <h6
-                      class="fw-bold text-secondary text-uppercase small mb-0"
-                    >
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-secondary text-uppercase small mb-0">
                       Thư viện ảnh
                     </h6>
                     <div v-if="formData.existing_images.length > 0">
-                      <input
-                        class="form-check-input cursor-pointer me-2"
-                        type="checkbox"
-                        id="selectAll"
-                        v-model="isAllImagesSelected"
-                      />
-                      <label
-                        class="form-check-label small me-3 cursor-pointer"
-                        for="selectAll"
-                        >Chọn tất cả</label
-                      >
-                      <button
-                        v-if="selectedImageIds.length > 0"
-                        class="btn btn-xs btn-danger"
-                        @click="handleBulkDeleteImages"
-                        :disabled="isBulkDeleting"
-                      >
+                      <input class="form-check-input cursor-pointer me-2" type="checkbox" id="selectAll"
+                        v-model="isAllImagesSelected" />
+                      <label class="form-check-label small me-3 cursor-pointer" for="selectAll">Chọn tất cả</label>
+                      <button v-if="selectedImageIds.length > 0" class="btn btn-xs btn-danger"
+                        @click="handleBulkDeleteImages" :disabled="isBulkDeleting">
                         <i class="bi bi-trash me-1"></i> Xóa ({{
                           selectedImageIds.length
                         }})
@@ -1552,136 +1582,92 @@ onMounted(async () => {
                   </div>
                   <div class="p-3 border rounded bg-white">
                     <div class="d-flex flex-wrap gap-2 mb-3">
-                      <div
-                        v-for="(img, idx) in formData.existing_images"
-                        :key="img.id"
-                        class="position-relative"
-                      >
-                        <img
-                          :src="img.url"
-                          class="img-thumbnail"
-                          :class="{
-                            'border-primary shadow-sm':
-                              selectedImageIds.includes(img.id),
-                          }"
-                          style="
+                      <div v-for="(img, idx) in formData.existing_images" :key="img.id" class="position-relative">
+                        <img :src="img.url" class="img-thumbnail" :class="{
+                          'border-primary shadow-sm':
+                            selectedImageIds.includes(img.id),
+                        }" style="
                             width: 80px;
                             height: 80px;
                             object-fit: cover;
                             cursor: pointer;
-                          "
-                          @click="
+                          " @click="
                             selectedImageIds.includes(img.id)
                               ? (selectedImageIds = selectedImageIds.filter(
-                                  (id) => id !== img.id
-                                ))
+                                (id) => id !== img.id
+                              ))
                               : selectedImageIds.push(img.id)
-                          "
-                        />
+                            " />
                         <div class="position-absolute top-0 start-0 m-1">
-                          <input
-                            type="checkbox"
-                            class="form-check-input"
-                            :value="img.id"
-                            v-model="selectedImageIds"
-                            @click.stop
-                          />
+                          <input type="checkbox" class="form-check-input" :value="img.id" v-model="selectedImageIds"
+                            @click.stop />
                         </div>
                       </div>
-                      <div
-                        v-for="(url, idx) in galleryPreviews"
-                        :key="'new-' + idx"
-                        class="position-relative"
-                      >
-                        <img
-                          :src="url"
-                          class="img-thumbnail border-success"
-                          style="width: 80px; height: 80px; object-fit: cover"
-                        />
+                      <div v-for="(url, idx) in galleryPreviews" :key="'new-' + idx" class="position-relative">
+                        <img :src="url" class="img-thumbnail border-success"
+                          style="width: 80px; height: 80px; object-fit: cover" />
                         <button
                           class="btn btn-sm btn-secondary rounded-circle position-absolute top-0 start-100 translate-middle p-0"
-                          style="width: 20px; height: 20px; line-height: 1"
-                          @click="removeNewGalleryImage(idx)"
-                        >
+                          style="width: 20px; height: 20px; line-height: 1" @click="removeNewGalleryImage(idx)">
                           &times;
                         </button>
                       </div>
                       <label
                         class="border border-dashed rounded d-flex align-items-center justify-content-center cursor-pointer bg-light text-muted hover-bg-gray"
-                        style="width: 80px; height: 80px"
-                      >
+                        style="width: 80px; height: 80px">
                         <div class="text-center">
                           <i class="bi bi-plus-lg fs-4"></i>
                           <div style="font-size: 10px">Thêm ảnh</div>
                         </div>
-                        <input
-                          type="file"
-                          class="d-none"
-                          multiple
-                          accept="image/*"
-                          @change="handleGalleryChange"
-                        />
+                        <input type="file" class="d-none" multiple accept="image/*" @change="handleGalleryChange" />
                       </label>
                     </div>
                   </div>
                 </div>
 
-                <!-- Variants -->
+                <!-- Variants Table -->
                 <div>
-                  <div
-                    class="d-flex justify-content-between align-items-center mb-2"
-                  >
-                    <h6
-                      class="fw-bold text-secondary text-uppercase small mb-0"
-                    >
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-secondary text-uppercase small mb-0">
                       Cấu hình biến thể
                     </h6>
-                    <div class="d-flex gap-2">
-                      <select
-                        class="form-select form-select-sm w-auto"
-                        v-model="selectedAttributeId"
-                      >
+                    <div class="d-flex gap-2 align-items-center">
+                      <select class="form-select form-select-sm w-auto" v-model="selectedAttributeId">
                         <option value="">+ Thêm cột thuộc tính</option>
-                        <option
-                          v-for="a in attributesList"
-                          :key="a.id"
-                          :value="a.id"
-                        >
+                        <option v-for="a in attributesList" :key="a.id" :value="a.id">
                           {{ a.name }}
                         </option>
                       </select>
-                      <button
-                        class="btn btn-sm btn-primary"
-                        @click="addSelectedAttributeToForm"
-                        :disabled="!selectedAttributeId"
-                      >
+                      <!-- [UPDATED] Action Buttons -->
+                      <button class="btn btn-sm btn-primary" @click="addSelectedAttributeToForm"
+                        :disabled="!selectedAttributeId">
                         Thêm
                       </button>
-                      <button
-                        class="btn btn-sm btn-outline-success"
-                        @click="openCreateAttrModal"
-                      >
+                      <button class="btn btn-sm btn-outline-success" @click="openCreateAttrModal">
                         Tạo mới
+                      </button>
+                      <!-- [NEW] Manage Button -->
+                      <button class="btn btn-sm btn-outline-secondary" @click="openManageAttrModal"
+                        title="Quản lý / Sửa / Xóa thuộc tính gốc">
+                        <i class="bi bi-gear-fill"></i> Quản lý
                       </button>
                     </div>
                   </div>
                   <div class="table-responsive border rounded">
-                    <table
-                      class="table table-sm table-bordered text-center align-middle mb-0 bg-white"
-                    >
+                    <table class="table table-sm table-bordered text-center align-middle mb-0 bg-white">
                       <thead class="bg-light">
                         <tr>
-                          <th
-                            v-for="d in formData.attribute_definitions"
-                            :key="d.id"
-                            style="min-width: 100px"
-                          >
-                            {{ d.name }}
-                            <i
-                              class="bi bi-x text-danger cursor-pointer ms-1"
-                              title="Xóa cột"
-                              @click="removeAttributeDefinition(d)"
-                            ></i>
+                          <!-- [NEW] Cột Ảnh -->
+                          <th style="width: 80px">Ảnh</th>
+                          <!-- [UPDATED] Render cột thuộc tính -->
+                          <th v-for="d in formData.attribute_definitions" :key="d.id" style="min-width: 120px">
+                            <div class="d-flex align-items-center justify-content-between px-2">
+                              <span>{{ d.name }}</span>
+                              <!-- Only "Remove Column" button remains here -->
+                              <i class="bi bi-x-circle text-danger cursor-pointer ms-2"
+                                title="Gỡ bỏ cột này (không xóa khỏi hệ thống)"
+                                @click="removeAttributeDefinition(d)"></i>
+                            </div>
                           </th>
                           <th style="width: 120px">Giá gốc</th>
                           <th style="width: 120px">Giá bán</th>
@@ -1692,44 +1678,40 @@ onMounted(async () => {
                         </tr>
                       </thead>
                       <tbody>
-                        <tr v-for="(v, i) in formData.variants" :key="i">
-                          <td
-                            v-for="d in formData.attribute_definitions"
-                            :key="d.id"
-                          >
-                            <input
-                              type="text"
-                              class="form-control form-control-sm text-center border-0"
-                              v-model="v.attributes[d.name]"
-                              placeholder="..."
-                            />
+                        <tr v-for="(v, i) in formData.variants" :key="i"
+                          :class="{ 'table-danger': duplicateRowIndices.includes(i) }">
+                          <!-- [NEW] Ô chọn ảnh cho từng dòng biến thể -->
+                          <td>
+                            <label
+                              class="ratio ratio-1x1 d-block border rounded overflow-hidden cursor-pointer position-relative bg-light"
+                              style="width: 50px; height: 50px;">
+                              <img v-if="v.imagePreview" :src="v.imagePreview" class="w-100 h-100 object-fit-cover"
+                                onerror="this.src='https://placehold.co/50?text=Err'" />
+                              <div v-else
+                                class="d-flex align-items-center justify-content-center w-100 h-100 text-muted">
+                                <i class="bi bi-camera"></i>
+                              </div>
+                              <input type="file" class="d-none" accept="image/*"
+                                @change="handleVariantImageChange($event, i)" />
+                            </label>
+                          </td>
+                          <td v-for="d in formData.attribute_definitions" :key="d.id">
+                            <input type="text" class="form-control form-control-sm text-center border-0 bg-transparent"
+                              v-model="v.attributes[d.name]" placeholder="..." />
                           </td>
                           <td>
-                            <input
-                              type="number"
-                              class="form-control form-control-sm text-end"
-                              v-model="v.original_price"
-                            />
+                            <input type="number" class="form-control form-control-sm text-end"
+                              v-model="v.original_price" />
                           </td>
                           <td>
-                            <input
-                              type="number"
-                              class="form-control form-control-sm text-end fw-bold text-primary"
-                              v-model="v.price"
-                            />
+                            <input type="number" class="form-control form-control-sm text-end fw-bold text-primary"
+                              v-model="v.price" />
                           </td>
                           <td>
-                            <input
-                              type="number"
-                              class="form-control form-control-sm text-center"
-                              v-model="v.stock"
-                            />
+                            <input type="number" class="form-control form-control-sm text-center" v-model="v.stock" />
                           </td>
                           <td>
-                            <button
-                              class="btn btn-sm text-danger"
-                              @click="removeVariantRow(i)"
-                            >
+                            <button class="btn btn-sm text-danger" @click="removeVariantRow(i)">
                               &times;
                             </button>
                           </td>
@@ -1737,14 +1719,11 @@ onMounted(async () => {
                       </tbody>
                     </table>
                   </div>
-                  <button
-                    class="btn btn-sm btn-light border w-100 mt-2 text-primary fw-bold"
-                    @click="addVariantRow"
-                  >
+                  <button class="btn btn-sm btn-light border w-100 mt-2 text-primary fw-bold" @click="addVariantRow">
                     <i class="bi bi-plus-lg"></i> Thêm biến thể
                   </button>
                   <div class="text-danger small mt-2" v-if="errors.variants">
-                    {{ errors.variants }}
+                    <i class="bi bi-exclamation-triangle me-1"></i> {{ errors.variants }}
                   </div>
                 </div>
               </div>
@@ -1752,23 +1731,12 @@ onMounted(async () => {
           </div>
         </div>
         <div class="modal-footer bg-light border-top-0">
-          <button
-            class="btn btn-outline-secondary px-4"
-            data-bs-dismiss="modal"
-          >
+          <button class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">
             Đóng
           </button>
           <!-- Hide save button in create mode as it's inside the preview area -->
-          <button
-            v-if="isEditMode"
-            class="btn btn-primary px-4"
-            @click="handleSave"
-            :disabled="isSaving"
-          >
-            <span
-              v-if="isSaving"
-              class="spinner-border spinner-border-sm me-1"
-            ></span>
+          <button v-if="isEditMode" class="btn btn-primary px-4" @click="handleSave" :disabled="isSaving">
+            <span v-if="isSaving" class="spinner-border spinner-border-sm me-1"></span>
             Lưu thay đổi
           </button>
         </div>
@@ -1782,25 +1750,13 @@ onMounted(async () => {
       <div class="modal-content shadow">
         <div class="modal-header bg-success text-white py-2">
           <h6 class="modal-title mb-0">Tạo thuộc tính mới</h6>
-          <button
-            class="btn-close btn-close-white"
-            data-bs-dismiss="modal"
-          ></button>
+          <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <input
-            type="text"
-            class="form-control"
-            v-model="newQuickAttrName"
-            placeholder="VD: Màu sắc, Size..."
-          />
+          <input type="text" class="form-control" v-model="newQuickAttrName" placeholder="VD: Màu sắc, Size..." />
         </div>
         <div class="modal-footer p-2">
-          <button
-            class="btn btn-sm btn-success w-100"
-            @click="handleCreateQuickAttribute"
-            :disabled="isCreatingAttr"
-          >
+          <button class="btn btn-sm btn-success w-100" @click="handleCreateQuickAttribute" :disabled="isCreatingAttr">
             {{ isCreatingAttr ? "..." : "Tạo ngay" }}
           </button>
         </div>
@@ -1808,81 +1764,158 @@ onMounted(async () => {
     </div>
   </div>
 
-  <!-- [UPDATED] View Detail Modal -->
-  <div class="modal fade" id="viewModal" ref="viewModalRef" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-body p-0">
-          <div class="row g-0">
-            <div
-              class="col-md-5 bg-light d-flex align-items-center justify-content-center p-4"
-            >
-              <img
-                :src="viewingProduct.thumbnail_url"
-                class="img-fluid rounded shadow-sm"
-                style="max-height: 300px"
-              />
-            </div>
-            <div class="col-md-7 p-4">
-              <button
-                type="button"
-                class="btn-close float-end"
-                data-bs-dismiss="modal"
-              ></button>
-              <span class="badge bg-primary mb-2">{{
-                viewingProduct.categoryName
-              }}</span>
-              <!-- [ADDED] Brand Badge -->
-              <span v-if="viewingProduct.brandName && viewingProduct.brandName !== 'N/A'" class="badge bg-secondary mb-2 ms-1">{{ viewingProduct.brandName }}</span>
+  <!-- [NEW] Manage Attribute Modal (Edit/Delete) -->
+  <div class="modal fade" id="manageAttrModal" ref="manageAttrModalRef" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content shadow">
+        <div class="modal-header bg-secondary text-white py-2">
+          <h6 class="modal-title mb-0">Quản lý Thuộc tính hệ thống</h6>
+          <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Chọn thuộc tính cần sửa:</label>
+            <select class="form-select" v-model="managingAttrId">
+              <option value="">-- Chọn thuộc tính --</option>
+              <option v-for="a in attributesList" :key="a.id" :value="a.id">{{ a.name }}</option>
+            </select>
+          </div>
+          <div v-if="managingAttrId">
+            <label class="form-label small fw-bold">Tên hiển thị mới:</label>
+            <input type="text" class="form-control" v-model="managingAttrName" placeholder="Nhập tên mới..." />
+            <div class="form-text small">Thay đổi này sẽ cập nhật tên thuộc tính trên toàn hệ thống.</div>
+          </div>
+        </div>
+        <div class="modal-footer p-2 d-flex justify-content-between" v-if="managingAttrId">
+          <button class="btn btn-sm btn-danger" @click="handleDeleteGlobalAttribute" :disabled="isManagingAttr">
+            <span v-if="isManagingAttr" class="spinner-border spinner-border-sm me-1"></span>
+            Xóa vĩnh viễn
+          </button>
+          <button class="btn btn-sm btn-primary" @click="handleUpdateGlobalAttribute"
+            :disabled="isManagingAttr || !managingAttrName.trim()">
+            <span v-if="isManagingAttr" class="spinner-border spinner-border-sm me-1"></span>
+            Cập nhật
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-              <h4 class="fw-bold mb-3">{{ viewingProduct.name }}</h4>
-              <div class="mb-3">
-                <h2 class="text-danger fw-bold mb-0">
-                  {{ viewingProduct.priceRange }}
-                </h2>
-                <small class="text-muted"
-                  >Kho: {{ viewingProduct.totalStock }}</small
-                >
+  <!-- [UPDATED] View Detail Modal: modal-xl -->
+  <div class="modal fade" id="viewModal" ref="viewModalRef" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header border-bottom-0 pb-0">
+          <h5 class="modal-title fw-bold text-secondary">Chi tiết sản phẩm</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-4">
+            <!-- Left: Images -->
+            <div class="col-lg-5">
+              <div
+                class="border rounded bg-light d-flex align-items-center justify-content-center mb-3 position-relative"
+                style="height: 400px; overflow: hidden;">
+                <img :src="selectedViewImage || viewingProduct.thumbnail_url" class="img-fluid object-fit-contain"
+                  style="max-height: 100%; max-width: 100%;"
+                  onerror="this.src='https://placehold.co/400x400?text=No+Image'" />
               </div>
-              <p class="text-muted small mb-4" style="white-space: pre-line">
-                {{ viewingProduct.description }}
-              </p>
-              <hr />
-              <h6 class="fw-bold small text-uppercase text-secondary">
-                Chi tiết Biến thể ({{ viewingProduct.variants.length }})
-              </h6>
-              <div style="max-height: 200px; overflow-y: auto">
-                <div
-                  v-for="v in viewingProduct.variants"
-                  :key="v.id"
-                  class="mb-2 p-2 border rounded bg-light"
-                >
-                  <div
-                    class="d-flex justify-content-between align-items-center mb-1"
-                  >
-                    <div>
-                      <span
-                        v-for="(val, key) in v.attributes"
-                        :key="key"
-                        class="badge bg-white text-dark border me-1"
-                      >
-                        {{ key }}: {{ val }}
-                      </span>
-                    </div>
-                    <span class="fw-bold text-danger">{{
-                      formatCurrency(v.price)
-                    }}</span>
-                  </div>
-                  <div class="small text-muted d-flex justify-content-between">
-                    <span
-                      >Kho: <b>{{ v.stock }}</b></span
-                    >
-                    <span>Gốc: {{ formatCurrency(v.original_price) }}</span>
-                  </div>
+              <!-- Gallery Thumbnails -->
+              <div class="d-flex gap-2 overflow-auto pb-2"
+                v-if="viewingProduct.images && viewingProduct.images.length > 0">
+                <div class="border rounded cursor-pointer flex-shrink-0"
+                  :class="{ 'border-primary shadow-sm': selectedViewImage === viewingProduct.thumbnail_url }"
+                  style="width: 70px; height: 70px;" @click="selectedViewImage = viewingProduct.thumbnail_url">
+                  <img :src="viewingProduct.thumbnail_url" class="w-100 h-100 object-fit-cover rounded" />
+                </div>
+                <div v-for="(img, idx) in viewingProduct.images" :key="idx"
+                  class="border rounded cursor-pointer flex-shrink-0"
+                  :class="{ 'border-primary shadow-sm': selectedViewImage === img }" style="width: 70px; height: 70px;"
+                  @click="selectedViewImage = img">
+                  <img :src="img" class="w-100 h-100 object-fit-cover rounded" />
                 </div>
               </div>
             </div>
+
+            <!-- Right: Details -->
+            <div class="col-lg-7">
+              <div>
+                <span class="badge bg-primary me-2">{{ viewingProduct.categoryName }}</span>
+                <span v-if="viewingProduct.brandName && viewingProduct.brandName !== 'N/A'"
+                  class="badge bg-secondary">{{ viewingProduct.brandName }}</span>
+              </div>
+
+              <h3 class="fw-bold mt-2 mb-2 text-dark">{{ viewingProduct.name }}</h3>
+
+              <!-- [NEW] Rating -->
+              <div class="d-flex align-items-center mb-3 text-warning">
+                <span class="fw-bold me-1 text-dark">{{ viewingProduct.average_rating || 0 }}</span>
+                <i v-for="n in 5" :key="n" class="bi"
+                  :class="n <= Math.round(viewingProduct.average_rating) ? 'bi-star-fill' : 'bi-star'"></i>
+                <span class="text-muted ms-2 small">({{ viewingProduct.review_count || 0 }} đánh giá)</span>
+              </div>
+
+              <h2 class="text-danger fw-bold mb-3">
+                {{ viewingProduct.priceRange }}
+              </h2>
+
+              <div class="alert alert-light border">
+                <strong>Mô tả:</strong>
+                <p class="mb-0 small text-muted" style="white-space: pre-line; max-height: 150px; overflow-y: auto;">
+                  {{ viewingProduct.description || 'Chưa có mô tả.' }}
+                </p>
+              </div>
+
+              <div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+                <h6 class="fw-bold text-uppercase text-secondary mb-0">
+                  Danh sách biến thể ({{ viewingProduct.variants.length }})
+                </h6>
+                <span class="badge bg-light text-dark border">Tổng kho: {{ viewingProduct.totalStock }}</span>
+              </div>
+
+              <!-- [UPDATED] Variants Table View -->
+              <div class="table-responsive border rounded" style="max-height: 300px;">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="bg-light sticky-top">
+                    <tr>
+                      <th style="width: 60px;">Ảnh</th>
+                      <th>Thuộc tính</th>
+                      <th class="text-end">Giá bán</th>
+                      <th class="text-end">Giá gốc</th>
+                      <th class="text-center">Kho</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="v in viewingProduct.variants" :key="v.id">
+                      <td>
+                        <img :src="v.imageUrl || 'https://placehold.co/50?text=NoImg'"
+                          class="rounded border object-fit-cover" style="width: 50px; height: 50px;"
+                          onerror="this.src='https://placehold.co/50?text=Err'" />
+                      </td>
+                      <td>
+                        <div class="d-flex flex-wrap gap-1">
+                          <span v-for="(val, key) in v.attributes" :key="key" class="badge bg-white text-dark border">
+                            {{ key }}: {{ val }}
+                          </span>
+                        </div>
+                      </td>
+                      <td class="text-end fw-bold text-danger">{{ formatCurrency(v.price) }}</td>
+                      <td class="text-end text-muted small text-decoration-line-through">{{
+                        formatCurrency(v.original_price) }}</td>
+                      <td class="text-center fw-bold">{{ v.stock }}</td>
+                    </tr>
+                    <tr v-if="!viewingProduct.variants || viewingProduct.variants.length === 0">
+                      <td colspan="5" class="text-center py-3 text-muted">Không có biến thể nào.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
           </div>
+        </div>
+        <div class="modal-footer border-top-0 pt-0">
+          <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Đóng</button>
         </div>
       </div>
     </div>
@@ -1894,34 +1927,42 @@ onMounted(async () => {
 .text-brand {
   color: #009981 !important;
 }
+
 .text-primary {
   color: #009981 !important;
 }
+
 .bg-primary {
   background-color: #009981 !important;
 }
+
 .btn-primary {
   background-color: #009981 !important;
   border-color: #009981 !important;
   color: white !important;
 }
+
 .btn-primary:hover {
   background-color: #007a67 !important;
   border-color: #007a67 !important;
 }
+
 .btn-outline-primary {
   color: #009981 !important;
   border-color: #009981 !important;
 }
+
 .btn-outline-primary:hover {
   background-color: #009981 !important;
   color: white !important;
 }
+
 .btn-success {
   background-color: #009981 !important;
   border-color: #009981 !important;
   color: white !important;
 }
+
 .btn-success:hover {
   background-color: #007a67 !important;
   border-color: #007a67 !important;
@@ -1936,9 +1977,11 @@ onMounted(async () => {
   border-bottom: 3px solid transparent;
   cursor: pointer;
 }
+
 .custom-tabs .nav-link:hover {
   color: #009981;
 }
+
 .custom-tabs .nav-link.active {
   color: #009981;
   background: transparent;
@@ -1950,23 +1993,45 @@ onMounted(async () => {
   content: " *";
   color: red;
 }
+
 .cursor-pointer {
   cursor: pointer;
 }
+
 .custom-switch:checked {
   background-color: #009981;
   border-color: #009981;
 }
+
 :deep(.table-striped-columns) tbody tr td:nth-child(even) {
   background-color: rgba(0, 0, 0, 0.02);
 }
+
 .custom-table th {
   font-weight: 600;
   text-transform: uppercase;
   font-size: 0.85rem;
   letter-spacing: 0.5px;
 }
+
 .hover-bg-gray:hover {
   background-color: #e9ecef !important;
+}
+
+/* Highlight duplicate rows */
+.table-danger {
+  background-color: #ffe6e6 !important;
+}
+
+/* Subtle input in table */
+.form-control.bg-transparent {
+  background-color: transparent !important;
+}
+
+/* Sticky Header for detail table */
+.sticky-top {
+  position: sticky;
+  top: 0;
+  z-index: 1020;
 }
 </style>
