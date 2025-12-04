@@ -7,10 +7,7 @@ import Swal from 'sweetalert2'; // Import SweetAlert2
 const store = useStore();
 const router = useRouter();
 
-// Lấy cart từ getter
-const cart = computed(() => store.getters.cartItems);
 
-// Hàm tiện ích: Xử lý giá an toàn (chuyển string "1.000.000" -> number 1000000)
 const parsePrice = (value) => {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
@@ -19,12 +16,7 @@ const parsePrice = (value) => {
     return 0;
 };
 
-// Tính tổng tiền: Luôn tính tất cả sản phẩm trong giỏ
-const total = computed(() => {
-    return cart.value.reduce((sum, item) => sum + (parsePrice(item.price) * Number(item.qty)), 0);
-});
 
-// --- HELPER: LẤY TÊN BIẾN THỂ AN TOÀN ---
 const getVariantLabel = (item) => {
     if (item.variantName && item.variantName !== 'Mặc định') return item.variantName;
     if (item.variant_name && item.variant_name !== 'Mặc định') return item.variant_name;
@@ -139,7 +131,6 @@ const proceedToCheckout = () => {
     router.push('/checkout');
 }
 </script>
-
 <template>
     <div class="cart-page">
         <div class="container">
@@ -248,7 +239,7 @@ const proceedToCheckout = () => {
 </template>
 
 <style scoped>
-/* Reset & Base */
+
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 

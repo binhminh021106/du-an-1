@@ -44,6 +44,8 @@ class CartController extends Controller
      */
     public function addToCart(Request $request)
     {
+        // === SỬA ĐỔI 1: SỬA TÊN BẢNG TRONG VALIDATION ===
+        // Đã sửa 'products' thành 'product' (số ít) để khớp với database của bạn
         $request->validate([
             'product_id' => 'required|exists:product,id', // [FIX] Sửa lại thành 'product' (số ít) khớp với DB cũ
             'variant_id' => 'nullable|exists:variants,id',
