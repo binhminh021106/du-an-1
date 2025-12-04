@@ -31,7 +31,8 @@ class User extends Authenticatable
         'avatar_url',
         'status',
         'email_verified_at',
-        'remember_token'
+        'remember_token',
+        'google_id',
     ];
 
     /**
