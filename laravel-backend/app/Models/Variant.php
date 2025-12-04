@@ -21,7 +21,8 @@ class Variant extends Model
         'product_id',
         'price',
         'original_price',
-        'stock'
+        'stock',
+        'image' 
     ];
 
     /**

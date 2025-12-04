@@ -6,128 +6,209 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Cart;
 use App\Models\CartItem;
-use App\Models\Product;
 use App\Models\Variant;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class CartController extends Controller
 {
-    // Cấu hình URL gốc của server (PHẢI KHỚP VỚI CẤU HÌNH TRONG VUE)
-    // Nếu bạn sử dụng /storage, hãy sửa lại đường dẫn trong getImageUrl
-    const SERVER_URL = 'http://127.0.0.1:8000'; 
-    const FALLBACK_IMAGE_URL = 'https://placehold.co/100x100?text=No+Img';
-    
-    // Hàm tiện ích để tạo URL ảnh đầy đủ
-    private function getImageUrl($path)
+    /**
+     * [GET] /api/carts
+     * Lấy danh sách sản phẩm trong giỏ hàng
+     */
+    public function index(Request $request)
     {
-        if (!$path) return self::FALLBACK_IMAGE_URL;
-        // Nếu path đã là URL (http/https/data:), trả về ngay
-        if (str_starts_with($path, 'http') || str_starts_with($path, 'data:')) return $path;
+        try {
+            $user = $request->user();
+            if (!$user) {
+                return response()->json(['data' => []], 200);
+            }
 
-        // Bỏ ký tự '/' ở đầu path nếu có
-        $cleanPath = str_starts_with($path, '/') ? substr($path, 1) : $path;
-        
-        // Giả định ảnh được public trực tiếp từ thư mục gốc Laravel (hoặc /public)
-        return self::SERVER_URL . '/' . $cleanPath;
+            $cart = Cart::firstOrCreate(['user_id' => $user->id]);
+            $cartItems = $this->getCartItems($cart->id);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $cartItems
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error("Lỗi lấy giỏ hàng: " . $e->getMessage());
+            return response()->json(['message' => 'Lỗi server'], 500);
+        }
     }
 
-    // Thêm sản phẩm vào giỏ (DB)
+    /**
+     * [POST] /api/cart/add
+     * Thêm sản phẩm vào giỏ
+     */
     public function addToCart(Request $request)
     {
         // === SỬA ĐỔI 1: SỬA TÊN BẢNG TRONG VALIDATION ===
         // Đã sửa 'products' thành 'product' (số ít) để khớp với database của bạn
         $request->validate([
-            'product_id' => 'required|exists:product,id',
-            'variant_id' => 'required|exists:variants,id',
-            'quantity' => 'required|integer|min:1'
+            'product_id' => 'required|exists:product,id', // [FIX] Sửa lại thành 'product' (số ít) khớp với DB cũ
+            'variant_id' => 'nullable|exists:variants,id',
+            'quantity'   => 'required|integer|min:1'
         ]);
 
-        // QUAN TRỌNG: Kiểm tra user (nếu người dùng chưa đăng nhập, dòng này sẽ bị lỗi)
-        $user = $request->user(); 
-        if (!$user) {
-             return response()->json(['status' => 'error', 'message' => 'Người dùng chưa đăng nhập.'], 401);
-        }
+        $user = $request->user();
         
         try {
             DB::beginTransaction();
 
-            // 1. Tìm hoặc tạo giỏ hàng cho User
-            $cart = Cart::firstOrCreate(
-                ['user_id' => $user->id]
-            );
+            // 1. Tìm hoặc tạo giỏ hàng
+            $cart = Cart::firstOrCreate(['user_id' => $user->id]);
 
-            // 2. Kiểm tra xem sản phẩm biến thể này đã có trong giỏ chưa
+            // 2. Xác định Variant ID
+            $variantId = $request->variant_id;
+            
+            // Nếu không có variant_id, thử tìm variant mặc định
+            if (!$variantId) {
+                $defaultVariant = Variant::where('product_id', $request->product_id)->first();
+                if ($defaultVariant) $variantId = $defaultVariant->id;
+            }
+
+            if (!$variantId) {
+                return response()->json(['message' => 'Sản phẩm không hợp lệ (thiếu biến thể)'], 400);
+            }
+
+            // 3. Kiểm tra item đã có chưa
             $cartItem = CartItem::where('cart_id', $cart->id)
-                ->where('variant_id', $request->variant_id)
+                ->where('variant_id', $variantId)
                 ->first();
 
             if ($cartItem) {
-                // Nếu có rồi -> Cộng dồn số lượng
                 $cartItem->quantity += $request->quantity;
                 $cartItem->save();
             } else {
-                // Nếu chưa -> Tạo mới
+                // [FIX] Bỏ cột 'product_id' vì bảng cart_items thường chỉ liên kết qua variant_id
                 CartItem::create([
-                    'cart_id' => $cart->id,
-                    'variant_id' => $request->variant_id,
-                    'quantity' => $request->quantity
+                    'cart_id'    => $cart->id,
+                    'variant_id' => $variantId,
+                    'quantity'   => $request->quantity
                 ]);
             }
 
-            // 3. Trả về danh sách giỏ hàng mới nhất
-            $updatedItems = $this->getCartItems($cart->id);
-
             DB::commit();
 
+            // Trả về dữ liệu giỏ hàng mới nhất
             return response()->json([
                 'status' => 'success',
                 'message' => 'Đã thêm vào giỏ hàng',
-                'cart_items' => $updatedItems
+                'data' => $this->getCartItems($cart->id)
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error("Lỗi thêm giỏ hàng: " . $e->getMessage());
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
 
-    // Hàm phụ trợ để lấy danh sách item đầy đủ thông tin
+    /**
+     * [PUT] /api/cart/{id}
+     * Cập nhật số lượng item
+     */
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'quantity' => 'required|integer|min:1'
+        ]);
+
+        try {
+            $user = $request->user();
+            // Tìm item thuộc về user đó (thông qua cart) để bảo mật
+            $cart = Cart::where('user_id', $user->id)->first();
+            
+            if (!$cart) return response()->json(['message' => 'Giỏ hàng không tồn tại'], 404);
+
+            // $id ở đây là id của bảng cart_items
+            $cartItem = CartItem::where('cart_id', $cart->id)->where('id', $id)->first();
+
+            if ($cartItem) {
+                $cartItem->quantity = $request->quantity;
+                $cartItem->save();
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Cập nhật thành công',
+                    'data' => $this->getCartItems($cart->id)
+                ]);
+            }
+
+            return response()->json(['message' => 'Sản phẩm không tìm thấy'], 404);
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi cập nhật'], 500);
+        }
+    }
+
+    /**
+     * [DELETE] /api/cart/{id}
+     * Xóa sản phẩm khỏi giỏ
+     */
+    public function destroy(Request $request, $id)
+    {
+        try {
+            $user = $request->user();
+            $cart = Cart::where('user_id', $user->id)->first();
+            
+            if (!$cart) return response()->json(['message' => 'Giỏ hàng trống'], 404);
+
+            $deleted = CartItem::where('cart_id', $cart->id)->where('id', $id)->delete();
+
+            if ($deleted) {
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Đã xóa sản phẩm',
+                    'data' => $this->getCartItems($cart->id)
+                ]);
+            }
+
+            return response()->json(['message' => 'Không tìm thấy sản phẩm để xóa'], 404);
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi xóa sản phẩm'], 500);
+        }
+    }
+
+    // --- HELPER FUNCTION ---
     private function getCartItems($cartId)
     {
-        return CartItem::with([
-            'variant.product', 
-            'variant.attributeValues.attribute'
-        ])
+        // Eager loading: variant -> product, variant -> attributes
+        $items = CartItem::with(['variant.product', 'variant.attributeValues.attribute'])
             ->where('cart_id', $cartId)
-            ->get()
-            ->map(function($item) {
-                $variant = $item->variant;
-                $product = $variant ? $variant->product : null;
+            ->get();
 
-                // Xử lý an toàn: Nếu không tìm thấy product/variant, dùng giá trị mặc định
-                return [
-                    'id' => $item->id,
-                    'cartId' => $item->id, 
-                    'product_id' => $product ? $product->id : null,
-                    'name' => $product ? $product->name : 'Sản phẩm đã bị xóa', 
-                    'variant_id' => $item->variant_id,
-                    'price' => $variant ? $variant->price : 0,
-                    'qty' => $item->quantity, 
-                    
-                    // === SỬA ĐỔI 2: CHUYỂN PATH ẢNH THÀNH FULL URL ===
-                    'thumbnail_url' => $product 
-                        ? $this->getImageUrl($product->thumbnail_url) // <-- Áp dụng hàm getImageUrl
-                        : self::FALLBACK_IMAGE_URL, 
-                    // === KẾT THÚC SỬA ĐỔI ===
-                    
-                    'stock' => $variant ? $variant->stock : 0, 
+        // Format lại dữ liệu cho khớp với Store.js Frontend
+        return $items->map(function($item) {
+            $product = $item->variant->product ?? null;
+            if (!$product) return null; // Bỏ qua nếu sản phẩm gốc bị xóa
 
-                    // Format attributes (Sử dụng imploding an toàn hơn)
-                    'variantName' => $variant && $variant->attributeValues->isNotEmpty()
-                        ? $variant->attributeValues->map(fn($av) => ($av->attribute->name ?? '') . ': ' . ($av->value ?? ''))
-                                                    ->implode(' - ')
-                        : ($variant ? ($variant->name ?? 'Mặc định') : 'Mặc định'),
-                ];
-            });
+            return [
+                'id'           => $item->id, // ID của Cart Item (dùng để xóa/sửa)
+                'product_id'   => $product->id,
+                'name'         => $product->name, // Store.js cần key 'name'
+                'variant_id'   => $item->variant_id,
+                'price'        => $item->variant->price,
+                'quantity'     => $item->quantity, // Store.js map quantity -> qty
+                'qty'          => $item->quantity, // Thêm key này cho chắc ăn
+                'stock'        => $item->variant->stock ?? 100,
+                'image_url'    => $product->thumbnail_url ?? $product->image_url ?? '',
+                'variant_name' => $this->formatVariantName($item->variant),
+                'category_id'  => $product->category_id
+            ];
+        })->filter(); // Loại bỏ các giá trị null
+    }
+
+    // Format tên biến thể (Ví dụ: Màu: Đỏ - Size: L)
+    private function formatVariantName($variant)
+    {
+        if (!$variant || $variant->attributeValues->isEmpty()) {
+            return 'Mặc định';
+        }
+        return $variant->attributeValues->map(function($av) {
+            return $av->attribute->name . ': ' . $av->value;
+        })->implode(' - ');
     }
 }

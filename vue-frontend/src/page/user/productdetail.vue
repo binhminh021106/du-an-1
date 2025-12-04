@@ -14,20 +14,20 @@ const store = useStore();
 const SERVER_URL = 'http://127.0.0.1:8000';    
 const USE_STORAGE = false; 
 
-// Lấy thông tin User hiện tại (từ Vuex hoặc LocalStorage) để check quyền xóa
+// State để theo dõi các ảnh bị lỗi load
+const imageLoadErrors = ref({});
+
+// Lấy thông tin User hiện tại
 const currentUser = computed(() => {
-    // Ưu tiên lấy từ store auth module, fallback về localStorage nếu store chưa sync kịp
     return store.state.auth?.user || store.state.user || JSON.parse(localStorage.getItem('user') || 'null');
 });
 
 const formatDate = (dateString) => {
     if (!dateString) return new Date().toLocaleDateString('vi-VN');
     const date = new Date(dateString);
-    // Format: 14:30 20/10/2023
     return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')} ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
 };
 
-// Hàm tạo màu ngẫu nhiên cho avatar placeholder dựa trên tên
 const getAvatarColor = (name) => {
     if (!name) return '#6c757d'; 
     let hash = 0;
@@ -38,7 +38,6 @@ const getAvatarColor = (name) => {
     return '#' + '00000'.substring(0, 6 - c.length) + c;
 };
 
-// Lấy chữ cái đầu của tên để làm Avatar chữ
 const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.trim().split(' ');
@@ -46,50 +45,32 @@ const getInitials = (name) => {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-// --- FIX CORE: XỬ LÝ HIỂN THỊ USER INFO ---
+const handleImageError = (id) => {
+    if (id) {
+        imageLoadErrors.value[id] = true;
+    }
+};
 
-/**
- * Lấy tên hiển thị ưu tiên từ bảng Users kết nối qua user_id
- * Logic: User Object (fullName) -> User Object (name) -> user_name (fallback cũ) -> "Khách hàng"
- */
 const getUserDisplayName = (userObj, fallbackName) => {
-    // 1. Nếu có object user từ quan hệ with('user')
     if (userObj) {
-        if (userObj.fullName) return userObj.fullName; // Chuẩn schema của bạn
+        if (userObj.fullName) return userObj.fullName;
         if (userObj.full_name) return userObj.full_name;
         if (userObj.name) return userObj.name;
     }
-    
-    // 2. Nếu không có object user, dùng tên lưu tạm trong comment (nếu có)
     if (fallbackName) return fallbackName;
-
-    // 3. Fallback cuối cùng
     return "Khách hàng";
 };
 
-/**
- * Lấy URL Avatar
- * Logic: Nếu là link ngoài (Google/FB) -> dùng luôn. Nếu là link local -> nối thêm SERVER_URL
- */
 const getUserAvatar = (userObj) => {
     if (!userObj || !userObj.avatar_url) return null;
-    
     const url = userObj.avatar_url;
-    
-    // Trường hợp 1: Link tuyệt đối (https://...)
     if (url.startsWith('http')) return url;
-    
-    // Trường hợp 2: Link tương đối (storage/uploads/...)
     const cleanPath = url.startsWith('/') ? url.substring(1) : url;
-    
-    // Kiểm tra xem path đã có chữ 'storage' chưa để tránh duplicate
-    if (cleanPath.startsWith('storage/')) {
+    if (cleanPath.startsWith('storage/') || cleanPath.startsWith('uploads/')) {
         return `${SERVER_URL}/${cleanPath}`;
     }
     return `${SERVER_URL}/storage/${cleanPath}`;
 };
-
-// --- END FIX ---
 
 // --- NOTIFICATION SYSTEM ---
 const Toast = Swal.mixin({
@@ -122,9 +103,8 @@ const notify = (type, message, title = '') => {
 
 const getImageUrl = (path) => {
   if (!path) return 'https://placehold.co/500x500?text=No+Img';
-  if (path.startsWith('http')) return path;
+  if (path.startsWith('http') || path.startsWith('blob:')) return path;
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-  // Cấu hình lại logic lấy ảnh sản phẩm
   return `${SERVER_URL}/${cleanPath}`; 
 };
 
@@ -136,7 +116,7 @@ const rawCommentsList = ref([]);
 const quantity = ref(1);
 const loading = ref(true);
 const isFavorite = ref(false);
-const activeTab = ref('desc'); // 'desc' | 'review' | 'comment'
+const activeTab = ref('desc');
 
 // --- PAGINATION STATE ---
 const ITEMS_PER_PAGE = 5; 
@@ -202,6 +182,8 @@ const selectAttribute = (attributeName, valueId) => {
         delete newSelection[attributeName];
         selectedOptions.value = newSelection;
         availableVariant.value = null; 
+        // Nếu bỏ chọn, có thể reset về ảnh thumbnail gốc nếu muốn
+        // if(product.value) selectedImage.value = product.value.thumbnail_url; 
         return;
     }
     let nextSelection = { ...selectedOptions.value, [attributeName]: valueId };
@@ -223,17 +205,26 @@ const findMatchingVariant = () => {
     if(!product.value || !product.value.variants) return;
     const totalKeys = Object.keys(groupedAttributes.value).length;
     const selectedKeys = Object.keys(selectedOptions.value).length;
+    
+    // Nếu chưa chọn đủ thuộc tính
     if (selectedKeys < totalKeys) {
         availableVariant.value = null;
         return;
     }
+
     const match = product.value.variants.find(variant => {
         if (!variant.attributesMap) return false;
         return Object.keys(groupedAttributes.value).every(attrName => {
             return String(variant.attributesMap[attrName]) === String(selectedOptions.value[attrName]);
         });
     });
+    
     availableVariant.value = match || null;
+
+    // [UPDATED] Tự động hiển thị ảnh biến thể nếu có
+    if (match && match.image) {
+        selectedImage.value = match.image;
+    }
 };
 
 const processProductData = (data) => {
@@ -284,6 +275,8 @@ const loadProductById = async (id) => {
     const data = productRes.data.data || productRes.data;
     if (!data) throw new Error("No data");
 
+    if (!data.variants) data.variants = [];
+
     // Chuẩn hóa dữ liệu variant
     data.variants.forEach((v, i) => {
       v.stock = Number(v.stock) || 0;
@@ -292,13 +285,22 @@ const loadProductById = async (id) => {
       v.id = v.id || i;
     });
 
+    // [NEW] Lấy thêm ảnh từ biến thể để hiển thị trong gallery
+    const variantImages = data.variants.map(v => v.image).filter(img => img && typeof img === 'string');
+
     // Xử lý hình ảnh
     const extraImages = (data.images || []).map(img => 
        (typeof img === 'string') ? img : (img.url || img.image_url || img.path)
     ).filter(Boolean);
 
-    data.gallery_images = [data.image_url || data.thumbnail_url, ...extraImages].filter(Boolean);
-    data.gallery_images = [...new Set(data.gallery_images)]; 
+    // Gộp ảnh thumbnail, ảnh phụ và ảnh biến thể
+    data.gallery_images = [
+        data.image_url || data.thumbnail_url, 
+        ...extraImages,
+        ...variantImages
+    ].filter(Boolean);
+    
+    data.gallery_images = [...new Set(data.gallery_images)]; // Loại bỏ ảnh trùng lặp
     if (data.gallery_images.length === 0) data.gallery_images = ['https://placehold.co/500x500?text=No+Img'];
 
     product.value = data;
@@ -309,6 +311,7 @@ const loadProductById = async (id) => {
     
     reviewPage.value = 1;
     commentPage.value = 1;
+    imageLoadErrors.value = {};
 
     loadReviews(id);
     loadComments(id);
@@ -324,17 +327,16 @@ const loadProductById = async (id) => {
 const loadReviews = async (productId) => {
     try {
         const reviewRes = await apiService.get(`/reviews?productId=${productId}`);
-        reviews.value = Array.isArray(reviewRes.data) ? reviewRes.data : (reviewRes.data?.data || []);
+        const allReviews = Array.isArray(reviewRes.data) ? reviewRes.data : (reviewRes.data?.data || []);
+        reviews.value = allReviews.filter(r => r.status === 'approved');
     } catch (e) {
         reviews.value = [];
     }
 };
 
-// --- LOGIC XỬ LÝ COMMENT QUAN TRỌNG ---
 const buildCommentTree = (flatList) => {
     const map = {};
     const roots = [];
-    // Deep copy để tránh biến đổi mảng gốc
     const list = JSON.parse(JSON.stringify(flatList)); 
 
     list.forEach((comment, index) => {
@@ -344,28 +346,26 @@ const buildCommentTree = (flatList) => {
 
     list.forEach(comment => {
         if (comment.parent_id !== null && map[comment.parent_id] !== undefined) {
-            list[map[comment.parent_id]].replies.push(comment);
+            if (list[map[comment.parent_id]]) {
+                list[map[comment.parent_id]].replies.push(comment);
+            }
         } else {
             roots.push(comment);
         }
     });
 
-    // Sort replies: Cũ nhất lên đầu (đọc theo dòng thời gian)
     roots.forEach(root => {
         if (root.replies.length > 0) {
             root.replies.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         }
     });
     
-    // Sort roots: Mới nhất lên đầu
     return roots.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 };
 
 const loadComments = async (productId) => {
     try {
-        // Gọi API lấy comment. Yêu cầu Backend phải có .with('user')
         const commentRes = await apiService.get(`/comments?product_id=${productId}`);
-        
         let rawData = [];
         if (Array.isArray(commentRes.data)) {
             rawData = commentRes.data;
@@ -373,20 +373,10 @@ const loadComments = async (productId) => {
             rawData = commentRes.data.data;
         }
 
-        // Lọc client-side cho chắc chắn
         if (productId) {
             rawData = rawData.filter(c => String(c.product_id) === String(productId));
         }
-
-        // --- DEBUG: Kiểm tra xem có user info không ---
-        if (rawData.length > 0) {
-            const sample = rawData[0];
-            if (!sample.user) {
-                console.warn("[Frontend Warning] Dữ liệu comment thiếu thông tin 'user'. Hãy kiểm tra Controller Backend đã thêm ->with('user') chưa.");
-            } else {
-                console.log("[Frontend Success] Đã nhận được thông tin user:", sample.user);
-            }
-        }
+        rawData = rawData.filter(c => c.status === 'approved');
 
         rawCommentsList.value = rawData;
         comments.value = buildCommentTree(rawData);
@@ -453,7 +443,6 @@ const openReplyForm = async (comment) => {
         closeReplyForm();
         return;
     }
-    
     activeReplyId.value = comment.id;
     const replyToName = getUserDisplayName(comment.user, comment.user_name);
     replyContent.value = `@${replyToName} `;
@@ -528,7 +517,7 @@ const postComment = async (content, parentId, type) => {
         }
 
         await loadComments(product.value.id);
-        notify('success', type === 'new' ? 'Gửi câu hỏi thành công!' : 'Đã gửi câu trả lời!');
+        notify('success', type === 'new' ? 'Gửi câu hỏi thành công! (Chờ duyệt)' : 'Đã gửi câu trả lời! (Chờ duyệt)');
         
     } catch (error) {
         console.error("Lỗi gửi bình luận:", error);
@@ -553,7 +542,6 @@ watch(() => route.params.id, (newId) => {
   if (newId) loadProductById(newId);
 });
 
-// [FIX] Cải thiện logic lấy sản phẩm liên quan
 watchEffect(() => {
   if (product.value && allProducts.value.length > 0) {
     let related = [];
@@ -572,7 +560,7 @@ watchEffect(() => {
 <template>
   <div class="container py-5 product-detail-page">
     <div v-if="loading" class="text-center py-5">
-        <div class="spinner-border text-primary" role="status"></div>
+        <div class="spinner-border text-theme" role="status"></div>
         <p class="mt-2 text-muted">Đang tải sản phẩm...</p>
     </div>
 
@@ -735,11 +723,11 @@ watchEffect(() => {
                                         <div class="d-flex align-items-center">
                                             <!-- Reviewer Avatar -->
                                             <div class="me-3">
-                                                 <img v-if="getUserAvatar(r.user)" 
+                                                 <img v-if="getUserAvatar(r.user) && !imageLoadErrors[r.id]" 
                                                       :src="getUserAvatar(r.user)" 
                                                       class="rounded-circle"
                                                       style="width: 45px; height: 45px; object-fit: cover;"
-                                                      @error="$event.target.style.display='none'"
+                                                      @error="handleImageError(r.id)"
                                                  />
                                                  <div v-else class="avatar-circle text-white" 
                                                       :style="{ backgroundColor: getAvatarColor(getUserDisplayName(r.user, r.user_name)) }">
@@ -789,7 +777,8 @@ watchEffect(() => {
                                               placeholder="Bạn có thắc mắc gì về sản phẩm? Hãy đặt câu hỏi..."></textarea>
                                 </div>
                                 <div class="text-end">
-                                    <button class="btn btn-primary btn-add-cart px-4" 
+                                    <!-- Button Gửi Câu Hỏi - Dùng btn-theme -->
+                                    <button class="btn btn-theme px-4" 
                                             @click="submitNewComment" 
                                             :disabled="isSubmittingComment">
                                             <span v-if="isSubmittingComment" class="spinner-border spinner-border-sm me-2"></span>
@@ -815,11 +804,12 @@ watchEffect(() => {
                                             <div class="d-flex align-items-center">
                                                 <!-- Avatar tự tạo hoặc Ảnh -->
                                                 <div class="me-3">
-                                                     <img v-if="getUserAvatar(c.user)" 
+                                                     <!-- Fix Logic Avatar -->
+                                                     <img v-if="getUserAvatar(c.user) && !imageLoadErrors[c.id]" 
                                                           :src="getUserAvatar(c.user)" 
                                                           class="rounded-circle"
                                                           style="width: 45px; height: 45px; object-fit: cover;"
-                                                          @error="$event.target.style.display='none'"
+                                                          @error="handleImageError(c.id)"
                                                      />
                                                      <div v-else class="avatar-circle text-white" 
                                                           :style="{ backgroundColor: getAvatarColor(getUserDisplayName(c.user, c.user_name)) }">
@@ -836,9 +826,9 @@ watchEffect(() => {
                                             </div>
                                             <div class="d-flex align-items-center gap-2">
                                                 <small class="text-muted fst-italic">{{ formatDate(c.created_at) }}</small>
-                                                <!-- Nút Xóa (Fix: Ép kiểu String để so sánh an toàn) -->
+                                                <!-- Nút Xóa: Hiển thị nếu là chủ comment hoặc Admin -->
                                                 <button v-if="currentUser && (String(currentUser.id) === String(c.user_id) || currentUser.role === 'admin')" 
-                                                        class="btn btn-link text-danger p-0 ms-2 small text-decoration-none"
+                                                        class="btn btn-link text-danger p-0 ms-2 small text-decoration-none btn-delete-comment"
                                                         @click="deleteComment(c.id)">
                                                     <i class="bi bi-trash"></i> Xóa
                                                 </button>
@@ -847,8 +837,8 @@ watchEffect(() => {
                                         <div class="comment-content ps-2 ms-5">
                                             <p class="mb-2 text-dark">{{ c.content }}</p>
                                             
-                                            <!-- Nút Trả lời -->
-                                            <button class="btn btn-link p-0 text-decoration-none small fw-bold text-primary" @click="openReplyForm(c)">
+                                            <!-- Nút Trả lời - Dùng text-theme -->
+                                            <button class="btn btn-link p-0 text-decoration-none small fw-bold text-theme" @click="openReplyForm(c)">
                                                 <i class="bi bi-reply-fill"></i> Trả lời
                                             </button>
 
@@ -857,7 +847,8 @@ watchEffect(() => {
                                                 <textarea :id="`reply-input-${c.id}`" v-model="replyContent" class="form-control mb-2" rows="2"></textarea>
                                                 <div class="d-flex gap-2 justify-content-end">
                                                     <button class="btn btn-sm btn-secondary" @click="closeReplyForm">Hủy</button>
-                                                    <button class="btn btn-sm btn-primary" @click="submitReply(c.id)" :disabled="isSubmittingReply">
+                                                    <!-- Nút Gửi Reply - Dùng btn-theme -->
+                                                    <button class="btn btn-sm btn-theme" @click="submitReply(c.id)" :disabled="isSubmittingReply">
                                                         {{ isSubmittingReply ? 'Đang gửi...' : 'Gửi' }}
                                                     </button>
                                                 </div>
@@ -872,11 +863,11 @@ watchEffect(() => {
                                                 <div class="d-flex align-items-center">
                                                     <!-- Avatar Reply -->
                                                     <div class="me-2">
-                                                         <img v-if="getUserAvatar(reply.user)" 
+                                                         <img v-if="getUserAvatar(reply.user) && !imageLoadErrors[reply.id]" 
                                                               :src="getUserAvatar(reply.user)" 
                                                               class="rounded-circle"
                                                               style="width: 35px; height: 35px; object-fit: cover;"
-                                                              @error="$event.target.style.display='none'"
+                                                              @error="handleImageError(reply.id)"
                                                          />
                                                          <div v-else class="avatar-circle small text-white" 
                                                               style="width: 35px; height: 35px; font-size: 0.9rem;"
@@ -893,9 +884,9 @@ watchEffect(() => {
                                                 </div>
                                                 <div class="d-flex align-items-center gap-2">
                                                     <small class="text-muted fst-italic" style="font-size: 0.8rem;">{{ formatDate(reply.created_at) }}</small>
-                                                    <!-- Nút Xóa (Reply) Fix String -->
+                                                    <!-- Nút Xóa (Reply) -->
                                                     <button v-if="currentUser && (String(currentUser.id) === String(reply.user_id) || currentUser.role === 'admin')" 
-                                                            class="btn btn-link text-danger p-0 ms-2 small text-decoration-none"
+                                                            class="btn btn-link text-danger p-0 ms-2 small text-decoration-none btn-delete-comment"
                                                             style="font-size: 0.8rem;"
                                                             @click="deleteComment(reply.id)">
                                                         <i class="bi bi-trash"></i> Xóa
@@ -905,7 +896,8 @@ watchEffect(() => {
                                             <div class="comment-content ps-2 ms-5">
                                                 <p class="mb-1 text-dark">{{ reply.content }}</p>
                                                 
-                                                <button class="btn btn-link p-0 text-decoration-none small fw-bold text-primary" @click="openReplyForm(reply)">
+                                                <!-- Nút Trả lời Reply - Dùng text-theme -->
+                                                <button class="btn btn-link p-0 text-decoration-none small fw-bold text-theme" @click="openReplyForm(reply)">
                                                     <i class="bi bi-reply-fill"></i> Trả lời
                                                 </button>
 
@@ -914,7 +906,8 @@ watchEffect(() => {
                                                     <textarea :id="`reply-input-${reply.id}`" v-model="replyContent" class="form-control mb-2" rows="2"></textarea>
                                                     <div class="d-flex gap-2 justify-content-end">
                                                         <button class="btn btn-sm btn-secondary" @click="closeReplyForm">Hủy</button>
-                                                        <button class="btn btn-sm btn-primary" @click="submitReply(reply.id)" :disabled="isSubmittingReply">
+                                                        <!-- Nút Gửi Reply - Dùng btn-theme -->
+                                                        <button class="btn btn-sm btn-theme" @click="submitReply(reply.id)" :disabled="isSubmittingReply">
                                                             {{ isSubmittingReply ? 'Đang gửi...' : 'Gửi' }}
                                                         </button>
                                                     </div>
@@ -979,6 +972,32 @@ watchEffect(() => {
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
+/* THEME UTILS */
+.text-theme { color: var(--primary-color) !important; }
+.text-theme:hover { color: var(--primary-hover) !important; text-decoration: underline !important; }
+
+.btn-theme { 
+    background-color: var(--primary-color); 
+    border-color: var(--primary-color); 
+    color: white; 
+    font-weight: 500;
+}
+.btn-theme:hover:not(:disabled) { 
+    background-color: var(--primary-hover); 
+    border-color: var(--primary-hover); 
+    color: white; 
+}
+.btn-theme:disabled {
+    background-color: #a0c4be;
+    border-color: #a0c4be;
+    color: #fff;
+}
+
+.btn-delete-comment:hover {
+    text-decoration: underline !important;
+    font-weight: bold;
+}
+
 /* IMAGES */
 .main-image-wrapper { 
     background: #fff; border-radius: 12px; overflow: hidden; padding: 20px; 
@@ -988,17 +1007,77 @@ watchEffect(() => {
 .main-product-image:hover { transform: scale(1.05); }
 @media (max-width: 768px) { .main-image-wrapper { height: 350px; } }
 
-.thumbnail-gallery { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-.thumbnail-wrapper { width: 70px; height: 70px; border-radius: 8px; overflow: hidden; border: 2px solid transparent; cursor: pointer; transition: all 0.2s; background: #fff; padding: 2px; }
+.thumbnail-gallery { 
+    display: flex; 
+    gap: 10px; 
+    overflow-x: auto; /* Cho phép cuộn ngang */
+    flex-wrap: nowrap; /* Không xuống dòng */
+    margin-top: 10px; 
+    padding-bottom: 5px; /* Khoảng cách cho thanh scroll */
+    scrollbar-width: thin; /* Thanh cuộn mảnh cho Firefox */
+}
+
+/* Tùy chỉnh thanh cuộn cho Chrome/Safari/Edge */
+.thumbnail-gallery::-webkit-scrollbar {
+    height: 4px;
+}
+.thumbnail-gallery::-webkit-scrollbar-track {
+    background: transparent;
+}
+.thumbnail-gallery::-webkit-scrollbar-thumb {
+    background-color: #ccc;
+    border-radius: 4px;
+}
+
+.thumbnail-wrapper { 
+    width: 70px; 
+    height: 70px; 
+    border-radius: 8px; 
+    overflow: hidden; 
+    border: 2px solid transparent; 
+    cursor: pointer; 
+    transition: all 0.2s; 
+    background: #fff; 
+    padding: 2px;
+    flex-shrink: 0; /* Quan trọng: Giữ kích thước không bị co lại */
+}
 .thumbnail-wrapper.active { border-color: var(--primary-color); transform: translateY(-2px); }
 .thumbnail-img { width: 100%; height: 100%; object-fit: contain; }
 
-/* INFO & CHIPS */
+/* INFO & CHIPS [UPDATED] */
 .product-info-box { padding: 0 10px; }
-.chip-btn { border: 1px solid #dee2e6; background: #fff; color: #495057; min-width: 60px; transition: all 0.2s; border-radius: 6px; font-size: 0.9rem; }
-.chip-btn:hover:not(.disabled) { border-color: var(--primary-color); color: var(--primary-color); background: rgba(0, 153, 129, 0.05); }
-.chip-btn.active { border-color: var(--primary-color); background-color: var(--primary-color); color: #fff; box-shadow: 0 4px 6px rgba(0, 153, 129, 0.2); }
-.chip-btn.disabled { opacity: 0.5; background: #f8f9fa; color: #adb5bd; text-decoration: line-through; cursor: not-allowed; border-style: dashed; }
+
+/* Updated Chip Button Style for Modern Look */
+.chip-btn { 
+    border: 1px solid #e0e0e0; 
+    background: #fff; 
+    color: #333; 
+    padding: 8px 16px; /* Comfortable padding */
+    min-width: unset; /* Let content dictate width */
+    transition: all 0.3s ease; 
+    border-radius: 8px; /* Slightly rounded */
+    font-size: 0.95rem; 
+    font-weight: 500;
+}
+.chip-btn:hover:not(.disabled) { 
+    border-color: var(--primary-color); 
+    color: var(--primary-color); 
+    background: #f0fdfa; 
+}
+.chip-btn.active { 
+    border-color: var(--primary-color); 
+    background-color: var(--primary-color); 
+    color: #fff; 
+    box-shadow: 0 4px 10px rgba(0, 153, 129, 0.3); 
+}
+.chip-btn.disabled { 
+    opacity: 0.5; 
+    background: #f8f9fa; 
+    color: #adb5bd; 
+    text-decoration: line-through; 
+    cursor: not-allowed; 
+    border-style: dashed; 
+}
 
 .qty-group button { background: #fff; color: #333; border-color: #ced4da; }
 .qty-group button:hover { background: #f8f9fa; }
