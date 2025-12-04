@@ -291,7 +291,7 @@ const handleRegister = async () => {
                 </div>
 
                 <p class="register-link">
-                    Bạn đã có tài khoản? <router-link :to="{ name: 'login' }">Đăng nhập ngay</router-link>
+                    Bạn đã có tài khoản? <router-link style="color: #009981;" :to="{ name: 'login' }">Đăng nhập ngay</router-link>
                 </p>
             </div>
         </div>

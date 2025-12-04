@@ -101,6 +101,17 @@ const userAuthRoutes = [
     name: "google-callback",
     component: () => import("../page/user/GoogleCallback.vue"),
   },
+  {
+    path: "/forgot-password",
+    name: "forgot-password",
+    component: () => import("../page/user/forgotPassword.vue"),
+  },
+  {
+    path: "/reset-password",
+    name: "reset-password",
+    component: () => import("../page/user/resetPassword.vue"),
+    props: (route) => ({ token: route.query.token, email: route.query.email }),
+  },
 ];
 
 const users = [...userAuthRoutes, userLayoutRoutes];

@@ -3,11 +3,12 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Laravel\Sanctum\HasApiTokens; 
+use Illuminate\Notifications\Notifiable;
+use App\Notifications\ResetPasswordRequest;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Laravel\Sanctum\HasApiTokens; 
 
 class User extends Authenticatable
 {
@@ -32,7 +33,11 @@ class User extends Authenticatable
         'status',
         'email_verified_at',
         'remember_token',
+<<<<<<< Updated upstream
         'google_id',
+=======
+        'google_id'
+>>>>>>> Stashed changes
     ];
 
     /**
@@ -86,5 +91,10 @@ class User extends Authenticatable
     public function roles()
     {
         return $this->belongsToMany(Role::class, 'user_roles', 'user_id', 'role_id');
+    }
+     public function sendPasswordResetNotification($token)
+    {
+        // Gọi class Notification tiếng Việt của chúng ta
+        $this->notify(new ResetPasswordRequest($token));
     }
 }
