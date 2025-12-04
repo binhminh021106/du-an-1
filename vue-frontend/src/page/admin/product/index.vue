@@ -124,7 +124,7 @@ const activeTab = ref("active");
 
 // Spinner States
 const isCreatingAttr = ref(false);
-const isManagingAttr = ref(false); // [NEW] Spinner for managing update/delete
+const isManagingAttr = ref(false);
 const deletingImageIds = ref([]);
 const processingStatusIds = ref([]);
 const isBulkDeleting = ref(false);
@@ -137,8 +137,8 @@ const attrModalInstance = ref(null);
 const attrModalRef = ref(null);
 const viewModalInstance = ref(null);
 const viewModalRef = ref(null);
-const manageAttrModalRef = ref(null); // [NEW]
-const manageAttrModalInstance = ref(null); // [NEW]
+const manageAttrModalRef = ref(null);
+const manageAttrModalInstance = ref(null);
 
 // Form Data & Helpers
 const newQuickAttrName = ref("");
@@ -149,7 +149,7 @@ const galleryFiles = ref([]);
 const galleryPreviews = ref([]);
 const duplicateRowIndices = ref([]);
 
-// [NEW] Manage Attributes State
+// Manage Attributes State
 const managingAttrId = ref("");
 const managingAttrName = ref("");
 
@@ -166,10 +166,10 @@ const viewingProduct = ref({
   attributeNames: [],
   priceRange: "",
   totalStock: 0,
-  average_rating: 0, // [NEW]
-  review_count: 0 // [NEW]
+  average_rating: 0,
+  review_count: 0
 });
-const selectedViewImage = ref(""); // [NEW] For image gallery in view modal
+const selectedViewImage = ref("");
 
 // Search & Sort & Pagination
 const searchQuery = ref("");
@@ -465,6 +465,15 @@ async function fetchProducts() {
 
     products.value = rawProducts.map((p) => {
       const category = allCategories.find((c) => c.id === p.category_id);
+      
+      // --- UPDATE START: Map Brand for table display ---
+      // Nếu API trả về relation 'brand' thì dùng luôn, còn không thì tìm trong danh sách brands đã fetch
+      let brand = p.brand; 
+      if (!brand && brands.value.length > 0) {
+          brand = brands.value.find((b) => b.id === p.brand_id);
+      }
+      // --- UPDATE END ---
+
       const productVariants = allVariants.filter(
         (v) => v.product_id == p.product_id || p.id == v.product_id
       );
@@ -485,6 +494,7 @@ async function fetchProducts() {
         ...p,
         product_id: p.product_id || p.id,
         category: category || null,
+        brand: brand || null, // Gán brand vào object
         brand_id: p.brand_id,
         variants: productVariants,
         images: productImages,
@@ -1328,6 +1338,8 @@ onMounted(async () => {
                   <th style="width: 80px">Ảnh</th>
                   <th>Tên sản phẩm</th>
                   <th>Danh mục</th>
+                  <!-- [ADDED] Brand Column Header -->
+                  <th>Thương hiệu</th>
                   <th>Giá bán</th>
                   <th>Kho</th>
                   <th>Trạng thái</th>
@@ -1336,12 +1348,12 @@ onMounted(async () => {
               </thead>
               <tbody>
                 <tr v-if="isLoading">
-                  <td colspan="8" class="text-center py-5">
+                  <td colspan="9" class="text-center py-5">
                     <div class="spinner-border text-primary"></div>
                   </td>
                 </tr>
                 <tr v-else-if="paginatedProducts.length === 0">
-                  <td colspan="8" class="text-center py-5 text-muted fst-italic">
+                  <td colspan="9" class="text-center py-5 text-muted fst-italic">
                     Không tìm thấy sản phẩm nào.
                   </td>
                 </tr>
@@ -1360,6 +1372,12 @@ onMounted(async () => {
                   <td>
                     <span class="badge bg-light text-dark border">{{
                       p.category?.name || "N/A"
+                    }}</span>
+                  </td>
+                  <!-- [ADDED] Brand Column Data -->
+                  <td>
+                    <span class="badge bg-white text-secondary border">{{
+                      p.brand?.name || "---"
                     }}</span>
                   </td>
                   <td class="text-danger fw-bold">

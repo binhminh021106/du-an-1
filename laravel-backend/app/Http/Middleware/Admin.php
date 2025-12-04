@@ -23,7 +23,7 @@ class Admin
         }
 
         // Nếu không phải admin
-        if ($user->role_id !== 11 && $user->role_id !== 12) {
+        if ($user->role_id !== 1 && $user->role_id !== 12) {
             return response()->json([
                 'message' => 'Unauthorized — you are not admin.'
             ], 403);
