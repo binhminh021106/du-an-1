@@ -33,11 +33,7 @@ class User extends Authenticatable
         'status',
         'email_verified_at',
         'remember_token',
-<<<<<<< Updated upstream
-        'google_id',
-=======
         'google_id'
->>>>>>> Stashed changes
     ];
 
     /**

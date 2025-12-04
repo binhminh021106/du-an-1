@@ -1,14 +1,15 @@
 <script setup>
+
 import { ref, reactive } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-// import Swal from 'sweetalert2';
-// import apiService from '../../apiService'; 
-// (Giữ nguyên logic của bạn)
+import Swal from 'sweetalert2';
+import apiService from '../../apiService';
 
 const route = useRoute();
 const router = useRouter();
 
 // Lấy token và email từ URL
+
 const token = route.query.token;
 const email = route.query.email;
 
@@ -19,7 +20,6 @@ const form = reactive({
 
 const error = ref('');
 const isLoading = ref(false);
-
 // Trạng thái ẩn hiện password
 const showPass = ref(false);
 const showConfirmPass = ref(false);
@@ -29,27 +29,21 @@ const goHome = () => {
 };
 
 const handleReset = async () => {
+
     error.value = '';
 
     if (!form.password || form.password.length < 8) {
         error.value = 'Mật khẩu mới phải có ít nhất 8 ký tự';
         return;
     }
+
     if (form.password !== form.password_confirmation) {
         error.value = 'Mật khẩu nhập lại không khớp';
         return;
     }
 
     isLoading.value = true;
-    
-    // Giả lập delay để test UI
-    setTimeout(() => {
-        isLoading.value = false;
-        alert('Đổi mật khẩu thành công (Test Mode)');
-        router.push({ name: 'login' });
-    }, 1500);
 
-    /* Logic thực tế của bạn
     try {
         const payload = {
             token: token,
@@ -76,8 +70,9 @@ const handleReset = async () => {
         let msg = 'Token không hợp lệ hoặc đã hết hạn.';
 
         if (response?.data?.errors) {
-             const firstKey = Object.keys(response.data.errors)[0];
-             msg = response.data.errors[firstKey][0];
+            // Lấy lỗi đầu tiên tìm thấy
+            const firstKey = Object.keys(response.data.errors)[0];
+            msg = response.data.errors[firstKey][0];
         } else if (response?.data?.message) {
             msg = response.data.message;
         }
@@ -89,17 +84,18 @@ const handleReset = async () => {
             text: msg,
             confirmButtonColor: '#009981',
         });
+
     } finally {
         isLoading.value = false;
     }
-    */
 };
+
 </script>
 
 <template>
     <div class="login-page-wrapper">
         <div class="login-container">
-            
+
             <button class="close-btn" @click="goHome" title="Về trang chủ">
                 <i class="fa-solid fa-xmark"></i>
             </button>
@@ -122,7 +118,7 @@ const handleReset = async () => {
                 <h2>Đặt lại mật khẩu</h2>
 
                 <form class="login-form" @submit.prevent="handleReset">
-                    
+
                     <!-- Hiển thị email (Readonly) -->
                     <div class="form-group">
                         <label>Email</label>
@@ -133,11 +129,8 @@ const handleReset = async () => {
                     <div class="form-group">
                         <label for="password">Mật khẩu mới</label>
                         <div class="password-wrapper">
-                            <input 
-                                :type="showPass ? 'text' : 'password'" 
-                                v-model="form.password"
-                                placeholder="Mật khẩu mới (min 8 ký tự)"
-                            >
+                            <input :type="showPass ? 'text' : 'password'" v-model="form.password"
+                                placeholder="Mật khẩu mới (min 8 ký tự)">
                             <span @click="showPass = !showPass" class="toggle-password">
                                 <i :class="showPass ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'"></i>
                             </span>
@@ -148,16 +141,13 @@ const handleReset = async () => {
                     <div class="form-group">
                         <label for="password_confirmation">Xác nhận mật khẩu</label>
                         <div class="password-wrapper">
-                            <input 
-                                :type="showConfirmPass ? 'text' : 'password'" 
-                                v-model="form.password_confirmation"
-                                placeholder="Nhập lại mật khẩu mới"
-                            >
+                            <input :type="showConfirmPass ? 'text' : 'password'" v-model="form.password_confirmation"
+                                placeholder="Nhập lại mật khẩu mới">
                             <span @click="showConfirmPass = !showConfirmPass" class="toggle-password">
                                 <i :class="showConfirmPass ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'"></i>
                             </span>
                         </div>
-                         <div v-if="error" class="invalid-feedback d-block">{{ error }}</div>
+                        <div v-if="error" class="invalid-feedback d-block">{{ error }}</div>
                     </div>
 
                     <button type="submit" class="btn-login" :disabled="isLoading">
@@ -201,13 +191,14 @@ const handleReset = async () => {
     display: grid;
     grid-template-columns: 1fr 1fr;
     max-width: 1000px;
-    width: 90%; /* FIX: 90% để tránh dính lề trên mobile */
+    width: 90%;
+    /* FIX: 90% để tránh dính lề trên mobile */
     background-color: #fff;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
     border-radius: 12px;
     overflow: hidden;
     margin: 20px;
-    position: relative; 
+    position: relative;
 }
 
 .close-btn {
@@ -219,7 +210,8 @@ const handleReset = async () => {
     font-size: 1.5rem;
     color: #999;
     cursor: pointer;
-    z-index: 100; /* FIX: Tăng z-index */
+    z-index: 100;
+    /* FIX: Tăng z-index */
     transition: all 0.2s ease;
     width: 32px;
     height: 32px;
@@ -276,7 +268,7 @@ const handleReset = async () => {
 }
 
 .benefits-list li::before {
-    content: '🔐'; 
+    content: '🔐';
     position: absolute;
     left: 0;
     top: -2px;
@@ -312,11 +304,13 @@ const handleReset = async () => {
 .login-form input {
     width: 100%;
     padding: 12px 15px;
-    padding-right: 40px; /* Thêm padding phải để icon mắt không đè chữ */
+    padding-right: 40px;
+    /* Thêm padding phải để icon mắt không đè chữ */
     border: 1px solid #ccc;
     border-radius: 8px;
     font-size: 1rem;
-    box-sizing: border-box; /* FIX: Quan trọng */
+    box-sizing: border-box;
+    /* FIX: Quan trọng */
     outline: none;
     transition: border-color 0.3s;
 }
@@ -346,7 +340,8 @@ const handleReset = async () => {
     color: #888;
     z-index: 5;
     background: transparent;
-    padding: 5px; /* Tăng diện tích bấm */
+    padding: 5px;
+    /* Tăng diện tích bấm */
 }
 
 .invalid-feedback {
@@ -373,6 +368,7 @@ const handleReset = async () => {
     background-color: #007a67;
     transform: translateY(-1px);
 }
+
 .btn-login:disabled {
     background-color: #ccc;
     cursor: not-allowed;
@@ -398,8 +394,13 @@ const handleReset = async () => {
     background-color: var(--border-color);
 }
 
-.separator::before { left: 0; }
-.separator::after { right: 0; }
+.separator::before {
+    left: 0;
+}
+
+.separator::after {
+    right: 0;
+}
 
 .register-link {
     text-align: center;
@@ -418,16 +419,18 @@ const handleReset = async () => {
 }
 
 @media (max-width: 768px) {
-    .login-container { 
-        grid-template-columns: 1fr; 
+    .login-container {
+        grid-template-columns: 1fr;
         max-width: 400px;
     }
-    .promo-section { 
-        display: none; 
+
+    .promo-section {
+        display: none;
     }
-    .login-section { 
-        border-left: none; 
-        padding: 40px 20px; 
+
+    .login-section {
+        border-left: none;
+        padding: 40px 20px;
     }
 }
 </style>
