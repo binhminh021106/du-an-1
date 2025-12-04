@@ -155,13 +155,14 @@ class AdminProductController extends Controller
                         }
                     }
                 }
-                return [
+               return [
                     'id' => $variant->id,
                     'product_id' => $variant->product_id,
                     'price' => (float) $variant->price,
                     'original_price' => (float) $variant->original_price,
                     'stock' => (int) $variant->stock,
-                    'attributes' => $attributes, // Mảng key-value đơn giản
+                    'image' => $variant->image, // <--- THÊM DÒNG NÀY
+                    'attributes' => $attributes, 
                     'created_at' => $variant->created_at,
                     'updated_at' => $variant->updated_at,
                 ];
