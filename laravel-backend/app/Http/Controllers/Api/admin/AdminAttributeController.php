@@ -9,7 +9,7 @@ use App\Models\Attribute;
 class AdminAttributeController extends Controller
 {
     /**
-     * Lấy danh sách tất cả thuộc tính (Màu sắc, Kích thước...)
+     * Lấy danh sách tất cả thuộc tính (Màu sắc, Kích thước.....)
      */
     public function index()
     {
