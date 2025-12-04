@@ -2,6 +2,7 @@
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.1.0",
     "chart.js": "^4.5.1",
+    "sweetalert2": "^11.26.3",
     "vue3-apexcharts": "^1.10.0"
   }
 }

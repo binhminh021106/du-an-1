@@ -1,15 +1,26 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-// THAY THẾ: Import orders và hàm xử lý từ Store
-// Sửa đường dẫn import cho phù hợp với cấu trúc thư mục: ../store instead of ../../store
-import { orders, updateOrderStatus, saveOrders } from '../../store/orderStore.js'; 
+import { useStore } from 'vuex'; // [MỚI] Import Store để reload giỏ hàng
+import apiService from '../../apiService.js';
+import Swal from 'sweetalert2';
 
-// Giả định useRouter và useRoute cho code chạy độc lập
-const useRouterMock = () => ({
-  push: (path) => console.log('Navigating to:', path)
-});
-const router = useRouterMock();
+const router = useRouter();
+const store = useStore(); // [MỚI] Khởi tạo store
+
+// --- CẤU HÌNH ĐƯỜNG DẪN ẢNH ---
+const SERVER_URL = 'http://127.0.0.1:8000';
+
+const getImageUrl = (path) => {
+  if (!path) return 'https://placehold.co/70x70?text=No+Img';
+  if (path.startsWith('http')) return path;
+  const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  return `${SERVER_URL}/${cleanPath}`;
+};
+
+// [THAY ĐỔI] Biến orders lưu dữ liệu từ API
+const orders = ref([]);
+const isLoading = ref(false);
 
 // Biến điều khiển popup
 const showPopup = ref(false);
@@ -18,137 +29,198 @@ const isReviewing = ref(false);
 const reviewText = ref('');
 const reviewRating = ref(0);
 
-// --- TÍNH NĂNG: Biến cho Tìm kiếm và Phân trang ---
+// --- TÍNH NĂNG: Tìm kiếm và Phân trang ---
 const searchQuery = ref('');
 const currentPage = ref(1);
 const itemsPerPage = 5;
 
-// Dữ liệu đơn hàng hiện tại là từ orderStore (đã được import ở trên)
-
-// --- TÍNH NĂNG: Sắp xếp, Lọc, và Phân trang ---
-
-// 1. Sắp xếp đơn hàng (đã được sắp xếp trong loadOrders, nhưng vẫn nên dùng sorted cho các thao tác tiếp theo)
-const sortedOrders = computed(() => {
-    // orders.value đã được sắp xếp trong orderStore, chỉ cần trả về.
-    return orders.value;
-});
-
-// 2. Lọc đơn hàng theo tìm kiếm
-const filteredOrders = computed(() => {
-  const query = searchQuery.value.toLowerCase().trim();
-  if (!query) {
-    return sortedOrders.value;
+// --- HELPER: LẤY NHÃN BIẾN THỂ ---
+const getVariantLabel = (item) => {
+  if (item.variant_name && item.variant_name !== 'Mặc định') return item.variant_name;
+  
+  if (Array.isArray(item.attributes) && item.attributes.length > 0) {
+      if (typeof item.attributes[0] === 'object') {
+          return item.attributes.map(a => {
+              const attrName = a.name || a.attribute?.name || ''; 
+              const attrValue = a.value || '';
+              return attrName ? `${attrName}: ${attrValue}` : attrValue;
+          }).join(' - ').replace(/^: | :$/g, '');
+      }
+      return item.attributes.join(' - ');
   }
 
+  if (item.attributes && typeof item.attributes === 'object') {
+     return Object.values(item.attributes).join(' - ');
+  }
+  return null;
+};
+
+// --- Helper Map Trạng thái ---
+const mapStatusBackendToFrontend = (status) => {
+  const map = {
+    'pending': 'Đã đặt hàng',
+    'confirmed': 'Chờ chuyển phát',
+    'processing': 'Chờ chuyển phát',
+    'shipping': 'Đang giao hàng',
+    'shipped': 'Đang giao hàng',
+    'delivered': 'Đã giao thành công',
+    'completed': 'Hoàn thành, có thể đánh giá',
+    'cancelled': 'Đã hủy',
+    'returned': 'Đã trả hàng',
+    'returning': 'Đang trả hàng'
+  };
+  return map[status] || 'Đã đặt hàng';
+};
+
+// --- FETCH ORDERS ---
+const fetchOrders = async () => {
+  isLoading.value = true;
+  try {
+    const response = await apiService.get('/orders');
+    const rawData = response.data.data || response.data;
+
+    orders.value = rawData.map(order => {
+      const statusVN = mapStatusBackendToFrontend(order.status);
+      
+      return {
+        id: String(order.id),
+        date: order.created_at,
+        status: statusVN,
+        statusRaw: order.status,
+        
+        canCancel: order.status === 'pending',
+        canRepurchase: true, // Luôn cho phép mua lại
+        canReturn: order.status === 'delivered',
+        canReview: order.status === 'delivered' || order.status === 'completed',
+        isReviewed: false,
+
+        items: order.items ? order.items.map(item => {
+          const variant = item.variant || {};
+          const product = variant.product || {};
+          let displayName = product.name || item.product_name || 'Sản phẩm';
+          const rawAttributes = variant.attribute_values || variant.attributes;
+          let simpleVariantLabel = null;
+          if (variant.name && variant.name !== 'Mặc định' && variant.name !== displayName) {
+             simpleVariantLabel = variant.name;
+          }
+          const rawImagePath = variant.image || product.thumbnail_url;
+
+          return {
+            id: item.id,
+            name: displayName,
+            variant_name: simpleVariantLabel, 
+            attributes: rawAttributes, 
+            image: getImageUrl(rawImagePath),
+            qty: item.quantity,
+            price: item.price,
+            quantity: item.quantity
+          };
+        }) : [],
+
+        customer: {
+          name: order.customer_name,
+          phone: order.customer_phone,
+          address: order.shipping_address
+        },
+
+        payment: {
+          subtotal: order.subtotal_amount,
+          shippingFee: order.shipping_fee,
+          total: order.total_amount,
+          method: order.payment_method
+        },
+        total: order.total_amount 
+      };
+    });
+
+    orders.value.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  } catch (error) {
+    console.error("Lỗi tải đơn hàng:", error);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchOrders();
+});
+
+// --- LOGIC UI ---
+const sortedOrders = computed(() => orders.value);
+
+const filteredOrders = computed(() => {
+  const query = searchQuery.value.toLowerCase().trim();
+  if (!query) return sortedOrders.value;
+
   return sortedOrders.value.filter(order => {
-    // Tìm theo mã đơn hàng
-    const orderIdMatch = order.id.toLowerCase().includes(query);
-    
-    // Tìm theo tên sản phẩm
+    const orderIdMatch = String(order.id).toLowerCase().includes(query);
     const itemMatch = order.items.some(item => 
-      item.name.toLowerCase().includes(query)
+      String(item.name).toLowerCase().includes(query)
     );
-    
     return orderIdMatch || itemMatch;
   });
 });
 
-// 3. Tính tổng số trang
-const totalPages = computed(() => {
-  return Math.ceil(filteredOrders.value.length / itemsPerPage);
-});
-
-// 4. Lấy đơn hàng cho trang hiện tại
+const totalPages = computed(() => Math.ceil(filteredOrders.value.length / itemsPerPage));
 const paginatedOrders = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage;
   const end = start + itemsPerPage;
   return filteredOrders.value.slice(start, end);
 });
 
-// --- TÍNH NĂNG: Hàm điều khiển phân trang ---
-const setPage = (page) => {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page;
-  }
-};
+const setPage = (page) => { if (page >= 1 && page <= totalPages.value) currentPage.value = page; };
+const prevPage = () => { if (currentPage.value > 1) currentPage.value--; };
+const nextPage = () => { if (currentPage.value < totalPages.value) currentPage.value++; };
 
-const prevPage = () => {
-  if (currentPage.value > 1) {
-    currentPage.value--;
-  }
-};
+watch(searchQuery, () => { currentPage.value = 1; });
 
-const nextPage = () => {
-  if (currentPage.value < totalPages.value) {
-    currentPage.value++;
-  }
-};
-
-// --- Watcher để reset về trang 1 khi tìm kiếm ---
-watch(searchQuery, () => {
-  currentPage.value = 1;
-});
-
-// --- Logic Tính Toán cho Popup (Dựa trên selectedOrder) ---
-const isCancellable = computed(() => selectedOrder.value?.canCancel && selectedOrder.value?.status === 'Đã đặt hàng'); // Đơn hàng mới đặt có thể hủy
+// Logic Popup
+const isCancellable = computed(() => selectedOrder.value?.canCancel); 
 const isRepurchasable = computed(() => selectedOrder.value?.canRepurchase);
-const isReturnable = computed(() => selectedOrder.value?.canReturn && (selectedOrder.value?.status === 'Đã giao thành công' || selectedOrder.value?.status === 'Hoàn thành, có thể đánh giá'));
-const isReviewAvailable = computed(() => selectedOrder.value?.canReview && !selectedOrder.value?.isReviewed && (selectedOrder.value?.status === 'Đã giao thành công' || selectedOrder.value?.status === 'Hoàn thành, có thể đánh giá'));
+const isReturnable = computed(() => selectedOrder.value?.canReturn);
+const isReviewAvailable = computed(() => selectedOrder.value?.canReview && !selectedOrder.value?.isReviewed);
 
-// --- Logic cho Thanh Tiến Trình ---
 const orderSteps = [
-  { key: 'placed', label: 'Đã đặt hàng', statusMatch: ['Đã đặt hàng', 'Chờ chuyển phát', 'Đang giao hàng', 'Đã giao thành công', 'Hoàn thành, có thể đánh giá'] },
-  { key: 'shipping_prep', label: 'Chờ chuyển phát', statusMatch: ['Chờ chuyển phát', 'Đang giao hàng', 'Đã giao thành công', 'Hoàn thành, có thể đánh giá'] },
-  { key: 'in_transit', label: 'Đang giao hàng', statusMatch: ['Đang giao hàng', 'Đã giao thành công', 'Hoàn thành, có thể đánh giá'] },
-  { key: 'delivered', label: 'Đã giao đơn hàng', statusMatch: ['Đã giao thành công', 'Hoàn thành, có thể đánh giá'] },
+  { key: 'placed', label: 'Đã đặt hàng', statusMatch: ['Đã đặt hàng', 'pending'] },
+  { key: 'shipping_prep', label: 'Chờ chuyển phát', statusMatch: ['Chờ chuyển phát', 'processing', 'confirmed'] },
+  { key: 'in_transit', label: 'Đang giao hàng', statusMatch: ['Đang giao hàng', 'shipping', 'shipped'] },
+  { key: 'delivered', label: 'Đã giao đơn hàng', statusMatch: ['Đã giao thành công', 'Hoàn thành, có thể đánh giá', 'delivered', 'completed'] },
 ];
 
 const getActiveStepIndex = computed(() => {
   if (!selectedOrder.value) return -1;
-  if (selectedOrder.value.status === 'Đã hủy') {
-    return -2;
-  }
+  if (selectedOrder.value.status === 'Đã hủy' || selectedOrder.value.statusRaw === 'cancelled') return -2;
   let activeIndex = -1;
   const currentStatus = selectedOrder.value.status;
   for (let i = orderSteps.length - 1; i >= 0; i--) {
-    // Sửa lại logic so khớp trạng thái: lấy trạng thái tương đương với step đang hiển thị
-    if (orderSteps[i].label === currentStatus || orderSteps[i].statusMatch.includes(currentStatus)) {
+    if (orderSteps[i].label === currentStatus || orderSteps[i].statusMatch.includes(currentStatus) || orderSteps[i].statusMatch.includes(selectedOrder.value.statusRaw)) {
         activeIndex = i;
         break;
     }
   }
-  
-  // Xử lý trường hợp đặc biệt: 'Đang giao hàng' tương đương với bước 2 (index 2)
   if (currentStatus === 'Đang giao hàng') return 2;
-  // Xử lý trường hợp đặc biệt: 'Đã đặt hàng' tương đương với bước 0 (index 0)
   if (currentStatus === 'Đã đặt hàng') return 0;
-  
-  // Trả về chỉ số cuối cùng
   return activeIndex;
 });
 
-
-// --- Hàm Định Dạng và Class ---
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+const formatDate = (isoDate) => {
+  if (!isoDate) return '';
+  const date = new Date(isoDate);
+  return date.toLocaleDateString('vi-VN');
 };
 
 const getStatusClass = (status) => {
-  // Sửa lỗi chính tả trạng thái: "dang giao hang"
-  return 'status-' + status.toLowerCase().replace(/ /g, '-').replace(/,/g, '').replace('đang-trung-chuyển', 'dang-giao-hang');
+  if (!status) return '';
+  const s = status.toLowerCase();
+  if (s.includes('hủy')) return 'status-da-huy';
+  if (s.includes('đặt hàng')) return 'status-da-dat-hang';
+  if (s.includes('giao hàng')) return 'status-dang-giao-hang';
+  if (s.includes('thành công') || s.includes('hoàn thành')) return 'status-da-giao-thanh-cong';
+  return 'status-default';
 };
 
-const formatDate = (isoDate) => {
-  if (!isoDate) return '';
-  const parts = isoDate.split('-'); // Dạng YYYY-MM-DD
-  if (parts.length === 3) {
-    return `${parts[2]}-${parts[1]}-${parts[0]}`; // Trả về DD-MM-YYYY
-  }
-  return isoDate;
-};
-
-
-// --- Logic Popup ---
 const openDetailPopup = (order, startReview = false) => {
   selectedOrder.value = order;
   isReviewing.value = startReview;
@@ -163,178 +235,211 @@ const closeDetailPopup = () => {
   isReviewing.value = false;
 };
 
-// --- CÁC HÀM XỬ LÝ HÀNH ĐỘNG (CẬP NHẬT STORE) ---
-const handleCancelList = (order) => {
-  if (confirm(`Bạn có chắc muốn hủy đơn hàng #${order.id} không?`)) {
-    alert(`Đã gửi yêu cầu hủy đơn hàng #${order.id}`);
-    updateOrderStatus(order.id, 'Đã hủy'); 
-    
-    // Cập nhật lại selectedOrder nếu đang mở popup
-    if (selectedOrder.value && selectedOrder.value.id === order.id) {
-        selectedOrder.value.status = 'Đã hủy';
-        selectedOrder.value.canCancel = false;
+// --- [THAY ĐỔI QUAN TRỌNG] HÀM MUA LẠI GỌI API THỰC TẾ ---
+const handleRepurchaseList = async (order) => {
+  try {
+    // 1. Hiển thị loading (tùy chọn)
+    Swal.fire({ title: 'Đang xử lý...', didOpen: () => Swal.showLoading() });
+
+    // 2. Gọi API Repurchase bên backend
+    // Đảm bảo route trong api.php là: Route::post('/orders/{id}/repurchase', [OrderController::class, 'repurchase']);
+    await apiService.post(`/orders/${order.id}/repurchase`);
+
+    // 3. Reload lại Store Cart để cập nhật số lượng trên header/giỏ hàng
+    await store.dispatch('fetchCart'); 
+
+    // 4. Thông báo thành công và điều hướng
+    Swal.fire({
+      title: 'Thành công!',
+      text: `Các sản phẩm từ đơn hàng #${order.id} đã được thêm vào giỏ!`,
+      icon: 'success',
+      showCancelButton: true,
+      confirmButtonText: 'Đến giỏ hàng ngay',
+      cancelButtonText: 'Tiếp tục xem',
+      confirmButtonColor: '#009981'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        router.push('/cart');
+      }
+    });
+
+  } catch (error) {
+    console.error("Lỗi mua lại:", error);
+    Swal.fire('Lỗi', 'Không thể thực hiện mua lại lúc này.', 'error');
+  }
+};
+
+const handleCancelList = async (order) => {
+  const result = await Swal.fire({
+    title: 'Xác nhận hủy?',
+    text: `Bạn có chắc muốn hủy đơn hàng #${order.id} không?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#3085d6',
+    confirmButtonText: 'Đồng ý hủy',
+    cancelButtonText: 'Không'
+  });
+
+  if (result.isConfirmed) {
+    try {
+      await apiService.delete(`/order/${order.id}`);
+      Swal.fire('Thành công!', `Đơn hàng #${order.id} đã được hủy.`, 'success');
+      await fetchOrders(); 
+      if (selectedOrder.value && String(selectedOrder.value.id) === String(order.id)) {
+        closeDetailPopup();
+      }
+    } catch (error) {
+      console.error("Lỗi hủy đơn:", error);
+      Swal.fire('Lỗi', 'Không thể hủy đơn hàng này.', 'error');
     }
   }
 };
-const handleRepurchaseList = (order) => {
-  alert(`Đã thêm các sản phẩm của đơn hàng #${order.id} vào giỏ hàng!`);
-  // Thực tế sẽ cần logic thêm item vào cartStore
-  // router.push('/cart');
-};
+
 const handleReturnList = (order) => {
-  if (confirm(`Bạn có chắc muốn yêu cầu hoàn hàng cho đơn hàng #${order.id} không?`)) {
-    alert(`Đã gửi yêu cầu hoàn hàng cho đơn hàng #${order.id}.`);
-    // Cập nhật cờ canReturn
-    const orderToUpdate = orders.value.find(o => o.id === order.id);
-    if (orderToUpdate) {
-      orderToUpdate.canReturn = false;
-      saveOrders(); // Lưu lại thay đổi cờ
-    }
-    if (selectedOrder.value && selectedOrder.value.id === order.id) {
-      selectedOrder.value.canReturn = false;
-    }
-  }
+  Swal.fire('Yêu cầu hoàn hàng', `Đã gửi yêu cầu hoàn hàng cho đơn hàng #${order.id}.`, 'info');
 };
+
 const handleStartReviewFromList = (order) => {
   openDetailPopup(order, true);
 };
 
+// Wrapper functions cho Popup
 const handleCancel = () => { handleCancelList(selectedOrder.value); };
-const handleRepurchase = () => { handleRepurchaseList(selectedOrder.value); };
+const handleRepurchase = () => { handleRepurchaseList(selectedOrder.value); }; // Dùng chung logic mới
 const handleStartReview = () => { isReviewing.value = true; };
 const handleReturn = () => { handleReturnList(selectedOrder.value); };
 
 const handleSubmitReview = () => {
   if (reviewRating.value === 0) {
-    alert('Vui lòng chọn số sao để đánh giá!');
+    Swal.fire('Chưa đánh giá', 'Vui lòng chọn số sao để đánh giá!', 'warning');
     return;
   }
-  alert(`Cảm ơn bạn đã đánh giá ${reviewRating.value} sao cho đơn hàng #${selectedOrder.value.id}!`);
-  
-  // Cập nhật cờ đánh giá trong Store
-  const orderToUpdate = orders.value.find(o => o.id === selectedOrder.value.id);
-  if (orderToUpdate) {
-    orderToUpdate.isReviewed = true;
-    saveOrders(); // Lưu lại thay đổi
-    selectedOrder.value.isReviewed = true;
-  }
+  Swal.fire('Cảm ơn!', `Cảm ơn bạn đã đánh giá ${reviewRating.value} sao cho đơn hàng #${selectedOrder.value.id}!`, 'success');
   isReviewing.value = false;
 };
-
 </script>
 
 <template>
   <div class="order-list-container">
     <h2 class="title">📋 Danh Sách Đơn Hàng</h2>
 
-    <div v-if="orders.length > 0">
-      
-      <div class="search-container">
-        <i class="fas fa-search search-icon"></i>
-        <input 
-          type="text" 
-          v-model="searchQuery" 
-          placeholder="Tìm theo mã đơn hàng hoặc tên sản phẩm..."
-          class="search-bar"
-        >
-      </div>
-
-      <div v-if="filteredOrders.length > 0">
-        <div class="order-cards">
-          <div v-for="order in paginatedOrders" :key="order.id" class="order-card">
-            
-            <div @click.stop="openDetailPopup(order)">
-              <div class="card-header">
-                <strong>Đơn hàng #{{ order.id }}</strong>
-              </div>
-              
-              <p class="card-status-line">
-                Trạng thái: 
-                <span :class="['status-badge', getStatusClass(order.status)]">
-                  {{ order.status }}
-                </span>
-              </p>
-              
-              <p>Ngày đặt: {{ formatDate(order.date) }}</p>
-
-              <div class="product-table">
-                <div class="product-header">
-                  <span class="col-name">Sản phẩm</span>
-                  <span class="col-qty">SL</span>
-                  <span class="col-price">Giá</span>
-                </div>
-                <div v-for="(product, index) in order.items" :key="index" class="product-row">
-                  <span class="col-name">{{ product.name }}</span>
-                  <span class="col-qty">x{{ product.qty || product.quantity }}</span>
-                  <span class="col-price">{{ formatCurrency(product.price) }}</span>
-                </div>
-              </div>
-              <p class="total-amount">Tổng cộng: <strong>{{ formatCurrency(order.total) }}</strong></p>
-            </div>
-
-            <div class="card-action-buttons">
-              <button class="detail-btn" @click.stop="openDetailPopup(order)">
-                <i class="fas fa-eye"></i> Xem Chi Tiết
-              </button>
-              <button
-                v-if="order.canCancel && (order.status === 'Đã đặt hàng' || order.status === 'Đang giao hàng')"
-                class="action-btn-list danger-btn-list"
-                @click.stop="handleCancelList(order)">
-                <i class="fas fa-times-circle"></i> Hủy Đơn
-              </button>
-              <button
-                v-if="order.canRepurchase"
-                class="action-btn-list primary-btn-list"
-                @click.stop="handleRepurchaseList(order)">
-                <i class="fas fa-redo-alt"></i> Mua Lại
-              </button>
-              <button
-                v-if="order.canReturn && (order.status === 'Đã giao thành công' || order.status === 'Hoàn thành, có thể đánh giá')"
-                class="action-btn-list secondary-btn-list"
-                @click.stop="handleReturnList(order)">
-                <i class="fas fa-undo-alt"></i> Hoàn Hàng
-              </button>
-              <button
-                v-if="order.canReview && !order.isReviewed && (order.status === 'Đã giao thành công' || order.status === 'Hoàn thành, có thể đánh giá')"
-                class="action-btn-list success-btn-list"
-                @click.stop="handleStartReviewFromList(order)">
-                <i class="fas fa-star"></i> Đánh Giá
-              </button>
-            </div>
-            
-          </div>
-        </div>
-
-        <div class="pagination-container" v-if="totalPages > 1">
-          <button @click="prevPage" :disabled="currentPage === 1" class="page-btn">
-            &laquo; Trước
-          </button>
-          
-          <button 
-            v-for="page in totalPages" 
-            :key="page"
-            @click="setPage(page)"
-            :class="['page-btn', { 'active': currentPage === page }]"
-          >
-            {{ page }}
-          </button>
-
-          <button @click="nextPage" :disabled="currentPage === totalPages" class="page-btn">
-            Sau &raquo;
-          </button>
-        </div>
-
-      </div>
-      
-      <p v-else class="no-results">
-        Không tìm thấy đơn hàng nào khớp với tìm kiếm của bạn.
-      </p>
-
+    <div v-if="isLoading" class="loading-state">
+      <i class="fas fa-spinner fa-spin"></i> Đang tải dữ liệu...
     </div>
 
-    <p v-else class="no-orders">Bạn chưa có đơn hàng nào.</p>
+    <div v-else>
+      <div v-if="orders.length > 0">
+        
+        <div class="search-container">
+          <i class="fas fa-search search-icon"></i>
+          <input 
+            type="text" 
+            v-model="searchQuery" 
+            placeholder="Tìm theo mã đơn hàng hoặc tên sản phẩm..."
+            class="search-bar"
+          >
+        </div>
 
-    
+        <div v-if="filteredOrders.length > 0">
+          <div class="order-cards">
+            <div v-for="order in paginatedOrders" :key="order.id" class="order-card">
+              
+              <div @click.stop="openDetailPopup(order)">
+                <div class="card-header">
+                  <strong>Đơn hàng #{{ order.id }}</strong>
+                </div>
+                
+                <p class="card-status-line">
+                  Trạng thái: 
+                  <span :class="['status-badge', getStatusClass(order.status)]">
+                    {{ order.status }}
+                  </span>
+                </p>
+                
+                <p>Ngày đặt: {{ formatDate(order.date) }}</p>
+
+                <div class="product-table">
+                  <div class="product-header">
+                    <span class="col-name">Sản phẩm</span>
+                    <span class="col-qty">SL</span>
+                    <span class="col-price">Giá</span>
+                  </div>
+                  <div v-for="(product, index) in order.items" :key="index" class="product-row">
+                    <div class="col-name-wrapper col-name">
+                        <div class="product-name-text">{{ product.name }}</div>
+                        <div class="item-variants" v-if="getVariantLabel(product)">
+                            <span class="variant-badge">
+                                <i class="fa-solid fa-layer-group"></i> {{ getVariantLabel(product) }}
+                            </span>
+                        </div>
+                    </div>
+                    <span class="col-qty">x{{ product.qty || product.quantity }}</span>
+                    <span class="col-price">{{ formatCurrency(product.price) }}</span>
+                  </div>
+                </div>
+                <p class="total-amount">Tổng cộng: <strong>{{ formatCurrency(order.total) }}</strong></p>
+              </div>
+
+              <div class="card-action-buttons">
+                <button class="detail-btn" @click.stop="openDetailPopup(order)">
+                  <i class="fas fa-eye"></i> Xem Chi Tiết
+                </button>
+                <button
+                  v-if="order.canCancel && (order.status === 'Đã đặt hàng' || order.status === 'Đang giao hàng')"
+                  class="action-btn-list danger-btn-list"
+                  @click.stop="handleCancelList(order)">
+                  <i class="fas fa-times-circle"></i> Hủy Đơn
+                </button>
+                <button
+                  v-if="order.canRepurchase"
+                  class="action-btn-list primary-btn-list"
+                  @click.stop="handleRepurchaseList(order)">
+                  <i class="fas fa-redo-alt"></i> Mua Lại
+                </button>
+                <button
+                  v-if="order.canReturn && (order.status === 'Đã giao thành công' || order.status === 'Hoàn thành, có thể đánh giá')"
+                  class="action-btn-list secondary-btn-list"
+                  @click.stop="handleReturnList(order)">
+                  <i class="fas fa-undo-alt"></i> Hoàn Hàng
+                </button>
+                <button
+                  v-if="order.canReview && !order.isReviewed && (order.status === 'Đã giao thành công' || order.status === 'Hoàn thành, có thể đánh giá')"
+                  class="action-btn-list success-btn-list"
+                  @click.stop="handleStartReviewFromList(order)">
+                  <i class="fas fa-star"></i> Đánh Giá
+                </button>
+              </div>
+              
+            </div>
+          </div>
+
+          <div class="pagination-container" v-if="totalPages > 1">
+            <button @click="prevPage" :disabled="currentPage === 1" class="page-btn">
+              &laquo; Trước
+            </button>
+            <button 
+              v-for="page in totalPages" 
+              :key="page"
+              @click="setPage(page)"
+              :class="['page-btn', { 'active': currentPage === page }]"
+            >
+              {{ page }}
+            </button>
+            <button @click="nextPage" :disabled="currentPage === totalPages" class="page-btn">
+              Sau &raquo;
+            </button>
+          </div>
+
+        </div>
+        <p v-else class="no-results">
+          Không tìm thấy đơn hàng nào khớp với tìm kiếm của bạn.
+        </p>
+      </div>
+      <p v-else class="no-orders">Bạn chưa có đơn hàng nào.</p>
+    </div>
+
+    <!-- POPUP -->
     <div v-if="showPopup && selectedOrder" class="popup-overlay" @click.self="closeDetailPopup">
       <div class="popup-content">
         <button class="close-btn" @click="closeDetailPopup">×</button>
@@ -370,12 +475,10 @@ const handleSubmitReview = () => {
             <span>Mã đơn hàng:</span>
             <strong>#{{ selectedOrder.id }}</strong>
           </div>
-          
           <div class="info-row">
             <span>Ngày đặt:</span>
             <span>{{ formatDate(selectedOrder.date) }}</span>
           </div>
-
           <div class="info-row">
             <span>Trạng thái:</span>
             <strong class="status-text">{{ selectedOrder.status }}</strong>
@@ -393,12 +496,17 @@ const handleSubmitReview = () => {
           <h3><i class="fas fa-box-open section-icon"></i> Sản phẩm đã đặt</h3>
           <div class="product-list-popup">
             <div v-for="item in selectedOrder.items" :key="item.id" class="product-item">
-              <img :src="item.image" :alt="item.name" class="product-image">
+              <img :src="item.image" :alt="item.name" class="product-image" @error="$event.target.src = 'https://placehold.co/70x70?text=No+Img'">
               <div class="product-info">
                 <span class="product-name">{{ item.name }}</span>
-                <span class="product-qty">Số lượng: x{{ item.qty }}</span>
+                <div class="item-variants" v-if="getVariantLabel(item)">
+                    <span class="variant-badge">
+                        <i class="fa-solid fa-layer-group"></i> {{ getVariantLabel(item) }}
+                    </span>
+                </div>
+                <span class="product-qty">Số lượng: x{{ item.qty || item.quantity }}</span>
               </div>
-              <span class="product-price">{{ formatCurrency(item.price * item.qty) }}</span>
+              <span class="product-price">{{ formatCurrency(item.price * (item.qty || item.quantity)) }}</span>
             </div>
           </div>
         </div>
@@ -464,20 +572,18 @@ const handleSubmitReview = () => {
 </template>
 
 <style scoped>
-/* STYLES GIỮ NGUYÊN */
-/* Định nghĩa màu sắc (ĐÃ BỔ SUNG WARNING-COLOR) */
+/* STYLES GIỮ NGUYÊN (Thêm 1 class loading) */
 :root {
   --primary-color: #009981;
   --danger-color: #E74C3C;
   --secondary-color: #3498DB;
   --success-color: #28A745;
-  --warning-color: #F39C12; /* <-- DÒNG NÀY ĐÃ ĐƯỢC THÊM */
+  --warning-color: #F39C12;
   --text-color: #333;
   --light-gray: #f8f8f8;
   --border-color: #e0e0e0;
 }
 
-/* --- STYLES CHO DANH SÁCH --- */
 .order-list-container {
   padding: 20px;
   max-width: 900px;
@@ -492,6 +598,13 @@ const handleSubmitReview = () => {
   border-bottom: 3px solid var(--primary-color);
   padding-bottom: 10px;
   margin-bottom: 25px;
+}
+
+.loading-state {
+  text-align: center;
+  font-size: 1.2em;
+  color: #666;
+  padding: 40px;
 }
 
 .order-cards {
@@ -540,7 +653,7 @@ const handleSubmitReview = () => {
   border-radius: 5px;
   font-size: 0.85em;
   font-weight: bold;
-  color:#009981;
+  color:#fff;
 }
 
 .status-dang-giao-hang {
@@ -553,9 +666,11 @@ const handleSubmitReview = () => {
 .status-da-huy {
   background-color: #95A5A6;
 }
-/* ** FIX LỖI: Đây là CSS bị thiếu cho trạng thái "Đã đặt hàng" ** */
 .status-da-dat-hang {
-  background-color: var(--warning-color); /* <-- DÒNG NÀY ĐÃ ĐƯỢC THÊM */
+  background-color: var(--warning-color); 
+}
+.status-default {
+  background-color: #777;
 }
 
 .product-table {
@@ -580,6 +695,16 @@ const handleSubmitReview = () => {
   padding: 5px 0;
   border-bottom: 1px dashed #ddd;
   align-items: center;
+}
+
+/* [UPDATED] CSS cho cột tên sản phẩm trong danh sách */
+.col-name-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+.product-name-text {
+    /* Styles cho tên sản phẩm */
 }
 
 .col-name { text-align: left; }
@@ -1111,5 +1236,27 @@ const handleSubmitReview = () => {
   border-radius: 6px;
   font-weight: bold;
   font-size: 1.1em;
+}
+
+/* [UPDATED] STYLES CHO BADGE BIẾN THỂ */
+.variant-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #f3f4f6;
+    color: #4b5563;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    border: 1px solid #e5e7eb;
+    margin-top: 4px;
+    font-weight: 500;
+}
+.variant-badge i {
+    font-size: 0.9em;
+    color: var(--primary-color);
+}
+.item-variants {
+    margin-top: 2px;
 }
 </style>

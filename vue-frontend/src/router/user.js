@@ -77,6 +77,11 @@ const userLayoutRoutes = {
       name: "catchAll",
       component: () => import("../page/user/NotFound.vue"),
     },
+    {
+      path: "PostDetail/:id",
+      name: "PostDetailt",
+      component: () => import("../page/user/PostDetail.vue"),
+    },
   ],
 };
 

@@ -13,15 +13,16 @@ use App\Models\Coupon;
 
 class Order extends Model
 {
-    /** @use HasFactory<\Database\Factories\OrderFactory> */ // <-- Thêm dòng này
+    /** @use HasFactory<\Database\Factories\OrderFactory> */
     use HasFactory;
     use SoftDeletes;
 
     /**
-     * Tên bảng mà Model này quản lý.
-     * Quy chuẩn Laravel là 'orders' (số nhiều).
+     * Tên bảng trong Database.
+     * QUAN TRỌNG: Database của bạn tên bảng là 'order' (số ít), 
+     * nên bắt buộc phải khai báo dòng này. Không được sửa thành 'orders'.
      */
-    protected $table = 'order'; // <-- Sửa thành 'orders'
+    protected $table = 'order'; 
 
     /**
      * Các cột được phép gán hàng loạt (Mass Assignment).
@@ -44,23 +45,18 @@ class Order extends Model
 
     /**
      * Ép kiểu dữ liệu cho các cột.
-     * Rất quan trọng cho các cột tiền tệ.
+     * QUAN TRỌNG: Vì DB dùng 'bigint' cho tiền tệ, ta ép kiểu về 'integer' 
+     * để Laravel xử lý đúng số nguyên (VNĐ không dùng số thập phân).
      */
     protected $casts = [
-        'subtotal_amount' => 'decimal:2',
-        'shipping_fee' => 'decimal:2',
-        'discount_amount' => 'decimal:2',
-        'total_amount' => 'decimal:2',
-        'user_id' => 'integer',
-        'coupon_id' => 'integer',
+        'subtotal_amount' => 'integer',
+        'shipping_fee'    => 'integer',
+        'discount_amount' => 'integer',
+        'total_amount'    => 'integer',
+        'user_id'         => 'integer',
+        'coupon_id'       => 'integer',
+        // 'created_at' và 'updated_at' tự động cast thành datetime
     ];
-
-    /**
-     * Ghi chú: Nếu bảng của bạn KHÔNG có 2 cột 'created_at' và 'updated_at',
-     * hãy thêm dòng này vào để tắt tính năng timestamps của Laravel:
-     */
-    // public $timestamps = false;
-
 
     // --- CÁC RELATIONSHIPS (RẤT QUAN TRỌNG) ---
 
@@ -77,13 +73,13 @@ class Order extends Model
      */
     public function coupon()
     {
-        // 'coupon_id' có thể là NULL, nên dùng 'optional'
+        // 'coupon_id' có thể là NULL
         return $this->belongsTo(Coupon::class, 'coupon_id', 'id');
     }
 
     /**
      * Lấy TẤT CẢ các chi tiết (sản phẩm) của đơn hàng này.
-     * Đây là quan hệ quan trọng nhất.
+     * Quan hệ 1-N (Một đơn hàng có nhiều sản phẩm).
      */
     public function orderDetails()
     {

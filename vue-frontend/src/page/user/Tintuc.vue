@@ -1,519 +1,897 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
-// Import apiService mà chúng ta đã cấu hình (hoặc import axios trực tiếp nếu muốn)
-import apiService from '../../apiService.js';
+import { ref, computed, onMounted, watch } from 'vue';
+import apiService from '../../apiService.js'; 
 
 // --- CONFIG ---
-const BACKEND_URL = 'http://127.0.0.1:8000'; // Đổi theo port thực tế của bạn
+const BACKEND_URL = 'http://127.0.0.1:8000'; 
+const ITEMS_PER_PAGE = 4; // Số bài viết mỗi trang
 
 // --- STATE ---
 const posts = ref([]);
 const isLoading = ref(true);
-const searchQuery = ref('');
+const searchQuery = ref(''); // State tìm kiếm theo tên bài viết
+const authorQuery = ref(''); // State tìm kiếm theo Tác giả
+const currentPage = ref(1);
 
-// --- COMPUTED ---
-// 1. Bài viết nổi bật (Lấy bài đầu tiên trong danh sách)
-const featuredPost = computed(() => {
-  return posts.value.length > 0 ? posts.value[0] : null;
-});
+// --- HELPER FUNCTIONS ---
 
-// 2. Danh sách tin tức mới nhất (Lấy từ bài thứ 2 trở đi)
-const latestPosts = computed(() => {
-  return posts.value.slice(1);
-});
+// Hàm Debounce: Chờ một khoảng thời gian (ms) trước khi gọi hàm
+let debounceTimer = null;
+const debounce = (func, delay) => {
+    return function(...args) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            func.apply(this, args);
+        }, delay);
+    };
+};
 
-// --- METHODS ---
 const getFullImage = (path) => {
-    if (!path) return 'https://placehold.co/600x400?text=No+Image';
+    if (!path) return 'https://placehold.co/800x450?text=No+Image';
     if (path.startsWith('http')) return path;
-    return `${BACKEND_URL}${path}`;
+    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    return `${BACKEND_URL}/${cleanPath}`;
 };
 
 const formatDate = (dateString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('vi-VN', { 
+    return new Date(dateString).toLocaleDateString('vi-VN', { 
         day: '2-digit', month: '2-digit', year: 'numeric' 
-    }).format(date);
+    });
 };
 
-const fetchPosts = async () => {
+// --- COMPUTED ---
+
+// Kiểm tra xem có đang tìm kiếm hay không (tên bài hoặc tác giả)
+const isSearching = computed(() => {
+    return !!searchQuery.value || !!authorQuery.value;
+});
+
+// 1. Bài viết nổi bật (Lấy bài đầu tiên)
+const featuredPost = computed(() => {
+    return posts.value.length > 0 ? posts.value[0] : null;
+});
+
+// 2. Danh sách tin tức (Lấy từ bài thứ 2 trở đi)
+const allLatestPosts = computed(() => {
+    return posts.value.length > 0 ? posts.value.slice(1) : [];
+});
+
+// 3. Tổng số trang
+const totalPages = computed(() => {
+    return Math.ceil(allLatestPosts.value.length / ITEMS_PER_PAGE);
+});
+
+// 4. Danh sách tin cũ ĐÃ PHÂN TRANG (Chỉ hiển thị bài của trang hiện tại)
+const paginatedPosts = computed(() => {
+    const start = (currentPage.value - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return allLatestPosts.value.slice(start, end);
+});
+
+
+// --- METHODS ---
+
+const fetchPosts = async (query = '', author = '') => {
     isLoading.value = true;
     try {
-        // --- SỬA Ở ĐÂY ---
-        // Cũ (Sai với ý bạn): const response = await apiService.get('/client/news');
+        let url = '/news';
+        const params = new URLSearchParams();
+
+        if (query) {
+            params.append('q', query);
+        }
+        if (author) {
+            params.append('author', author);
+        }
+
+        if (params.toString()) {
+            url += `?${params.toString()}`;
+        }
+
+        const response = await apiService.get(url);
+        const data = response.data.data ? response.data.data : response.data;
         
-        // Mới (Đúng ý bạn): Gọi thẳng vào /news
-        const response = await apiService.get('/news'); 
-        
-        // --- XỬ LÝ DỮ LIỆU ---
-        // Tùy vào cách NewController trả về (có bọc 'data' hay không)
-        // Nếu controller trả về: return response()->json($news); -> Thì lấy response.data
-        // Nếu controller trả về: return response()->json(['data' => $news]); -> Thì lấy response.data.data
-        
-        const allPosts = response.data; // Hoặc response.data.data (hãy console.log để xem)
-        
-        posts.value = Array.isArray(allPosts) ? allPosts : [];
-            
+        posts.value = Array.isArray(data) ? data : [];
+        currentPage.value = 1;
+
     } catch (error) {
         console.error("Lỗi tải bài viết:", error);
+        posts.value = [];
     } finally {
         isLoading.value = false;
+        
+        // FIX CUỘN TRANG (Cuộn lên đầu trang sau khi tìm kiếm/load data)
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 };
 
-const handleSearch = () => {
-    // Logic tìm kiếm (có thể gọi API search hoặc filter local)
-    console.log("Tìm kiếm:", searchQuery.value);
-    // Demo filter local đơn giản:
-    // posts.value = posts.value.filter(p => p.title.includes(searchQuery.value));
+const triggerSearch = () => {
+    const finalQuery = searchQuery.value || ''; 
+    const finalAuthor = authorQuery.value || ''; 
+    fetchPosts(finalQuery, finalAuthor);
 };
 
-// --- LIFECYCLE ---
+const searchByAuthor = (authorName) => {
+    searchQuery.value = ''; // Xóa tìm kiếm theo tên bài viết
+    authorQuery.value = authorName; // Đặt tên tác giả
+    triggerSearch(); // Bỏ qua watcher, gọi trực tiếp để phản hồi ngay lập tức
+};
+
+const handleSearch = () => {
+    authorQuery.value = ''; // Nếu click nút search, ưu tiên tìm kiếm theo tên bài viết
+    triggerSearch();
+};
+
+
+const changePage = (page) => {
+    if (page >= 1 && page <= totalPages.value) {
+        currentPage.value = page;
+        const listSection = document.getElementById('latest-news-section');
+        if (listSection) {
+            listSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+};
+
+// --- LIFECYCLE & WATCHER ---
 onMounted(() => {
-    fetchPosts();
+    // Gọi triggerSearch để tải bài viết khi trang được mount (lần đầu)
+    triggerSearch();
+});
+
+// Watcher 1: Theo dõi thay đổi của searchQuery (Tên bài viết) và dùng Debounce
+watch(searchQuery, debounce((newQuery) => {
+    if (newQuery !== null) {
+        authorQuery.value = ''; // Hủy lọc theo tác giả nếu người dùng gõ tìm kiếm mới
+        triggerSearch();
+    }
+}, 400)); 
+
+// Watcher cho AuthorQuery: Khi bấm nút X reset filter
+watch(authorQuery, (newAuthor) => {
+    if (newAuthor === '') {
+        // Nếu authorQuery bị reset (Xóa bộ lọc), gọi lại tìm kiếm/load mặc định
+        triggerSearch();
+    } 
 });
 </script>
 
 <template>
   <section class="blog-page">
-    <header class="blog-hero">
-      <div class="blog-hero-inner">
-        <p class="blog-pre-title">THÔNG TIN & KIẾN THỨC CÔNG NGHỆ</p>
-        <h1>Blog Tin tức</h1>
-        <p class="blog-subtitle">
-          Cập nhật những tin tức, đánh giá sản phẩm, và mẹo vặt công nghệ mới nhất từ đội ngũ chuyên gia của chúng tôi.
+    
+    <!-- HERO HEADER -->
+    <header class="page-hero">
+      <div class="hero-inner">
+        <p class="hero-pre-title">THÔNG TIN & KIẾN THỨC</p>
+        <!-- Tiêu đề phản ánh trạng thái tìm kiếm -->
+        <h1 v-if="isSearching">Kết quả tìm kiếm</h1>
+        <h1 v-else>Blog Công Nghệ</h1>
+        <p class="hero-subtitle">
+          Cập nhật xu hướng công nghệ mới nhất, đánh giá sản phẩm và mẹo hay từ đội ngũ chuyên gia.
         </p>
       </div>
     </header>
 
-    <main class="blog-container">
+    <main class="page-container">
         
-      <div v-if="isLoading" class="text-center py-5">
-         <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
-         </div>
-         <p class="mt-2 text-muted">Đang tải tin tức...</p>
+      <!-- LOADING STATE (Chỉ hiển thị khi không có bài viết nào được load) -->
+      <div v-if="isLoading && posts.length === 0" class="text-center py-5 loading-box">
+           <div class="spinner-border text-primary" role="status">
+             <span class="visually-hidden">Loading...</span>
+           </div>
       </div>
 
-      <div v-else class="blog-grid">
+      <!-- MAIN LAYOUT -->
+      <div v-else class="page-layout">
         
-        <section class="posts-content">
-          
-          <article v-if="featuredPost" class="featured-post">
-            <div class="featured-image" 
-                 :style="{ backgroundImage: `url(${getFullImage(featuredPost.image_url)})` }">
-            </div>
-            <div class="featured-body">
-              <span class="category-tag">MỚI NHẤT</span>
-              <h2>
-                  <router-link :to="`/blog/${featuredPost.slug}`" class="text-decoration-none text-reset">
-                      {{ featuredPost.title }}
-                  </router-link>
-              </h2>
-              <p class="excerpt">
-                {{ featuredPost.excerpt || 'Đang cập nhật mô tả...' }}
-              </p>
-              <div class="post-meta">
-                <span><span class="meta-icon">📅</span> {{ formatDate(featuredPost.created_at) }}</span>
-                <span><span class="meta-icon">✍️</span> {{ featuredPost.author?.name || 'Admin' }}</span>
-              </div>
-              <router-link :to="`/blog/${featuredPost.slug}`" class="read-more-btn">
-                  Đọc tiếp <span class="arrow">→</span>
-              </router-link>
-            </div>
-          </article>
+        <!-- OVERLAY LOADING KHI ĐANG TÌM KIẾM/REFRESH -->
+        <div v-if="isLoading && posts.length > 0" class="content-overlay">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="text-primary mt-2">Đang tải kết quả...</p>
+        </div>
 
-          <h2 class="section-title">Tin tức mới nhất</h2>
+
+        <!-- LEFT COLUMN: CONTENT -->
+        <section class="content-column" :class="{ 'content-loading': isLoading && posts.length > 0 }">
           
-          <div v-if="latestPosts.length > 0" class="latest-posts-grid">
-            
-            <article v-for="post in latestPosts" :key="post.id" class="post-card">
-              <div class="post-image-container" 
-                   :style="{ backgroundImage: `url(${getFullImage(post.image_url)})` }">
-              </div>
-              <div class="post-card-body">
-                <span class="category-tag">TIN TỨC</span>
-                <h3>
-                    <router-link :to="`/blog/${post.slug}`" class="text-decoration-none text-reset">
-                        {{ post.title }}
+          <!-- CASE 1: KHÔNG CÓ BÀI VIẾT NÀO -->
+          <div v-if="posts.length === 0" class="empty-state card-style">
+              <i class="bi bi-newspaper display-4 text-muted mb-3"></i>
+              <!-- Thông báo khi tìm kiếm không có kết quả -->
+              <h3 v-if="searchQuery">Không tìm thấy kết quả cho "{{ searchQuery }}"</h3>
+              <h3 v-else-if="authorQuery">Không tìm thấy bài viết của "{{ authorQuery }}"</h3>
+              <h3 v-else>Chưa có tin tức nào</h3>
+              <p class="text-muted">Vui lòng thử lại với từ khóa khác hoặc quay lại sau.</p>
+          </div>
+
+          <!-- CASE 2: CÓ BÀI VIẾT -->
+          <template v-else>
+              <!-- Tiêu đề rõ ràng cho Featured Post -->
+              <h3 class="featured-heading">
+                <i class="bi bi-bullseye me-2 icon-color"></i>
+                <!-- VĂN BẢN QUAN TRỌNG: Xác nhận đang hiển thị cái gì -->
+                {{ isSearching ? 'Bài viết liên quan nhất' : 'Tin tức nổi bật' }}
+              </h3>
+
+              <!-- Featured Post (Bài viết đầu tiên sau khi lọc/load) -->
+              <article v-if="featuredPost" class="featured-post card-style">
+                <div class="featured-image-wrap">
+                    <router-link :to="`/PostDetail/${featuredPost.id}`" class="full-link">
+                        <div class="featured-image" 
+                             :style="{ backgroundImage: `url(${getFullImage(featuredPost.image_url)})` }">
+                        </div>
                     </router-link>
-                </h3>
-                <p class="excerpt-small">
-                    {{ post.excerpt ? post.excerpt.substring(0, 100) + '...' : '' }}
-                </p>
-                <router-link :to="`/blog/${post.slug}`" class="read-more-link">
-                    Xem chi tiết
-                </router-link>
-              </div>
-            </article>
+                </div>
+                <div class="featured-body">
+                  <div class="d-flex align-items-center mb-3">
+                      <!-- Badge phản ánh trạng thái tìm kiếm -->
+                      <span class="badge-custom me-2" v-if="isSearching">KẾT QUẢ ĐẦU TIÊN</span>
+                      <span class="badge-custom me-2" v-else>MỚI NHẤT</span>
+                      <span class="date-meta"><i class="bi bi-calendar3 icon-color"></i> {{ formatDate(featuredPost.created_at) }}</span>
+                  </div>
+                  
+                  <h2 class="featured-title">
+                      <router-link :to="`/PostDetail/${featuredPost.id}`" class="text-reset">
+                          {{ featuredPost.title }}
+                      </router-link>
+                  </h2>
+                  <p class="excerpt">
+                      {{ featuredPost.excerpt || featuredPost.content?.substring(0, 180) + '...' }}
+                  </p>
+                  
+                  <div class="post-footer">
+                      <!-- Link tìm kiếm theo Tác giả -->
+                    <span class="author">
+                        <i class="bi bi-person-fill icon-color"></i> 
+                        <a href="#" @click.prevent="searchByAuthor(featuredPost.author_name || 'Admin')" class="author-link">
+                            {{ featuredPost.author_name || 'Admin' }}
+                        </a>
+                    </span>
+                    <router-link :to="`/PostDetail/${featuredPost.id}`" class="read-more-btn">
+                        Đọc tiếp <i class="bi bi-arrow-right ms-1"></i>
+                    </router-link>
+                  </div>
+                </div>
+              </article>
 
-          </div>
-          <div v-else class="text-center py-4 text-muted">
-              Hiện chưa có thêm tin tức nào.
-          </div>
-          
+              <!-- List Posts Grid (CÓ PHÂN TRANG) -->
+              <div v-if="allLatestPosts.length > 0" class="latest-section" id="latest-news-section">
+                  <!-- Tiêu đề mục phản ánh trạng thái tìm kiếm -->
+                  <h3 class="section-heading">
+                      <i class="bi bi-grid-fill me-2"></i>
+                      <!-- VĂN BẢN QUAN TRỌNG: Xác nhận đang hiển thị cái gì -->
+                      {{ isSearching ? 'Các kết quả khác' : 'Tin cũ hơn' }}
+                  </h3>
+                  
+                  <div class="latest-posts-grid">
+                    <article v-for="post in paginatedPosts" :key="post.id" class="post-card card-style">
+                      <div class="card-img-top">
+                          <router-link :to="`/PostDetail/${post.id}`" class="full-link">
+                              <div class="img-bg" :style="{ backgroundImage: `url(${getFullImage(post.image_url)})` }"></div>
+                          </router-link>
+                      </div>
+                      <div class="card-body">
+                        <div class="card-meta">
+                            <span class="date"><i class="bi bi-calendar-event icon-color"></i> {{ formatDate(post.created_at) }}</span>
+                        </div>
+                        <h4 class="card-title">
+                            <router-link :to="`/PostDetail/${post.id}`" class="text-reset">
+                                {{ post.title }}
+                            </router-link>
+                        </h4>
+                        <p class="card-excerpt">
+                            {{ post.excerpt ? post.excerpt.substring(0, 90) + '...' : '' }}
+                        </p>
+                        <div class="card-footer-custom">
+                            <router-link :to="`/PostDetail/${post.id}`" class="card-link">
+                                Xem chi tiết <i class="bi bi-chevron-right small-icon"></i>
+                            </router-link>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+
+                  <!-- UI PHÂN TRANG -->
+                  <div v-if="totalPages > 1" class="pagination-wrapper">
+                      <button 
+                        class="page-btn prev" 
+                        :disabled="currentPage === 1"
+                        @click="changePage(currentPage - 1)"
+                      >
+                        <i class="bi bi-chevron-left"></i>
+                      </button>
+
+                      <div class="page-numbers">
+                        <button 
+                            v-for="page in totalPages" 
+                            :key="page"
+                            class="page-btn" 
+                            :class="{ active: currentPage === page }"
+                            @click="changePage(page)"
+                        >
+                            {{ page }}
+                        </button>
+                      </div>
+
+                      <button 
+                        class="page-btn next" 
+                        :disabled="currentPage === totalPages"
+                        @click="changePage(currentPage + 1)"
+                      >
+                        <i class="bi bi-chevron-right"></i>
+                      </button>
+                  </div>
+              </div>
+          </template>
+
         </section>
         
-        <aside class="blog-sidebar">
+        <!-- RIGHT COLUMN: SIDEBAR -->
+        <aside class="sidebar-column">
           
           <div class="sidebar-widget search-widget">
-            <h4><span class="sidebar-icon">🔍</span> Tìm kiếm</h4>
-            <input type="text" 
-                   v-model="searchQuery" 
-                   @keyup.enter="handleSearch"
-                   placeholder="Nhập từ khóa..." 
-                   class="search-input">
-            <button class="search-btn" @click="handleSearch">Tìm</button>
+            <h4><i class="bi bi-search me-2"></i> Tìm kiếm</h4>
+            <div class="search-box">
+                <input type="text" v-model="searchQuery" placeholder="Nhập từ khóa...">
+                <button @click="handleSearch"><i class="bi bi-search"></i></button>
+            </div>
+            <!-- HIỂN THỊ TRẠNG THÁI LỌC THEO TÁC GIẢ -->
+            <div v-if="authorQuery" class="alert alert-info mt-3 py-2 px-3 d-flex justify-content-between align-items-center small">
+                <span>Đang lọc theo: <strong>{{ authorQuery }}</strong></span>
+                <!-- Bấm nút X để reset lọc theo tác giả -->
+                <button @click="authorQuery = ''" class="btn-close ms-2" aria-label="Close"></button>
+            </div>
           </div>
           
           <div class="sidebar-widget category-widget">
-            <h4><span class="sidebar-icon">🏷️</span> Danh mục</h4>
+            <h4><i class="bi bi-tags-fill me-2"></i> Danh mục</h4>
             <ul>
-              <li><a href="#">Đánh giá sản phẩm</a></li>
-              <li><a href="#">Tin tức công nghệ</a></li>
-              <li><a href="#">Mẹo & Thủ thuật</a></li>
-              <li><a href="#">Khuyến mãi</a></li>
+              <li><a href="#"><i class="bi bi-caret-right-fill me-1 bullet-icon"></i> Đánh giá sản phẩm</a></li>
+              <li><a href="#"><i class="bi bi-caret-right-fill me-1 bullet-icon"></i> Tin tức công nghệ</a></li>
+              <li><a href="#"><i class="bi bi-caret-right-fill me-1 bullet-icon"></i> Mẹo & Thủ thuật</a></li>
+              <li><a href="#"><i class="bi bi-caret-right-fill me-1 bullet-icon"></i> Khuyến mãi</a></li>
             </ul>
           </div>
 
           <div class="sidebar-widget popular-widget">
-            <h4><span class="sidebar-icon">🔥</span> Bài viết phổ biến</h4>
-             <div class="popular-post-item">
-                <p>Top laptop gaming đáng mua 2025</p>
-                <span class="post-meta-small">5,200 lượt xem</span>
+            <h4><i class="bi bi-star-fill me-2"></i> Phổ biến</h4>
+              <div class="popular-post-item">
+                <div class="pop-number">1</div>
+                <div>
+                    <p>Top laptop gaming đáng mua 2025</p>
+                    <span class="post-meta-small"><i class="bi bi-eye"></i> 5,200 view</span>
+                </div>
             </div>
-             <div class="popular-post-item">
-                <p>Hướng dẫn vệ sinh bàn phím cơ</p>
-                <span class="post-meta-small">4,150 lượt xem</span>
+              <div class="popular-post-item">
+                <div class="pop-number">2</div>
+                <div>
+                    <p>Hướng dẫn vệ sinh bàn phím cơ</p>
+                    <span class="post-meta-small"><i class="bi bi-eye"></i> 4,150 view</span>
+                </div>
+            </div>
+              <div class="popular-post-item">
+                <div class="pop-number">3</div>
+                <div>
+                    <p>So sánh iPhone 15 và 16</p>
+                    <span class="post-meta-small"><i class="bi bi-eye"></i> 3,800 view</span>
+                </div>
             </div>
           </div>
+
+           <div class="sidebar-widget support-box mt-4">
+              <div class="d-flex align-items-center mb-3">
+                  <i class="bi bi-envelope-paper-fill text-primary fs-3 me-3"></i>
+                  <div>
+                      <h6 class="mb-0 fw-bold">Đăng ký nhận tin</h6>
+                      <small class="text-muted">Nhận bài viết mới qua email</small>
+                  </div>
+              </div>
+              <button class="btn btn-outline-primary w-100 btn-sm fw-bold">Đăng ký ngay</button>
+           </div>
           
         </aside>
+
       </div>
     </main>
   </section>
 </template>
 
 <style scoped>
-/* Giữ nguyên CSS của bạn, chỉ thêm 1 chút cho text-reset của router-link */
-.text-decoration-none { text-decoration: none; }
-.text-reset { color: inherit; }
-.text-reset:hover { color: var(--primary); }
-
-/* --- CSS CŨ CỦA BẠN --- */
+/* --- VARIABLES --- */
 :root {
   --primary: #009981;
+  --primary-dark: #007a67;
   --accent: #00483D;
-  --text-dark: #263238;
-  --text-subtle: #546E7A;
-  --bg-light: #F4F6F8;
-  --card-bg: #FFFFFF;
+  --text-dark: #2c3e50;
+  --text-gray: #636e72;
+  --bg-light: #F8F9FA;
+  --white: #FFFFFF;
 }
 
+/* --- UTILS --- */
+.full-link {
+    display: block;      
+    width: 100%;
+    height: 100%;        
+    text-decoration: none;
+}
+.author-link {
+    /* Style cho link tác giả trong featured post */
+    color: var(--text-dark); 
+    text-decoration: underline;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.author-link:hover {
+    color: var(--primary);
+}
+.alert-info {
+    background-color: #e0f7fa; 
+    color: #004d40; 
+    border: 1px solid #b2ebf2;
+    border-radius: 8px;
+}
+.btn-close {
+    background: transparent url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23004d40'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e") center/1em auto no-repeat;
+    opacity: 0.8;
+    padding: 0.2em;
+    font-size: 0.75rem;
+}
+.btn-close:hover {
+    opacity: 1;
+}
+
+
+/* --- BASE --- */
 .blog-page {
-  font-family: 'Inter', 'Roboto', system-ui, sans-serif;
-  color: var(--text-dark);
+  font-family: 'Inter', system-ui, sans-serif;
   background-color: var(--bg-light);
   min-height: 100vh;
+  color: var(--text-dark);
   display: flex;
   flex-direction: column;
 }
 
-.blog-hero {
-  background: linear-gradient(135deg, rgba(0, 153, 129, 0.1), rgba(0, 72, 61, 0.05));
-  border-bottom: 4px solid var(--primary);
-  padding: 80px 16px 50px 16px;
+.text-reset { text-decoration: none; color: inherit; transition: color 0.2s; }
+.text-reset:hover { color: var(--primary); }
+.icon-color { color: var(--primary); margin-right: 5px; }
+
+/* --- HERO --- */
+.page-hero {
+  background: linear-gradient(135deg, #e0f2f1 0%, #ffffff 100%);
+  padding: 60px 20px;
   text-align: center;
+  border-bottom: 1px solid #e0e0e0;
 }
-.blog-hero-inner {
-  max-width: 900px;
-  margin: 0 auto;
-}
-.blog-pre-title {
+.hero-inner { max-width: 800px; margin: 0 auto; }
+.hero-pre-title {
   color: var(--primary);
-  font-size: 0.9rem;
-  letter-spacing: 2px;
-  text-transform: uppercase;
   font-weight: 700;
+  letter-spacing: 2px;
+  font-size: 0.85rem;
   margin-bottom: 10px;
 }
-.blog-hero h1 {
-  color: var(--accent);
-  font-size: 3rem;
+.page-hero h1 {
+  font-size: 2.5rem;
   font-weight: 800;
-  margin: 0 0 15px 0;
+  color: var(--accent);
+  margin-bottom: 15px;
 }
-.blog-subtitle {
-  color: var(--text-subtle);
+.hero-subtitle {
+  color: var(--text-gray);
   font-size: 1.1rem;
-  max-width: 700px;
-  margin: 0 auto;
   line-height: 1.6;
 }
 
-.blog-container {
-  max-width: 1280px;
+/* --- LAYOUT CONTAINER --- */
+.page-container {
+  max-width: 1320px;
   margin: 50px auto;
-  padding: 0 30px;
+  padding: 0 20px;
   flex-grow: 1;
 }
-.blog-grid {
+
+/* --- GRID LAYOUT --- */
+.page-layout {
     display: grid;
-    grid-template-columns: 1fr 320px;
-    gap: 40px;
+    grid-template-columns: 1fr 320px; 
+    gap: 48px;
+    align-items: start;
+    position: relative; /* Thêm position relative cho overlay */
 }
-.section-title {
-    color: var(--accent);
-    font-size: 1.8rem;
+
+/* --- SHARED CARD STYLE --- */
+.card-style {
+    background: var(--white);
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+    border: 1px solid rgba(0,0,0,0.03);
+    overflow: hidden;
+}
+.empty-state {
+    padding: 60px 0;
+    text-align: center;
+    grid-column: 1 / -1; /* Chiếm hết chiều ngang nếu không có bài nào */
+}
+
+/* --- FEATURED POST --- */
+.featured-heading {
+    /* NEW STYLE: Đặt riêng tiêu đề cho Featured Post */
+    font-size: 1.5rem;
     font-weight: 700;
-    margin-top: 40px;
-    margin-bottom: 30px;
-    border-bottom: 3px solid var(--primary);
-    padding-bottom: 5px;
-    display: inline-block;
+    margin-bottom: 20px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #eee;
 }
 
 .featured-post {
     display: flex;
-    background: var(--card-bg);
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
-    margin-bottom: 40px;
-    transition: transform 0.3s ease;
+    flex-direction: row;
+    min-height: 400px;
+    margin-bottom: 50px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 .featured-post:hover {
     transform: translateY(-5px);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+.featured-image-wrap {
+    width: 60%;
+    position: relative;
+    overflow: hidden;
+    display: flex; 
 }
 .featured-image {
-    width: 55%;
-    min-height: 400px;
-    background-color: #E0E0E0;
+    width: 100%;
+    height: 100%;
     background-size: cover;
     background-position: center;
+    transition: transform 0.5s ease;
+    min-height: 100%; 
+}
+.featured-post:hover .featured-image {
+    transform: scale(1.05);
 }
 .featured-body {
-    width: 45%;
-    padding: 30px 40px;
+    width: 40%;
+    padding: 40px;
     display: flex;
     flex-direction: column;
     justify-content: center;
 }
-.featured-body h2 {
-    color: var(--accent);
-    font-size: 2rem;
-    font-weight: 800;
-    margin: 10px 0 15px 0;
+
+.badge-custom {
+    background-color: var(--primary);
+    color: white;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.date-meta { font-size: 0.85rem; color: #999; }
+
+.featured-title {
+    font-size: 1.8rem;
+    font-weight: 700;
     line-height: 1.3;
-}
-.excerpt {
-    color: var(--text-subtle);
-    line-height: 1.7;
-    margin-bottom: 20px;
-}
-.post-meta {
-    font-size: 0.9rem;
-    color: var(--text-subtle);
-    margin-top: 10px;
     margin-bottom: 15px;
 }
-.post-meta span {
-    margin-right: 15px;
+.excerpt {
+    color: var(--text-gray);
+    margin-bottom: 25px;
+    line-height: 1.6;
+    font-size: 1rem;
 }
-.meta-icon {
-    margin-right: 5px;
-    color: var(--primary);
+.post-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
 }
 .read-more-btn {
-    display: inline-block;
     color: var(--primary);
-    text-decoration: none;
     font-weight: 700;
+    text-decoration: none;
     font-size: 1rem;
-    transition: color 0.2s;
-    border-bottom: 2px solid var(--primary);
-    padding-bottom: 2px;
-    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    transition: padding-left 0.2s;
 }
 .read-more-btn:hover {
     color: var(--accent);
-    border-bottom-color: var(--accent);
+    padding-left: 5px;
 }
-.arrow {
-    margin-left: 5px;
-    font-weight: 900;
+
+/* --- LIST POSTS --- */
+.section-heading {
+    /* Đã tách ra, giờ chỉ dùng cho List Grid */
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 25px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
 }
 
 .latest-posts-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 30px;
 }
+
 .post-card {
-    background: var(--card-bg);
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
-    transition: box-shadow 0.3s ease, transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: transform 0.3s, box-shadow 0.3s;
 }
 .post-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.08);
 }
-.post-image-container {
-    height: 200px;
-    background-color: #ECEFF1;
+.card-img-top {
+    width: 100%;
+    aspect-ratio: 16/9; 
+    overflow: hidden;
+    position: relative;
+}
+.img-bg {
+    width: 100%;
+    height: 100%;
     background-size: cover;
     background-position: center;
-    border-bottom: 3px solid var(--primary);
+    transition: transform 0.5s;
 }
-.post-card-body {
-    padding: 20px;
+.post-card:hover .img-bg {
+    transform: scale(1.1);
 }
-.post-card-body h3 {
-    color: var(--accent);
-    font-size: 1.25rem;
+.card-body {
+    padding: 25px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+.card-meta {
+    font-size: 0.8rem;
+    color: #aaa;
+    margin-bottom: 12px;
+}
+.card-title {
+    font-size: 1.2rem;
     font-weight: 700;
-    margin: 8px 0 10px 0;
+    margin-bottom: 12px;
     line-height: 1.4;
+    
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
-.excerpt-small {
-    color: var(--text-subtle);
+.card-excerpt {
     font-size: 0.95rem;
-    margin-bottom: 15px;
+    color: var(--text-gray);
+    margin-bottom: 20px;
+    flex-grow: 1;
+    line-height: 1.5;
 }
-.read-more-link {
-    color: var(--primary);
-    text-decoration: none;
-    font-weight: 600;
+.card-footer-custom {
+    border-top: 1px solid #eee;
+    padding-top: 15px;
+}
+.card-link {
     font-size: 0.9rem;
-    border-bottom: 1px solid var(--primary);
-    transition: color 0.2s;
+    color: var(--primary);
+    font-weight: 600;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
-.category-tag {
-    display: inline-block;
-    background-color: var(--primary);
-    color: white;
-    font-size: 0.75rem;
-    font-weight: 700;
-    padding: 4px 10px;
-    border-radius: 4px;
-    letter-spacing: 0.5px;
-}
+.card-link:hover { color: var(--accent); }
 
-.blog-sidebar {
-    height: fit-content;
+/* --- SIDEBAR --- */
+.sidebar-column {
     display: flex;
     flex-direction: column;
     gap: 30px;
+    position: sticky;
+    top: 20px;
 }
 .sidebar-widget {
-    background: var(--card-bg);
+    background: var(--white);
     padding: 25px;
     border-radius: 12px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.03);
+    border: 1px solid rgba(0,0,0,0.03);
 }
 .sidebar-widget h4 {
-    color: var(--accent);
-    font-size: 1.3rem;
+    font-size: 1.1rem;
     font-weight: 700;
-    margin-top: 0;
     margin-bottom: 20px;
-    border-bottom: 2px solid var(--bg-light);
-    padding-bottom: 10px;
-}
-.sidebar-icon {
-    font-size: 1.1em;
-    margin-right: 8px;
-    color: var(--primary);
+    color: var(--accent);
+    border-bottom: 1px dashed #eee;
+    padding-bottom: 15px;
+    display: flex;
+    align-items: center;
 }
 
-.search-input {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #CFD8DC;
-    border-radius: 6px;
-    margin-bottom: 10px;
-    font-size: 1rem;
-    box-sizing: border-box;
+/* Search Box */
+.search-box { display: flex; gap: 8px; }
+.search-box input {
+    flex-grow: 1;
+    padding: 10px 15px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    outline: none;
+    background: #fdfdfd;
+    transition: border 0.2s;
 }
-.search-btn {
-    width: 100%;
-    padding: 12px;
-    background-color: var(--primary);
+.search-box input:focus { border-color: var(--primary); background: #fff; }
+.search-box button {
+    background: var(--primary);
     color: white;
     border: none;
-    border-radius: 6px;
-    font-weight: 700;
+    width: 45px;
+    border-radius: 8px;
     cursor: pointer;
     transition: background-color 0.2s;
 }
-.search-btn:hover {
-    background-color: var(--accent);
-}
+.search-box button:hover { background-color: var(--accent); }
 
-.category-widget ul {
-    list-style: none;
-    padding: 0;
-}
-.category-widget li {
-    margin-bottom: 8px;
-    border-bottom: 1px dashed #ECEFF1;
-    padding-bottom: 8px;
-}
+/* Category */
+.category-widget ul { list-style: none; padding: 0; margin: 0; }
+.category-widget li { margin-bottom: 8px; }
 .category-widget a {
-    color: var(--text-dark);
     text-decoration: none;
+    color: var(--text-dark);
     font-weight: 500;
-    transition: color 0.2s;
+    padding: 8px 10px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s;
 }
 .category-widget a:hover {
+    background-color: rgba(0, 153, 129, 0.08);
     color: var(--primary);
-    padding-left: 5px;
+    padding-left: 15px;
 }
+.bullet-icon { font-size: 0.7rem; color: #ccc; transition: color 0.2s; }
+.category-widget a:hover .bullet-icon { color: var(--primary); }
 
+/* Popular Posts */
 .popular-post-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
     margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px dotted #CFD8DC;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #f5f5f5;
+    cursor: pointer;
 }
+.popular-post-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.pop-number {
+    font-size: 1.2rem;
+    font-weight: 900;
+    color: #eee;
+    line-height: 1;
+    min-width: 20px;
+}
+.popular-post-item:hover .pop-number { color: var(--primary); }
 .popular-post-item p {
-    font-size: 1rem;
     font-weight: 600;
-    color: var(--text-dark);
-    margin: 0;
+    font-size: 0.95rem;
+    margin-bottom: 5px;
+    transition: color 0.2s;
+    line-height: 1.4;
 }
-.post-meta-small {
-    font-size: 0.85rem;
-    color: var(--text-subtle);
+.popular-post-item:hover p { color: var(--primary); }
+.post-meta-small { font-size: 0.8rem; color: #999; }
+
+/* Empty State */
+.empty-state { text-align: center; padding: 60px 0; }
+
+/* Footer */
+.page-footer {
+    border-top: 1px solid #eee;
+    padding: 30px 0;
+    margin-top: auto;
+    background: var(--white);
 }
 
-@media (max-width: 1100px) {
-    .blog-grid {
-        grid-template-columns: 1fr;
-    }
-    .blog-sidebar {
-        order: -1;
-    }
+/* --- PAGINATION CSS --- */
+.pagination-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 40px;
+    gap: 15px;
 }
-@media (max-width: 900px) {
+
+.page-numbers {
+    display: flex;
+    gap: 8px;
+}
+
+.page-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #eee;
+    background: var(--white);
+    border-radius: 8px;
+    color: var(--text-dark);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.page-btn:hover:not(:disabled) {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.page-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.page-btn:disabled {
+    background: #f8f9fa;
+    color: #ccc;
+    cursor: not-allowed;
+    border-color: #eee;
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 992px) {
+    .page-layout {
+        grid-template-columns: 1fr;
+        gap: 40px;
+    }
     .featured-post {
         flex-direction: column;
+        min-height: auto;
     }
-    .featured-image, .featured-body {
+    .featured-image-wrap {
         width: 100%;
-        min-height: 250px;
+        height: 250px;
     }
     .featured-body {
+        width: 100%;
         padding: 25px;
     }
-    .featured-body h2 {
-        font-size: 1.6rem;
-    }
-    .latest-posts-grid {
-        grid-template-columns: 1fr;
-    }
+    .featured-title { font-size: 1.5rem; }
+    .sidebar-column { order: 1; } 
+}
+/* Thêm CSS cho Overlay */
+.content-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.8);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    border-radius: 12px;
+    margin: 50px 0; /* Cho phép header và sidebar không bị mờ */
+}
+
+/* Điều chỉnh lại vị trí của Overlay trong page-layout */
+.page-layout {
+    position: relative;
+    /* ... các thuộc tính grid khác ... */
 }
 </style>
