@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api\admin;
+namespace App\Http\Controllers\Api\Admin; 
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -12,12 +12,32 @@ use Illuminate\Support\Facades\Validator;
 
 class AdminUserController extends Controller
 {
+    /**
+     * Lấy tất cả danh sách người dùng (khách hàng).
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function index()
     {
-        $users = User::orderBy('created_at', 'desc')->get();
-        return response()->json($users);
+        // *** ĐÃ THÊM TRY/CATCH ĐỂ HIỂN THỊ LỖI CHÍNH XÁC ***
+        try {
+            $users = User::orderBy('created_at', 'desc')->get();
+            return response()->json($users);
+        } catch (\Exception $e) {
+            // Trả về lỗi chi tiết từ PHP Exception (Lỗi DB, Model, v.v.)
+            return response()->json([
+                'message' => 'Lỗi truy vấn danh sách người dùng.',
+                'debug' => $e->getMessage(), // HIỂN THỊ LỖI CẦN THIẾT NHẤT
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ], 500);
+        }
     }
 
+    /**
+     * Tạo người dùng (khách hàng) mới.
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -39,12 +59,15 @@ class AdminUserController extends Controller
         DB::beginTransaction();
         try {
             $user = new User();
-            $user->fullName = $request->name;
+            // Lưu ý: Tên cột DB là fullName, nhưng request từ front-end dùng 'name'
+            $user->fullName = $request->name; 
             $user->email = $request->email;
             $user->phone = $request->phone;
             $user->sex = $request->sex;
             $user->status = $request->status ?? 'active';
             $user->password = Hash::make($request->password);
+            $user->birthday = $request->birthday; // Thêm trường birthday
+            $user->address = $request->address;   // Thêm trường address
             
             // Lưu user trước để có ID
             $user->save(); 
@@ -53,21 +76,16 @@ class AdminUserController extends Controller
             if ($request->hasFile('avatar')) {
                 $file = $request->file('avatar');
                 
-                // Đặt tên file theo ID của user
-                // Ví dụ: avatar_58.jpg (với 58 là ID user)
                 $filename = 'avatar_' . $user->id . '.' . $file->getClientOriginalExtension();
-                
                 $path = public_path('uploads/users');
 
                 if (!File::exists($path)) {
                     File::makeDirectory($path, 0755, true);
                 }
 
-                // Lưu file đè lên nếu trùng tên (cập nhật ảnh mới cho cùng ID)
                 $file->move($path, $filename);
                 
-                // Cập nhật đường dẫn ảnh vào DB
-                $user->avatar_url = '/uploads/users/' . $filename;
+                $user->avatar_url = 'uploads/users/' . $filename; // Bỏ dấu '/' đầu tiên
                 $user->save(); 
             }
             
@@ -76,10 +94,17 @@ class AdminUserController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Lỗi tạo tài khoản: ' . $e->getMessage()], 500);
+            // Trả về lỗi chi tiết để debug
+            return response()->json(['message' => 'Lỗi tạo tài khoản: ' . $e->getMessage()], 500); 
         }
     }
 
+    /**
+     * Cập nhật thông tin người dùng.
+     * @param Request $request
+     * @param string $id
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function update(Request $request, string $id)
     {
         $user = User::findOrFail($id);
@@ -101,6 +126,8 @@ class AdminUserController extends Controller
             if ($request->has('name')) $user->fullName = $request->name;
             if ($request->has('email')) $user->email = $request->email;
             if ($request->has('phone')) $user->phone = $request->phone;
+            if ($request->has('address')) $user->address = $request->address; // Cập nhật address
+            if ($request->has('birthday')) $user->birthday = $request->birthday; // Cập nhật birthday
             if ($request->has('status')) $user->status = $request->status;
             if ($request->has('sex')) $user->sex = $request->sex;
             
@@ -110,9 +137,7 @@ class AdminUserController extends Controller
 
             // --- XỬ LÝ CẬP NHẬT ẢNH ---
             if ($request->hasFile('avatar')) {
-                // Không cần xóa ảnh cũ nếu tên file mới giống hệt (avatar_{id}.ext)
-                // Trừ khi đuôi file thay đổi (ví dụ từ .jpg sang .png) thì mới cần xóa file cũ khác đuôi.
-                // Tuy nhiên, để an toàn và sạch sẽ, ta cứ kiểm tra xóa file cũ đi.
+                // Xóa ảnh cũ
                 if ($user->avatar_url) {
                     $oldPath = public_path($user->avatar_url);
                     if (File::exists($oldPath)) {
@@ -122,7 +147,6 @@ class AdminUserController extends Controller
 
                 $file = $request->file('avatar');
                 
-                // Đặt tên file theo ID của user
                 $filename = 'avatar_' . $user->id . '.' . $file->getClientOriginalExtension();
                 $path = public_path('uploads/users');
 
@@ -131,7 +155,7 @@ class AdminUserController extends Controller
                 }
 
                 $file->move($path, $filename);
-                $user->avatar_url = '/uploads/users/' . $filename;
+                $user->avatar_url = 'uploads/users/' . $filename; // Bỏ dấu '/' đầu tiên
             }
 
             $user->save();
@@ -143,11 +167,17 @@ class AdminUserController extends Controller
         }
     }
 
+    /**
+     * Xóa người dùng.
+     * @param string $id
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function destroy(string $id)
     {
         try {
             $user = User::findOrFail($id);
             
+            // Xóa ảnh đại diện vật lý nếu có
             if ($user->avatar_url) {
                 $imagePath = public_path($user->avatar_url);
                 if (File::exists($imagePath)) {

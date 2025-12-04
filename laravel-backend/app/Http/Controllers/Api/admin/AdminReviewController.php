@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Review;
+use Illuminate\Support\Facades\Log;
 
 class AdminReviewController extends Controller
 {
@@ -13,12 +14,17 @@ class AdminReviewController extends Controller
      */
     public function index()
     {
-        $reviews = Review::with(['user:id,fullName,avatar_url', 'product:id,name'])
-            ->with(['product.images'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        try {
+            $reviews = Review::with(['user:id,fullName,avatar_url', 'product:id,name'])
+                ->with(['product.images'])
+                ->orderBy('created_at', 'desc')
+                ->get();
 
-        return response()->json($reviews);
+            return response()->json($reviews);
+        } catch (\Exception $e) {
+            Log::error("Lỗi lấy Reviews: " . $e->getMessage());
+            return response()->json(['message' => 'Lỗi server', 'error' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -54,9 +60,12 @@ class AdminReviewController extends Controller
      */
     public function destroy(string $id)
     {
-        $review = Review::findOrFail($id);
-        $review->delete();
-
-        return response()->json(['message' => 'Đã xóa đánh giá thành công']);
+        try {
+            $review = Review::findOrFail($id);
+            $review->delete();
+            return response()->json(['message' => 'Đã xóa đánh giá thành công']);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi xóa review', 'error' => $e->getMessage()], 500);
+        }
     }
 }
