@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue';
+import { ref, shallowRef, markRaw, onMounted, nextTick, watch } from 'vue';
 import apiService from '../../apiService.js';
 // import Swal from 'sweetalert2'; 
 
@@ -31,16 +31,16 @@ const orderStatusCounts = ref({});
 const monthlyRevenue = ref(new Array(12).fill(0));
 const yearlyRevenue = ref({});
 
-// Chart Refs (Pie Chart)
-const chartInstance = ref(null);
+// Chart Refs (Pie Chart) - Dùng shallowRef để tránh lỗi conflict Proxy Vue 3
+const chartInstance = shallowRef(null);
 const chartCanvas = ref(null);
 const chartConfigKeys = ref([]);
 const hoveredLegendKey = ref(null);
 
-// Chart Refs (Revenue)
-const revenueBarInstance = ref(null);
+// Chart Refs (Revenue) - Dùng shallowRef
+const revenueBarInstance = shallowRef(null);
 const revenueBarCanvas = ref(null);
-const revenueLineInstance = ref(null);
+const revenueLineInstance = shallowRef(null);
 const revenueLineCanvas = ref(null);
 
 // Helper Constants
@@ -209,8 +209,10 @@ const renderStatusChart = () => {
     const colors = chartConfigKeys.value.map(key => STATUS_CONFIG[key].color);
 
     const ctx = chartCanvas.value.getContext('2d');
-    chartInstance.value = new window.Chart(ctx, {
-        type: 'doughnut', // Doughnut nhìn hiện đại hơn Pie một chút
+    
+    // Sử dụng markRaw để Vue không cố gắng biến instance này thành Reactive
+    chartInstance.value = markRaw(new window.Chart(ctx, {
+        type: 'doughnut',
         data: {
             labels: labels,
             datasets: [{
@@ -218,7 +220,7 @@ const renderStatusChart = () => {
                 backgroundColor: colors,
                 borderWidth: 0,
                 hoverOffset: 15,
-                cutout: '65%' // Tạo lỗ giữa cho Doughnut
+                cutout: '65%'
             }]
         },
         options: {
@@ -241,7 +243,7 @@ const renderStatusChart = () => {
             },
             interaction: { mode: 'nearest', intersect: true },
         }
-    });
+    }));
 };
 
 // --- REVENUE CHARTS ---
@@ -253,7 +255,7 @@ const renderRevenueCharts = () => {
 
     // Bar Chart
     const ctxBar = revenueBarCanvas.value.getContext('2d');
-    revenueBarInstance.value = new window.Chart(ctxBar, {
+    revenueBarInstance.value = markRaw(new window.Chart(ctxBar, {
         type: 'bar',
         data: {
             labels: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'],
@@ -282,14 +284,14 @@ const renderRevenueCharts = () => {
                 }
             }
         }
-    });
+    }));
 
     // Line Chart
     const years = Object.keys(yearlyRevenue.value).sort();
     const yearlyData = years.map(y => yearlyRevenue.value[y]);
     
     const ctxLine = revenueLineCanvas.value.getContext('2d');
-    revenueLineInstance.value = new window.Chart(ctxLine, {
+    revenueLineInstance.value = markRaw(new window.Chart(ctxLine, {
         type: 'line',
         data: {
             labels: years.length > 0 ? years : [new Date().getFullYear()],
@@ -321,7 +323,7 @@ const renderRevenueCharts = () => {
                 }
             }
         }
-    });
+    }));
 };
 
 // --- INTERACTIONS ---
@@ -330,16 +332,24 @@ const onLegendHover = (key) => {
     hoveredLegendKey.value = key;
     const index = chartConfigKeys.value.indexOf(key);
     if (index !== -1) {
-        chartInstance.value.setActiveElements([{ datasetIndex: 0, index: index }]);
-        chartInstance.value.update();
+        try {
+            chartInstance.value.setActiveElements([{ datasetIndex: 0, index: index }]);
+            chartInstance.value.update();
+        } catch (e) {
+            console.warn("Chart hover error ignored", e);
+        }
     }
 };
 
 const onLegendLeave = () => {
     if (!chartInstance.value) return;
     hoveredLegendKey.value = null;
-    chartInstance.value.setActiveElements([]);
-    chartInstance.value.update();
+    try {
+        chartInstance.value.setActiveElements([]);
+        chartInstance.value.update();
+    } catch (e) {
+        console.warn("Chart hover leave error ignored", e);
+    }
 };
 
 // Watch tabs change to render charts
