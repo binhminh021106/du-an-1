@@ -48,6 +48,7 @@ use App\Http\Controllers\Api\admin\AdminOrderItemController;
 use App\Http\Controllers\Api\admin\AdminBrandSlideController;
 use App\Http\Controllers\Api\admin\AdminPermissionController;
 use App\Http\Controllers\Api\admin\AdminImageProductController;
+use App\Http\Controllers\Api\Admin\AdminInventoryController; // [NEW] Import Inventory Controller
 
 // ==============================================================================
 // 2. AUTHENTICATION ROUTES (PUBLIC)
@@ -183,6 +184,10 @@ Route::group([
     'middleware' => ['auth:sanctum', 'admin']
 ], function () {
 
+    // --- INVENTORY (QUẢN LÝ KHO) [NEW] ---
+    Route::get('inventory', [AdminInventoryController::class, 'index']);
+    Route::put('inventory/variants/{id}/stock', [AdminInventoryController::class, 'updateStock']);
+
     // --- PRODUCTS ---
     Route::apiResource('products', AdminProductController::class);
 
@@ -207,7 +212,7 @@ Route::group([
     Route::apiResource('coupons', AdminCouponController::class);
 
     // --- IMAGE PRODUCTS ---
-Route::post('imageProducts/bulk-delete', [AdminImageProductController::class, 'bulkDestroy']);
+    Route::post('imageProducts/bulk-delete', [AdminImageProductController::class, 'bulkDestroy']);
     Route::apiResource('imageProducts', AdminImageProductController::class);
 
     // --- NEWS ---
