@@ -19,15 +19,16 @@ use App\Http\Controllers\Api\Client\CouponController;
 use App\Http\Controllers\Api\Client\ReviewController;
 use App\Http\Controllers\Api\admin\AdminNewController;
 use App\Http\Controllers\Api\Client\CommentController;
+use App\Http\Controllers\Api\Client\PaymentController;
 use App\Http\Controllers\Api\Client\ProductController;
 use App\Http\Controllers\Api\Client\VariantController;
 use App\Http\Controllers\Api\admin\AdminAuthController;
 use App\Http\Controllers\Api\admin\AdminRoleController;
 use App\Http\Controllers\Api\admin\AdminUserController;
 use App\Http\Controllers\Api\Client\CategoryController;
-use App\Http\Controllers\Api\Client\CheckoutController;
 
 // --- ADMIN CONTROLLERS ---
+use App\Http\Controllers\Api\Client\CheckoutController;
 use App\Http\Controllers\Api\Client\WishlistController;
 use App\Http\Controllers\Api\admin\AdminBrandController;
 use App\Http\Controllers\Api\admin\AdminOrderController;
@@ -81,6 +82,9 @@ Route::post('/forgot-password', [NewPasswordController::class, 'store'])
 
 Route::post('/reset-password', [NewPasswordController::class, 'update'])
     ->name('password.update');
+
+Route::post('/payment/vnpay', [PaymentController::class, 'createPaymentUrl']);
+Route::get('/payment/vnpay-return', [PaymentController::class, 'vnpayReturn']);
 
 // --- CATEGORIES ---
 Route::get('/categories', [CategoryController::class, 'index']);
@@ -207,7 +211,7 @@ Route::group([
     Route::apiResource('coupons', AdminCouponController::class);
 
     // --- IMAGE PRODUCTS ---
-Route::post('imageProducts/bulk-delete', [AdminImageProductController::class, 'bulkDestroy']);
+    Route::post('imageProducts/bulk-delete', [AdminImageProductController::class, 'bulkDestroy']);
     Route::apiResource('imageProducts', AdminImageProductController::class);
 
     // --- NEWS ---

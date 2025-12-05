@@ -22,7 +22,7 @@ class CheckoutController extends Controller
             'customer_email' => 'required|email|max:255',
             'customer_phone' => 'required|string|max:20',
             'shipping_address' => 'required|string|max:500',
-            'payment_method' => 'required|string|in:COD,BANK,CARD',
+            'payment_method' => 'required|string|in:COD,BANK,CARD,VNPAY',
             'shipping_fee' => 'required|numeric|min:0',
             'discount_amount' => 'required|numeric|min:0',
             'coupon_code' => 'nullable|string|max:50',
