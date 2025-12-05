@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, watch, computed, nextTick } from "vue";
+import { ref, reactive, onMounted, watch, computed, nextTick, onUnmounted } from "vue";
 import { useStore } from "vuex";
 import { useRouter } from "vue-router";
 import apiService from '../../apiService.js'; // Import API Service để gọi backend
@@ -10,6 +10,8 @@ const router = useRouter();
 
 // --- 1. XỬ LÝ DỮ LIỆU TỪ VUEX & LOCALSTORAGE ---
 const selectedIds = ref([]);
+// [NEW] State để theo dõi item nào đang loading
+const updatingIds = ref([]);
 
 // Lấy danh sách từ getter
 const allCartItems = computed(() => store.getters.cartItems || []);
@@ -70,30 +72,62 @@ const getImageUrl = (path) => {
   return `${SERVER_URL}${cleanPath}`;
 };
 
-// Actions tương tác với Vuex
-const increaseQuantity = (item) => {
+// Actions tương tác với Vuex [UPDATED: ASYNC & SPINNER]
+const increaseQuantity = async (item) => {
+  if (updatingIds.value.includes(item.cartId)) return; // Chặn spam
+
   if (item.stock && item.qty >= item.stock) {
     Swal.fire('Thông báo', `Sản phẩm này chỉ còn tối đa ${item.stock} món.`, 'warning');
     return;
   }
-  store.dispatch('updateItemQty', { cartId: item.cartId, qty: item.qty + 1 });
-};
-
-const decreaseQuantity = (item) => {
-  if (item.qty > 1) {
-    store.dispatch('updateItemQty', { cartId: item.cartId, qty: item.qty - 1 });
+  
+  updatingIds.value.push(item.cartId); // Bật spinner
+  try {
+      await store.dispatch('updateItemQty', { cartId: item.cartId, qty: item.qty + 1 });
+  } catch(e) {
+      console.error(e);
+  } finally {
+      setTimeout(() => {
+          updatingIds.value = updatingIds.value.filter(id => id !== item.cartId);
+      }, 300);
   }
 };
 
-const onRemoveItemLocal = (cartId) => {
-  store.dispatch('removeItem', cartId);
-  selectedIds.value = selectedIds.value.filter(id => String(id) !== String(cartId));
-  localStorage.setItem('checkout_items', JSON.stringify(selectedIds.value));
+const decreaseQuantity = async (item) => {
+  if (updatingIds.value.includes(item.cartId)) return;
 
-  if (cartItems.value.length === 0) {
-    Swal.fire('Giỏ hàng trống', 'Bạn đã xóa hết sản phẩm thanh toán.', 'info').then(() => {
-      router.push('/cart');
-    });
+  if (item.qty > 1) {
+    updatingIds.value.push(item.cartId);
+    try {
+        await store.dispatch('updateItemQty', { cartId: item.cartId, qty: item.qty - 1 });
+    } catch(e) {
+        console.error(e);
+    } finally {
+        setTimeout(() => {
+            updatingIds.value = updatingIds.value.filter(id => id !== item.cartId);
+        }, 300);
+    }
+  }
+};
+
+const onRemoveItemLocal = async (cartId) => {
+  if (updatingIds.value.includes(cartId)) return;
+
+  updatingIds.value.push(cartId);
+  try {
+      await store.dispatch('removeItem', cartId);
+      selectedIds.value = selectedIds.value.filter(id => String(id) !== String(cartId));
+      localStorage.setItem('checkout_items', JSON.stringify(selectedIds.value));
+
+      if (cartItems.value.length === 0) {
+        Swal.fire('Giỏ hàng trống', 'Bạn đã xóa hết sản phẩm thanh toán.', 'info').then(() => {
+          router.push('/cart');
+        });
+      }
+  } catch(e) {
+      console.error(e);
+  } finally {
+      updatingIds.value = updatingIds.value.filter(id => id !== cartId);
   }
 };
 
@@ -137,10 +171,17 @@ const discountAmount = ref(0);
 const appliedCoupon = ref(null); // Lưu object coupon đã áp dụng
 const couponMessage = ref("");
 const isCouponLoading = ref(false);
+const showCouponModal = ref(false); // [NEW] State cho popup voucher
 
 const showModal = ref(false);
 const modalContent = ref({});
 const isSubmitting = ref(false); // Loading khi submit đơn
+
+// --- CUSTOM SEARCHABLE DROPDOWN STATE ---
+const activeDropdown = ref(null); // 'province', 'district', 'ward'
+const searchTerm = ref("");
+const dropdownContainer = ref(null); // Ref để detect click outside
+const searchInputRef = ref(null);
 
 // --- ON MOUNTED ---
 onMounted(async () => {
@@ -180,6 +221,13 @@ onMounted(async () => {
 
   // 4. [NEW] Load Coupons from DB
   fetchCoupons();
+
+  // 5. Detect Click Outside for Dropdowns
+  document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
 });
 
 const fetchCoupons = async () => {
@@ -224,6 +272,72 @@ const fillAddressFromBook = async () => {
     }
   }
 };
+
+// --- LOGIC CUSTOM SEARCHABLE SELECT ---
+
+// [NEW] Helper xóa dấu tiếng Việt để tìm kiếm không dấu
+const removeVietnameseTones = (str) => {
+  if (!str) return "";
+  str = str.toLowerCase();
+  str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+  str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+  str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+  str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+  str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+  str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+  str = str.replace(/đ/g, "d");
+  str = str.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Xóa các dấu phụ còn sót
+  return str;
+};
+
+const filteredProvinces = computed(() => {
+  if (!searchTerm.value) return provinces.value;
+  const keyword = removeVietnameseTones(searchTerm.value);
+  return provinces.value.filter(p => removeVietnameseTones(p.name).includes(keyword));
+});
+
+const filteredDistricts = computed(() => {
+  if (!searchTerm.value) return districts.value;
+  const keyword = removeVietnameseTones(searchTerm.value);
+  return districts.value.filter(d => removeVietnameseTones(d.name).includes(keyword));
+});
+
+const filteredWards = computed(() => {
+  if (!searchTerm.value) return wards.value;
+  const keyword = removeVietnameseTones(searchTerm.value);
+  return wards.value.filter(w => removeVietnameseTones(w.name).includes(keyword));
+});
+
+const toggleDropdown = (name) => {
+  if (name === 'district' && !districts.value.length) return; // Disabled logic
+  if (name === 'ward' && !wards.value.length) return; // Disabled logic
+
+  if (activeDropdown.value === name) {
+    activeDropdown.value = null;
+  } else {
+    activeDropdown.value = name;
+    searchTerm.value = ""; // Reset search
+    nextTick(() => {
+       // Focus input search if exist
+       const inputs = document.querySelectorAll('.search-input-field');
+       if(inputs.length) inputs[0].focus();
+    });
+  }
+};
+
+const selectOption = (type, val) => {
+  if (type === 'province') selectedProvince.value = val;
+  if (type === 'district') selectedDistrict.value = val;
+  if (type === 'ward') selectedWard.value = val;
+  activeDropdown.value = null;
+};
+
+const handleClickOutside = (event) => {
+  if (dropdownContainer.value && !dropdownContainer.value.contains(event.target)) {
+    activeDropdown.value = null;
+  }
+};
+// ------------------------------------
 
 // Watchers Address
 watch(selectedProvince, (val) => {
@@ -275,6 +389,9 @@ const applyCouponLogic = (coupon) => {
   discountAmount.value = discount;
   appliedCoupon.value = coupon;
   couponMessage.value = `Đã áp dụng: ${coupon.name} (-${discount.toLocaleString()}đ)`;
+  
+  // Đóng modal sau khi chọn thành công
+  showCouponModal.value = false; 
 };
 
 const handleApplyCouponCode = () => {
@@ -294,8 +411,21 @@ const handleApplyCouponCode = () => {
 };
 
 const quickApplyCoupon = (coupon) => {
-  couponCode.value = coupon.code;
-  applyCouponLogic(coupon);
+  // [FIX] Cho phép bỏ chọn (Toggle)
+  if (appliedCoupon.value && appliedCoupon.value.code === coupon.code) {
+      couponCode.value = "";
+      discountAmount.value = 0;
+      appliedCoupon.value = null;
+      couponMessage.value = "";
+  } else {
+      couponCode.value = coupon.code;
+      applyCouponLogic(coupon);
+  }
+};
+
+// Mở Modal Voucher
+const openCouponModal = () => {
+    showCouponModal.value = true;
 };
 
 const totalPrice = computed(() => {
@@ -484,20 +614,74 @@ const closeModal = () => {
 
           <div class="form-group">
             <label>Địa chỉ nhận hàng <span class="text-danger">*</span></label>
-            <div class="address-select">
-              <select v-model="selectedProvince">
-                <option disabled value="">Tỉnh/Thành phố</option>
-                <option v-for="p in provinces" :key="p.code" :value="p.name">{{ p.name }}</option>
-              </select>
-              <select v-model="selectedDistrict" :disabled="!districts.length">
-                <option disabled value="">Quận/Huyện</option>
-                <option v-for="d in districts" :key="d.code" :value="d.name">{{ d.name }}</option>
-              </select>
-              <select v-model="selectedWard" :disabled="!wards.length">
-                <option disabled value="">Phường/Xã</option>
-                <option v-for="w in wards" :key="w.code" :value="w.name">{{ w.name }}</option>
-              </select>
+            <!-- REPLACED OLD SELECTS WITH NEW CUSTOM SEARCHABLE DROPDOWNS -->
+            <div class="address-select-group" ref="dropdownContainer">
+              
+              <!-- PROVINCE -->
+              <div class="custom-select-wrapper">
+                 <div class="select-trigger" @click="toggleDropdown('province')" :class="{ 'active': activeDropdown === 'province' }">
+                    <span :class="{'placeholder-text': !selectedProvince}">{{ selectedProvince || 'Tỉnh/Thành phố' }}</span>
+                    <i class="fa-solid fa-chevron-down arrow-icon"></i>
+                 </div>
+                 <div class="custom-options-dropdown" v-show="activeDropdown === 'province'">
+                    <div class="search-box-container">
+                       <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                       <input type="text" v-model="searchTerm" placeholder="Tìm tỉnh/thành..." class="search-input-field" @click.stop>
+                    </div>
+                    <ul class="options-list">
+                       <li v-for="p in filteredProvinces" :key="p.code" @click="selectOption('province', p.name)" 
+                           :class="{'selected': selectedProvince === p.name}">
+                          {{ p.name }}
+                       </li>
+                       <li v-if="filteredProvinces.length === 0" class="no-result">Không tìm thấy</li>
+                    </ul>
+                 </div>
+              </div>
+
+              <!-- DISTRICT -->
+              <div class="custom-select-wrapper" :class="{'disabled': !districts.length}">
+                 <div class="select-trigger" @click="toggleDropdown('district')" :class="{ 'active': activeDropdown === 'district' }">
+                    <span :class="{'placeholder-text': !selectedDistrict}">{{ selectedDistrict || 'Quận/Huyện' }}</span>
+                    <i class="fa-solid fa-chevron-down arrow-icon"></i>
+                 </div>
+                 <div class="custom-options-dropdown" v-show="activeDropdown === 'district'">
+                    <div class="search-box-container">
+                       <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                       <input type="text" v-model="searchTerm" placeholder="Tìm quận/huyện..." class="search-input-field" @click.stop>
+                    </div>
+                    <ul class="options-list">
+                       <li v-for="d in filteredDistricts" :key="d.code" @click="selectOption('district', d.name)"
+                            :class="{'selected': selectedDistrict === d.name}">
+                          {{ d.name }}
+                       </li>
+                       <li v-if="filteredDistricts.length === 0" class="no-result">Không tìm thấy</li>
+                    </ul>
+                 </div>
+              </div>
+
+              <!-- WARD -->
+              <div class="custom-select-wrapper" :class="{'disabled': !wards.length}">
+                 <div class="select-trigger" @click="toggleDropdown('ward')" :class="{ 'active': activeDropdown === 'ward' }">
+                    <span :class="{'placeholder-text': !selectedWard}">{{ selectedWard || 'Phường/Xã' }}</span>
+                    <i class="fa-solid fa-chevron-down arrow-icon"></i>
+                 </div>
+                 <div class="custom-options-dropdown" v-show="activeDropdown === 'ward'">
+                    <div class="search-box-container">
+                       <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                       <input type="text" v-model="searchTerm" placeholder="Tìm phường/xã..." class="search-input-field" @click.stop>
+                    </div>
+                    <ul class="options-list">
+                       <li v-for="w in filteredWards" :key="w.code" @click="selectOption('ward', w.name)"
+                            :class="{'selected': selectedWard === w.name}">
+                          {{ w.name }}
+                       </li>
+                       <li v-if="filteredWards.length === 0" class="no-result">Không tìm thấy</li>
+                    </ul>
+                 </div>
+              </div>
+
             </div>
+
             <input type="text" v-model="form.address.street" placeholder="Số nhà, tên đường..." class="mt-2"
               :class="{ 'is-invalid': errors.address }" />
             <span v-if="errors.address" class="error-text">{{ errors.address }}</span>
@@ -542,11 +726,16 @@ const closeModal = () => {
 
               <!-- THÊM NÚT TĂNG GIẢM -->
               <div class="item-quantity-controls mt-2">
-                <button type="button" @click="decreaseQuantity(item)" :disabled="item.qty <= 1" class="qty-btn-inline">
+                <!-- Spinner overlay cho từng item -->
+                <div v-if="updatingIds.includes(item.cartId)" class="qty-spinner">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                </div>
+
+                <button type="button" @click="decreaseQuantity(item)" :disabled="item.qty <= 1 || updatingIds.includes(item.cartId)" class="qty-btn-inline">
                   −
                 </button>
                 <span class="qty-number-inline">{{ item.qty }}</span>
-                <button type="button" @click="increaseQuantity(item)" class="qty-btn-inline">
+                <button type="button" @click="increaseQuantity(item)" :disabled="updatingIds.includes(item.cartId)" class="qty-btn-inline">
                   +
                 </button>
               </div>
@@ -562,8 +751,9 @@ const closeModal = () => {
                 {{ (Number(item.price) * Number(item.qty)).toLocaleString() }} đ
               </div>
               <!-- NÚT XÓA -->
-              <button type="button" @click="onRemoveItemLocal(item.cartId)" class=" btn btn-outline-danger">
-                <i class="fa-solid fa-trash"></i>
+              <button type="button" @click="onRemoveItemLocal(item.cartId)" class=" btn btn-outline-danger" :disabled="updatingIds.includes(item.cartId)">
+                <i v-if="updatingIds.includes(item.cartId)" class="fa-solid fa-spinner fa-spin"></i>
+                <i v-else class="fa-solid fa-trash"></i>
               </button>
             </div>
 
@@ -592,46 +782,29 @@ const closeModal = () => {
           <span class="total-amount">{{ totalPrice.toLocaleString() }} đ</span>
         </div>
 
-        <!-- KHU VỰC NHẬP MÃ GIẢM GIÁ -->
+        <!-- [MODIFIED] KHU VỰC NHẬP MÃ GIẢM GIÁ (Chuyển thành nút mở popup) -->
         <div class="coupon-section">
-          <label><i class="fa-solid fa-ticket"></i> Mã giảm giá</label>
-          <div class="coupon-input-group">
-            <input type="text" v-model="couponCode" placeholder="Nhập mã giảm giá"
-              @keyup.enter="handleApplyCouponCode" />
-            <button type="button" @click="handleApplyCouponCode" :disabled="!couponCode">Áp dụng</button>
+          <div class="coupon-header-row">
+            <label><i class="fa-solid fa-ticket"></i> Mã giảm giá</label>
+            <!-- Nút Mở Popup được style lại -->
+            <button type="button" class="btn-open-coupon" @click="openCouponModal">
+                <i class="fa-solid fa-ticket-simple me-1"></i> Chọn hoặc nhập mã
+            </button>
           </div>
-          <p v-if="couponMessage" :class="{ 'success-msg': appliedCoupon, 'error-msg': !appliedCoupon }">
+          
+          <!-- Hiển thị voucher đã chọn ngay dưới -->
+          <div v-if="appliedCoupon" class="selected-coupon-info">
+            <span class="success-text">
+                <i class="fa-solid fa-check-circle"></i> Đã dùng: {{ appliedCoupon.code }}
+            </span>
+             <button type="button" class="btn-remove-coupon" @click="quickApplyCoupon(appliedCoupon)" title="Bỏ chọn">
+                &times;
+             </button>
+          </div>
+           <p v-else-if="couponMessage" :class="{ 'success-msg': appliedCoupon, 'error-msg': !appliedCoupon }">
             <i :class="appliedCoupon ? 'fa-solid fa-check-circle' : 'fa-solid fa-circle-exclamation'"></i> {{
               couponMessage }}
           </p>
-        </div>
-
-        <!-- LIST MÃ GIẢM GIÁ TỪ DB -->
-        <div class="available-vouchers-container" v-if="coupons.length > 0">
-          <div class="voucher-header">Mã ưu đãi dành cho bạn</div>
-          <div class="voucher-list">
-            <div v-for="cp in coupons" :key="cp.code" class="voucher-ticket"
-              :class="{ 'active': appliedCoupon?.code === cp.code }" @click="quickApplyCoupon(cp)">
-              <div class="voucher-left">
-                <div class="voucher-code">{{ cp.code }}</div>
-                <div class="voucher-label">{{ cp.name || cp.code }}</div>
-                <div class="voucher-desc-left" v-if="cp.min_spend">Đơn từ {{ Number(cp.min_spend).toLocaleString() }}đ
-                </div>
-              </div>
-              <div class="voucher-right">
-                <div class="voucher-desc">
-                  <span v-if="cp.type === 'percent'">Giảm {{ cp.value }}%</span>
-                  <span v-else>Giảm {{ Number(cp.value).toLocaleString() }}đ</span>
-                </div>
-
-                <span class="apply-tag" v-if="appliedCoupon?.code !== cp.code">Dùng ngay</span>
-                <span class="apply-tag used" v-else><i class="fa-solid fa-check"></i> Đã chọn</span>
-              </div>
-              <!-- Decor -->
-              <div class="circle-notch top"></div>
-              <div class="circle-notch bottom"></div>
-            </div>
-          </div>
         </div>
 
         <button type="button" @click="confirmCheckout" class="checkout-btn" :disabled="isSubmitting">
@@ -641,7 +814,65 @@ const closeModal = () => {
       </div>
     </div>
 
-    <!-- MODAL SUCCESS - Đã phục hồi giao diện chi tiết -->
+    <!-- [NEW] COUPON MODAL -->
+    <div v-if="showCouponModal" class="custom-modal-overlay">
+        <div class="custom-modal-content coupon-modal">
+            <div class="modal-header">
+                <h4><i class="fa-solid fa-ticket"></i> Chọn Voucher</h4>
+                <button @click="showCouponModal = false" class="modal-close-btn">&times;</button>
+            </div>
+
+            <div class="modal-body p-0">
+                <!-- Search Voucher Input inside Modal -->
+                <div class="coupon-input-group modal-search">
+                    <input type="text" v-model="couponCode" placeholder="Nhập mã giảm giá" @keyup.enter="handleApplyCouponCode" />
+                    <button type="button" @click="handleApplyCouponCode" :disabled="!couponCode">Áp dụng</button>
+                </div>
+
+                <!-- Voucher List -->
+                <div class="voucher-list-modal">
+                    <div v-if="coupons.length > 0" class="voucher-grid">
+                        <div v-for="cp in coupons" :key="cp.code" class="voucher-ticket-compact"
+                             :class="{ 'active': appliedCoupon?.code === cp.code }" @click="quickApplyCoupon(cp)">
+                            
+                            <div class="ticket-left">
+                                <div class="ticket-icon"><i class="fa-solid fa-gift"></i></div>
+                            </div>
+                            
+                            <div class="ticket-content">
+                                <div class="ticket-code">{{ cp.code }}</div>
+                                <div class="ticket-desc">
+                                    <span v-if="cp.type === 'percent'">Giảm {{ cp.value }}%</span>
+                                    <span v-else>Giảm {{ Number(cp.value).toLocaleString() }}đ</span>
+                                    <span v-if="cp.min_spend" class="min-spend">Cho đơn từ {{ Number(cp.min_spend).toLocaleString() }}đ</span>
+                                </div>
+                            </div>
+
+                            <div class="ticket-action">
+                                <div class="radio-check">
+                                    <i class="fa-solid fa-check" v-if="appliedCoupon?.code === cp.code"></i>
+                                </div>
+                            </div>
+
+                            <!-- Decor -->
+                            <div class="notch top"></div>
+                            <div class="notch bottom"></div>
+                        </div>
+                    </div>
+                    <div v-else class="text-center py-4 text-muted">
+                        Không có mã giảm giá nào khả dụng.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer-custom">
+                <button @click="showCouponModal = false" class="modal-ok-btn">Đồng ý</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- MODAL SUCCESS -->
     <div v-if="showModal" class="custom-modal-overlay">
       <div class="custom-modal-content">
         <button @click="closeModal" class="modal-close-btn">&times;</button>
@@ -806,16 +1037,152 @@ textarea:focus {
   display: block;
 }
 
-.address-select {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+/* ========== CUSTOM SEARCHABLE DROPDOWN STYLE ========== */
+.address-select-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 10;
 }
 
-.address-select select {
-  flex: 1;
-  min-width: 140px;
+.custom-select-wrapper {
+    flex: 1;
+    min-width: 140px;
+    position: relative;
+    user-select: none;
 }
+
+.custom-select-wrapper.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.select-trigger {
+    padding: 12px 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    transition: all 0.2s;
+    height: 46px; /* Match input height */
+}
+
+.select-trigger.active {
+    border-color: #009981;
+    box-shadow: 0 0 0 3px rgba(0, 153, 129, 0.1);
+}
+
+.placeholder-text {
+    color: #999;
+}
+
+.arrow-icon {
+    color: #888;
+    font-size: 12px;
+    transition: transform 0.2s;
+}
+
+.select-trigger.active .arrow-icon {
+    transform: rotate(180deg);
+}
+
+.custom-options-dropdown {
+    position: absolute;
+    top: 110%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    z-index: 100;
+    overflow: hidden;
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.search-box-container {
+    padding: 10px;
+    border-bottom: 1px solid #f0f0f0;
+    position: relative;
+}
+
+.search-icon {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #aaa;
+    font-size: 13px;
+}
+
+.search-input-field {
+    width: 100%;
+    padding: 8px 10px 8px 32px;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+}
+
+.search-input-field:focus {
+    border-color: #009981;
+}
+
+.options-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.options-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.options-list::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
+
+.options-list li {
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+    transition: background 0.1s;
+}
+
+.options-list li:hover {
+    background: #f0fdfa;
+    color: #009981;
+}
+
+.options-list li.selected {
+    background: #e6fffa;
+    color: #009981;
+    font-weight: 600;
+}
+
+.no-result {
+    padding: 15px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* ================================================== */
 
 /* Payment Methods */
 .payment-methods-grid {
@@ -960,6 +1327,23 @@ textarea:focus {
   border-radius: 6px;
   width: 90px;
   height: 30px;
+  position: relative; /* [UPDATED] */
+}
+
+/* [NEW] Spinner overlay cho trang checkout */
+.qty-spinner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.85); /* Nền trắng mờ */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    border-radius: 6px;
+    color: #10b981;
 }
 
 .qty-btn-inline {
@@ -1066,12 +1450,56 @@ textarea:focus {
   color: #e74c3c;
 }
 
-/* Coupon Section */
+/* Coupon Section New */
 .coupon-section {
   margin-top: 25px;
   padding-top: 20px;
   border-top: 1px dashed #ddd;
 }
+
+.coupon-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.btn-open-coupon {
+    /* NEW BUTTON STYLE */
+    background-color: white;
+    border: 1px solid #009981;
+    color: #009981;
+    padding: 6px 15px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.btn-open-coupon:hover { 
+    background-color: #009981;
+    color: white;
+}
+
+.selected-coupon-info {
+    background: #e6fffa;
+    border: 1px dashed #009981;
+    padding: 8px 12px;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.btn-remove-coupon {
+    background: none; border: none; color: #999; font-size: 18px; cursor: pointer; line-height: 1;
+}
+.btn-remove-coupon:hover { color: #e74c3c; }
+
 
 .coupon-input-group {
   display: flex;
@@ -1083,6 +1511,7 @@ textarea:focus {
   text-transform: uppercase;
   font-weight: 600;
   letter-spacing: 1px;
+  flex: 1;
 }
 
 /* [UPDATED] Button color */
@@ -1126,181 +1555,137 @@ textarea:focus {
   gap: 5px;
 }
 
-/* Voucher Tickets */
-.available-vouchers-container {
-  margin-top: 20px;
+/* ----- COUPON MODAL STYLES ----- */
+.coupon-modal {
+    max-width: 450px; /* Compact width */
+    padding-bottom: 20px;
 }
 
-.voucher-header {
-  font-size: 13px;
-  font-weight: 600;
-  color: #888;
-  text-transform: uppercase;
-  margin-bottom: 10px;
+.modal-search {
+    padding: 15px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #eee;
+    margin-top: 0;
 }
 
-.voucher-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 250px;
-  overflow-y: auto;
+.voucher-list-modal {
+    max-height: 350px;
+    overflow-y: auto;
+    padding: 15px;
 }
 
-.voucher-ticket {
-  display: flex;
-  justify-content: space-between;
-  align-items: stretch;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 0;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s;
-  overflow: visible;
+.voucher-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
-.voucher-ticket:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-  border-color: #009981;
+/* Compact Voucher Ticket */
+.voucher-ticket-compact {
+    display: flex;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    min-height: 70px;
 }
 
-.voucher-ticket.active {
-  background: #e6fffa;
-  border-color: #009981;
+.voucher-ticket-compact:hover {
+    border-color: #009981;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
-.voucher-left {
-  flex: 1;
-  padding: 12px 0 12px 15px;
-  min-width: 150px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  border-right: 1px dashed #e0e0e0;
+.voucher-ticket-compact.active {
+    border: 1px solid #009981;
+    background-color: #f0fdfa;
 }
 
-.voucher-ticket.active .voucher-left {
-  border-right-color: #b2f5ea;
+.ticket-left {
+    width: 60px;
+    background: #009981;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 24px;
 }
 
-.voucher-code {
-  font-weight: 700;
-  color: #009981;
-  font-size: 14px;
+.ticket-content {
+    flex: 1;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
-.voucher-label {
-  font-size: 13px;
-  color: #555;
-  margin-top: 2px;
+.ticket-code {
+    font-weight: 700;
+    color: #333;
+    font-size: 14px;
+    margin-bottom: 4px;
 }
 
-.voucher-desc-left {
-  font-size: 11px;
-  color: #999;
-  margin-top: 4px;
+.ticket-desc {
+    font-size: 12px;
+    color: #666;
+    line-height: 1.4;
 }
 
-
-.voucher-right {
-  flex-shrink: 0;
-  width: 100px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 8px;
-  background: #f8f8f8;
-  border-top-right-radius: 8px;
-  border-bottom-right-radius: 8px;
+.min-spend {
+    display: block;
+    font-size: 11px;
+    color: #999;
 }
 
-.voucher-ticket.active .voucher-right {
-  background: #e6fffa;
+.ticket-action {
+    width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-left: 1px dashed #eee;
 }
 
-.voucher-desc {
-  font-size: 11px;
-  color: #777;
-  margin-bottom: 6px;
+.radio-check {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #ddd;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-/* [FIX] Đảm bảo nội dung voucher-desc không bị tràn nút */
-.voucher-right {
-  position: relative;
-  /* Tạo context cho absolute positioning */
-  width: 100px;
-  padding: 10px 8px;
+.voucher-ticket-compact.active .radio-check {
+    border-color: #009981;
+    background: #009981;
+    color: #fff;
+    font-size: 10px;
 }
 
-.voucher-desc {
-  z-index: 2;
-  /* Đưa nội dung lên trên notch */
-  text-align: center;
-  white-space: nowrap;
-  /* Giữ mô tả trên 1 hàng (thường là Giảm X%) */
-  font-weight: 600;
-  color: #333;
+/* Notches */
+.notch {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #fff; /* Must match modal bg */
+    border-radius: 50%;
+    left: 54px; /* Position at junction */
+    z-index: 1;
+    border: 1px solid #e0e0e0;
 }
+.notch.top { top: -7px; border-bottom-color: transparent; }
+.notch.bottom { bottom: -7px; border-top-color: transparent; }
+.voucher-ticket-compact:hover .notch { background-color: #fff; } /* Fix hover glitch */
 
-.voucher-desc span {
-  display: block;
-  font-size: 12px;
-}
-
-.apply-tag {
-  font-size: 12px;
-  padding: 5px 8px;
-  background: #009981;
-  color: white;
-  border-radius: 6px;
-  font-weight: 600;
-  width: 90%;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 153, 129, 0.2);
-  cursor: pointer;
-  z-index: 2;
-  /* Đưa nút lên trên cùng */
-}
-
-.apply-tag.used {
-  background: #e67e22;
-  box-shadow: none;
-}
-
-/* Notch Decor */
-.circle-notch {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  background-color: #f8f9fa;
-  /* Màu nền trang checkout */
-  border-radius: 50%;
-  right: 93px;
-  z-index: 1;
-  border: 1px solid #e0e0e0;
-}
-
-.circle-notch.top {
-  top: -9px;
-  border-bottom-color: transparent;
-}
-
-.circle-notch.bottom {
-  bottom: -9px;
-  border-top-color: transparent;
-}
-
-.voucher-ticket:hover .circle-notch {
-  background-color: #f0fdfa;
-}
-
-.voucher-ticket.active .circle-notch {
-  background-color: #f8f9fa;
-  border-color: #009981;
+.modal-footer-custom {
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    background: #fff;
+    border-bottom-left-radius: 20px;
+    border-bottom-right-radius: 20px;
 }
 
 /* Checkout Button */

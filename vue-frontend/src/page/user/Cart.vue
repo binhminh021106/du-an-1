@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, computed, watch } from "vue";
+import { onMounted, computed, watch, ref } from "vue"; // [UPDATE] Import ref
 import { useStore } from "vuex";
 import { useRouter } from "vue-router";
 import Swal from 'sweetalert2'; // Import SweetAlert2
@@ -7,6 +7,15 @@ import Swal from 'sweetalert2'; // Import SweetAlert2
 const store = useStore();
 const router = useRouter();
 
+// --- KHAI BÁO BIẾN BỊ THIẾU (FIX LỖI) ---
+// Lấy danh sách giỏ hàng từ Vuex getter
+const cart = computed(() => store.getters.cartItems);
+
+// Lấy tổng tiền từ Vuex getter
+const total = computed(() => store.getters.cartTotal);
+
+// [NEW] State lưu danh sách các cartId đang được cập nhật để hiện spinner
+const updatingIds = ref([]);
 
 const parsePrice = (value) => {
     if (typeof value === 'number') return value;
@@ -70,8 +79,10 @@ const Toast = Swal.mixin({
 
 // --- ACTIONS ---
 
-// [NÂNG CẤP] Xóa sản phẩm với SweetAlert2
+// [NÂNG CẤP] Xóa sản phẩm với SweetAlert2 và Spinner
 const removeItem = (cartId) => {
+    if (updatingIds.value.includes(cartId)) return; // Chặn click nếu đang xử lý
+
     Swal.fire({
         title: 'Bạn chắc chắn chứ?',
         text: "Sản phẩm sẽ bị xóa khỏi giỏ hàng!",
@@ -81,21 +92,34 @@ const removeItem = (cartId) => {
         cancelButtonColor: '#6b7280', // Màu xám cho nút hủy
         confirmButtonText: 'Vâng, xóa đi!',
         cancelButtonText: 'Hủy bỏ'
-    }).then((result) => {
+    }).then(async (result) => {
         if (result.isConfirmed) {
-            store.dispatch('removeItem', cartId);
-
-            // Hiển thị Toast thông báo thành công
-            Toast.fire({
-                icon: 'success',
-                title: 'Đã xóa sản phẩm thành công'
-            });
+            // Bật loading cho item này
+            updatingIds.value.push(cartId);
+            
+            try {
+                await store.dispatch('removeItem', cartId);
+                // Hiển thị Toast thông báo thành công
+                Toast.fire({
+                    icon: 'success',
+                    title: 'Đã xóa sản phẩm thành công'
+                });
+            } catch (error) {
+                console.error(error);
+                Toast.fire({ icon: 'error', title: 'Lỗi khi xóa sản phẩm' });
+            } finally {
+                // Tắt loading
+                updatingIds.value = updatingIds.value.filter(id => id !== cartId);
+            }
         }
     });
 }
 
-// [NÂNG CẤP] Update số lượng với Toast cảnh báo
-const updateQty = (cartId, currentQty, change) => {
+// [NÂNG CẤP] Update số lượng với Toast cảnh báo và Spinner loading
+const updateQty = async (cartId, currentQty, change) => {
+    // 1. Chặn nếu đang update món này (tránh spam click)
+    if (updatingIds.value.includes(cartId)) return;
+
     let newQty = parseInt(currentQty) + change;
     const item = cart.value.find(i => i.cartId === cartId);
     const maxStock = item ? (item.stock || 999) : 999;
@@ -103,7 +127,6 @@ const updateQty = (cartId, currentQty, change) => {
     if (newQty < 1) return;
 
     if (newQty > maxStock) {
-        // Thay alert bằng Toast warning
         Toast.fire({
             icon: 'warning',
             title: `Kho chỉ còn ${maxStock} sản phẩm!`
@@ -111,7 +134,22 @@ const updateQty = (cartId, currentQty, change) => {
         return;
     }
 
-    store.dispatch('updateItemQty', { cartId, qty: newQty });
+    // 2. Bật trạng thái loading cho item này
+    updatingIds.value.push(cartId);
+
+    try {
+        // 3. Gọi API (đợi hoàn thành)
+        await store.dispatch('updateItemQty', { cartId, qty: newQty });
+    } catch (error) {
+        console.error("Lỗi update qty:", error);
+        Toast.fire({ icon: 'error', title: 'Lỗi cập nhật số lượng' });
+    } finally {
+        // 4. Tắt loading sau khi xong (dù thành công hay lỗi)
+        // Dùng setTimeout nhỏ để UX mượt hơn nếu API quá nhanh
+        setTimeout(() => {
+            updatingIds.value = updatingIds.value.filter(id => id !== cartId);
+        }, 300); 
+    }
 }
 
 // [NÂNG CẤP] Checkout check
@@ -184,19 +222,28 @@ const proceedToCheckout = () => {
                                     </div>
 
                                     <!-- Bộ tăng giảm số lượng -->
+                                    <!-- [UPDATE] Thêm logic loading -->
                                     <div class="qty-control">
+                                        <!-- Overlay Spinner -->
+                                        <div v-if="updatingIds.includes(item.cartId)" class="qty-spinner">
+                                            <i class="fa-solid fa-spinner fa-spin"></i>
+                                        </div>
+
                                         <button @click="updateQty(item.cartId, item.qty, -1)"
-                                            :disabled="item.qty <= 1">-</button>
+                                            :disabled="item.qty <= 1 || updatingIds.includes(item.cartId)">-</button>
+                                        
                                         <input type="number" :value="item.qty" readonly>
+                                        
                                         <button @click="updateQty(item.cartId, item.qty, 1)"
-                                            :disabled="item.qty >= (item.stock || 999)">+</button>
+                                            :disabled="item.qty >= (item.stock || 999) || updatingIds.includes(item.cartId)">+</button>
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Delete Button (Desktop) -->
-                            <button class="btn-remove-item" @click="removeItem(item.cartId)" title="Xóa">
-                                <i class="fa-solid fa-xmark"></i>
+                            <button class="btn-remove-item" @click="removeItem(item.cartId)" title="Xóa" :disabled="updatingIds.includes(item.cartId)">
+                                <i v-if="updatingIds.includes(item.cartId)" class="fa-solid fa-spinner fa-spin"></i>
+                                <i v-else class="fa-solid fa-xmark"></i>
                             </button>
                         </div>
                     </div>
@@ -393,6 +440,24 @@ const proceedToCheckout = () => {
     border: 1px solid #d1d5db;
     border-radius: 6px;
     background: white;
+    /* [NEW] Để spinner overlay căn theo div này */
+    position: relative; 
+}
+
+/* [NEW] Spinner Overlay Style */
+.qty-spinner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.85); /* Nền trắng mờ */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    border-radius: 6px;
+    color: #10b981; /* Màu xanh thương hiệu */
 }
 
 .qty-control button {
