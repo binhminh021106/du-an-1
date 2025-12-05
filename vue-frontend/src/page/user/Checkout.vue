@@ -141,7 +141,7 @@ const shippingFees = {
 const paymentMethods = [
   { code: "COD", name: "Thanh toán khi nhận hàng (COD)", icon: "fa-box-open" },
   { code: "BANK", name: "Chuyển khoản ngân hàng", icon: "fa-building-columns" },
-  { code: "CARD", name: "VN Pay", icon: "fa-credit-card" },
+  { code: "VNPAY", name: "Thanh toán qua VNPay", icon: "fa-credit-card" }, // [UPDATED] Đổi code CARD thành VNPAY cho khớp backend
 ];
 
 const form = reactive({
@@ -464,14 +464,10 @@ const confirmCheckout = async () => {
     return;
   }
 
-  // [IMPORTANT] Helper làm sạch giá tiền (chuyển "100.000 đ" -> 100000)
-  // Đảm bảo dữ liệu gửi lên Controller là Number để khớp với kiểu bigint
   const cleanPrice = (val) => {
     if (typeof val === 'number') return val;
     return parseFloat(String(val).replace(/[^0-9.]/g, "")) || 0;
   };
-
-  // STOCK CHECK (Optional: Call API to check stock again before submit)
 
   isSubmitting.value = true;
 
@@ -491,31 +487,20 @@ const confirmCheckout = async () => {
     
     // 👇 FIX QUAN TRỌNG: LẤY ĐÚNG PRODUCT_ID VÀ VARIANT_ID
     items: cartItems.value.map(item => {
-      // Logic xác định Product ID chuẩn xác:
-      // 1. Nếu item từ DB (có quan hệ): Thử lấy item.product_id hoặc item.variant.product_id
-      // 2. Nếu item LocalStorage (lưu thẳng): item.id thường chính là product id
       let realProductId = item.product_id; 
       
       if (!realProductId && item.variant && item.variant.product_id) {
           realProductId = item.variant.product_id;
       }
-      
-      // Fallback cuối cùng cho trường hợp LocalStorage (nơi item.id chính là product id)
       if (!realProductId) {
           realProductId = item.id;
       }
 
       return {
         product_id: realProductId, 
-        
-        // Lấy variant_id an toàn từ nhiều nguồn có thể
         variant_id: item.variantId || item.variant_id || (item.variant ? item.variant.id : null), 
-        
         quantity: item.qty || item.quantity,
-        
-        // [FIX] Dùng cleanPrice để đảm bảo giá là số
         price: cleanPrice(item.price),
-        
         name: item.name,
         image: item.image || item.image_url || item.thumbnail_url
       };
@@ -523,14 +508,40 @@ const confirmCheckout = async () => {
   };
 
   try {
-    // [NEW] GỌI API TẠO ĐƠN HÀNG THAY VÌ LƯU LOCAL
+    // 1. GỌI API TẠO ĐƠN HÀNG
     const res = await apiService.post('/orders', newOrderData);
 
-    // Nếu thành công
-    const orderId = res.data.data?.id || res.data.id || 'N/A'; // Lấy mã đơn từ response
+    const orderId = res.data.data?.id || res.data.id || 'N/A'; // Lấy mã đơn
+
+    // Xóa giỏ hàng ngay khi tạo đơn thành công (Dù là COD hay VNPay)
+    cartItems.value.forEach(item => { store.dispatch('removeItem', item.cartId); });
+    localStorage.removeItem('checkout_items');
+
+    // === 2. XỬ LÝ LOGIC VNPAY ===
+    if (form.paymentMethod === 'VNPAY') {
+        try {
+            // Gọi API lấy link thanh toán
+            const vnpayRes = await apiService.post('/payment/vnpay', { order_id: orderId });
+            
+            if (vnpayRes.data && vnpayRes.data.data) {
+                // Chuyển hướng sang VNPay
+                window.location.href = vnpayRes.data.data;
+                return; // Dừng hàm tại đây (không hiện Modal Success bên dưới)
+            } else {
+                 Swal.fire('Lỗi', 'Không lấy được link thanh toán. Vui lòng kiểm tra lại.', 'error');
+                 return;
+            }
+        } catch (vnpayErr) {
+            console.error("Lỗi tạo link VNPay:", vnpayErr);
+            Swal.fire('Lỗi', 'Có lỗi khi kết nối cổng thanh toán VNPay', 'error');
+            return;
+        }
+    }
+    // ============================
+
+    // === 3. XỬ LÝ CHO COD / BANK ===
     const paymentMethodName = paymentMethods.find(p => p.code === form.paymentMethod)?.name || form.paymentMethod;
 
-    // [UPDATED] Modal Content theo cấu trúc "cũ" chi tiết hơn
     modalContent.value = {
       title: `Đặt hàng thành công! (Mã: ${orderId})`,
       details: [
@@ -543,21 +554,15 @@ const confirmCheckout = async () => {
       summary: [
         { label: "Tạm tính", value: `${subtotal.value.toLocaleString()} đ` },
         { label: "Phí vận chuyển", value: `${shippingCost.value.toLocaleString()} đ` },
-        { label: "Phí vận chuyển", value: `${shippingCost.value.toLocaleString()} đ` },
         ...(discountAmount.value > 0 ? [{ label: "Giảm giá", value: `-${discountAmount.value.toLocaleString()} đ` }] : []),
         { label: "Tổng cộng", value: `${totalPrice.value.toLocaleString()} đ`, isTotal: true },
       ]
     };
 
-    // Xóa giỏ hàng
-    cartItems.value.forEach(item => { store.dispatch('removeItem', item.cartId); });
-    localStorage.removeItem('checkout_items');
-
     showModal.value = true;
 
   } catch (error) {
     console.error("Lỗi đặt hàng:", error);
-    // Hiển thị lỗi chi tiết từ backend nếu có
     const msg = error.response?.data?.message || 'Có lỗi xảy ra, vui lòng thử lại.';
     Swal.fire('Đặt hàng thất bại', msg, 'error');
   } finally {
@@ -1777,6 +1782,7 @@ textarea:focus {
   color: #555;
   font-size: 14px;
   line-height: 1.5;
+  color: #333;
 }
 
 .summary-line-modal {
