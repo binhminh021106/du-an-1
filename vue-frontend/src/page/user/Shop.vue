@@ -13,13 +13,22 @@ const route = useRoute()
 const router = useRouter()
 const store = useStore()
 
-// --- [NEW] CẤU HÌNH TOAST (Thông báo xịn xò) ---
+// --- [NEW] CẤU HÌNH TOAST (Thông báo xịn xò - Updated Style) ---
 const Toast = Swal.mixin({
     toast: true,
     position: 'bottom-end',
     showConfirmButton: false,
     timer: 3000,
     timerProgressBar: true,
+    background: '#fff',
+    color: '#333',
+    iconColor: '#009981', // Màu xanh chủ đạo của Shop
+    // Class tùy chỉnh để style CSS
+    customClass: {
+        popup: 'elegant-toast', 
+        title: 'elegant-toast-title',
+        timerProgressBar: 'elegant-toast-progress'
+    },
     didOpen: (toast) => {
         toast.addEventListener('mouseenter', Swal.stopTimer)
         toast.addEventListener('mouseleave', Swal.resumeTimer)
@@ -806,6 +815,31 @@ watch(() => route.query, (newQuery) => {
     </div>
   </div>
 </template>
+
+<!-- [NEW] Global Style for SweetAlert -->
+<style>
+/* Style riêng cho Toast để thanh thoát hơn */
+.elegant-toast {
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 12px !important;
+    padding: 10px 16px !important;
+    border-left: 4px solid #009981 !important; /* Điểm nhấn màu xanh của trang Shop */
+    background: #ffffff !important;
+}
+
+.elegant-toast-title {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    color: #333 !important;
+    margin-left: 5px !important;
+}
+
+.elegant-toast-progress {
+    background-color: #009981 !important;
+    height: 3px !important; /* Thanh progress mảnh hơn */
+}
+</style>
 
 <style scoped>
 /* [MODIFIED] Chuyển biến vào scope của wrapper để nhận diện đúng */

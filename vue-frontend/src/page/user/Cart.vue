@@ -1,22 +1,18 @@
 <script setup>
-import { onMounted, computed, watch, ref } from "vue"; // [UPDATE] Import ref
+import { onMounted, computed, watch, ref } from "vue";
 import { useStore } from "vuex";
 import { useRouter } from "vue-router";
-import Swal from 'sweetalert2'; // Import SweetAlert2
+import Swal from 'sweetalert2';
 
 const store = useStore();
 const router = useRouter();
 
-// --- KHAI BÁO BIẾN BỊ THIẾU (FIX LỖI) ---
-// Lấy danh sách giỏ hàng từ Vuex getter
+// --- KHAI BÁO BIẾN ---
 const cart = computed(() => store.getters.cartItems);
-
-// Lấy tổng tiền từ Vuex getter
 const total = computed(() => store.getters.cartTotal);
-
-// [NEW] State lưu danh sách các cartId đang được cập nhật để hiện spinner
 const updatingIds = ref([]);
 
+// --- UTILS ---
 const parsePrice = (value) => {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
@@ -24,7 +20,6 @@ const parsePrice = (value) => {
     }
     return 0;
 };
-
 
 const getVariantLabel = (item) => {
     if (item.variantName && item.variantName !== 'Mặc định') return item.variantName;
@@ -36,7 +31,6 @@ const getVariantLabel = (item) => {
     return null;
 };
 
-// --- CẤU HÌNH API ---
 const SERVER_URL = 'http://127.0.0.1:8000';
 const USE_STORAGE = false;
 
@@ -53,24 +47,43 @@ const formatPrice = (v) => {
     return price.toLocaleString("vi-VN") + " ₫";
 }
 
+// [NEW] Load Lordicon Script
+const loadLordicon = () => {
+    if (!document.querySelector('script[src="https://cdn.lordicon.com/lordicon.js"]')) {
+        const script = document.createElement('script')
+        script.src = 'https://cdn.lordicon.com/lordicon.js'
+        script.async = true
+        document.head.appendChild(script)
+    }
+}
+
 onMounted(() => {
+    loadLordicon(); // Load script icon
     store.dispatch('enrichCartData');
 });
 
-// Debug: Log dữ liệu cart khi thay đổi
 watch(cart, (newVal) => {
     if (newVal && newVal.length > 0) {
         console.log("🛒 Dữ liệu Giỏ hàng hiện tại:", newVal);
     }
 });
 
-// --- CẤU HÌNH SWEETALERT2 & TOAST ---
+// --- TOAST ĐẸP HƠN ---
 const Toast = Swal.mixin({
     toast: true,
-    position: 'top-end',
+    position: 'bottom-end', // [UPDATE] Chuyển xuống góc phải dưới
     showConfirmButton: false,
     timer: 3000,
     timerProgressBar: true,
+    background: '#fff',
+    color: '#333',
+    iconColor: '#10b981', // Màu icon xanh đẹp
+    // Thêm class tùy chỉnh để CSS
+    customClass: {
+        popup: 'elegant-toast', 
+        title: 'elegant-toast-title',
+        timerProgressBar: 'elegant-toast-progress'
+    },
     didOpen: (toast) => {
         toast.addEventListener('mouseenter', Swal.stopTimer)
         toast.addEventListener('mouseleave', Swal.resumeTimer)
@@ -78,46 +91,44 @@ const Toast = Swal.mixin({
 });
 
 // --- ACTIONS ---
-
-// [NÂNG CẤP] Xóa sản phẩm với SweetAlert2 và Spinner
 const removeItem = (cartId) => {
-    if (updatingIds.value.includes(cartId)) return; // Chặn click nếu đang xử lý
+    if (updatingIds.value.includes(cartId)) return;
 
+    // SweetAlert Confirm cũng nên chỉnh chút cho đẹp (nếu muốn)
     Swal.fire({
         title: 'Bạn chắc chắn chứ?',
         text: "Sản phẩm sẽ bị xóa khỏi giỏ hàng!",
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#ef4444', // Màu đỏ cho nút xóa
-        cancelButtonColor: '#6b7280', // Màu xám cho nút hủy
-        confirmButtonText: 'Vâng, xóa đi!',
-        cancelButtonText: 'Hủy bỏ'
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Xóa ngay',
+        cancelButtonText: 'Giữ lại',
+        customClass: {
+            popup: 'elegant-popup', // Dùng chung style bo góc
+            confirmButton: 'elegant-confirm-btn',
+            cancelButton: 'elegant-cancel-btn'
+        }
     }).then(async (result) => {
         if (result.isConfirmed) {
-            // Bật loading cho item này
             updatingIds.value.push(cartId);
-            
             try {
                 await store.dispatch('removeItem', cartId);
-                // Hiển thị Toast thông báo thành công
                 Toast.fire({
                     icon: 'success',
-                    title: 'Đã xóa sản phẩm thành công'
+                    title: 'Đã xóa sản phẩm'
                 });
             } catch (error) {
                 console.error(error);
                 Toast.fire({ icon: 'error', title: 'Lỗi khi xóa sản phẩm' });
             } finally {
-                // Tắt loading
                 updatingIds.value = updatingIds.value.filter(id => id !== cartId);
             }
         }
     });
 }
 
-// [NÂNG CẤP] Update số lượng với Toast cảnh báo và Spinner loading
 const updateQty = async (cartId, currentQty, change) => {
-    // 1. Chặn nếu đang update món này (tránh spam click)
     if (updatingIds.value.includes(cartId)) return;
 
     let newQty = parseInt(currentQty) + change;
@@ -134,32 +145,31 @@ const updateQty = async (cartId, currentQty, change) => {
         return;
     }
 
-    // 2. Bật trạng thái loading cho item này
     updatingIds.value.push(cartId);
 
     try {
-        // 3. Gọi API (đợi hoàn thành)
         await store.dispatch('updateItemQty', { cartId, qty: newQty });
     } catch (error) {
         console.error("Lỗi update qty:", error);
         Toast.fire({ icon: 'error', title: 'Lỗi cập nhật số lượng' });
     } finally {
-        // 4. Tắt loading sau khi xong (dù thành công hay lỗi)
-        // Dùng setTimeout nhỏ để UX mượt hơn nếu API quá nhanh
         setTimeout(() => {
             updatingIds.value = updatingIds.value.filter(id => id !== cartId);
         }, 300); 
     }
 }
 
-// [NÂNG CẤP] Checkout check
 const proceedToCheckout = () => {
     if (cart.value.length === 0) {
         Swal.fire({
             icon: 'info',
             title: 'Giỏ hàng trống',
             text: 'Hãy chọn thêm sản phẩm trước khi thanh toán nhé!',
-            confirmButtonColor: '#10b981'
+            confirmButtonColor: '#10b981',
+            customClass: {
+                popup: 'elegant-popup',
+                confirmButton: 'elegant-confirm-btn'
+            }
         });
         return;
     }
@@ -169,17 +179,29 @@ const proceedToCheckout = () => {
     router.push('/checkout');
 }
 </script>
+
 <template>
     <div class="cart-page">
         <div class="container">
 
             <!-- HEADER -->
             <div class="page-header">
-                <h1><i class="fa-solid fa-bag-shopping"></i> Giỏ hàng của bạn</h1>
+                <h1 class="flex items-center gap-2">
+                    <!-- [ICON] Shopping Bag -->
+                    <lord-icon
+                        src="https://cdn.lordicon.com/evyuuwna.json"
+                        trigger="loop"
+                        delay="2000"
+                        colors="primary:#1f2937,secondary:#10b981"
+                        style="width:32px;height:32px">
+                    </lord-icon>
+                    Giỏ hàng của bạn
+                </h1>
                 <span class="item-count">{{ cart.length }} sản phẩm</span>
             </div>
 
             <div v-if="cart.length === 0" class="empty-state">
+                <!-- Giữ nguyên ảnh tĩnh cho empty state vì nó to và đẹp -->
                 <img src="https://cdni.iconscout.com/illustration/premium/thumb/empty-cart-2130356-1800917.png"
                     alt="Empty Cart">
                 <h3>Giỏ hàng đang trống</h3>
@@ -210,7 +232,14 @@ const proceedToCheckout = () => {
 
                                     <div class="item-variants" v-if="getVariantLabel(item)">
                                         <span class="variant-badge">
-                                            <i class="fa-solid fa-layer-group"></i> {{ getVariantLabel(item) }}
+                                            <!-- [ICON] Layers/Stack -->
+                                            <lord-icon
+                                                src="https://cdn.lordicon.com/nocovwne.json"
+                                                trigger="hover"
+                                                colors="primary:#4b5563,secondary:#4b5563"
+                                                style="width:18px;height:18px; margin-right: 4px;">
+                                            </lord-icon>
+                                            {{ getVariantLabel(item) }}
                                         </span>
                                     </div>
                                 </div>
@@ -222,11 +251,16 @@ const proceedToCheckout = () => {
                                     </div>
 
                                     <!-- Bộ tăng giảm số lượng -->
-                                    <!-- [UPDATE] Thêm logic loading -->
                                     <div class="qty-control">
                                         <!-- Overlay Spinner -->
                                         <div v-if="updatingIds.includes(item.cartId)" class="qty-spinner">
-                                            <i class="fa-solid fa-spinner fa-spin"></i>
+                                            <!-- [ICON] Loading Spinner -->
+                                            <lord-icon
+                                                src="https://cdn.lordicon.com/dpinvufc.json"
+                                                trigger="loop"
+                                                colors="primary:#10b981,secondary:#10b981"
+                                                style="width:24px;height:24px">
+                                            </lord-icon>
                                         </div>
 
                                         <button @click="updateQty(item.cartId, item.qty, -1)"
@@ -240,10 +274,34 @@ const proceedToCheckout = () => {
                                 </div>
                             </div>
 
-                            <!-- Delete Button (Desktop) -->
-                            <button class="btn-remove-item" @click="removeItem(item.cartId)" title="Xóa" :disabled="updatingIds.includes(item.cartId)">
-                                <i v-if="updatingIds.includes(item.cartId)" class="fa-solid fa-spinner fa-spin"></i>
-                                <i v-else class="fa-solid fa-xmark"></i>
+                            <!-- Delete Button (Desktop) - Changed to Trash Bin -->
+                            <!-- Thêm class trash-btn-target để lordicon biết hover vào button thì chạy -->
+                            <button class="btn-remove-item trash-btn-target" 
+                                    :class="`trash-target-${item.cartId}`"
+                                    @click="removeItem(item.cartId)" 
+                                    title="Xóa" 
+                                    :disabled="updatingIds.includes(item.cartId)">
+                                
+                                <div v-if="updatingIds.includes(item.cartId)" class="loading-icon">
+                                     <!-- [ICON] Small Spinner -->
+                                    <lord-icon
+                                        src="https://cdn.lordicon.com/dpinvufc.json"
+                                        trigger="loop"
+                                        colors="primary:#ef4444,secondary:#ef4444"
+                                        style="width:20px;height:20px">
+                                    </lord-icon>
+                                </div>
+                                <div v-else class="flex-center">
+                                    <!-- [ICON] Trash Bin -->
+                                    <!-- Target: trỏ vào class của button cha -->
+                                    <lord-icon
+                                        src="https://cdn.lordicon.com/jmkrnisz.json"
+                                        trigger="hover"
+                                        :target="`.trash-target-${item.cartId}`"
+                                        colors="primary:#9ca3af,secondary:#ef4444"
+                                        style="width:24px;height:24px">
+                                    </lord-icon>
+                                </div>
                             </button>
                         </div>
                     </div>
@@ -274,8 +332,16 @@ const proceedToCheckout = () => {
                             Mua Hàng ngay
                         </button>
 
-                        <router-link to="/shop" class="link-continue">
-                            <i class="fa-solid fa-arrow-left"></i> Tiếp tục chọn đồ
+                        <router-link to="/shop" class="link-continue flex items-center justify-center gap-1 btn-continue-target">
+                             <!-- [ICON] Arrow Left (Rotated) -->
+                            <lord-icon
+                                src="https://cdn.lordicon.com/vduvxizq.json"
+                                trigger="hover"
+                                target=".btn-continue-target"
+                                colors="primary:#6b7280"
+                                style="width:20px;height:20px; transform: rotate(180deg);">
+                            </lord-icon>
+                            Tiếp tục chọn đồ
                         </router-link>
                     </div>
                 </div>
@@ -284,6 +350,51 @@ const proceedToCheckout = () => {
         </div>
     </div>
 </template>
+
+<!-- [NEW] Non-scoped style for SweetAlert customization -->
+<style>
+/* Style riêng cho Toast để thanh thoát hơn */
+.elegant-toast {
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 12px !important;
+    padding: 10px 16px !important;
+    border-left: 4px solid #10b981 !important; /* Điểm nhấn màu xanh bên trái */
+    background: #ffffff !important;
+}
+
+.elegant-toast-title {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    color: #333 !important;
+    margin-left: 5px !important;
+}
+
+.elegant-toast-progress {
+    background-color: #10b981 !important;
+    height: 3px !important; /* Thanh progress mảnh hơn */
+}
+
+/* Style cho Popup Confirm Dialog (Xóa/Thanh toán) */
+.elegant-popup {
+    border-radius: 16px !important;
+    font-family: 'Inter', sans-serif !important;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.1) !important;
+}
+
+.elegant-confirm-btn {
+    border-radius: 8px !important;
+    padding: 10px 24px !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+}
+
+.elegant-cancel-btn {
+    border-radius: 8px !important;
+    padding: 10px 24px !important;
+    font-weight: 600 !important;
+}
+</style>
 
 <style scoped>
 
@@ -301,6 +412,14 @@ const proceedToCheckout = () => {
     max-width: 1200px;
     margin: 0 auto;
 }
+
+/* Helpers */
+.flex { display: flex; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.gap-2 { gap: 8px; }
+.gap-1 { gap: 4px; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
 
 /* Header */
 .page-header {
@@ -330,19 +449,17 @@ const proceedToCheckout = () => {
 .cart-layout {
     display: grid;
     grid-template-columns: 1fr 350px;
-    /* Cột trái to, cột phải cố định 350px */
     gap: 25px;
     align-items: start;
 }
 
-/* Item Card - THE IMPORTANT PART */
+/* Item Card */
 .cart-item-card {
     background: white;
     border-radius: 12px;
     padding: 20px;
     display: flex;
     align-items: flex-start;
-    /* Căn hàng trên cùng */
     gap: 20px;
     margin-bottom: 15px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -396,8 +513,7 @@ const proceedToCheckout = () => {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    margin-right: 30px;
-    /* Tránh đè lên nút xóa */
+    margin-right: 40px; /* Tăng margin để tránh đè nút xóa (icon xóa giờ to hơn chút) */
 }
 
 .item-name:hover {
@@ -411,7 +527,7 @@ const proceedToCheckout = () => {
 .variant-badge {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    /* gap: 5px; Xóa gap vì đã margin-right ở icon */
     background: #f3f4f6;
     color: #4b5563;
     padding: 4px 10px;
@@ -433,31 +549,28 @@ const proceedToCheckout = () => {
     color: #059669;
 }
 
-/* Quantity Control - Custom Button */
+/* Quantity Control */
 .qty-control {
     display: flex;
     align-items: center;
     border: 1px solid #d1d5db;
     border-radius: 6px;
     background: white;
-    /* [NEW] Để spinner overlay căn theo div này */
     position: relative; 
 }
 
-/* [NEW] Spinner Overlay Style */
 .qty-spinner {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(255, 255, 255, 0.85); /* Nền trắng mờ */
+    background: rgba(255, 255, 255, 0.9);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 10;
     border-radius: 6px;
-    color: #10b981; /* Màu xanh thương hiệu */
 }
 
 .qty-control button {
@@ -488,7 +601,6 @@ const proceedToCheckout = () => {
     font-size: 14px;
     color: #111827;
     outline: none;
-    /* Hide spin button */
     -moz-appearance: textfield;
 }
 
@@ -498,27 +610,32 @@ const proceedToCheckout = () => {
     margin: 0;
 }
 
+/* Remove Button - Styled for Lordicon */
 .btn-remove-item {
     position: absolute;
     top: 15px;
     right: 15px;
     background: transparent;
     border: none;
-    color: #9ca3af;
+    /* color: #9ca3af; Remove text color since we handle color in lordicon */
     cursor: pointer;
-    font-size: 18px;
-    transition: color 0.2s;
+    padding: 4px;
+    border-radius: 50%;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-remove-item:hover {
-    color: #ef4444;
+    background: #fee2e2; /* Light red background on hover */
 }
+/* Khi hover vào button, đổi màu icon thành đỏ đậm thông qua lordicon attribute nhưng css này hỗ trợ visual click */
 
 /* Summary Column */
 .cart-summary-section {
     position: sticky;
     top: 20px;
-    /* Trượt theo màn hình */
 }
 
 .summary-card {
@@ -594,7 +711,10 @@ const proceedToCheckout = () => {
 }
 
 .link-continue {
-    display: block;
+    display: flex; /* Changed to flex for alignment */
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     text-align: center;
     margin-top: 15px;
     color: #6b7280;
