@@ -1,22 +1,23 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import apiService from '../../apiService'; // Đảm bảo đường dẫn đúng tới apiService
+import { useStore } from 'vuex'; // <--- BỔ SUNG
+import apiService from '../../apiService';
 import Swal from 'sweetalert2';
 
 const route = useRoute();
 const router = useRouter();
+const store = useStore(); // <--- KHỞI TẠO STORE
 
 const loading = ref(true);
-const status = ref(''); // 'success' | 'error'
+const status = ref('');
 const message = ref('Đang xử lý kết quả thanh toán...');
 const orderInfo = ref(null);
 
 onMounted(async () => {
-    // 1. Lấy tham số từ URL do VNPay trả về
+    // 1. Lấy tham số từ URL
     const params = route.query;
 
-    // Kiểm tra nếu không có mã phản hồi thì báo lỗi luôn
     if (!params.vnp_ResponseCode) {
         status.value = 'error';
         message.value = 'Không tìm thấy thông tin giao dịch hợp lệ.';
@@ -25,18 +26,35 @@ onMounted(async () => {
     }
 
     try {
-        // 2. Gọi Backend để kiểm tra chữ ký (Checksum) và cập nhật trạng thái đơn
+        // 2. Gọi Backend check checksum
         const res = await apiService.get('/payment/vnpay-return', { params });
-        
+
         if (res.data.status === 'success') {
             status.value = 'success';
             message.value = 'Giao dịch thành công!';
-            orderInfo.value = res.data.data; // Dữ liệu đơn hàng backend trả về
-            
-            // 3. Xóa giỏ hàng local sau khi thanh toán thành công
-            localStorage.removeItem('checkout_items');
-            
-            // Thông báo nhỏ góc màn hình
+            orderInfo.value = res.data.data;
+
+            // --- 3. LOGIC XÓA GIỎ HÀNG ĐÃ SỬA ---
+            // Lấy danh sách ID các món hàng đã mang đi thanh toán từ LocalStorage
+            const storedIds = localStorage.getItem('checkout_items');
+
+            if (storedIds) {
+                try {
+                    const idsToDelete = JSON.parse(storedIds);
+                    if (Array.isArray(idsToDelete)) {
+                        // Lặp qua từng ID và xóa khỏi Vuex Store
+                        idsToDelete.forEach(cartId => {
+                            store.dispatch('removeItem', cartId);
+                        });
+                    }
+                } catch (e) {
+                    console.error("Lỗi parse JSON checkout_items", e);
+                }
+                // Xóa key lưu tạm sau khi xử lý xong
+                localStorage.removeItem('checkout_items');
+            }
+            // ------------------------------------
+
             const Toast = Swal.mixin({
                 toast: true, position: 'top-end', showConfirmButton: false, timer: 3000
             });
@@ -57,16 +75,16 @@ onMounted(async () => {
 
 const goHome = () => router.push('/');
 const viewOrders = () => router.push('/OrderList');
-const retryPayment = () => router.push('/cart'); // Quay lại giỏ để thanh toán lại
+const retryPayment = () => router.push('/cart'); 
 </script>
 
 <template>
     <div class="payment-result-page container">
         <h2 class="page-title"><i class="fa-solid fa-receipt"></i> Kết quả thanh toán</h2>
-        
+
         <div class="result-content">
             <div class="card result-card">
-                
+
                 <!-- TRẠNG THÁI LOADING -->
                 <div v-if="loading" class="state-box loading">
                     <div class="spinner">
@@ -82,7 +100,8 @@ const retryPayment = () => router.push('/cart'); // Quay lại giỏ để thanh
                         <i class="fa-solid fa-check"></i>
                     </div>
                     <h2 class="status-title">Thanh toán thành công!</h2>
-                    <p class="status-desc">Cảm ơn bạn đã mua sắm. Đơn hàng của bạn đã được thanh toán và đang chờ xử lý.</p>
+                    <p class="status-desc">Cảm ơn bạn đã mua sắm. Đơn hàng của bạn đã được thanh toán và đang chờ xử lý.
+                    </p>
 
                     <div class="order-summary-box" v-if="orderInfo">
                         <div class="summary-row">
@@ -162,7 +181,10 @@ const retryPayment = () => router.push('/cart'); // Quay lại giỏ để thanh
     align-items: center;
     gap: 10px;
 }
-.page-title i { color: #009981; }
+
+.page-title i {
+    color: #009981;
+}
 
 .result-content {
     width: 100%;
@@ -188,8 +210,15 @@ const retryPayment = () => router.push('/cart'); // Quay lại giỏ để thanh
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Icons */
@@ -314,6 +343,7 @@ const retryPayment = () => router.push('/cart'); // Quay lại giỏ để thanh
 .btn-primary-custom.error-btn {
     background: #e74c3c;
 }
+
 .btn-primary-custom.error-btn:hover {
     background: #c0392b;
     box-shadow: 0 4px 10px rgba(231, 76, 60, 0.2);

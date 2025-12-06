@@ -119,14 +119,6 @@ Route::get('/news/{slug}', [NewController::class, 'show']);
 Route::get('/reviews', [ReviewController::class, 'index']);
 Route::get('/review/{id}', [ReviewController::class, 'show']);
 
-// --- USERS ---
-Route::get('/users', [UserController::class, 'index']);
-Route::get('/user/{id}', [UserController::class, 'show']);
-
-// --- USER ADDRESSES ---
-Route::get('/useraddresses', [UserAddressController::class, 'index']);
-Route::get('/useraddress/{id}', [UserAddressController::class, 'show']);
-
 // --- ROLES ---
 Route::get('/roles', [RoleController::class, 'index']);
 
@@ -143,38 +135,37 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
+    Route::put('/user/profile', [UserController::class, 'updateProfile']);
 
-    // --- CART (GIỎ HÀNG DATABASE) ---
+    // --- USER ADDRESSES (QUẢN LÝ ĐỊA CHỈ) ---
+    Route::get('/user/addresses', [UserAddressController::class, 'index']);
+    Route::post('/user/addresses', [UserAddressController::class, 'store']);
+    Route::put('/user/addresses/{id}', [UserAddressController::class, 'update']);
+    Route::delete('/user/addresses/{id}', [UserAddressController::class, 'destroy']);
+
+    // --- CART ---
     Route::get('/carts', [CartController::class, 'index']);
     Route::post('/cart/add', [CartController::class, 'addToCart']);
     Route::put('/cart/{id}', [CartController::class, 'update']);
     Route::delete('/cart/{id}', [CartController::class, 'destroy']);
 
-    // --- WISHLIST (YÊU THÍCH) ---
+    // --- WISHLIST ---
     Route::get('/wishlist', [WishlistController::class, 'index']);
     Route::post('/wishlist/toggle', [WishlistController::class, 'toggle']);
 
-    // --- COMMENTS (BÌNH LUẬN) ---
+    // --- COMMENTS (Gửi bình luận) ---
     Route::post('/comments', [CommentController::class, 'store']);
     Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
 
-    // --- ORDERS (ĐƠN HÀNG CỦA USER) ---
+    // --- ORDERS ---
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/order/{id}', [OrderController::class, 'show']);
-
     Route::post('/orders', [CheckoutController::class, 'store']);
     Route::post('/orders/{id}/repurchase', [OrderController::class, 'repurchase']);
-
-    // Route của client dùng từ khóa 'order' (số ít)
     Route::put('/order/{id}', [OrderController::class, 'update']);
     Route::delete('/order/{id}', [OrderController::class, 'destroy']);
 
-    // --- USER ADDRESS ---
-    Route::post('/useraddress', [UserAddressController::class, 'store']);
-    Route::put('/useraddress/{id}', [UserAddressController::class, 'update']);
-    Route::delete('/useraddress/{id}', [UserAddressController::class, 'destroy']);
-
-    // --- REVIEWS ---
+    // --- REVIEWS (Đánh giá) ---
     Route::post('/reviews', [ReviewController::class, 'store']);
     Route::put('/review/{id}', [ReviewController::class, 'update']);
     Route::delete('/review/{id}', [ReviewController::class, 'destroy']);
