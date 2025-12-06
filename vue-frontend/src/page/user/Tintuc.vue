@@ -5,6 +5,7 @@ import apiService from '../../apiService.js';
 // --- CONFIG ---
 const BACKEND_URL = 'http://127.0.0.1:8000'; 
 const ITEMS_PER_PAGE = 4; // Số bài viết mỗi trang
+const SITE_NAME = 'ThinkHub Blog'; // Tên website của bạn
 
 // --- STATE ---
 const posts = ref([]);
@@ -12,6 +13,105 @@ const isLoading = ref(true);
 const searchQuery = ref(''); // State tìm kiếm theo tên bài viết
 const authorQuery = ref(''); // State tìm kiếm theo Tác giả
 const currentPage = ref(1);
+
+// --- HELPER METHODS ---
+
+// [MỚI] Hàm tạo Slug cho tiêu đề bài viết
+const toSlug = (str) => {
+    if (!str) return '';
+    str = str.toLowerCase();
+    str = str.replace(/(à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ)/g, 'a');
+    str = str.replace(/(è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ)/g, 'e');
+    str = str.replace(/(ì|í|ị|ỉ|ĩ)/g, 'i');
+    str = str.replace(/(ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ)/g, 'o');
+    str = str.replace(/(ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ)/g, 'u');
+    str = str.replace(/(ỳ|ý|ỵ|ỷ|ỹ)/g, 'y');
+    str = str.replace(/(đ)/g, 'd');
+    str = str.replace(/([^0-9a-z-\s])/g, '');
+    str = str.replace(/(\s+)/g, '-');
+    str = str.replace(/^-+/g, '');
+    str = str.replace(/-+$/g, '');
+    return str;
+};
+
+// --- SEO HELPER FOR LISTING PAGE ---
+const updateListingSeo = () => {
+    // 1. Basic Meta
+    document.title = `Tin tức Công Nghệ & Thủ Thuật - ${SITE_NAME}`;
+    const desc = "Cập nhật xu hướng công nghệ mới nhất, đánh giá sản phẩm, thủ thuật và mẹo hay từ đội ngũ chuyên gia.";
+    const url = window.location.href;
+    const image = 'https://placehold.co/1200x630?text=News+Page'; // Ảnh đại diện mặc định cho trang tin
+
+    // Helper set meta tag
+    const setMetaName = (name, content) => {
+        let element = document.querySelector(`meta[name="${name}"]`);
+        if (!element) {
+            element = document.createElement('meta');
+            element.setAttribute('name', name);
+            document.head.appendChild(element);
+        }
+        element.setAttribute('content', content);
+    };
+
+    const setMetaProperty = (property, content) => {
+        let element = document.querySelector(`meta[property="${property}"]`);
+        if (!element) {
+            element = document.createElement('meta');
+            element.setAttribute('property', property);
+            document.head.appendChild(element);
+        }
+        element.setAttribute('content', content);
+    };
+
+    // 2. Canonical (Tránh trùng lặp nội dung)
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+        canonical = document.createElement('link');
+        canonical.setAttribute('rel', 'canonical');
+        document.head.appendChild(canonical);
+    }
+    canonical.setAttribute('href', url.split('?')[0]); 
+
+    // 3. Open Graph & Twitter Card (Fix lỗi thiếu Twitter Card)
+    setMetaName('description', desc);
+    setMetaProperty('og:title', document.title);
+    setMetaProperty('og:description', desc);
+    setMetaProperty('og:image', image);
+    setMetaProperty('og:url', url);
+    setMetaProperty('og:type', 'website');
+
+    // [FIX] Thêm Twitter Card
+    setMetaName('twitter:card', 'summary_large_image');
+    setMetaName('twitter:title', document.title);
+    setMetaName('twitter:description', desc);
+    setMetaName('twitter:image', image);
+
+    // 4. Schema.org (CollectionPage)
+    let schemaScript = document.querySelector('#news-listing-schema');
+    if (!schemaScript) {
+        schemaScript = document.createElement('script');
+        schemaScript.id = 'news-listing-schema';
+        schemaScript.type = 'application/ld+json';
+        document.head.appendChild(schemaScript);
+    }
+    
+    const schemaData = {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "headline": "Tin tức Công Nghệ",
+        "description": desc,
+        "url": url,
+        "publisher": {
+            "@type": "Organization",
+            "name": SITE_NAME,
+            "logo": {
+                "@type": "ImageObject",
+                "url": `${window.location.origin}/logo.png`
+            }
+        }
+    };
+    schemaScript.textContent = JSON.stringify(schemaData);
+};
 
 // --- HELPER FUNCTIONS ---
 
@@ -138,6 +238,7 @@ const changePage = (page) => {
 onMounted(() => {
     // Gọi triggerSearch để tải bài viết khi trang được mount (lần đầu)
     triggerSearch();
+    updateListingSeo(); // Cập nhật SEO cho trang danh sách
 });
 
 // Watcher 1: Theo dõi thay đổi của searchQuery (Tên bài viết) và dùng Debounce
@@ -160,11 +261,9 @@ watch(authorQuery, (newAuthor) => {
 <template>
   <section class="blog-page">
     
-    <!-- HERO HEADER -->
     <header class="page-hero">
       <div class="hero-inner">
         <p class="hero-pre-title">THÔNG TIN & KIẾN THỨC</p>
-        <!-- Tiêu đề phản ánh trạng thái tìm kiếm -->
         <h1 v-if="isSearching">Kết quả tìm kiếm</h1>
         <h1 v-else>Blog Công Nghệ</h1>
         <p class="hero-subtitle">
@@ -175,49 +274,39 @@ watch(authorQuery, (newAuthor) => {
 
     <main class="page-container">
         
-      <!-- LOADING STATE (Chỉ hiển thị khi không có bài viết nào được load) -->
       <div v-if="isLoading && posts.length === 0" class="text-center py-5 loading-box">
            <div class="spinner-border text-primary" role="status">
              <span class="visually-hidden">Loading...</span>
            </div>
       </div>
 
-      <!-- MAIN LAYOUT -->
       <div v-else class="page-layout">
         
-        <!-- OVERLAY LOADING KHI ĐANG TÌM KIẾM/REFRESH -->
         <div v-if="isLoading && posts.length > 0" class="content-overlay">
             <div class="spinner-border text-primary" role="status"></div>
             <p class="text-primary mt-2">Đang tải kết quả...</p>
         </div>
 
 
-        <!-- LEFT COLUMN: CONTENT -->
         <section class="content-column" :class="{ 'content-loading': isLoading && posts.length > 0 }">
           
-          <!-- CASE 1: KHÔNG CÓ BÀI VIẾT NÀO -->
           <div v-if="posts.length === 0" class="empty-state card-style">
               <i class="bi bi-newspaper display-4 text-muted mb-3"></i>
-              <!-- Thông báo khi tìm kiếm không có kết quả -->
               <h3 v-if="searchQuery">Không tìm thấy kết quả cho "{{ searchQuery }}"</h3>
               <h3 v-else-if="authorQuery">Không tìm thấy bài viết của "{{ authorQuery }}"</h3>
               <h3 v-else>Chưa có tin tức nào</h3>
               <p class="text-muted">Vui lòng thử lại với từ khóa khác hoặc quay lại sau.</p>
           </div>
 
-          <!-- CASE 2: CÓ BÀI VIẾT -->
           <template v-else>
-              <!-- Tiêu đề rõ ràng cho Featured Post -->
               <h3 class="featured-heading">
                 <i class="bi bi-bullseye me-2 icon-color"></i>
-                <!-- VĂN BẢN QUAN TRỌNG: Xác nhận đang hiển thị cái gì -->
                 {{ isSearching ? 'Bài viết liên quan nhất' : 'Tin tức nổi bật' }}
               </h3>
 
-              <!-- Featured Post (Bài viết đầu tiên sau khi lọc/load) -->
               <article v-if="featuredPost" class="featured-post card-style">
                 <div class="featured-image-wrap">
-                    <router-link :to="`/PostDetail/${featuredPost.id}`" class="full-link">
+                    <router-link :to="{ name: 'PostDetailt', params: { id: featuredPost.id, slug: featuredPost.slug || toSlug(featuredPost.title) } }" class="full-link">
                         <div class="featured-image" 
                              :style="{ backgroundImage: `url(${getFullImage(featuredPost.image_url)})` }">
                         </div>
@@ -225,14 +314,13 @@ watch(authorQuery, (newAuthor) => {
                 </div>
                 <div class="featured-body">
                   <div class="d-flex align-items-center mb-3">
-                      <!-- Badge phản ánh trạng thái tìm kiếm -->
                       <span class="badge-custom me-2" v-if="isSearching">KẾT QUẢ ĐẦU TIÊN</span>
                       <span class="badge-custom me-2" v-else>MỚI NHẤT</span>
                       <span class="date-meta"><i class="bi bi-calendar3 icon-color"></i> {{ formatDate(featuredPost.created_at) }}</span>
                   </div>
                   
                   <h2 class="featured-title">
-                      <router-link :to="`/PostDetail/${featuredPost.id}`" class="text-reset">
+                      <router-link :to="{ name: 'PostDetailt', params: { id: featuredPost.id, slug: featuredPost.slug || toSlug(featuredPost.title) } }" class="text-reset">
                           {{ featuredPost.title }}
                       </router-link>
                   </h2>
@@ -241,33 +329,29 @@ watch(authorQuery, (newAuthor) => {
                   </p>
                   
                   <div class="post-footer">
-                      <!-- Link tìm kiếm theo Tác giả -->
-                    <span class="author">
+                      <span class="author">
                         <i class="bi bi-person-fill icon-color"></i> 
                         <a href="#" @click.prevent="searchByAuthor(featuredPost.author_name || 'Admin')" class="author-link">
                             {{ featuredPost.author_name || 'Admin' }}
                         </a>
                     </span>
-                    <router-link :to="`/PostDetail/${featuredPost.id}`" class="read-more-btn">
+                    <router-link :to="{ name: 'PostDetailt', params: { id: featuredPost.id, slug: featuredPost.slug || toSlug(featuredPost.title) } }" class="read-more-btn">
                         Đọc tiếp <i class="bi bi-arrow-right ms-1"></i>
                     </router-link>
                   </div>
                 </div>
               </article>
 
-              <!-- List Posts Grid (CÓ PHÂN TRANG) -->
               <div v-if="allLatestPosts.length > 0" class="latest-section" id="latest-news-section">
-                  <!-- Tiêu đề mục phản ánh trạng thái tìm kiếm -->
                   <h3 class="section-heading">
                       <i class="bi bi-grid-fill me-2"></i>
-                      <!-- VĂN BẢN QUAN TRỌNG: Xác nhận đang hiển thị cái gì -->
                       {{ isSearching ? 'Các kết quả khác' : 'Tin cũ hơn' }}
                   </h3>
                   
                   <div class="latest-posts-grid">
                     <article v-for="post in paginatedPosts" :key="post.id" class="post-card card-style">
                       <div class="card-img-top">
-                          <router-link :to="`/PostDetail/${post.id}`" class="full-link">
+                          <router-link :to="{ name: 'PostDetailt', params: { id: post.id, slug: post.slug || toSlug(post.title) } }" class="full-link">
                               <div class="img-bg" :style="{ backgroundImage: `url(${getFullImage(post.image_url)})` }"></div>
                           </router-link>
                       </div>
@@ -276,7 +360,7 @@ watch(authorQuery, (newAuthor) => {
                             <span class="date"><i class="bi bi-calendar-event icon-color"></i> {{ formatDate(post.created_at) }}</span>
                         </div>
                         <h4 class="card-title">
-                            <router-link :to="`/PostDetail/${post.id}`" class="text-reset">
+                            <router-link :to="{ name: 'PostDetailt', params: { id: post.id, slug: post.slug || toSlug(post.title) } }" class="text-reset">
                                 {{ post.title }}
                             </router-link>
                         </h4>
@@ -284,7 +368,7 @@ watch(authorQuery, (newAuthor) => {
                             {{ post.excerpt ? post.excerpt.substring(0, 90) + '...' : '' }}
                         </p>
                         <div class="card-footer-custom">
-                            <router-link :to="`/PostDetail/${post.id}`" class="card-link">
+                            <router-link :to="{ name: 'PostDetailt', params: { id: post.id, slug: post.slug || toSlug(post.title) } }" class="card-link">
                                 Xem chi tiết <i class="bi bi-chevron-right small-icon"></i>
                             </router-link>
                         </div>
@@ -292,7 +376,6 @@ watch(authorQuery, (newAuthor) => {
                     </article>
                   </div>
 
-                  <!-- UI PHÂN TRANG -->
                   <div v-if="totalPages > 1" class="pagination-wrapper">
                       <button 
                         class="page-btn prev" 
@@ -327,7 +410,6 @@ watch(authorQuery, (newAuthor) => {
 
         </section>
         
-        <!-- RIGHT COLUMN: SIDEBAR -->
         <aside class="sidebar-column">
           
           <div class="sidebar-widget search-widget">
@@ -336,10 +418,8 @@ watch(authorQuery, (newAuthor) => {
                 <input type="text" v-model="searchQuery" placeholder="Nhập từ khóa...">
                 <button @click="handleSearch"><i class="bi bi-search"></i></button>
             </div>
-            <!-- HIỂN THỊ TRẠNG THÁI LỌC THEO TÁC GIẢ -->
             <div v-if="authorQuery" class="alert alert-info mt-3 py-2 px-3 d-flex justify-content-between align-items-center small">
                 <span>Đang lọc theo: <strong>{{ authorQuery }}</strong></span>
-                <!-- Bấm nút X để reset lọc theo tác giả -->
                 <button @click="authorQuery = ''" class="btn-close ms-2" aria-label="Close"></button>
             </div>
           </div>

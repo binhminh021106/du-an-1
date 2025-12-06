@@ -116,7 +116,9 @@ const viewingNewsItem = ref({});
 // Form Data
 const formData = reactive({
     id: null, title: '', excerpt: '', content: '', slug: '',
-    status: 'pending', author_name: ''
+    status: 'pending', author_name: '',
+    // [SEO UPGRADE] Init SEO fields
+    meta_title: '', meta_description: '', meta_keywords: ''
 });
 
 const errors = reactive({ title: '', slug: '', content: '', author_name: '' });
@@ -192,7 +194,18 @@ const paginatedNews = computed(() => {
 watch([searchQuery, currentTab, sortOption], () => currentPage.value = 1);
 
 watch(() => formData.title, (newTitle) => {
-    if (!isEditMode.value && newTitle) formData.slug = slugify(newTitle);
+    if (!isEditMode.value && newTitle) {
+        formData.slug = slugify(newTitle);
+        // [SEO UPGRADE] Tự động điền Meta Title nếu chưa có
+        if(!formData.meta_title) formData.meta_title = newTitle;
+    }
+});
+
+watch(() => formData.excerpt, (newExcerpt) => {
+     // [SEO UPGRADE] Tự động điền Meta Description nếu chưa có và đang viết bài mới
+     if (!isEditMode.value && newExcerpt && !formData.meta_description) {
+        formData.meta_description = newExcerpt;
+    }
 });
 
 // HELPER FUNCTIONS
@@ -243,7 +256,9 @@ function resetForm() {
     Object.assign(formData, {
         id: null, title: '', excerpt: '', content: '', slug: '',
         status: 'pending',
-        author_name: currentUser.value.name || ''
+        author_name: currentUser.value.name || '',
+        // [SEO UPGRADE] Reset SEO fields
+        meta_title: '', meta_description: '', meta_keywords: ''
     });
     selectedFile.value = null;
     previewImage.value = null;
@@ -365,10 +380,14 @@ async function handleSave() {
         const plainText = formData.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
         formData.excerpt = plainText.slice(0, 160) + (plainText.length > 160 ? '...' : '');
     }
+    // [SEO UPGRADE] Fallback cho SEO nếu người dùng lười điền
+    if (!formData.meta_title) formData.meta_title = formData.title;
+    if (!formData.meta_description) formData.meta_description = formData.excerpt;
+
     if (!validateForm()) return;
     isLoading.value = true;
     const payload = new FormData();
-    Object.keys(formData).forEach(key => { if (key !== 'author_id') payload.append(key, formData[key]); });
+    Object.keys(formData).forEach(key => { if (key !== 'author_id') payload.append(key, formData[key] || ''); });
     if (selectedFile.value) payload.append('image', selectedFile.value);
     if (isEditMode.value) payload.append('_method', 'PUT');
     const url = isEditMode.value ? `admin/news/${formData.id}` : `admin/news`;
@@ -709,6 +728,29 @@ onMounted(async () => {
                                             <div class="form-text small">Hỗ trợ JPG, PNG, WEBP. Max 10MB.</div>
                                         </div>
                                     </div>
+                                    
+                                    <!-- [SEO UPGRADE] THÊM CARD CẤU HÌNH SEO MỚI -->
+                                    <div class="card mb-3 border-0 shadow-sm">
+                                        <div class="card-header fw-bold bg-white text-primary border-bottom">
+                                            <i class="bi bi-google me-1"></i> Cấu hình SEO (Google)
+                                        </div>
+                                        <div class="card-body bg-light">
+                                            <div class="mb-2">
+                                                <label class="form-label small fw-bold">Meta Title</label>
+                                                <input type="text" class="form-control form-control-sm" v-model="formData.meta_title" placeholder="Tiêu đề hiển thị trên Google">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label small fw-bold">Meta Keywords</label>
+                                                <input type="text" class="form-control form-control-sm" v-model="formData.meta_keywords" placeholder="Từ khóa, cách nhau dấu phẩy">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label small fw-bold">Meta Description</label>
+                                                <textarea class="form-control form-control-sm" rows="3" v-model="formData.meta_description" placeholder="Mô tả ngắn gọn khi tìm kiếm..."></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- END SEO CARD -->
+
                                     <div class="d-grid"><button type="button" @click="exportToPDF(null)"
                                             class="btn btn-outline-danger"><i class="bi bi-file-earmark-pdf"></i> Xem
                                             trước PDF</button></div>

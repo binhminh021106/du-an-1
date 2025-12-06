@@ -6,6 +6,25 @@ import apiService from '../../apiService.js';
 import Swal from 'sweetalert2'; 
 import { toggleWishlist } from "../../store/wishlistStore.js";
 
+// Hàm tạo Slug (Copy hàm này vào)
+const toSlug = (str) => {
+    if (!str) return '';
+    str = str.toLowerCase();
+    str = str.replace(/(à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ)/g, 'a');
+    str = str.replace(/(è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ)/g, 'e');
+    str = str.replace(/(ì|í|ị|ỉ|ĩ)/g, 'i');
+    str = str.replace(/(ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ)/g, 'o');
+    str = str.replace(/(ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ)/g, 'u');
+    str = str.replace(/(ỳ|ý|ỵ|ỷ|ỹ)/g, 'y');
+    str = str.replace(/(đ)/g, 'd');
+    str = str.replace(/([^0-9a-z-\s])/g, '');
+    str = str.replace(/(\s+)/g, '-');
+    str = str.replace(/^-+/g, '');
+    str = str.replace(/-+$/g, '');
+    return str;
+};
+
+// const store = useStore();
 const router = useRouter();
 const store = useStore(); 
 
@@ -506,22 +525,22 @@ onBeforeUnmount(stopAutoSlide);
                 </div>
             </section>
 
-            <section class="product-group news-group">
-                <h2 class="section-title">TIN TỨC CÔNG NGHỆ</h2>
-                <div class="news-grid">
-                    <div class="news-card-basic" v-for="news in newsList" :key="news.id">
-                        <div class="news-img-wrap">
-                            <img :src="getImageUrl(news.image_url || news.image)" :alt="news.title"
-                                onerror="this.src='https://placehold.co/400x300?text=News'">
-                        </div>
-                        <div class="news-content">
-                            <h3 class="news-title">{{ news.title }}</h3>
-                            <p class="news-excerpt">{{ getExcerpt(news.excerpt || news.content, 100) }}</p>
-                            <router-link :to="`/PostDetail/${news.id}`" class="read-more-link">Xem thêm
-                                &rarr;</router-link>
+                <section class="product-group news-group">
+                    <h2 class="section-title">TIN TỨC CÔNG NGHỆ</h2>
+                    <div class="news-grid">
+                        <div class="news-card-basic" v-for="news in newsList" :key="news.id">
+                            <div class="news-img-wrap">
+                                <img :src="getImageUrl(news.image_url || news.image)" :alt="news.title" onerror="this.src='https://placehold.co/400x300?text=News'">
+                            </div>
+                            <div class="news-content">
+                                <h3 class="news-title">{{ news.title }}</h3>
+                                <p class="news-excerpt">{{ getExcerpt(news.excerpt || news.content, 100) }}</p>
+                                <!-- SỬA Ở ĐÂY: Dùng news.id thay vì news.slug -->
+                                <router-link :to="`/PostDetail/${news.id}`" class="read-more-link">Xem thêm &rarr;</router-link>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </section>
             </section>
         </main>
 
