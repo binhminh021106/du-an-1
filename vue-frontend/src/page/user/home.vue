@@ -1,14 +1,13 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { useRouter } from 'vue-router'; 
-import { useStore } from "vuex"; // [FIX] Import useStore từ Vuex giống Shop.vue
+import { useStore } from "vuex"; 
 import apiService from '../../apiService.js';
 import Swal from 'sweetalert2'; 
 import { toggleWishlist } from "../../store/wishlistStore.js";
-// import { addToCart } from '../../store/cartStore.js'; // [FIX] Không dùng hàm lẻ này nữa
 
 const router = useRouter();
-const store = useStore(); // [FIX] Khởi tạo store
+const store = useStore(); 
 
 // --- CẤU HÌNH ---
 const SERVER_URL = 'http://127.0.0.1:8000';
@@ -28,7 +27,6 @@ const Toast = Swal.mixin({
     }
 });
 
-
 const getImageUrl = (path) => {
     if (!path) return 'https://placehold.co/400x300?text=No+Image';
     if (path.startsWith('http') || path.startsWith('data:') || path.startsWith('blob:')) return path;
@@ -37,7 +35,6 @@ const getImageUrl = (path) => {
 };
 
 const formatCurrency = (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-
 
 const getProductPrice = (product) => {
     if (!product) return 0;
@@ -59,6 +56,7 @@ const getExcerpt = (text, limit = 100) => {
     return cleanText.substring(0, limit) + '...';
 };
 
+// --- KHAI BÁO BIẾN STATE ---
 const categories = ref([]);
 const brands = ref([]);
 const slides = ref([]);
@@ -67,6 +65,8 @@ const newsList = ref([]);
 const vouchers = ref([]);
 const activeCategoryId = ref(null);
 const currentSlide = ref(0);
+// [FIX] Thêm biến loading để sửa lỗi "loading is not defined"
+const loading = ref(true);
 let interval = null;
 const scrollRefs = ref({}) 
 
@@ -81,6 +81,8 @@ const chatBodyRef = ref(null);
 
 // --- FETCH DATA ---
 const fetchData = async () => {
+    // [FIX] Bật loading khi bắt đầu gọi API
+    loading.value = true;
     try {
         const [catRes, slideRes, prodRes, brandRes, couponRes, newsRes] = await Promise.all([
             apiService.get(`/categories`).catch(e => null),
@@ -109,6 +111,9 @@ const fetchData = async () => {
 
     } catch (err) {
         console.error("Lỗi tải trang chủ:", err);
+    } finally {
+        // [FIX] Tắt loading khi tải xong (dù thành công hay thất bại)
+        loading.value = false;
     }
 };
 
@@ -220,12 +225,10 @@ const nextSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.va
 const prevSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.value - 1 + slides.value.length) % slides.value.length; };
 
 
-// [UPDATED] Hàm thêm vào giỏ hàng áp dụng logic Vuex của Shop.vue
 const onAddToCart = async (item) => {
     try {
         console.log("🖱️ User clicked Add to Cart:", item);
 
-        // 1. Chuẩn bị dữ liệu sản phẩm cho Store (Frontend)
         let product = item.raw_product ? JSON.parse(JSON.stringify(item.raw_product)) : {
             id: item.id,
             name: item.name,
@@ -236,13 +239,11 @@ const onAddToCart = async (item) => {
             product.image = item.image; 
         }
 
-        // 2. Chuẩn bị dữ liệu biến thể
         let variantToAdd = item.raw_variant ? JSON.parse(JSON.stringify(item.raw_variant)) : null;
 
-        // Nếu không có variant thật, tạo dummy variant (để khớp logic Store)
         if (!variantToAdd) {
              variantToAdd = {
-                id: product.id, // Dùng ID sản phẩm làm ID variant giả
+                id: product.id, 
                 product_id: product.id,
                 name: '', 
                 price: product.price || item.sale_price,
@@ -251,30 +252,22 @@ const onAddToCart = async (item) => {
             };
         }
 
-        // --- BƯỚC 1: CẬP NHẬT UI NGAY LẬP TỨC BẰNG VUEX (OPTIMISTIC UI) ---
-        // [FIX] Dùng store.dispatch thay vì hàm addToCart lẻ
-        // Việc này đảm bảo Vuex cập nhật state -> Header (đang watch Vuex) sẽ tự nhảy số
         await store.dispatch('addToCart', {
             product: product,
             variant: variantToAdd,
             quantity: 1
         });
 
-        // Toast thông báo
         const variantName = variantToAdd.name ? `(${variantToAdd.name})` : '';
         Toast.fire({ icon: 'success', title: `Đã thêm ${product.name} ${variantName} vào giỏ!` });
 
-        // --- BƯỚC 2: GỌI API ĐỂ LƯU VÀO DATABASE ---
-        // Vẫn giữ lại phần này để đảm bảo dữ liệu được đồng bộ xuống DB
         try {
             const payload = {
                 product_id: product.id,
-                // Nếu là variant giả (id trùng product_id) thì gửi null hoặc xử lý tùy backend
                 variant_id: (variantToAdd.id === product.id && !variantToAdd.sku) ? null : variantToAdd.id, 
                 quantity: 1
             };
 
-            // Gọi endpoint thêm vào giỏ
             await apiService.post('/cart/add', payload);
             console.log("✅ Đã đồng bộ giỏ hàng với Database");
 
@@ -288,7 +281,6 @@ const onAddToCart = async (item) => {
     }
 };
 
-// yêu thích
 const wishlistIds = ref(new Set()); 
 
 const updateWishlistState = () => {
