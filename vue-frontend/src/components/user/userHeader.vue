@@ -82,6 +82,7 @@ const handleSearch = () => {
   }
 };
 
+// [UPDATED] Logout với giao diện đẹp hơn
 const handleLogout = () => {
   Swal.fire({
     title: 'Đăng xuất?',
@@ -91,7 +92,14 @@ const handleLogout = () => {
     confirmButtonColor: '#009981',
     cancelButtonColor: '#d33',
     confirmButtonText: 'Đăng xuất',
-    cancelButtonText: 'Ở lại'
+    cancelButtonText: 'Ở lại',
+    // [NEW] Custom classes for elegant style
+    customClass: {
+        popup: 'elegant-popup',
+        confirmButton: 'elegant-confirm-btn',
+        cancelButton: 'elegant-cancel-btn',
+        title: 'elegant-title'
+    }
   }).then((result) => {
     if (result.isConfirmed) {
       localStorage.removeItem('userData');
@@ -123,8 +131,19 @@ const handleUserUpdate = (event) => {
   }
 };
 
+// [NEW] Load Lordicon Script
+const loadLordicon = () => {
+    if (!document.querySelector('script[src="https://cdn.lordicon.com/lordicon.js"]')) {
+        const script = document.createElement('script')
+        script.src = 'https://cdn.lordicon.com/lordicon.js'
+        script.async = true
+        document.head.appendChild(script)
+    }
+}
+
 // --- LIFECYCLE HOOKS ---
 onMounted(() => {
+  loadLordicon(); // Load script icon
   try {
     const userData = localStorage.getItem('userData');
     if (userData) {
@@ -262,24 +281,79 @@ onUnmounted(() => {
               <span class="user-name-truncate">{{ user.fullName || user.email }}</span>
             </button>
 
+            <!-- DROPDOWN MENU USER - LORDICON UPDATED -->
             <div class="dropdown-menu user-dropdown" :class="{ active: isUserMenuActive }">
               <div class="user-dropdown-header">
                 <strong>{{ user.fullName || 'Người dùng' }}</strong>
                 <small>{{ user.email }}</small>
               </div>
+              
               <ul class="menu-list">
-                <li><router-link :to="{ name: 'profile' }"><i class="fa-solid fa-address-card"></i> Tài
-                    khoản</router-link></li>
-                <li><router-link :to="{ name: 'OrderList' }"><i class="fa-solid fa-box-archive"></i> Đơn
-                    mua</router-link></li>
-                <li><router-link :to="{ name: 'wishlist' }"><i class="fa-solid fa-heart"></i> Yêu thích</router-link>
+                <!-- 1. TÀI KHOẢN -->
+                <li>
+                    <router-link :to="{ name: 'profile' }" class="lordicon-link profile-target">
+                        <div class="icon-wrap">
+                            <lord-icon
+                                src="https://cdn.lordicon.com/bhfjfgqz.json"
+                                trigger="hover"
+                                target=".profile-target"
+                                colors="primary:#4b5563"
+                                style="width:20px;height:20px">
+                            </lord-icon>
+                        </div>
+                        Tài khoản
+                    </router-link>
                 </li>
+
+                <!-- 2. ĐƠN MUA -->
+                <li>
+                    <router-link :to="{ name: 'OrderList' }" class="lordicon-link order-target">
+                        <div class="icon-wrap">
+                            <lord-icon
+                                src="https://cdn.lordicon.com/pbrgppbb.json"
+                                trigger="hover"
+                                target=".order-target"
+                                colors="primary:#4b5563"
+                                style="width:20px;height:20px">
+                            </lord-icon>
+                        </div>
+                        Đơn mua
+                    </router-link>
+                </li>
+
+                <!-- 3. YÊU THÍCH -->
+                <li>
+                    <router-link :to="{ name: 'wishlist' }" class="lordicon-link wishlist-target">
+                        <div class="icon-wrap">
+                            <lord-icon
+                                src="https://cdn.lordicon.com/rjzlnunf.json"
+                                trigger="hover"
+                                target=".wishlist-target"
+                                colors="primary:#4b5563,secondary:#e91e63"
+                                style="width:20px;height:20px">
+                            </lord-icon>
+                        </div>
+                        Yêu thích
+                    </router-link>
+                </li>
+
                 <li class="divider">
                   <hr>
                 </li>
+
+                <!-- 4. ĐĂNG XUẤT -->
                 <li>
-                  <a href="#" class="logout-link" @click.prevent="handleLogout">
-                    <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
+                  <a href="#" class="logout-link lordicon-link logout-target" @click.prevent="handleLogout">
+                    <div class="icon-wrap">
+                        <lord-icon
+                            src="https://cdn.lordicon.com/moscwhoj.json"
+                            trigger="hover"
+                            target=".logout-target"
+                            colors="primary:#d9534f,secondary:#d9534f"
+                            style="width:20px;height:20px">
+                        </lord-icon>
+                    </div>
+                    Đăng xuất
                   </a>
                 </li>
               </ul>
@@ -291,6 +365,53 @@ onUnmounted(() => {
     </div>
   </header>
 </template>
+
+<!-- [NEW] Global Style for SweetAlert (Elegant Theme) -->
+<style>
+/* Style cho Popup Confirm Dialog */
+.elegant-popup {
+    border-radius: 16px !important;
+    font-family: Arial, sans-serif !important;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15) !important;
+    padding: 1.5rem !important;
+}
+
+.elegant-title {
+    font-size: 1.5rem !important;
+    color: #333 !important;
+    font-weight: 700 !important;
+}
+
+.elegant-confirm-btn {
+    border-radius: 8px !important;
+    padding: 12px 24px !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 12px rgba(0, 153, 129, 0.3) !important;
+    background-color: #009981 !important; /* Primary color */
+    border: none !important;
+    transition: transform 0.2s !important;
+}
+
+.elegant-confirm-btn:hover {
+    transform: translateY(-2px);
+    background-color: #00806b !important;
+}
+
+.elegant-cancel-btn {
+    border-radius: 8px !important;
+    padding: 12px 24px !important;
+    font-weight: 600 !important;
+    background-color: #f3f4f6 !important;
+    color: #4b5563 !important;
+    border: 1px solid #e5e7eb !important;
+    transition: background-color 0.2s !important;
+}
+
+.elegant-cancel-btn:hover {
+    background-color: #e5e7eb !important;
+    color: #374151 !important;
+}
+</style>
 
 <style scoped>
 /* CSS Variables giả lập */
@@ -634,20 +755,22 @@ ul {
   color: #666;
 }
 
+/* [NEW] Style for Lordicon links in dropdown */
+.icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+    width: 24px;
+}
+
 .logout-link {
   color: var(--danger-color) !important;
 }
 
-.logout-link i {
-  color: var(--danger-color) !important;
-}
-
+/* Fix icon color on hover for logout */
 .logout-link:hover {
   background-color: #fdf2f2 !important;
-  color: #b92c28 !important;
-}
-
-.logout-link:hover i {
   color: #b92c28 !important;
 }
 

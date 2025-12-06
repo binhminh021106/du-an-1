@@ -33,13 +33,22 @@ const SERVER_URL = 'http://127.0.0.1:8000';
 const CHATBOT_API_URL = 'http://localhost:3000/api/chat-search'; // Hoặc port 8000 tùy server bạn
 const USE_STORAGE = false; 
 
-// --- TOAST CONFIG (Giữ lại thông báo đẹp) ---
+// --- TOAST CONFIG (UPDATED) ---
 const Toast = Swal.mixin({
     toast: true,
     position: 'bottom-end',
     showConfirmButton: false,
     timer: 3000,
     timerProgressBar: true,
+    background: '#fff',
+    color: '#333',
+    iconColor: '#10b981', // Màu xanh chủ đạo
+    // Class tùy chỉnh để style CSS
+    customClass: {
+        popup: 'elegant-toast', 
+        title: 'elegant-toast-title',
+        timerProgressBar: 'elegant-toast-progress'
+    },
     didOpen: (toast) => {
         toast.addEventListener('mouseenter', Swal.stopTimer)
         toast.addEventListener('mouseleave', Swal.resumeTimer)
@@ -477,53 +486,110 @@ onBeforeUnmount(stopAutoSlide);
     </div>
 </template>
 
+<style>
+/* Style riêng cho Toast để thanh thoát hơn (Copy from CartPage) */
+.elegant-toast {
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 12px !important;
+    padding: 10px 16px !important;
+    border-left: 4px solid #10b981 !important; /* Điểm nhấn màu xanh bên trái */
+    background: #ffffff !important;
+}
+
+.elegant-toast-title {
+    font-family: 'Montserrat', sans-serif !important; /* Dùng Font của trang Home */
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    color: #333 !important;
+    margin-left: 5px !important;
+}
+
+.elegant-toast-progress {
+    background-color: #10b981 !important;
+    height: 3px !important; /* Thanh progress mảnh hơn */
+}
+</style>
+
 <style scoped>
-/* Code CSS cũ của bạn rất ổn định, giữ nguyên */
-:root { --primary-color: #009981; --text-color: #333; --border-color: #e5e7eb; }
-* { box-sizing: border-box; font-family: 'Montserrat', sans-serif; }
-.text-uppercase { text-transform: uppercase; }
-.container { max-width: 1280px; margin: 20px auto; padding: 0 15px; }
-.top-section-layout { display: grid; grid-template-columns: 240px 1fr 260px; gap: 15px; align-items: stretch; margin-bottom: 20px; }
-.categories-sidebar { background: #fff; border-radius: 8px; box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .1), 0 2px 6px 2px rgba(60, 64, 67, .15); padding: 10px; height: 100%; }
-.sidebar-title { font-size: 14px; font-weight: 700; margin-bottom: 10px; padding-left: 10px; color: #444; }
-.category-item-clean { display: flex; align-items: center; gap: 10px; padding: 10px 12px; color: #333; font-size: 13px; font-weight: 500; border-radius: 5px; transition: 0.2s; text-decoration: none; }
-.cat-icon { width: 20px; text-align: center; color: #666; display: flex; align-items: center; justify-content: center; }
-.category-item-clean:hover { background: #DBF9EB; color: #00483D; font-weight: 600; }
-.category-item-clean:hover .cat-icon { color: #00483D; }
-.slider { position: relative; overflow: hidden; border-radius: 8px; box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .1); width: 100%; min-height: 300px; }
-.slider-wrapper { display: flex; height: 100%; transition: transform 0.5s ease-in-out; width: 100%; }
-.slide { min-width: 100%; width: 100%; flex: 0 0 100%; position: relative; }
-.slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.slider-control { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255, 255, 255, 0.3); color: #fff; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; transition: 0.3s; z-index: 3; display: flex; align-items: center; justify-content: center; }
-.slider-control:hover { background: rgba(0, 0, 0, 0.4); }
-.prev { left: 10px; }
-.next { right: 10px; }
-.voucher-sidebar { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .1); height: 100%; overflow: hidden; }
-.voucher-list { display: flex; flex-direction: column; gap: 10px; }
-.voucher-card { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px dashed var(--primary-color); padding: 10px; border-radius: 6px; transition: all 0.2s; }
-.voucher-card:hover { background: #f9f9f9; }
-.voucher-code { font-weight: 700; color: var(--primary-color); font-size: 13px; display: block; }
-.voucher-desc { font-size: 11px; color: #666; display: block; margin-top: 2px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.btn-save { background: var(--primary-color); color: #fff; border: none; padding: 5px 12px; font-size: 11px; border-radius: 4px; cursor: pointer; font-weight: 600; }
-.btn-save:hover { opacity: 0.9; }
-.no-voucher { text-align: center; font-size: 12px; color: #999; padding: 20px 0; }
-.brand-banner { margin-bottom: 20px; }
-.brand-banner img { width: 100%; height: 120px; object-fit: cover; border-radius: 10px; display: block; }
-.trust-block { display: flex; justify-content: space-between; padding: 25px 30px; margin-bottom: 30px; background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); border-top: 3px solid var(--primary-color); }
-.trust-item { font-size: 15px; font-weight: 700; color: var(--primary-color); display: flex; align-items: center; gap: 12px; }
-.trust-item i { font-size: 24px; color: var(--primary-color); }
-.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-.section-title { font-size: 18px; font-weight: 700; color: #333; text-transform: uppercase; }
-.carousel-nav button { background: #fff; border: 1px solid #ddd; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; margin-left: 5px; color: #555; transition: 0.2s; }
-.carousel-nav button:hover { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
-.product-carousel-wrapper { display: flex; overflow-x: auto; scroll-behavior: smooth; gap: 15px; padding-bottom: 10px; scrollbar-width: none; }
-.product-carousel-wrapper::-webkit-scrollbar { display: none; }
-.product-card-basic { background: transparent; transition: 0.3s ease; flex: 0 0 calc(20% - 12px); min-width: 200px; }
-.product-grid .product-card-basic { flex: unset; min-width: unset; width: 100%; }
-.product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
-/* Container hình ảnh */
-/* --- GIỮ NGUYÊN HOẶC CẬP NHẬT CÁC CLASS CŨ --- */
-.image-wrapper {
+:root {
+    --primary-color: #009981;
+    --text-color: #333;
+    --border-color: #e5e7eb;
+    --shadow-color: rgba(0, 153, 129, 0.15); 
+}
+
+* {
+    box-sizing: border-box;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.text-uppercase {
+    text-transform: uppercase;
+}
+
+.container {
+    max-width: 1280px;
+    margin: 20px auto;
+    padding: 0 15px;
+}
+
+.top-section-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr 260px;
+    gap: 15px;
+    align-items: stretch;
+    margin-bottom: 20px;
+}
+
+.categories-sidebar {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .1), 0 2px 6px 2px rgba(60, 64, 67, .15);
+    padding: 10px;
+    height: 100%;
+}
+
+.sidebar-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    padding-left: 10px;
+    color: #444;
+}
+
+.category-item-clean {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    color: #333;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 5px;
+    transition: 0.2s;
+    text-decoration: none;
+}
+
+.cat-icon {
+    width: 20px;
+    text-align: center;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.category-item-clean:hover {
+    background: #DBF9EB;
+    color: #00483D;
+    font-weight: 600;
+}
+
+.category-item-clean:hover .cat-icon {
+    color: #00483D;
+}
+
+.slider {
     position: relative;
     width: 100%;
     padding-top: 100%;
