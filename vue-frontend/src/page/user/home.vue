@@ -14,13 +14,22 @@ const SERVER_URL = 'http://127.0.0.1:8000';
 const CHATBOT_API_URL = 'http://localhost:3000/api/chat-search'; 
 const USE_STORAGE = false;
 
-// --- TOAST CONFIG ---
+// --- TOAST CONFIG (UPDATED) ---
 const Toast = Swal.mixin({
     toast: true,
     position: 'bottom-end',
     showConfirmButton: false,
     timer: 3000,
     timerProgressBar: true,
+    background: '#fff',
+    color: '#333',
+    iconColor: '#10b981', // Màu xanh chủ đạo
+    // Class tùy chỉnh để style CSS
+    customClass: {
+        popup: 'elegant-toast', 
+        title: 'elegant-toast-title',
+        timerProgressBar: 'elegant-toast-progress'
+    },
     didOpen: (toast) => {
         toast.addEventListener('mouseenter', Swal.stopTimer)
         toast.addEventListener('mouseleave', Swal.resumeTimer)
@@ -563,6 +572,30 @@ onBeforeUnmount(stopAutoSlide);
         </div>
     </div>
 </template>
+
+<style>
+/* Style riêng cho Toast để thanh thoát hơn (Copy from CartPage) */
+.elegant-toast {
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 12px !important;
+    padding: 10px 16px !important;
+    border-left: 4px solid #10b981 !important; /* Điểm nhấn màu xanh bên trái */
+    background: #ffffff !important;
+}
+
+.elegant-toast-title {
+    font-family: 'Montserrat', sans-serif !important; /* Dùng Font của trang Home */
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    color: #333 !important;
+    margin-left: 5px !important;
+}
+
+.elegant-toast-progress {
+    background-color: #10b981 !important;
+    height: 3px !important; /* Thanh progress mảnh hơn */
+}
+</style>
 
 <style scoped>
 :root {
