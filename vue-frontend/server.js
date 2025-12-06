@@ -14,100 +14,102 @@ app.use(cors({
 }));
 app.use(bodyParser.json());
 
-// --- KEY CỦA BẠN ---
-const API_KEY = "AIzaSyB1u0hTKon0bRM_e2cMg3r11B64XcC1WBA"; 
+// --- CẤU HÌNH API KEY ---
+const API_KEY = "AIzaSyBjMweCPWXHKWaJMIqujo1M6MAejnwAv20"; 
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-// [CẬP NHẬT QUAN TRỌNG]: Dạy AI bỏ qua các từ chung chung
-const SYSTEM_INSTRUCTION = `
-Bạn là trợ lý ảo tìm kiếm sản phẩm. 
-Output MẶC ĐỊNH là JSON thuần: {"keyword": "...", "min_price": ..., "max_price": ...}.
-Không trả lời bằng lời văn. Chỉ JSON.
-
-QUY TẮC QUAN TRỌNG:
-1. Nếu người dùng dùng từ chung chung như "sản phẩm", "đồ", "hàng", "cái gì", "gợi ý", "tìm"... thì keyword PHẢI là null (hoặc chuỗi rỗng). CHỈ lấy tên cụ thể (ví dụ: "giày", "laptop", "chuột").
-2. Xử lý giá: "k" = 000, "tr", "triệu" = 000000.
-
-Ví dụ: 
-- "sản phẩm dưới 100k" -> {"keyword": null, "max_price": 100000}
-- "tìm giày dưới 200k" -> {"keyword": "giày", "max_price": 200000}
-`;
-
-// --- HÀM TỰ ĐỘNG LẤY DANH SÁCH MODEL TỪ GOOGLE ---
+// Hàm chọn model phù hợp nhất
 async function getValidModel() {
     try {
-        console.log("🔍 Đang hỏi Google xem Key này dùng được Model nào...");
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);
         const data = await response.json();
-
-        if (data.error) {
-            console.error("❌ Lỗi API Key:", data.error.message);
-            return null;
-        }
-
-        const availableModels = data.models
-            .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
-            .map(m => m.name.replace("models/", ""));
-
-        if (availableModels.length > 0) {
-            console.log("✅ Các Model khả dụng:", availableModels.join(", "));
-            
-            // Ưu tiên chọn Pro chuẩn, sau đó đến các bản khác
-            const preferred = availableModels.find(m => m === "gemini-1.5-pro") || 
-                              availableModels.find(m => m === "gemini-1.5-pro-latest") ||
-                              availableModels.find(m => m === "gemini-pro") ||
-                              availableModels.find(m => m.includes("flash")); 
-            
-            console.log("🚀 Đã chọn Model:", preferred);
-            return preferred;
-        } else {
-            console.error("❌ Không tìm thấy Model nào khả dụng cho Key này!");
-            return null;
-        }
+        
+        // Ưu tiên model 1.5 Pro hoặc Flash
+        const preferred = data.models?.find(m => m.name.includes("gemini-1.5-pro")) || 
+                          data.models?.find(m => m.name.includes("gemini-1.5-flash"));
+                          
+        return preferred ? preferred.name.replace("models/", "") : "gemini-1.5-flash";
     } catch (e) {
-        console.error("❌ Lỗi kết nối lấy danh sách model:", e.message);
-        return "gemini-1.5-pro"; 
+        return "gemini-1.5-flash"; 
     }
 }
 
 app.post('/api/chat-search', async (req, res) => {
     try {
-        const { query } = req.body;
-        console.log("👉 Nhận câu hỏi:", query);
-
-        const currentModelName = await getValidModel();
-        if (!currentModelName) {
-            throw new Error("Không tìm thấy Model AI nào hoạt động với Key này.");
-        }
-
-        const model = genAI.getGenerativeModel({ model: currentModelName });
-        const prompt = `${SYSTEM_INSTRUCTION}\nUser: "${query}"\nJSON:`;
+        // [QUAN TRỌNG] Nhận Context từ Client gửi lên
+        const { query, categories, brands } = req.body;
+        console.log(`👉 User: "${query}"`);
         
-        const result = await model.generateContent(prompt);
+        // Tạo chuỗi danh sách hợp lệ để "ép" AI chọn
+        const validCategories = categories && categories.length > 0 ? categories.join(", ") : "Không có";
+        const validBrands = brands && brands.length > 0 ? brands.join(", ") : "Không có";
+
+        const SYSTEM_INSTRUCTION = `
+        Bạn là API trích xuất ý định tìm kiếm sản phẩm thương mại điện tử.
+        
+        DỮ LIỆU THỰC TẾ CỦA SHOP (CONTEXT):
+        - Danh mục có sẵn: [${validCategories}]
+        - Thương hiệu có sẵn: [${validBrands}]
+
+        NHIỆM VỤ:
+        Phân tích query: "${query}" -> Trả về JSON bộ lọc.
+
+        QUY TẮC MAPPING THÔNG MINH:
+        1. Mapping Danh mục (Category):
+           - User tìm "đt", "dế", "mobile", "smartphone" -> Chọn giá trị trong [Danh mục có sẵn] gần nghĩa nhất (VD: "Điện thoại di động").
+           - "lap", "máy tính" -> Chọn (VD: "Laptop & Macbook").
+           - "tai nghe", "headphone" -> Chọn (VD: "Thiết bị âm thanh").
+        
+        2. Mapping Thương hiệu (Brand):
+           - "táo", "nhà táo", "ip" -> Nếu có "Apple" trong [Thương hiệu có sẵn], chọn "brand_name": "Apple".
+           - "ss", "sam" -> "Samsung".
+        
+        3. Xử lý xung đột Keyword:
+           - Nếu từ khóa đã được xác định là Brand hoặc Category -> KHÔNG đưa nó vào trường "keyword" nữa.
+           - Ví dụ: "Tìm laptop Dell" -> category_name="Laptop", brand_name="Dell", keyword=null. (Vì đã lọc đủ ý).
+           - Ví dụ: "Tìm laptop gaming" -> category_name="Laptop", keyword="gaming".
+
+        OUTPUT JSON:
+        {
+          "keyword": string | null,       // Chỉ chứa tên model cụ thể (VD: "S24 Ultra", "Pro Max")
+          "category_name": string | null, // Bắt buộc phải giống text trong [Danh mục có sẵn]
+          "brand_name": string | null,    // Bắt buộc phải giống text trong [Thương hiệu có sẵn]
+          "min_price": number | null,
+          "max_price": number | null
+        }
+        
+        Chỉ trả về JSON. Không giải thích thêm.
+        `;
+
+        const modelName = await getValidModel();
+        const model = genAI.getGenerativeModel({ model: modelName });
+        
+        const result = await model.generateContent(SYSTEM_INSTRUCTION);
         const response = await result.response;
         
         let text = response.text();
+        // Vệ sinh JSON
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        if (text.startsWith('JSON')) text = text.replace('JSON', '').trim();
         
         let filters = {};
         try {
             filters = JSON.parse(text);
-            console.log("✅ AI đã hiểu (JSON):", filters);
+            console.log("✅ AI Filter:", filters);
         } catch (e) {
-            filters = { keyword: null }; // Nếu lỗi thì không lọc theo tên
+            console.error("⚠️ AI lỗi JSON, dùng fallback keyword.");
+            filters = { keyword: query };
         }
 
         res.json({ ai_data: filters });
 
     } catch (error) {
-        console.error("❌ LỖI NGHIÊM TRỌNG:", error.message);
-        res.status(500).json({ error: "Lỗi Server AI", details: error.message });
+        console.error("❌ Lỗi Server:", error.message);
+        res.status(500).json({ error: "Lỗi xử lý AI" });
     }
 });
 
 app.listen(PORT, () => {
-    console.log(`\n!!! SERVER ĐÃ CẬP NHẬT LOGIC TỪ KHÓA !!!`);
-    console.log(`Server: http://localhost:${PORT}`);
-    getValidModel(); 
+    console.log(`\n>>> SERVER CONTEXT AWARE ĐANG CHẠY TẠI PORT ${PORT} <<<`);
 });

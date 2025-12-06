@@ -4,33 +4,82 @@ namespace App\Http\Controllers\Api\Client;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Product; // Đảm bảo Model Product đã được import
+use App\Models\Product;
 
 class ProductController extends Controller
 {
     /**
      * Display a listing of the resource.
-     * API hiển thị danh sách sản phẩm (cho trang chủ, trang danh mục)
      */
-   public function index()
+    public function index(Request $request)
     {
-       
-        $products = Product::with(['variants', 'category'])
-            ->where('status', 'active') 
-            ->latest()
-            ->get();
+        // Khởi tạo query từ Model Product
+        $query = Product::query();
 
+        // [QUAN TRỌNG] Eager Loading:
+        // 'variants.attributeValues.attribute': Lấy thông tin Màu/Size để hiển thị tên biến thể (VD: iPhone | Đỏ - 128GB)
+        // 'brand', 'category': Để hiển thị thông tin hãng và danh mục
+        // 'images': Lấy ảnh phụ
+        $query->with([
+            'variants.attributeValues.attribute',
+            'category',
+            'brand',
+            'images'
+        ]);
+
+        // Chỉ lấy sản phẩm đang hoạt động
+        $query->where('status', 'active');
+
+        // --- Logic Lọc ---
+        if ($request->has('category_id') && $request->category_id != 'null') {
+            $query->where('category_id', $request->category_id);
+        }
+
+        if ($request->has('keyword') && !empty($request->keyword)) {
+            $keyword = $request->keyword;
+            $query->where('name', 'like', "%{$keyword}%");
+        }
+
+        // Sắp xếp mới nhất
+        $query->latest();
+
+        $products = $query->get();
+
+        // [LOGIC XỬ LÝ DỮ LIỆU] Tính toán giá min/max VÀ TÊN BIẾN THỂ
         $products->transform(function ($product) {
-            
-           
-            $minPrice = $product->variants->min('price');
-            $maxPrice = $product->variants->max('price');
+            $hasVariants = $product->variants && $product->variants->isNotEmpty();
 
-            // Gán giá hiển thị (để Frontend tiện dùng hoặc fallback)
-            $product->display_price = $minPrice ?: ($product->price ?? 0);
-            $product->display_price_max = $maxPrice ?: ($product->price ?? 0);
-            
-           
+            if ($hasVariants) {
+                // [FIX QUAN TRỌNG] Tạo tên cho biến thể từ thuộc tính (Attribute Values)
+                // Vì bảng variants thường không có cột 'name', ta phải ghép từ Color, Size...
+                $product->variants->transform(function ($variant) {
+                    // Nếu variant chưa có tên, hoặc tên rỗng
+                    if (empty($variant->name)) {
+                        // Lấy danh sách giá trị (VD: ["Đen", "128GB"])
+                        $attributes = $variant->attributeValues->map(function ($av) {
+                            return $av->value;
+                        })->toArray();
+
+                        // Nối lại thành chuỗi: "Đen - 128GB"
+                        $variant->name = !empty($attributes) ? implode(' - ', $attributes) : '';
+                    }
+                    return $variant;
+                });
+
+                $minPrice = $product->variants->min('price');
+                $maxPrice = $product->variants->max('price');
+            } else {
+                $minPrice = $product->price ?? 0;
+                $maxPrice = $product->price ?? 0;
+            }
+
+            $product->price = $minPrice; // Giá hiển thị là giá thấp nhất
+            $product->min_price = $minPrice;
+            $product->max_price = $maxPrice;
+
+            // Ẩn bớt trường không cần thiết để API nhẹ hơn
+            $product->makeHidden(['description', 'content']);
+
             return $product;
         });
 
@@ -42,37 +91,50 @@ class ProductController extends Controller
 
     /**
      * Display the specified resource.
-     * API hiển thị chi tiết sản phẩm (QUAN TRỌNG: Cần load sâu quan hệ)
      */
     public function show(string $id)
     {
-        
+        // Load chi tiết kèm đầy đủ quan hệ để hiển thị trang Detail
         $product = Product::with([
-            'variants.attributeValues.attribute', // Cốt lõi để Frontend vẽ nút chọn
-            'images',                             // Ảnh phụ (Gallery)
-            'category',                           // Danh mục
-            'reviews.user'                        // Đánh giá kèm thông tin người dùng
+            'variants.attributeValues.attribute', // Quan trọng: Lấy tên thuộc tính
+            'images',
+            'category',
+            'brand',
+            'reviews.user',
+            'comments.user'
         ])->find($id);
 
         if (!$product) {
             return response()->json(['message' => 'Không tìm thấy sản phẩm'], 404);
         }
 
-        // Tính toán các thông số phụ trợ cho Frontend
+        // [LOGIC TÍNH TOÁN CHI TIẾT]
         $variants = $product->variants;
-        
-        $product->min_price = $variants->isNotEmpty() ? $variants->min('price') : ($product->price ?? 0);
-        $product->max_price = $variants->isNotEmpty() ? $variants->max('price') : ($product->price ?? 0);
-        $product->total_stock = $variants->isNotEmpty() ? $variants->sum('stock') : ($product->stock ?? 0);
+        $hasVariants = $variants && $variants->isNotEmpty();
 
-        // Xử lý ảnh: Nếu không có ảnh gallery, dùng ảnh đại diện làm ảnh đầu tiên
-        // Laravel collection helper
+        // [FIX] Cũng áp dụng logic tạo tên biến thể cho trang chi tiết luôn cho đồng bộ
+        if ($hasVariants) {
+            $variants->transform(function ($variant) {
+                if (empty($variant->name)) {
+                    $attributes = $variant->attributeValues->map(function ($av) {
+                        return $av->value;
+                    })->toArray();
+                    $variant->name = !empty($attributes) ? implode(' - ', $attributes) : '';
+                }
+                return $variant;
+            });
+        }
+
+        $product->min_price = $hasVariants ? $variants->min('price') : ($product->price ?? 0);
+        $product->max_price = $hasVariants ? $variants->max('price') : ($product->price ?? 0);
+        $product->total_stock = $hasVariants ? $variants->sum('stock') : ($product->stock ?? 0);
+
+        // Gom ảnh vào gallery
         $gallery = collect();
         if ($product->thumbnail_url) {
             $gallery->push($product->thumbnail_url);
         }
         if ($product->images && $product->images->isNotEmpty()) {
-            // Giả sử bảng image_product có cột image_url
             $gallery = $gallery->merge($product->images->pluck('image_url'));
         }
         $product->gallery_images = $gallery->unique()->values();
@@ -83,27 +145,8 @@ class ProductController extends Controller
         ]);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
-    }
+    // Các method chưa dùng
+    public function store(Request $request) {}
+    public function update(Request $request, string $id) {}
+    public function destroy(string $id) {}
 }
