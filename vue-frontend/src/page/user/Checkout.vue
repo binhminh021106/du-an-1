@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, watch, computed, nextTick, onUnmounted } from "vue";
 import { useStore } from "vuex";
 import { useRouter } from "vue-router";
-import apiService from '../../apiService.js'; // Import API Service để gọi backend
+import apiService from '../../apiService.js';
 import Swal from 'sweetalert2';
 
 const store = useStore();
@@ -10,12 +10,10 @@ const router = useRouter();
 
 // --- 1. XỬ LÝ DỮ LIỆU TỪ VUEX & LOCALSTORAGE ---
 const selectedIds = ref([]);
-// [NEW] State để theo dõi item nào đang loading
 const updatingIds = ref([]);
 
 // Lấy danh sách từ getter
 const allCartItems = computed(() => store.getters.cartItems || []);
-
 
 // --- HELPER: LẤY TÊN BIẾN THỂ AN TOÀN ---
 const getVariantLabel = (item) => {
@@ -27,7 +25,8 @@ const getVariantLabel = (item) => {
   }
   return null;
 };
-// FIX 1: Logic lọc sản phẩm & Hiển thị biến thể
+
+// Logic lọc sản phẩm & Hiển thị biến thể
 const cartItems = computed(() => {
   if (!selectedIds.value || selectedIds.value.length === 0) return [];
   if (!allCartItems.value || allCartItems.value.length === 0) return [];
@@ -35,10 +34,8 @@ const cartItems = computed(() => {
   return allCartItems.value.filter(item => {
     return selectedIds.value.some(id => String(id) === String(item.cartId));
   }).map(item => {
-    // Xử lý hiển thị biến thể: Nếu có attributesMap (từ ProductDetail lưu vào), format thành chuỗi đẹp
     let variantInfo = '';
     if (item.attributesMap) {
-      // Ví dụ: { "Màu": "Đỏ", "Size": "XL" } -> "Màu: Đỏ, Size: XL"
       variantInfo = Object.entries(item.attributesMap)
         .map(([key, val]) => `${key}: ${val}`)
         .join(', ');
@@ -48,12 +45,12 @@ const cartItems = computed(() => {
 
     return {
       ...item,
-      displayVariant: variantInfo // Field mới để hiển thị
+      displayVariant: variantInfo
     };
   });
 });
 
-// FIX 2: Tính tổng tiền an toàn
+// Tính tổng tiền an toàn
 const subtotal = computed(() => {
   return cartItems.value.reduce((total, item) => {
     let price = item.price;
@@ -72,16 +69,15 @@ const getImageUrl = (path) => {
   return `${SERVER_URL}${cleanPath}`;
 };
 
-// Actions tương tác với Vuex [UPDATED: ASYNC & SPINNER]
+// Actions tương tác với Vuex
 const increaseQuantity = async (item) => {
-  if (updatingIds.value.includes(item.cartId)) return; // Chặn spam
-
+  if (updatingIds.value.includes(item.cartId)) return;
   if (item.stock && item.qty >= item.stock) {
     Swal.fire('Thông báo', `Sản phẩm này chỉ còn tối đa ${item.stock} món.`, 'warning');
     return;
   }
   
-  updatingIds.value.push(item.cartId); // Bật spinner
+  updatingIds.value.push(item.cartId);
   try {
       await store.dispatch('updateItemQty', { cartId: item.cartId, qty: item.qty + 1 });
   } catch(e) {
@@ -95,7 +91,6 @@ const increaseQuantity = async (item) => {
 
 const decreaseQuantity = async (item) => {
   if (updatingIds.value.includes(item.cartId)) return;
-
   if (item.qty > 1) {
     updatingIds.value.push(item.cartId);
     try {
@@ -141,7 +136,7 @@ const shippingFees = {
 const paymentMethods = [
   { code: "COD", name: "Thanh toán khi nhận hàng (COD)", icon: "fa-box-open" },
   { code: "BANK", name: "Chuyển khoản ngân hàng", icon: "fa-building-columns" },
-  { code: "VNPAY", name: "Thanh toán qua VNPay", icon: "fa-credit-card" }, // [UPDATED] Đổi code CARD thành VNPAY cho khớp backend
+  { code: "VNPAY", name: "Thanh toán qua VNPay", icon: "fa-credit-card" },
 ];
 
 const form = reactive({
@@ -149,7 +144,7 @@ const form = reactive({
   email: "",
   phone: "",
   address: { province: "", district: "", ward: "", street: "" },
-  paymentMethod: "COD", // Default
+  paymentMethod: "COD",
 });
 
 const provinces = ref([]);
@@ -165,32 +160,26 @@ const savedAddresses = ref([]);
 const selectedSavedAddressId = ref("");
 
 // COUPON STATE
-const coupons = ref([]); // Danh sách coupon từ API
+const coupons = ref([]);
 const couponCode = ref("");
 const discountAmount = ref(0);
-const appliedCoupon = ref(null); // Lưu object coupon đã áp dụng
+const appliedCoupon = ref(null);
 const couponMessage = ref("");
-const isCouponLoading = ref(false);
-const showCouponModal = ref(false); // [NEW] State cho popup voucher
-
+const showCouponModal = ref(false);
 const showModal = ref(false);
 const modalContent = ref({});
-const isSubmitting = ref(false); // Loading khi submit đơn
+const isSubmitting = ref(false);
 
 // --- CUSTOM SEARCHABLE DROPDOWN STATE ---
-const activeDropdown = ref(null); // 'province', 'district', 'ward'
+const activeDropdown = ref(null);
 const searchTerm = ref("");
-const dropdownContainer = ref(null); // Ref để detect click outside
-const searchInputRef = ref(null);
+const dropdownContainer = ref(null);
 
 // --- ON MOUNTED ---
 onMounted(async () => {
-  // 1. Load Checkout IDs
   const storedIds = localStorage.getItem('checkout_items');
   if (storedIds) {
-    try {
-      selectedIds.value = JSON.parse(storedIds);
-    } catch (e) { console.error(e); }
+    try { selectedIds.value = JSON.parse(storedIds); } catch (e) { console.error(e); }
   }
 
   if (!selectedIds.value || selectedIds.value.length === 0) {
@@ -198,7 +187,6 @@ onMounted(async () => {
     return;
   }
 
-  // 2. Load User Data
   const userDataString = localStorage.getItem("userData");
   if (userDataString) {
     try {
@@ -213,16 +201,12 @@ onMounted(async () => {
     } catch (e) { console.error(e); }
   }
 
-  // 3. Load Provinces
   try {
     const res = await fetch("https://provinces.open-api.vn/api/?depth=3");
     provinces.value = await res.json();
   } catch (e) { console.error(e); }
 
-  // 4. [NEW] Load Coupons from DB
   fetchCoupons();
-
-  // 5. Detect Click Outside for Dropdowns
   document.addEventListener('click', handleClickOutside);
 });
 
@@ -232,11 +216,9 @@ onUnmounted(() => {
 
 const fetchCoupons = async () => {
   try {
-    const res = await apiService.get('/coupons'); // API lấy danh sách coupon
-    // Giả sử backend trả về { data: [...] } hoặc mảng trực tiếp
+    const res = await apiService.get('/coupons');
     const data = res.data.data || res.data;
     if (Array.isArray(data)) {
-      // Chỉ lấy coupon còn hạn và còn lượt dùng
       const now = new Date();
       coupons.value = data.filter(c => {
         const expired = c.expires_at ? new Date(c.expires_at) < now : false;
@@ -244,12 +226,9 @@ const fetchCoupons = async () => {
         return !expired && !outOfStock;
       });
     }
-  } catch (e) {
-    console.error("Lỗi tải mã giảm giá:", e);
-  }
+  } catch (e) { console.error("Lỗi tải mã giảm giá:", e); }
 };
 
-// Logic Address Book
 const fillAddressFromBook = async () => {
   if (!selectedSavedAddressId.value) return;
   const addr = savedAddresses.value.find(a => a.id === selectedSavedAddressId.value);
@@ -273,9 +252,6 @@ const fillAddressFromBook = async () => {
   }
 };
 
-// --- LOGIC CUSTOM SEARCHABLE SELECT ---
-
-// [NEW] Helper xóa dấu tiếng Việt để tìm kiếm không dấu
 const removeVietnameseTones = (str) => {
   if (!str) return "";
   str = str.toLowerCase();
@@ -286,7 +262,7 @@ const removeVietnameseTones = (str) => {
   str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
   str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
   str = str.replace(/đ/g, "d");
-  str = str.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Xóa các dấu phụ còn sót
+  str = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   return str;
 };
 
@@ -309,16 +285,15 @@ const filteredWards = computed(() => {
 });
 
 const toggleDropdown = (name) => {
-  if (name === 'district' && !districts.value.length) return; // Disabled logic
-  if (name === 'ward' && !wards.value.length) return; // Disabled logic
+  if (name === 'district' && !districts.value.length) return;
+  if (name === 'ward' && !wards.value.length) return;
 
   if (activeDropdown.value === name) {
     activeDropdown.value = null;
   } else {
     activeDropdown.value = name;
-    searchTerm.value = ""; // Reset search
+    searchTerm.value = "";
     nextTick(() => {
-       // Focus input search if exist
        const inputs = document.querySelectorAll('.search-input-field');
        if(inputs.length) inputs[0].focus();
     });
@@ -337,9 +312,7 @@ const handleClickOutside = (event) => {
     activeDropdown.value = null;
   }
 };
-// ------------------------------------
 
-// Watchers Address
 watch(selectedProvince, (val) => {
   const p = provinces.value.find((p) => p.name === val);
   districts.value = p ? p.districts : [];
@@ -347,7 +320,6 @@ watch(selectedProvince, (val) => {
     selectedDistrict.value = ""; wards.value = []; selectedWard.value = "";
   }
   shippingCost.value = shippingFees[val] ?? 30000;
-  // Re-check coupon if total changed due to shipping (if coupon covers shipping)
   if (appliedCoupon.value) applyCouponLogic(appliedCoupon.value);
 });
 
@@ -364,43 +336,33 @@ watch([selectedProvince, selectedDistrict, selectedWard, () => form.address.stre
   form.address.ward = selectedWard.value;
 });
 
-// [NEW] Coupon Logic Realtime
 const applyCouponLogic = (coupon) => {
   couponMessage.value = "";
   discountAmount.value = 0;
   appliedCoupon.value = null;
 
-  // 1. Check Min Spend
   if (coupon.min_spend && subtotal.value < coupon.min_spend) {
     couponMessage.value = `Đơn hàng chưa đủ ${Number(coupon.min_spend).toLocaleString()}đ để dùng mã này.`;
     return;
   }
 
-  // 2. Calculate Discount
   let discount = 0;
   if (coupon.type === 'percent') {
     discount = subtotal.value * (coupon.value / 100);
-    // Có thể thêm max_discount_amount nếu DB có trường này
   } else if (coupon.type === 'fixed') {
     discount = coupon.value;
   }
 
-  // 3. Apply
   discountAmount.value = discount;
   appliedCoupon.value = coupon;
   couponMessage.value = `Đã áp dụng: ${coupon.name} (-${discount.toLocaleString()}đ)`;
-  
-  // Đóng modal sau khi chọn thành công
   showCouponModal.value = false; 
 };
 
 const handleApplyCouponCode = () => {
   const code = couponCode.value.trim().toUpperCase();
   if (!code) return;
-
-  // Tìm trong danh sách đã load (hoặc gọi API verify nếu cần bảo mật hơn)
   const found = coupons.value.find(c => c.code.toUpperCase() === code);
-
   if (found) {
     applyCouponLogic(found);
   } else {
@@ -411,7 +373,6 @@ const handleApplyCouponCode = () => {
 };
 
 const quickApplyCoupon = (coupon) => {
-  // [FIX] Cho phép bỏ chọn (Toggle)
   if (appliedCoupon.value && appliedCoupon.value.code === coupon.code) {
       couponCode.value = "";
       discountAmount.value = 0;
@@ -423,7 +384,6 @@ const quickApplyCoupon = (coupon) => {
   }
 };
 
-// Mở Modal Voucher
 const openCouponModal = () => {
     showCouponModal.value = true;
 };
@@ -433,31 +393,25 @@ const totalPrice = computed(() => {
   return total > 0 ? total : 0;
 });
 
-// --- VALIDATION & SUBMIT ---
 const validateForm = () => {
   let valid = true;
   errors.name = errors.email = errors.phone = errors.address = errors.paymentMethod = "";
-
   if (!form.name.trim()) { errors.name = "Vui lòng nhập họ tên."; valid = false; }
-
   const emailRegex = /^[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}$/;
   if (!form.email.trim()) { errors.email = "Vui lòng nhập email."; valid = false; }
   else if (!emailRegex.test(form.email)) { errors.email = "Email không hợp lệ."; valid = false; }
-
   const phoneRegex = /^(0[0-9]{9,10})$/;
   if (!form.phone.trim()) { errors.phone = "Vui lòng nhập số điện thoại."; valid = false; }
   else if (!phoneRegex.test(form.phone)) { errors.phone = "Số điện thoại không hợp lệ."; valid = false; }
-
   if (!form.address.province || !form.address.district || !form.address.ward || !form.address.street.trim()) {
     errors.address = "Vui lòng nhập đầy đủ địa chỉ giao hàng.";
     valid = false;
   }
-
   if (!form.paymentMethod) { errors.paymentMethod = "Vui lòng chọn phương thức thanh toán."; valid = false; }
-
   return valid;
 };
 
+// ============ MODIFIED CONFIRM CHECKOUT ============
 const confirmCheckout = async () => {
   if (!validateForm()) {
     Swal.fire('Thông tin thiếu sót', 'Vui lòng kiểm tra lại thông tin nhận hàng.', 'error');
@@ -471,31 +425,24 @@ const confirmCheckout = async () => {
 
   isSubmitting.value = true;
 
-  // Cấu trúc dữ liệu gửi lên API Controller
   const newOrderData = {
     customer_name: form.name,
     customer_email: form.email,
     customer_phone: form.phone,
     shipping_address: `${form.address.street}, ${form.address.ward}, ${form.address.district}, ${form.address.province}`,
     payment_method: form.paymentMethod,
-    
-    // [FIX] Dùng cleanPrice để đảm bảo gửi số
     shipping_fee: cleanPrice(shippingCost.value),
     discount_amount: cleanPrice(discountAmount.value),
     coupon_code: appliedCoupon.value ? appliedCoupon.value.code : null,
     total_amount: cleanPrice(totalPrice.value),
-    
-    // 👇 FIX QUAN TRỌNG: LẤY ĐÚNG PRODUCT_ID VÀ VARIANT_ID
     items: cartItems.value.map(item => {
       let realProductId = item.product_id; 
-      
       if (!realProductId && item.variant && item.variant.product_id) {
           realProductId = item.variant.product_id;
       }
       if (!realProductId) {
           realProductId = item.id;
       }
-
       return {
         product_id: realProductId, 
         variant_id: item.variantId || item.variant_id || (item.variant ? item.variant.id : null), 
@@ -510,23 +457,20 @@ const confirmCheckout = async () => {
   try {
     // 1. GỌI API TẠO ĐƠN HÀNG
     const res = await apiService.post('/orders', newOrderData);
+    const orderId = res.data.data?.id || res.data.id || 'N/A';
 
-    const orderId = res.data.data?.id || res.data.id || 'N/A'; // Lấy mã đơn
-
-    // Xóa giỏ hàng ngay khi tạo đơn thành công (Dù là COD hay VNPay)
-    cartItems.value.forEach(item => { store.dispatch('removeItem', item.cartId); });
-    localStorage.removeItem('checkout_items');
+    // ❌ ĐÃ XÓA CODE XÓA GIỎ HÀNG TOÀN CỤC TẠI ĐÂY
 
     // === 2. XỬ LÝ LOGIC VNPAY ===
     if (form.paymentMethod === 'VNPAY') {
         try {
-            // Gọi API lấy link thanh toán
             const vnpayRes = await apiService.post('/payment/vnpay', { order_id: orderId });
             
             if (vnpayRes.data && vnpayRes.data.data) {
+                // *** QUAN TRỌNG: Không xóa giỏ hàng tại đây ***
                 // Chuyển hướng sang VNPay
                 window.location.href = vnpayRes.data.data;
-                return; // Dừng hàm tại đây (không hiện Modal Success bên dưới)
+                return; 
             } else {
                  Swal.fire('Lỗi', 'Không lấy được link thanh toán. Vui lòng kiểm tra lại.', 'error');
                  return;
@@ -537,9 +481,13 @@ const confirmCheckout = async () => {
             return;
         }
     }
-    // ============================
+    
+    // === 3. XỬ LÝ CHO COD / BANK (Chỉ xóa giỏ khi vào đây) ===
+    
+    // ✅ Xóa giỏ hàng CHỈ KHI là COD hoặc BANK
+    cartItems.value.forEach(item => { store.dispatch('removeItem', item.cartId); });
+    localStorage.removeItem('checkout_items');
 
-    // === 3. XỬ LÝ CHO COD / BANK ===
     const paymentMethodName = paymentMethods.find(p => p.code === form.paymentMethod)?.name || form.paymentMethod;
 
     modalContent.value = {
@@ -569,11 +517,11 @@ const confirmCheckout = async () => {
     isSubmitting.value = false;
   }
 };
+// ===================================================
 
 const closeModal = () => {
   showModal.value = false;
-  // Chuyển hướng về trang danh sách đơn hàng hoặc trang chủ
-  router.push('/OrderList'); // Đảm bảo route này tồn tại
+  router.push('/OrderList');
 };
 </script>
 
@@ -619,7 +567,6 @@ const closeModal = () => {
 
           <div class="form-group">
             <label>Địa chỉ nhận hàng <span class="text-danger">*</span></label>
-            <!-- REPLACED OLD SELECTS WITH NEW CUSTOM SEARCHABLE DROPDOWNS -->
             <div class="address-select-group" ref="dropdownContainer">
               
               <!-- PROVINCE -->
@@ -656,7 +603,7 @@ const closeModal = () => {
                     </div>
                     <ul class="options-list">
                        <li v-for="d in filteredDistricts" :key="d.code" @click="selectOption('district', d.name)"
-                            :class="{'selected': selectedDistrict === d.name}">
+                           :class="{'selected': selectedDistrict === d.name}">
                           {{ d.name }}
                        </li>
                        <li v-if="filteredDistricts.length === 0" class="no-result">Không tìm thấy</li>
@@ -677,7 +624,7 @@ const closeModal = () => {
                     </div>
                     <ul class="options-list">
                        <li v-for="w in filteredWards" :key="w.code" @click="selectOption('ward', w.name)"
-                            :class="{'selected': selectedWard === w.name}">
+                           :class="{'selected': selectedWard === w.name}">
                           {{ w.name }}
                        </li>
                        <li v-if="filteredWards.length === 0" class="no-result">Không tìm thấy</li>
@@ -713,7 +660,6 @@ const closeModal = () => {
         <h3>Đơn hàng của bạn</h3>
         <ul class="cart-items-list">
           <li v-for="item in cartItems" :key="item.cartId" class="cart-item-summary">
-            <!-- Hình ảnh: Cập nhật src để nhận cả item.image -->
             <div class="item-img-wrapper">
               <img :src="getImageUrl(item.image || item.image_url)" :alt="item.name"
                 @error="$event.target.src = 'https://placehold.co/70x70?text=No+Img'" />
@@ -724,14 +670,11 @@ const closeModal = () => {
             <div class="item-details-summary">
               <div class="item-name">{{ item.name }}</div>
 
-              <!-- HIỂN THỊ BIẾN THỂ -->
               <div v-if="item.displayVariant" class="item-variant-badge">
                 {{ item.displayVariant }}
               </div>
 
-              <!-- THÊM NÚT TĂNG GIẢM -->
               <div class="item-quantity-controls mt-2">
-                <!-- Spinner overlay cho từng item -->
                 <div v-if="updatingIds.includes(item.cartId)" class="qty-spinner">
                     <i class="fa-solid fa-spinner fa-spin"></i>
                 </div>
@@ -755,7 +698,6 @@ const closeModal = () => {
               <div class="item-price">
                 {{ (Number(item.price) * Number(item.qty)).toLocaleString() }} đ
               </div>
-              <!-- NÚT XÓA -->
               <button type="button" @click="onRemoveItemLocal(item.cartId)" class=" btn btn-outline-danger" :disabled="updatingIds.includes(item.cartId)">
                 <i v-if="updatingIds.includes(item.cartId)" class="fa-solid fa-spinner fa-spin"></i>
                 <i v-else class="fa-solid fa-trash"></i>
@@ -787,17 +729,14 @@ const closeModal = () => {
           <span class="total-amount">{{ totalPrice.toLocaleString() }} đ</span>
         </div>
 
-        <!-- [MODIFIED] KHU VỰC NHẬP MÃ GIẢM GIÁ (Chuyển thành nút mở popup) -->
         <div class="coupon-section">
           <div class="coupon-header-row">
             <label><i class="fa-solid fa-ticket"></i> Mã giảm giá</label>
-            <!-- Nút Mở Popup được style lại -->
             <button type="button" class="btn-open-coupon" @click="openCouponModal">
                 <i class="fa-solid fa-ticket-simple me-1"></i> Chọn hoặc nhập mã
             </button>
           </div>
           
-          <!-- Hiển thị voucher đã chọn ngay dưới -->
           <div v-if="appliedCoupon" class="selected-coupon-info">
             <span class="success-text">
                 <i class="fa-solid fa-check-circle"></i> Đã dùng: {{ appliedCoupon.code }}
@@ -828,13 +767,11 @@ const closeModal = () => {
             </div>
 
             <div class="modal-body p-0">
-                <!-- Search Voucher Input inside Modal -->
                 <div class="coupon-input-group modal-search">
                     <input type="text" v-model="couponCode" placeholder="Nhập mã giảm giá" @keyup.enter="handleApplyCouponCode" />
                     <button type="button" @click="handleApplyCouponCode" :disabled="!couponCode">Áp dụng</button>
                 </div>
 
-                <!-- Voucher List -->
                 <div class="voucher-list-modal">
                     <div v-if="coupons.length > 0" class="voucher-grid">
                         <div v-for="cp in coupons" :key="cp.code" class="voucher-ticket-compact"
@@ -859,7 +796,6 @@ const closeModal = () => {
                                 </div>
                             </div>
 
-                            <!-- Decor -->
                             <div class="notch top"></div>
                             <div class="notch bottom"></div>
                         </div>
@@ -889,14 +825,12 @@ const closeModal = () => {
         </div>
 
         <div class="modal-body">
-          <!-- Chi tiết khách hàng -->
           <div class="modal-details">
             <p v-for="d in modalContent.details" :key="d.label" style="margin-bottom: 8px;">
               <strong>{{ d.label }}:</strong> {{ d.value }}
             </p>
           </div>
 
-          <!-- Tóm tắt chi phí -->
           <div class="modal-summary" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
             <div v-for="sum in modalContent.summary" :key="sum.label"
               :class="['summary-line-modal', { 'total-modal': sum.isTotal }]">
@@ -974,12 +908,10 @@ h3 {
   position: relative;
 }
 
-/* [NEW] Dấu gạch chân xanh rõ ràng - Đã làm cho nó dài hơn */
 h3::after {
   content: '';
   display: block;
   width: 100%;
-  /* Kéo dài line gần full width của tiêu đề */
   height: 3px;
   background-color: #009981;
   position: absolute;
@@ -1323,7 +1255,7 @@ textarea:focus {
   font-weight: 500;
 }
 
-/* [NEW] Inline Quantity Controls */
+/* Inline Quantity Controls */
 .item-quantity-controls {
   display: flex;
   align-items: center;
@@ -1332,17 +1264,16 @@ textarea:focus {
   border-radius: 6px;
   width: 90px;
   height: 30px;
-  position: relative; /* [UPDATED] */
+  position: relative; 
 }
 
-/* [NEW] Spinner overlay cho trang checkout */
 .qty-spinner {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(255, 255, 255, 0.85); /* Nền trắng mờ */
+    background: rgba(255, 255, 255, 0.85); 
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1383,7 +1314,6 @@ textarea:focus {
   font-weight: 600;
   font-size: 14px;
   color: #333;
-  /* Kẻ dọc nhẹ nhàng */
   border-left: 1px solid #e0e0e0;
   border-right: 1px solid #e0e0e0;
 }
@@ -1470,7 +1400,6 @@ textarea:focus {
 }
 
 .btn-open-coupon {
-    /* NEW BUTTON STYLE */
     background-color: white;
     border: 1px solid #009981;
     color: #009981;
@@ -1519,7 +1448,6 @@ textarea:focus {
   flex: 1;
 }
 
-/* [UPDATED] Button color */
 .coupon-input-group button {
   padding: 0 20px;
   background: #009981;
@@ -1562,7 +1490,7 @@ textarea:focus {
 
 /* ----- COUPON MODAL STYLES ----- */
 .coupon-modal {
-    max-width: 450px; /* Compact width */
+    max-width: 450px; 
     padding-bottom: 20px;
 }
 
