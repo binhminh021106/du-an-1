@@ -103,6 +103,10 @@ class AdminNewController extends Controller
             'image'       => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
             'author_name' => 'required|string|max:100', 
             'status'      => 'required|in:published,draft,pending',
+            // [SEO UPGRADE] Validate các trường SEO (nullable vì không bắt buộc)
+            'meta_title'       => 'nullable|string|max:255',
+            'meta_description' => 'nullable|string|max:500',
+            'meta_keywords'    => 'nullable|string|max:255',
         ], [
             'slug.unique' => 'Đường dẫn (Slug) này đã tồn tại.',
             'image.image' => 'File tải lên phải là hình ảnh.',
@@ -158,6 +162,10 @@ class AdminNewController extends Controller
             'image'       => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
             'author_name' => 'sometimes|required|string|max:100',
             'status'      => 'sometimes|required|in:published,draft,pending',
+            // [SEO UPGRADE] Update validation SEO
+            'meta_title'       => 'nullable|string|max:255',
+            'meta_description' => 'nullable|string|max:500',
+            'meta_keywords'    => 'nullable|string|max:255',
         ]);
 
         $data = $validated;

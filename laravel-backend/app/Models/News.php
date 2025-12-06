@@ -21,7 +21,11 @@ class News extends Model
         'image_url',
         'slug', 
         'status',
-        'author_name'
+        'author_name',
+        // [SEO UPGRADE] Thêm các trường Meta cho SEO
+        'meta_title',
+        'meta_description',
+        'meta_keywords',
     ];
 
     /**

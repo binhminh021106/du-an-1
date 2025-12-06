@@ -221,13 +221,7 @@ onMounted(() => {
       </div>
     </main>
     
-    <!-- FOOTER -->
-    <footer class="policy-footer">
-        <div class="container text-center">
-            <p class="mb-0 text-muted small">© 2025 TechShop. Tất cả các chính sách trên đều tuân thủ pháp luật Việt Nam.</p>
-        </div>
-    </footer>
-
+    
   </section>
 </template>
 
