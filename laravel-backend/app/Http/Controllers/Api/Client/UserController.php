@@ -56,23 +56,30 @@ class UserController extends Controller
 
         // 2. Xử lý upload ảnh nếu có
         if ($request->hasFile('avatar')) {
-            // (Tuỳ chọn) Xóa ảnh cũ để tránh rác server
+            $file = $request->file('avatar');
+
+            // --- XÓA ẢNH CŨ (Nếu có) ---
             if ($user->avatar_url) {
-                // Lấy path tương đối từ full URL cũ để xóa (logic này tùy project)
-                // Ví dụ: http://domain.com/storage/avatars/abc.jpg -> avatars/abc.jpg
-                $oldPath = str_replace(asset('storage/'), '', $user->avatar_url);
-                if (Storage::disk('public')->exists($oldPath)) {
-                   // Storage::disk('public')->delete($oldPath); // Uncomment nếu muốn xóa thật
+                // Lấy tên file từ đường dẫn URL cũ (ví dụ: http://.../abc.jpg => abc.jpg)
+                $oldFileName = basename($user->avatar_url);
+                // Xác định đường dẫn vật lý của file cũ
+                $oldFilePath = public_path('uploads/users/' . $oldFileName);
+
+                // Kiểm tra file có tồn tại trong thư mục uploads/users không thì xóa
+                if (file_exists($oldFilePath)) {
+                    unlink($oldFilePath);
                 }
             }
 
-            // Lưu file vào thư mục: storage/app/public/avatars
-            $path = $request->file('avatar')->store('avatars', 'public');
+            // --- LƯU ẢNH MỚI ---
+            // Tạo tên file mới: thời gian + tên gốc (để tránh trùng lặp)
+            $fileName = time() . '_' . $file->getClientOriginalName();
 
-            // [FIX QUAN TRỌNG]: Dùng asset() hoặc url() để tạo đường dẫn tuyệt đối (Full URL)
-            // Kết quả sẽ là: http://localhost:8000/storage/avatars/ten-file.jpg
-            // Thay vì chỉ là: /storage/avatars/ten-file.jpg
-            $data['avatar_url'] = asset('storage/' . $path);
+            // Di chuyển file vào thư mục public/uploads/users
+            $file->move(public_path('uploads/users'), $fileName);
+
+            // Lưu đường dẫn đầy đủ vào DB (http://your-domain/uploads/users/ten-file.jpg)
+            $data['avatar_url'] = asset('uploads/users/' . $fileName);
         }
 
         // 3. Cập nhật vào DB

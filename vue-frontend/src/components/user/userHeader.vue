@@ -109,6 +109,20 @@ const handleLoginSuccess = (event) => {
   store.dispatch('initializeCart').catch(err => console.warn("Init cart error:", err));
 };
 
+// [MỚI] Hàm xử lý khi thông tin user thay đổi từ Profile
+const handleUserUpdate = (event) => {
+  // Cập nhật lại biến user reactive để giao diện tự thay đổi
+  if (event.detail) {
+    user.value = event.detail;
+  } else {
+    // Nếu không có dữ liệu chi tiết, thử load lại từ localStorage
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      user.value = JSON.parse(userData);
+    }
+  }
+};
+
 // --- LIFECYCLE HOOKS ---
 onMounted(() => {
   try {
@@ -123,6 +137,9 @@ onMounted(() => {
 
   document.addEventListener('click', handleClickOutside);
   window.addEventListener('login-success', handleLoginSuccess);
+
+  // [MỚI] Đăng ký sự kiện lắng nghe cập nhật user
+  window.addEventListener('user-info-updated', handleUserUpdate);
 
   fetchCategories();
 
@@ -139,6 +156,9 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside);
   window.removeEventListener('login-success', handleLoginSuccess);
+
+  // [MỚI] Hủy đăng ký sự kiện khi component bị hủy
+  window.removeEventListener('user-info-updated', handleUserUpdate);
 });
 </script>
 
