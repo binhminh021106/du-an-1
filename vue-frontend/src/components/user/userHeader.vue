@@ -8,6 +8,9 @@ import Swal from 'sweetalert2';
 const router = useRouter();
 const store = useStore();
 
+// [ĐỒNG BỘ] Định nghĩa URL gốc của Server giống trang Profile
+const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 // --- STATE QUẢN LÝ MENU ---
 const isMenuActive = ref(false);
 const menuContainer = ref(null);
@@ -20,8 +23,25 @@ const user = ref(null);
 const searchQuery = ref('');
 
 // --- COMPUTED: SỐ LƯỢNG GIỎ HÀNG ---
-// Lấy trực tiếp từ getter của Vuex cho chuẩn
 const cartItemCount = computed(() => store.getters.cartCount || 0);
+
+// --- COMPUTED: LẤY CHỮ CÁI ĐẦU CỦA TÊN (Hiển thị khi không có ảnh) ---
+const userInitial = computed(() => {
+  if (!user.value || !user.value.fullName) return 'U';
+  return user.value.fullName.charAt(0).toUpperCase();
+});
+
+// [FIX - ĐỒNG BỘ VỚI PROFILE] HÀM XỬ LÝ URL ẢNH
+const getFullImageUrl = (url) => {
+  if (!url) return null; // Trả về null để hiển thị Initials (chữ cái đầu)
+
+  // Nếu là ảnh online (google, facebook) hoặc đã full URL thì giữ nguyên
+  if (url.startsWith("http") || url.startsWith("https")) return url;
+
+  // Xử lý path tương đối: nối thêm domain backend vào
+  const cleanPath = url.startsWith('/') ? url.substring(1) : url;
+  return `${BACKEND_URL}/${cleanPath}`;
+};
 
 // --- FETCH DATA ---
 const fetchCategories = async () => {
@@ -74,62 +94,45 @@ const handleLogout = () => {
     cancelButtonText: 'Ở lại'
   }).then((result) => {
     if (result.isConfirmed) {
-      // Xóa dữ liệu đăng nhập
       localStorage.removeItem('userData');
-      localStorage.removeItem('auth_token'); // Quan trọng: Xóa token
-      
-      // Update Store
+      localStorage.removeItem('auth_token');
       store.commit('SET_LOGIN_STATUS', false);
-      store.commit('CLEAR_CART'); // Tùy chọn: Xóa giỏ hàng khi logout nếu muốn
-      
+      store.commit('CLEAR_CART');
       user.value = null;
-      
-      // Chuyển hướng hoặc reload
       router.push({ name: 'login' });
-      // window.location.reload(); // Không cần reload trang nếu SPA làm tốt
     }
   });
 };
 
 const handleLoginSuccess = (event) => {
   user.value = event.detail.user;
-  // Khi login thành công, gọi lại init cart để merge giỏ hàng (nếu có logic đó)
-  // Dùng .then().catch() để tránh lỗi unhandled promise rejection
   store.dispatch('initializeCart').catch(err => console.warn("Init cart error:", err));
 };
 
 // --- LIFECYCLE HOOKS ---
 onMounted(() => {
-  // 1. Load User từ LocalStorage
   try {
-      const userData = localStorage.getItem('userData');
-      if (userData) {
-          user.value = JSON.parse(userData);
-      }
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      user.value = JSON.parse(userData);
+    }
   } catch (e) {
-      console.error("Lỗi parse userData:", e);
-      localStorage.removeItem('userData');
+    console.error("Lỗi parse userData:", e);
+    localStorage.removeItem('userData');
   }
 
-  // 2. Lắng nghe sự kiện
   document.addEventListener('click', handleClickOutside);
   window.addEventListener('login-success', handleLoginSuccess);
-  
-  // 3. Tải danh mục
+
   fetchCategories();
-  
-  // 4. Khởi tạo giỏ hàng (Check login, load DB/Local)
-  // Đảm bảo file store/index.js của bạn ĐÃ CÓ action 'initializeCart'
-  // FIX: Thêm kiểm tra action có tồn tại không trước khi dispatch để tránh lỗi màn hình đỏ
+
   if (store._actions && store._actions.initializeCart) {
-      store.dispatch('initializeCart').catch(err => {
-          console.warn("Lỗi khi khởi tạo giỏ hàng:", err);
-      });
+    store.dispatch('initializeCart').catch(err => {
+      console.warn("Lỗi khi khởi tạo giỏ hàng:", err);
+    });
   } else {
-      console.warn("⚠️ Action 'initializeCart' chưa được định nghĩa trong Vuex Store. Vui lòng kiểm tra file store/index.js");
-      // Fallback: Tự cập nhật trạng thái login nếu action thiếu
-      const token = localStorage.getItem('auth_token');
-      store.commit('SET_LOGIN_STATUS', !!token);
+    const token = localStorage.getItem('auth_token');
+    store.commit('SET_LOGIN_STATUS', !!token);
   }
 });
 
@@ -206,12 +209,12 @@ onUnmounted(() => {
 
         <!-- Header Actions -->
         <div class="header-actions">
-          
+
           <!-- Giỏ hàng -->
           <router-link :to="{ name: 'cart' }" class="action-item side-menu-container cart-action">
             <div class="cart-icon-wrapper">
-                <i class="fa-solid fa-cart-shopping"></i>
-                <span v-if="cartItemCount > 0" class="cart-badge">{{ cartItemCount }}</span>
+              <i class="fa-solid fa-cart-shopping"></i>
+              <span v-if="cartItemCount > 0" class="cart-badge">{{ cartItemCount }}</span>
             </div>
             <span>Giỏ hàng</span>
           </router-link>
@@ -225,11 +228,18 @@ onUnmounted(() => {
           <!-- User Menu (Hiện khi đã login) -->
           <div v-else class="side-menu-container user-menu" ref="userMenuContainer">
             <button @click="toggleUserMenu" class="action-item user-menu-trigger">
-                <!-- Avatar hoặc Icon mặc định -->
-                <img v-if="user.avatar_url" :src="user.avatar_url" class="user-avatar-mini" alt="Avatar">
-                <i v-else class="fa-solid fa-circle-user"></i>
-                
-                <span class="user-name-truncate">{{ user.fullName || user.email }}</span>
+              <!-- [UPDATED] Logic hiển thị Avatar đồng bộ với Profile -->
+
+              <!-- Trường hợp 1: Có ảnh avatar -> Dùng getFullImageUrl -->
+              <img v-if="user.avatar_url" :src="getFullImageUrl(user.avatar_url)" class="user-avatar-mini" alt="Avatar"
+                @error="user.avatar_url = null">
+
+              <!-- Trường hợp 2: Không có ảnh hoặc ảnh lỗi -> Hiển thị Initials -->
+              <div v-else class="user-avatar-placeholder">
+                {{ userInitial }}
+              </div>
+
+              <span class="user-name-truncate">{{ user.fullName || user.email }}</span>
             </button>
 
             <div class="dropdown-menu user-dropdown" :class="{ active: isUserMenuActive }">
@@ -238,10 +248,15 @@ onUnmounted(() => {
                 <small>{{ user.email }}</small>
               </div>
               <ul class="menu-list">
-                <li><router-link :to="{ name: 'profile' }"><i class="fa-solid fa-address-card"></i> Tài khoản</router-link></li>
-                <li><router-link :to="{ name: 'OrderList' }"><i class="fa-solid fa-box-archive"></i> Đơn mua</router-link></li>
-                <li><router-link :to="{ name: 'wishlist' }"><i class="fa-solid fa-heart"></i> Yêu thích</router-link></li>
-                <li class="divider"><hr></li>
+                <li><router-link :to="{ name: 'profile' }"><i class="fa-solid fa-address-card"></i> Tài
+                    khoản</router-link></li>
+                <li><router-link :to="{ name: 'OrderList' }"><i class="fa-solid fa-box-archive"></i> Đơn
+                    mua</router-link></li>
+                <li><router-link :to="{ name: 'wishlist' }"><i class="fa-solid fa-heart"></i> Yêu thích</router-link>
+                </li>
+                <li class="divider">
+                  <hr>
+                </li>
                 <li>
                   <a href="#" class="logout-link" @click.prevent="handleLogout">
                     <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
@@ -258,7 +273,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* CSS Variables giả lập (Vì scoped không hỗ trợ :root tốt) */
+/* CSS Variables giả lập */
 .site-header {
   --primary-color: #009981;
   --primary-light: #DBF9EB;
@@ -267,16 +282,24 @@ onUnmounted(() => {
   --text-dark: #333333;
   --bg-gray: #f8f9fa;
   --danger-color: #d9534f;
-  
+
   font-family: Arial, sans-serif;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   background-color: #fff;
   z-index: 1000;
-  position: relative; /* Đảm bảo z-index hoạt động */
+  position: relative;
 }
 
-a { text-decoration: none; color: inherit; }
-ul { list-style: none; margin: 0; padding: 0; }
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
 
 .container {
   max-width: 1200px;
@@ -286,123 +309,331 @@ ul { list-style: none; margin: 0; padding: 0; }
   align-items: center;
   justify-content: space-between;
 }
-.relative-container { position: relative; gap: 20px; }
+
+.relative-container {
+  position: relative;
+  gap: 20px;
+}
 
 /* TOP BAR */
-.top-bar { background-color: var(--primary-color); color: var(--text-white); font-size: 13px; padding: 8px 0; }
-.top-bar-links ul, .top-bar-info ul { display: flex; gap: 20px; }
-.top-bar a:hover { text-decoration: underline; opacity: 0.9; }
+.top-bar {
+  background-color: var(--primary-color);
+  color: var(--text-white);
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.top-bar-links ul,
+.top-bar-info ul {
+  display: flex;
+  gap: 20px;
+}
+
+.top-bar a:hover {
+  text-decoration: underline;
+  opacity: 0.9;
+}
 
 /* MAIN HEADER */
-.main-header { padding: 15px 0; border-bottom: 1px solid #eee; background-color: #fff; }
+.main-header {
+  padding: 15px 0;
+  border-bottom: 1px solid #eee;
+  background-color: #fff;
+}
 
 /* LOGO */
-.logo img { height: 40px; display: block; }
+.logo img {
+  height: 40px;
+  display: block;
+}
 
 /* CATEGORY BUTTON */
 .category-button {
-  background-color: var(--bg-gray); border: 1px solid #eee; color: var(--text-dark);
-  padding: 10px 15px; border-radius: 8px; cursor: pointer;
-  display: flex; align-items: center; gap: 8px; font-size: 14px; white-space: nowrap; transition: all 0.2s;
+  background-color: var(--bg-gray);
+  border: 1px solid #eee;
+  color: var(--text-dark);
+  padding: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: all 0.2s;
 }
-.category-button:hover { background-color: var(--primary-light); color: var(--primary-dark); }
-.category-button:hover i { color: var(--primary-dark); }
+
+.category-button:hover {
+  background-color: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.category-button:hover i {
+  color: var(--primary-dark);
+}
 
 /* DROPDOWN MENU */
 .dropdown-menu {
-  position: absolute; top: calc(100% + 10px); left: 0; width: 250px;
-  background: white; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-  display: none; z-index: 1001; border: 1px solid #eee; padding: 5px 0;
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  width: 250px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  display: none;
+  z-index: 1001;
+  border: 1px solid #eee;
+  padding: 5px 0;
 }
-.dropdown-menu.active { display: block; }
+
+.dropdown-menu.active {
+  display: block;
+}
 
 .menu-list li a {
-  display: flex; align-items: center; gap: 12px; padding: 12px 15px;
-  color: var(--text-dark); font-size: 14px; transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  color: var(--text-dark);
+  font-size: 14px;
+  transition: all 0.2s;
   border-left: 3px solid transparent;
 }
+
 .menu-list li a:hover {
-  background-color: var(--primary-light); color: var(--primary-dark);
-  padding-left: 18px; border-left-color: var(--primary-color); font-weight: 500;
+  background-color: var(--primary-light);
+  color: var(--primary-dark);
+  padding-left: 18px;
+  border-left-color: var(--primary-color);
+  font-weight: 500;
 }
-.icon-placeholder { width: 25px; text-align: center; color: #999; }
-.menu-list li a:hover .icon-placeholder { color: var(--primary-color); }
+
+.icon-placeholder {
+  width: 25px;
+  text-align: center;
+  color: #999;
+}
+
+.menu-list li a:hover .icon-placeholder {
+  color: var(--primary-color);
+}
 
 /* SEARCH BAR */
-.search-bar { flex-grow: 1; position: relative; }
+.search-bar {
+  flex-grow: 1;
+  position: relative;
+}
+
 .search-bar input {
-  width: 100%; padding: 10px 15px; border: 2px solid var(--primary-color);
-  border-radius: 8px; font-size: 14px; outline: none; background-color: var(--bg-gray);
+  width: 100%;
+  padding: 10px 15px;
+  border: 2px solid var(--primary-color);
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  background-color: var(--bg-gray);
 }
-.search-bar input:focus { background-color: #fff; }
+
+.search-bar input:focus {
+  background-color: #fff;
+}
+
 .search-btn {
-  position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
-  border: none; background: var(--primary-color); color: white;
-  padding: 6px 15px; border-radius: 6px; cursor: pointer; height: 80%;
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: var(--primary-color);
+  color: white;
+  padding: 6px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  height: 80%;
 }
-.search-btn:hover { background-color: var(--primary-dark); }
+
+.search-btn:hover {
+  background-color: var(--primary-dark);
+}
 
 /* HEADER ACTIONS */
-.header-actions { display: flex; align-items: center; gap: 15px; }
-.action-item {
-  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-  border-radius: 8px; background-color: var(--bg-gray); color: var(--text-dark);
-  font-size: 14px; white-space: nowrap; cursor: pointer; transition: all 0.2s;
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
-.action-item:hover { background-color: var(--primary-light); color: var(--primary-dark); }
-.action-item i { font-size: 20px; color: var(--primary-color); }
-.action-item:hover i { color: var(--primary-dark); }
+
+.action-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background-color: var(--bg-gray);
+  color: var(--text-dark);
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-item:hover {
+  background-color: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.action-item i {
+  font-size: 20px;
+  color: var(--primary-color);
+}
+
+.action-item:hover i {
+  color: var(--primary-dark);
+}
 
 /* Cart Specifics */
-.cart-action { position: relative; } /* Thêm position relative cho nút cha */
-.cart-action:hover .cart-icon-wrapper i { animation: bounce 0.5s; }
-@keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-
-.cart-icon-wrapper {
-    position: relative; /* Wrapper để định vị badge */
-    display: flex;
-    align-items: center;
-    margin-right: 5px; /* Tạo khoảng cách với chữ "Giỏ hàng" nếu cần */
+.cart-action {
+  position: relative;
 }
 
-/* CHỈNH SỬA VỊ TRÍ BADGE */
+.cart-action:hover .cart-icon-wrapper i {
+  animation: bounce 0.5s;
+}
+
+@keyframes bounce {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.cart-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-right: 5px;
+}
+
 .cart-badge {
   position: absolute;
-  top: -8px; /* Đẩy lên trên một chút so với icon */
-  right: -8px; /* Đẩy sang phải một chút */
-  background-color: var(--danger-color); 
+  top: -8px;
+  right: -8px;
+  background-color: var(--danger-color);
   color: white;
-  font-size: 10px; 
-  font-weight: bold; 
-  min-width: 16px; 
+  font-size: 10px;
+  font-weight: bold;
+  min-width: 16px;
   height: 16px;
-  border-radius: 50%; 
-  display: flex; 
-  align-items: center; 
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  border: 2px solid #fff; 
+  border: 2px solid #fff;
   padding: 0 2px;
-  z-index: 10; /* Đảm bảo nổi lên trên */
+  z-index: 10;
 }
 
 /* Login Button */
-.login-btn { background-color: var(--primary-color); color: white !important; font-weight: bold; }
-.login-btn i { color: white !important; }
-.login-btn:hover { background-color: var(--primary-dark); opacity: 1; }
+.login-btn {
+  background-color: var(--primary-color);
+  color: white !important;
+  font-weight: bold;
+}
+
+.login-btn i {
+  color: white !important;
+}
+
+.login-btn:hover {
+  background-color: var(--primary-dark);
+  opacity: 1;
+}
 
 /* User Menu */
-.user-menu-trigger { border: none; font-family: inherit; }
-.user-avatar-mini { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
-.user-name-truncate { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
-.user-dropdown { left: auto; right: 0; width: 260px; }
-.user-dropdown-header { padding: 12px 15px; border-bottom: 1px solid #eee; background-color: #fcfcfc; display: flex; flex-direction: column; }
-.user-dropdown-header strong { font-size: 15px; }
-.user-dropdown-header small { font-size: 13px; color: #666; }
+.user-menu-trigger {
+  border: none;
+  font-family: inherit;
+}
 
-.logout-link { color: var(--danger-color) !important; }
-.logout-link i { color: var(--danger-color) !important; }
-.logout-link:hover { background-color: #fdf2f2 !important; color: #b92c28 !important; }
-.logout-link:hover i { color: #b92c28 !important; }
+.user-avatar-mini {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #eee;
+}
 
-.divider hr { margin: 4px 0; border: none; border-top: 1px solid #eee; }
+/* [NEW STYLE] Avatar Placeholder (Initials) */
+.user-avatar-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--primary-light);
+  color: var(--primary-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+  border: 1px solid var(--primary-color);
+}
+
+.user-name-truncate {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-dropdown {
+  left: auto;
+  right: 0;
+  width: 260px;
+}
+
+.user-dropdown-header {
+  padding: 12px 15px;
+  border-bottom: 1px solid #eee;
+  background-color: #fcfcfc;
+  display: flex;
+  flex-direction: column;
+}
+
+.user-dropdown-header strong {
+  font-size: 15px;
+}
+
+.user-dropdown-header small {
+  font-size: 13px;
+  color: #666;
+}
+
+.logout-link {
+  color: var(--danger-color) !important;
+}
+
+.logout-link i {
+  color: var(--danger-color) !important;
+}
+
+.logout-link:hover {
+  background-color: #fdf2f2 !important;
+  color: #b92c28 !important;
+}
+
+.logout-link:hover i {
+  color: #b92c28 !important;
+}
+
+.divider hr {
+  margin: 4px 0;
+  border: none;
+  border-top: 1px solid #eee;
+}
 </style>
