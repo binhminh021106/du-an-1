@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+       <url>
+          <loc>http://localhost:5173/</loc>
+          <priority>1.0</priority>
+       </url>
+       <url>
+          <loc>http://localhost:5173/blog</loc>
+          <priority>0.8</priority>
+       </url>
+    </urlset>
+    ```
+4.  **Google Analytics**:
+    * Mở file `index.html` (nằm ở thư mục gốc dự án Vue).
+    * Thêm đoạn mã này vào trước thẻ `</head>` (Đây chỉ là mã mẫu, bạn cần ID thật từ Google):
+    ```html
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-XXXXXXXXXX');
+    </script>
