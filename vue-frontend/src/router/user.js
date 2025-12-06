@@ -82,6 +82,11 @@ const userLayoutRoutes = {
       name: "catchAll",
       component: () => import("../page/user/NotFound.vue"),
     },
+    {
+      path: "payment/result",
+      name: "PaymentResult",
+      component: () => import("../page/user/PaymentResult.vue"),
+    },
   ],
 };
 
