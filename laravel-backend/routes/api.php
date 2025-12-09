@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\Client\CategoryController;
 
 // --- ADMIN CONTROLLERS ---
 use App\Http\Controllers\Api\Client\CheckoutController;
+use App\Http\Controllers\Api\admin\AdminSupportEmailController;
 use App\Http\Controllers\Api\Client\WishlistController;
 use App\Http\Controllers\Api\admin\AdminBrandController;
 use App\Http\Controllers\Api\admin\AdminOrderController;
@@ -77,6 +78,8 @@ Route::get('/login', function () {
 // --- PRODUCTS ---
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/product/{id}', [ProductController::class, 'show']);
+
+Route::post('/contact-submit', [AdminSupportEmailController::class, 'store']);
 
 Route::post('/forgot-password', [NewPasswordController::class, 'store'])
     ->name('password.email');
@@ -199,6 +202,9 @@ Route::group([
 
     // --- COMMENTS ---
     Route::apiResource('comments', AdminCommentController::class);
+
+    Route::get('/support-emails', [AdminSupportEmailController::class, 'index']);
+    Route::delete('/support-emails/{id}', [AdminSupportEmailController::class, 'destroy']);
 
     // --- COUPONS ---
     Route::get('coupons/trashed', [AdminCouponController::class, 'trashed']);
