@@ -1,16 +1,51 @@
 <script setup>
-import { onMounted } from 'vue';
+import { onMounted, watch, nextTick } from 'vue';
+import { useRoute } from 'vue-router';
 
-// Đảm bảo cuộn mượt khi click mục lục
+const route = useRoute();
+
+// Hàm xử lý cuộn xuống ID tương ứng
+const scrollToSection = () => {
+  const hash = route.hash;
+  if (hash) {
+    // Xóa dấu # để lấy ID (ví dụ: #shipping-v2 -> shipping-v2)
+    const id = hash.slice(1); 
+    const element = document.getElementById(id);
+    
+    if (element) {
+      // Tính toán vị trí để cuộn (trừ đi chiều cao header nếu có, ở đây trừ 100px cho thoáng)
+      const headerOffset = 100; 
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth"
+      });
+    }
+  }
+};
+
 onMounted(() => {
   document.documentElement.style.scrollBehavior = 'smooth';
+  // Gọi hàm cuộn khi trang vừa load xong (nếu URL đã có sẵn hash)
+  setTimeout(() => {
+    scrollToSection();
+  }, 300); // Delay nhẹ để đảm bảo DOM đã render xong
+});
+
+// Lắng nghe sự thay đổi của Hash (khi click footer link trong lúc đang ở trang này)
+watch(() => route.hash, () => {
+  nextTick(() => {
+    scrollToSection();
+  });
 });
 </script>
 
 <template>
   <section class="policy-page">
     
-    <!-- HERO HEADER (Đồng bộ style) -->
+    <!-- HERO HEADER -->
     <header class="policy-hero">
       <div class="hero-inner">
         <p class="hero-pre-title">QUY TẮC & QUYỀN LỢI</p>
@@ -24,18 +59,19 @@ onMounted(() => {
     <main class="policy-container">
       <div class="policy-layout">
         
-        <!-- SIDEBAR TOC (Mục lục cố định) -->
+        <!-- SIDEBAR TOC (Đã cập nhật href khớp với ID mới) -->
         <aside class="policy-sidebar">
           <div class="sidebar-widget">
             <h3><i class="bi bi-list-columns-reverse me-2"></i> Mục lục chính sách</h3>
             <ul class="toc-links">
-              <li><a href="#shipping"><i class="bi bi-truck me-2"></i> Vận chuyển & Giao hàng</a></li>
-              <li><a href="#guide"><i class="bi bi-cart-check me-2"></i> Hướng dẫn mua hàng</a></li>
-              <li><a href="#returns"><i class="bi bi-arrow-repeat me-2"></i> Đổi trả & Hoàn tiền</a></li>
-              <li><a href="#warranty"><i class="bi bi-shield-check me-2"></i> Chính sách bảo hành</a></li>
-              <li><a href="#privacy"><i class="bi bi-lock me-2"></i> Bảo mật thông tin</a></li>
-              <li><a href="#terms"><i class="bi bi-file-earmark-text me-2"></i> Điều khoản sử dụng</a></li>
-              <li><a href="#contact"><i class="bi bi-headset me-2"></i> Liên hệ hỗ trợ</a></li>
+              <!-- Lưu ý: href ở đây phải khớp với ID các section bên dưới -->
+              <li><a href="#shipping-v2" @click.prevent="scrollToSection"><i class="bi bi-truck me-2"></i> Vận chuyển & Giao hàng</a></li>
+              <li><a href="#guide-v2" @click.prevent="scrollToSection"><i class="bi bi-cart-check me-2"></i> Hướng dẫn mua hàng</a></li>
+              <li><a href="#returns-v2" @click.prevent="scrollToSection"><i class="bi bi-arrow-repeat me-2"></i> Đổi trả & Hoàn tiền</a></li>
+              <li><a href="#warranty-v2" @click.prevent="scrollToSection"><i class="bi bi-shield-check me-2"></i> Chính sách bảo hành</a></li>
+              <li><a href="#privacy-v2" @click.prevent="scrollToSection"><i class="bi bi-lock me-2"></i> Bảo mật thông tin</a></li>
+              <li><a href="#terms-v2" @click.prevent="scrollToSection"><i class="bi bi-file-earmark-text me-2"></i> Điều khoản sử dụng</a></li>
+              <li><a href="#contact-v2" @click.prevent="scrollToSection"><i class="bi bi-headset me-2"></i> Liên hệ hỗ trợ</a></li>
             </ul>
           </div>
 
@@ -55,8 +91,8 @@ onMounted(() => {
         <!-- MAIN CONTENT -->
         <section class="policy-content">
           
-          <!-- 1. VẬN CHUYỂN -->
-          <article id="shipping" class="policy-card">
+          <!-- 1. VẬN CHUYỂN (ID khớp với footer: shipping-v2) -->
+          <article id="shipping-v2" class="policy-card">
             <h2 class="policy-title">
                 <i class="bi bi-truck text-primary me-2"></i> Vận chuyển & Giao hàng
             </h2>
@@ -81,7 +117,7 @@ onMounted(() => {
           </article>
 
           <!-- 2. HƯỚNG DẪN MUA HÀNG -->
-          <article id="guide" class="policy-card">
+          <article id="guide-v2" class="policy-card">
             <h2 class="policy-title">
                 <i class="bi bi-cart-check text-primary me-2"></i> Hướng dẫn Mua hàng
             </h2>
@@ -108,7 +144,7 @@ onMounted(() => {
                             <p>Chọn COD hoặc Chuyển khoản/Thẻ.</p>
                         </div>
                     </div>
-                     <div class="step-item">
+                      <div class="step-item">
                         <div class="step-number">4</div>
                         <div class="step-content">
                             <strong>Xác nhận</strong>
@@ -122,8 +158,8 @@ onMounted(() => {
             </div>
           </article>
 
-          <!-- 3. ĐỔI TRẢ -->
-          <article id="returns" class="policy-card">
+          <!-- 3. ĐỔI TRẢ (ID khớp với footer: returns-v2) -->
+          <article id="returns-v2" class="policy-card">
              <h2 class="policy-title">
                 <i class="bi bi-arrow-repeat text-primary me-2"></i> Đổi trả & Hoàn tiền
             </h2>
@@ -142,7 +178,7 @@ onMounted(() => {
           </article>
 
           <!-- 4. BẢO HÀNH -->
-          <article id="warranty" class="policy-card">
+          <article id="warranty-v2" class="policy-card">
              <h2 class="policy-title">
                 <i class="bi bi-shield-check text-primary me-2"></i> Bảo hành sản phẩm
             </h2>
@@ -150,25 +186,25 @@ onMounted(() => {
                 <p>
                   Tất cả sản phẩm chính hãng (Apple, Samsung, Xiaomi, Laptop...) đều được hưởng chế độ bảo hành theo quy định của <strong>Nhà sản xuất/Nhà phân phối</strong> tại Việt Nam.
                 </p>
-                 <div class="row mt-3">
-                     <div class="col-md-6 mb-3">
-                         <div class="p-3 border rounded bg-light h-100">
-                             <h6 class="fw-bold text-dark"><i class="bi bi-phone me-1"></i> Thiết bị chính</h6>
-                             <p class="mb-0 small text-secondary">Bảo hành 12 - 24 tháng tùy hãng.</p>
-                         </div>
-                     </div>
-                     <div class="col-md-6 mb-3">
-                         <div class="p-3 border rounded bg-light h-100">
-                             <h6 class="fw-bold text-dark"><i class="bi bi-headphones me-1"></i> Phụ kiện kèm theo</h6>
-                             <p class="mb-0 small text-secondary">Bảo hành 3 - 6 tháng (Cáp, sạc, pin...).</p>
-                         </div>
-                     </div>
-                 </div>
+                  <div class="row mt-3">
+                      <div class="col-md-6 mb-3">
+                          <div class="p-3 border rounded bg-light h-100">
+                              <h6 class="fw-bold text-dark"><i class="bi bi-phone me-1"></i> Thiết bị chính</h6>
+                              <p class="mb-0 small text-secondary">Bảo hành 12 - 24 tháng tùy hãng.</p>
+                          </div>
+                      </div>
+                      <div class="col-md-6 mb-3">
+                          <div class="p-3 border rounded bg-light h-100">
+                              <h6 class="fw-bold text-dark"><i class="bi bi-headphones me-1"></i> Phụ kiện kèm theo</h6>
+                              <p class="mb-0 small text-secondary">Bảo hành 3 - 6 tháng (Cáp, sạc, pin...).</p>
+                          </div>
+                      </div>
+                  </div>
             </div>
           </article>
 
-          <!-- 5. BẢO MẬT & ĐIỀU KHOẢN -->
-          <article id="privacy" class="policy-card">
+          <!-- 5. BẢO MẬT (ID khớp với footer: privacy-v2) -->
+          <article id="privacy-v2" class="policy-card">
              <h2 class="policy-title">
                 <i class="bi bi-lock text-primary me-2"></i> Quyền riêng tư & Bảo mật
             </h2>
@@ -182,7 +218,8 @@ onMounted(() => {
             </div>
           </article>
 
-           <article id="terms" class="policy-card">
+          <!-- 6. ĐIỀU KHOẢN (ID khớp với footer: terms-v2) -->
+           <article id="terms-v2" class="policy-card">
              <h2 class="policy-title">
                 <i class="bi bi-file-earmark-text text-primary me-2"></i> Điều khoản sử dụng
             </h2>
@@ -193,8 +230,8 @@ onMounted(() => {
             </div>
           </article>
 
-          <!-- 6. LIÊN HỆ -->
-          <article id="contact" class="policy-card contact-section">
+          <!-- 7. LIÊN HỆ -->
+          <article id="contact-v2" class="policy-card contact-section">
              <h2 class="policy-title text-white border-0 mb-4">
                 <i class="bi bi-headset me-2"></i> Thông tin Liên hệ
             </h2>
@@ -220,7 +257,6 @@ onMounted(() => {
         </section>
       </div>
     </main>
-    
     
   </section>
 </template>
@@ -295,7 +331,7 @@ onMounted(() => {
 /* --- SIDEBAR --- */
 .policy-sidebar {
   position: sticky;
-  top: 20px;
+  top: 80px; /* Cập nhật để tránh bị dính sát mép trên */
 }
 
 .sidebar-widget {
@@ -360,7 +396,7 @@ onMounted(() => {
   padding: 35px;
   border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.04);
-  scroll-margin-top: 100px; /* Tránh bị che bởi header khi scroll */
+  scroll-margin-top: 100px; /* Quan trọng: Giúp khi scroll không bị che bởi header */
 }
 
 .policy-title {
@@ -466,14 +502,6 @@ onMounted(() => {
     letter-spacing: 1px;
     margin-bottom: 5px;
     opacity: 0.9;
-}
-
-/* --- FOOTER --- */
-.policy-footer {
-    border-top: 1px solid #eee;
-    padding: 30px 0;
-    margin-top: auto;
-    background: var(--white);
 }
 
 /* --- RESPONSIVE --- */
