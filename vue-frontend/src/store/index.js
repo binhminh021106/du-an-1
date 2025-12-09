@@ -54,6 +54,10 @@ export default createStore({
         }
     },
     mutations: {
+        // [MỚI] Mutation để cập nhật trạng thái đăng nhập
+        SET_LOGIN_STATUS(state, status) {
+            state.isLoggedIn = status;
+        },
         SET_CART(state, cart) {
             state.cart = cart;
             // Nếu chưa đăng nhập thì mới cần sync ngược lại local storage để giữ trạng thái
@@ -107,7 +111,8 @@ export default createStore({
         },
         CLEAR_CART_MUTATION(state) {
             state.cart = [];
-            if (!state.isLoggedIn) saveToLocalStorage(state.cart);
+            // Logic quan trọng: Nếu không đăng nhập (vừa logout xong) -> Xóa luôn cả LocalStorage
+            if (!state.isLoggedIn) saveToLocalStorage([]); 
         },
         UPDATE_ITEM_INFO(state, { cartId, data }) {
             const item = state.cart.find(i => i.cartId === cartId);
