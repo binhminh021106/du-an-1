@@ -177,6 +177,32 @@ const dropdownContainer = ref(null);
 
 // --- ON MOUNTED ---
 onMounted(async () => {
+  // [START] KIỂM TRA ĐĂNG NHẬP NGAY LẬP TỨC
+  // Nếu không có token -> Chặn luôn, không cho load tiếp
+  const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
+  if (!token) {
+    await Swal.fire({
+      title: 'Chưa đăng nhập!',
+      text: 'Bạn cần đăng nhập để truy cập trang thanh toán.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Đăng nhập ngay',
+      cancelButtonText: 'Về trang chủ',
+      confirmButtonColor: '#009981',
+      cancelButtonColor: '#d33',
+      allowOutsideClick: false, // Không cho click ra ngoài để đóng
+      allowEscapeKey: false    // Không cho nhấn Esc để đóng
+    }).then((result) => {
+      if (result.isConfirmed) {
+        router.push({ name: 'login' });
+      } else {
+        router.push({ name: 'home' }); // Hoặc router.push('/')
+      }
+    });
+    return; // Dừng hàm tại đây, không chạy các logic bên dưới
+  }
+  // [END] KIỂM TRA ĐĂNG NHẬP
+
   const storedIds = localStorage.getItem('checkout_items');
   if (storedIds) {
     try { selectedIds.value = JSON.parse(storedIds); } catch (e) { console.error(e); }
@@ -502,7 +528,7 @@ const confirmCheckout = async () => {
       summary: [
         { label: "Tạm tính", value: `${subtotal.value.toLocaleString()} đ` },
         { label: "Phí vận chuyển", value: `${shippingCost.value.toLocaleString()} đ` },
-        ...(discountAmount.value > 0 ? [{ label: "Giảm giá", value: `-${discountAmount.value.toLocaleString()} đ` }] : []),
+        { label: "Giảm giá", value: appliedCoupon.value ? `-${discountAmount.value.toLocaleString()} đ` : '0 đ' },
         { label: "Tổng cộng", value: `${totalPrice.value.toLocaleString()} đ`, isTotal: true },
       ]
     };

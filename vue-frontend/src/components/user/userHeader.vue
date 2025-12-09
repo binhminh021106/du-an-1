@@ -82,7 +82,7 @@ const handleSearch = () => {
   }
 };
 
-// [UPDATED] Logout với giao diện đẹp hơn
+// [UPDATED] Logout với giao diện đẹp hơn và Logic chuẩn
 const handleLogout = () => {
   Swal.fire({
     title: 'Đăng xuất?',
@@ -93,7 +93,6 @@ const handleLogout = () => {
     cancelButtonColor: '#d33',
     confirmButtonText: 'Đăng xuất',
     cancelButtonText: 'Ở lại',
-    // [NEW] Custom classes for elegant style
     customClass: {
         popup: 'elegant-popup',
         confirmButton: 'elegant-confirm-btn',
@@ -102,10 +101,20 @@ const handleLogout = () => {
     }
   }).then((result) => {
     if (result.isConfirmed) {
+      // 1. Xóa thông tin User ở LocalStorage
       localStorage.removeItem('userData');
       localStorage.removeItem('authToken');
+      localStorage.removeItem('auth_token'); // Xóa cả key cũ nếu có
+      
+      // 2. Cập nhật State trong Vuex (QUAN TRỌNG: Phải set false TRƯỚC khi clear cart)
       store.commit('SET_LOGIN_STATUS', false);
-      store.commit('CLEAR_CART');
+      
+      // 3. Xóa giỏ hàng
+      // Gọi Action clearCart -> nó sẽ gọi mutation CLEAR_CART_MUTATION 
+      // -> Vì isLoggedIn = false nên nó sẽ xóa luôn key 'my_cart' trong LocalStorage
+      store.dispatch('clearCart'); 
+
+      // 4. Reset biến local và chuyển trang
       user.value = null;
       router.push({ name: 'login' });
     }
@@ -114,16 +123,15 @@ const handleLogout = () => {
 
 const handleLoginSuccess = (event) => {
   user.value = event.detail.user;
+  // Khi login thành công -> set status = true -> gọi fetchCart từ DB
+  store.commit('SET_LOGIN_STATUS', true);
   store.dispatch('initializeCart').catch(err => console.warn("Init cart error:", err));
 };
 
-// [MỚI] Hàm xử lý khi thông tin user thay đổi từ Profile
 const handleUserUpdate = (event) => {
-  // Cập nhật lại biến user reactive để giao diện tự thay đổi
   if (event.detail) {
     user.value = event.detail;
   } else {
-    // Nếu không có dữ liệu chi tiết, thử load lại từ localStorage
     const userData = localStorage.getItem('userData');
     if (userData) {
       user.value = JSON.parse(userData);
@@ -131,7 +139,6 @@ const handleUserUpdate = (event) => {
   }
 };
 
-// [NEW] Load Lordicon Script
 const loadLordicon = () => {
     if (!document.querySelector('script[src="https://cdn.lordicon.com/lordicon.js"]')) {
         const script = document.createElement('script')
@@ -143,7 +150,7 @@ const loadLordicon = () => {
 
 // --- LIFECYCLE HOOKS ---
 onMounted(() => {
-  loadLordicon(); // Load script icon
+  loadLordicon(); 
   try {
     const userData = localStorage.getItem('userData');
     if (userData) {
@@ -156,27 +163,25 @@ onMounted(() => {
 
   document.addEventListener('click', handleClickOutside);
   window.addEventListener('login-success', handleLoginSuccess);
-
-  // [MỚI] Đăng ký sự kiện lắng nghe cập nhật user
   window.addEventListener('user-info-updated', handleUserUpdate);
 
   fetchCategories();
 
+  // Khởi tạo giỏ hàng
+  // Token có thể là 'authToken' hoặc 'auth_token' tùy backend trả về
+  const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
+  store.commit('SET_LOGIN_STATUS', !!token);
+  
   if (store._actions && store._actions.initializeCart) {
     store.dispatch('initializeCart').catch(err => {
       console.warn("Lỗi khi khởi tạo giỏ hàng:", err);
     });
-  } else {
-    const token = localStorage.getItem('auth_token');
-    store.commit('SET_LOGIN_STATUS', !!token);
   }
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside);
   window.removeEventListener('login-success', handleLoginSuccess);
-
-  // [MỚI] Hủy đăng ký sự kiện khi component bị hủy
   window.removeEventListener('user-info-updated', handleUserUpdate);
 });
 </script>
@@ -267,21 +272,15 @@ onUnmounted(() => {
           <!-- User Menu (Hiện khi đã login) -->
           <div v-else class="side-menu-container user-menu" ref="userMenuContainer">
             <button @click="toggleUserMenu" class="action-item user-menu-trigger">
-              <!-- [UPDATED] Logic hiển thị Avatar đồng bộ với Profile -->
-
-              <!-- Trường hợp 1: Có ảnh avatar -> Dùng getFullImageUrl -->
               <img v-if="user.avatar_url" :src="getFullImageUrl(user.avatar_url)" class="user-avatar-mini" alt="Avatar"
                 @error="user.avatar_url = null">
-
-              <!-- Trường hợp 2: Không có ảnh hoặc ảnh lỗi -> Hiển thị Initials -->
               <div v-else class="user-avatar-placeholder">
                 {{ userInitial }}
               </div>
-
               <span class="user-name-truncate">{{ user.fullName || user.email }}</span>
             </button>
 
-            <!-- DROPDOWN MENU USER - LORDICON UPDATED -->
+            <!-- DROPDOWN MENU USER -->
             <div class="dropdown-menu user-dropdown" :class="{ active: isUserMenuActive }">
               <div class="user-dropdown-header">
                 <strong>{{ user.fullName || 'Người dùng' }}</strong>
@@ -289,7 +288,6 @@ onUnmounted(() => {
               </div>
               
               <ul class="menu-list">
-                <!-- 1. TÀI KHOẢN -->
                 <li>
                     <router-link :to="{ name: 'profile' }" class="lordicon-link profile-target">
                         <div class="icon-wrap">
@@ -304,8 +302,6 @@ onUnmounted(() => {
                         Tài khoản
                     </router-link>
                 </li>
-
-                <!-- 2. ĐƠN MUA -->
                 <li>
                     <router-link :to="{ name: 'OrderList' }" class="lordicon-link order-target">
                         <div class="icon-wrap">
@@ -320,8 +316,6 @@ onUnmounted(() => {
                         Đơn mua
                     </router-link>
                 </li>
-
-                <!-- 3. YÊU THÍCH -->
                 <li>
                     <router-link :to="{ name: 'wishlist' }" class="lordicon-link wishlist-target">
                         <div class="icon-wrap">
@@ -336,12 +330,7 @@ onUnmounted(() => {
                         Yêu thích
                     </router-link>
                 </li>
-
-                <li class="divider">
-                  <hr>
-                </li>
-
-                <!-- 4. ĐĂNG XUẤT -->
+                <li class="divider"><hr></li>
                 <li>
                   <a href="#" class="logout-link lordicon-link logout-target" @click.prevent="handleLogout">
                     <div class="icon-wrap">
@@ -366,7 +355,6 @@ onUnmounted(() => {
   </header>
 </template>
 
-<!-- [NEW] Global Style for SweetAlert (Elegant Theme) -->
 <style>
 /* Style cho Popup Confirm Dialog */
 .elegant-popup {
@@ -711,7 +699,6 @@ ul {
   border: 1px solid #eee;
 }
 
-/* [NEW STYLE] Avatar Placeholder (Initials) */
 .user-avatar-placeholder {
   width: 32px;
   height: 32px;
@@ -755,7 +742,6 @@ ul {
   color: #666;
 }
 
-/* [NEW] Style for Lordicon links in dropdown */
 .icon-wrap {
     display: flex;
     align-items: center;
@@ -768,7 +754,6 @@ ul {
   color: var(--danger-color) !important;
 }
 
-/* Fix icon color on hover for logout */
 .logout-link:hover {
   background-color: #fdf2f2 !important;
   color: #b92c28 !important;

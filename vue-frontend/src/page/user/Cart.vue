@@ -160,6 +160,7 @@ const updateQty = async (cartId, currentQty, change) => {
 }
 
 const proceedToCheckout = () => {
+    // 1. Kiểm tra giỏ hàng trống
     if (cart.value.length === 0) {
         Swal.fire({
             icon: 'info',
@@ -174,6 +175,36 @@ const proceedToCheckout = () => {
         return;
     }
 
+    // 2. [MỚI] Kiểm tra Auth Token (người dùng có đăng nhập không)
+    const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
+    
+    if (!token) {
+        Swal.fire({
+            title: 'Bạn chưa đăng nhập',
+            text: 'Vui lòng đăng nhập để tiến hành thanh toán và lưu đơn hàng.',
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonColor: '#10b981', // Màu xanh chủ đạo
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Đăng nhập ngay',
+            cancelButtonText: 'Để sau',
+            reverseButtons: true, // Đảo vị trí nút cho thuận tay
+            customClass: {
+                popup: 'elegant-popup',
+                confirmButton: 'elegant-confirm-btn',
+                cancelButton: 'elegant-cancel-btn'
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Chuyển hướng sang trang login
+                // Giả định route name là 'login', bạn có thể sửa thành '/login' nếu cần
+                router.push({ name: 'login' }); 
+            }
+        });
+        return; // Dừng hàm, không chạy xuống dưới
+    }
+
+    // 3. Nếu đã đăng nhập -> Tiếp tục thanh toán
     const itemsToCheckout = cart.value.map(item => item.cartId);
     localStorage.setItem('checkout_items', JSON.stringify(itemsToCheckout));
     router.push('/checkout');
@@ -265,9 +296,9 @@ const proceedToCheckout = () => {
 
                                         <button @click="updateQty(item.cartId, item.qty, -1)"
                                             :disabled="item.qty <= 1 || updatingIds.includes(item.cartId)">-</button>
-                                        
+                                       
                                         <input type="number" :value="item.qty" readonly>
-                                        
+                                       
                                         <button @click="updateQty(item.cartId, item.qty, 1)"
                                             :disabled="item.qty >= (item.stock || 999) || updatingIds.includes(item.cartId)">+</button>
                                     </div>
