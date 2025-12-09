@@ -1,3 +1,69 @@
+<script setup>
+import { ref, reactive } from 'vue';
+import Swal from 'sweetalert2';
+// [LƯU Ý QUAN TRỌNG] M kiểm tra lại đường dẫn import này cho đúng với vị trí file apiService.js trong project của m nhé.
+// Ví dụ: nếu Contact.vue nằm sâu 3 cấp thư mục thì dùng ../../../apiService
+import apiService from '../../apiService'; 
+
+// 1. Khởi tạo biến lưu dữ liệu form
+const contactForm = reactive({
+  name: '',
+  email: '',
+  content: ''
+});
+
+const isSubmitting = ref(false); // Trạng thái loading của nút gửi
+
+// 2. Hàm xử lý khi bấm Gửi
+const submitContact = async () => {
+  // Validate cơ bản
+  if (!contactForm.name || !contactForm.email || !contactForm.content) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Thiếu thông tin',
+      text: 'Vui lòng điền đầy đủ Họ tên, Email và Nội dung!',
+    });
+    return;
+  }
+
+  isSubmitting.value = true;
+
+  try {
+    // Gọi API (apiService tự lo phần base URL)
+    const response = await apiService.post('/contact-submit', {
+      name: contactForm.name,
+      email: contactForm.email,
+      content: contactForm.content
+    });
+
+    if (response.data.success) {
+      // Thông báo thành công
+      Swal.fire({
+        icon: 'success',
+        title: 'Thành công!',
+        text: 'Cảm ơn bạn đã liên hệ. Chúng tôi sẽ phản hồi sớm nhất!',
+        confirmButtonColor: '#009981'
+      });
+
+      // Reset form về rỗng
+      contactForm.name = '';
+      contactForm.email = '';
+      contactForm.content = '';
+    }
+
+  } catch (error) {
+    console.error(error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Có lỗi xảy ra',
+      text: 'Không thể gửi liên hệ lúc này. Vui lòng thử lại sau.',
+    });
+  } finally {
+    isSubmitting.value = false;
+  }
+};
+</script>
+
 <template>
   <section class="contact-page py-5">
     <div class="container">
@@ -16,23 +82,48 @@
         <div class="col-lg-6">
           <div class="card border-0 shadow-lg p-4 h-100 contact-form">
             <h5 class="fw-bold text-dark mb-4">Gửi lời nhắn cho chúng tôi</h5>
-            <form>
+            
+            <!-- Thêm sự kiện submit -->
+            <form @submit.prevent="submitContact">
               <div class="mb-3">
                 <label class="form-label">Họ và tên</label>
-                <input type="text" class="form-control form-control-lg" placeholder="Nhập họ tên của bạn" />
+                <!-- Thêm v-model -->
+                <input 
+                  type="text" 
+                  class="form-control form-control-lg" 
+                  placeholder="Nhập họ tên của bạn" 
+                  v-model="contactForm.name"
+                />
               </div>
               <div class="mb-3">
                 <label class="form-label">Email</label>
-                <input type="email" class="form-control form-control-lg" placeholder="Nhập email của bạn" />
+                <!-- Thêm v-model -->
+                <input 
+                  type="email" 
+                  class="form-control form-control-lg" 
+                  placeholder="Nhập email của bạn" 
+                  v-model="contactForm.email"
+                />
               </div>
               <div class="mb-3">
                 <label class="form-label">Nội dung</label>
-                <textarea class="form-control form-control-lg" rows="5"
-                  placeholder="Nhập nội dung liên hệ..."></textarea>
+                <!-- Thêm v-model -->
+                <textarea 
+                  class="form-control form-control-lg" 
+                  rows="5"
+                  placeholder="Nhập nội dung liên hệ..."
+                  v-model="contactForm.content"
+                ></textarea>
               </div>
-              <button class="btn btn-primary btn-lg w-100 fw-semibold">
-                Gửi liên hệ <i class="bi bi-envelope-paper-fill ms-2"></i> </button>
+              
+              <!-- Thêm loading state cho nút -->
+              <button class="btn btn-primary btn-lg w-100 fw-semibold" :disabled="isSubmitting">
+                <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2"></span>
+                <span v-if="!isSubmitting">Gửi liên hệ <i class="bi bi-envelope-paper-fill ms-2"></i></span>
+                <span v-else>Đang gửi...</span>
+              </button>
             </form>
+
           </div>
         </div>
 
