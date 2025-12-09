@@ -73,20 +73,21 @@ const userLayoutRoutes = {
       component: () => import("../page/user/OrderList.vue"),
     },
     {
-      path: "PostDetail/:slug/:id", 
+      path: "PostDetail/:slug/:id",
       name: "PostDetailt",
       component: () => import("../page/user/PostDetail.vue"),
-    },
-    {
-      path: ":pathMatch(.*)*",
-      name: "catchAll",
-      component: () => import("../page/user/NotFound.vue"),
     },
     {
       path: "payment/result",
       name: "PaymentResult",
       component: () => import("../page/user/PaymentResult.vue"),
     },
+    {
+      path: ":pathMatch(.*)*",
+      name: "catchAll",
+      component: () => import("../page/user/NotFound.vue"),
+    },
+
   ],
 };
 

@@ -103,7 +103,7 @@ const handleLogout = () => {
   }).then((result) => {
     if (result.isConfirmed) {
       localStorage.removeItem('userData');
-      localStorage.removeItem('auth_token');
+      localStorage.removeItem('authToken');
       store.commit('SET_LOGIN_STATUS', false);
       store.commit('CLEAR_CART');
       user.value = null;
