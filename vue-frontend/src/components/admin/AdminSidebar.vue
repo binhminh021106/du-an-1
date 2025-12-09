@@ -206,6 +206,12 @@ onMounted(() => {
                   <p>Đánh giá</p>
                 </router-link>
               </li>
+              <li class="nav-item" v-if="can('reviews.access')">
+                <router-link :to="{ name: 'EmailManager' }" class="nav-link" active-class="active">
+                  <i class="bi bi-circle nav-icon small-dot"></i>
+                  <p>Hộp thư hỗ trợ</p>
+                </router-link>
+              </li>
             </ul>
           </li>
           

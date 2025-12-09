@@ -64,6 +64,11 @@ const adminLayoutRoutes = [
         name: "admin-brands",
         component: () => import("../page/admin/brand/index.vue"),
       },
+      {
+        path: "EmailManager",
+        name: "EmailManager",
+        component: () => import("../page/admin/content/EmailManager.vue"),
+      },
       
     ],
   },
