@@ -4,16 +4,23 @@ import { useRoute } from 'vue-router';
 
 const route = useRoute();
 
-// Hàm xử lý cuộn xuống ID tương ứng
-const scrollToSection = () => {
-  const hash = route.hash;
+// Hàm xử lý cuộn: Nhận tham số targetHash (tùy chọn) để xử lý khi click trực tiếp
+const scrollToSection = (targetHash) => {
+  // Nếu targetHash là chuỗi (khi click menu) thì dùng nó, nếu không thì lấy từ URL hiện tại (khi load trang)
+  const hash = (typeof targetHash === 'string') ? targetHash : route.hash;
+
   if (hash) {
-    // Xóa dấu # để lấy ID (ví dụ: #shipping-v2 -> shipping-v2)
+    // Nếu là hành động click, cập nhật URL thủ công để người dùng có thể copy link chia sẻ
+    if (typeof targetHash === 'string') {
+      history.pushState(null, null, hash);
+    }
+
+    // Xóa dấu # để lấy ID
     const id = hash.slice(1); 
     const element = document.getElementById(id);
     
     if (element) {
-      // Tính toán vị trí để cuộn (trừ đi chiều cao header nếu có, ở đây trừ 100px cho thoáng)
+      // Tính toán vị trí để cuộn (trừ đi chiều cao header = 100px)
       const headerOffset = 100; 
       const elementPosition = element.getBoundingClientRect().top;
       const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
@@ -28,13 +35,13 @@ const scrollToSection = () => {
 
 onMounted(() => {
   document.documentElement.style.scrollBehavior = 'smooth';
-  // Gọi hàm cuộn khi trang vừa load xong (nếu URL đã có sẵn hash)
+  // Gọi hàm cuộn khi trang vừa load xong (nếu URL đã có sẵn hash từ trang khác chuyển sang)
   setTimeout(() => {
     scrollToSection();
-  }, 300); // Delay nhẹ để đảm bảo DOM đã render xong
+  }, 300);
 });
 
-// Lắng nghe sự thay đổi của Hash (khi click footer link trong lúc đang ở trang này)
+// Lắng nghe sự thay đổi của Hash (dành cho router-link từ footer hoặc nơi khác)
 watch(() => route.hash, () => {
   nextTick(() => {
     scrollToSection();
@@ -59,19 +66,19 @@ watch(() => route.hash, () => {
     <main class="policy-container">
       <div class="policy-layout">
         
-        <!-- SIDEBAR TOC (Đã cập nhật href khớp với ID mới) -->
+        <!-- SIDEBAR TOC -->
         <aside class="policy-sidebar">
           <div class="sidebar-widget">
             <h3><i class="bi bi-list-columns-reverse me-2"></i> Mục lục chính sách</h3>
             <ul class="toc-links">
-              <!-- Lưu ý: href ở đây phải khớp với ID các section bên dưới -->
-              <li><a href="#shipping-v2" @click.prevent="scrollToSection"><i class="bi bi-truck me-2"></i> Vận chuyển & Giao hàng</a></li>
-              <li><a href="#guide-v2" @click.prevent="scrollToSection"><i class="bi bi-cart-check me-2"></i> Hướng dẫn mua hàng</a></li>
-              <li><a href="#returns-v2" @click.prevent="scrollToSection"><i class="bi bi-arrow-repeat me-2"></i> Đổi trả & Hoàn tiền</a></li>
-              <li><a href="#warranty-v2" @click.prevent="scrollToSection"><i class="bi bi-shield-check me-2"></i> Chính sách bảo hành</a></li>
-              <li><a href="#privacy-v2" @click.prevent="scrollToSection"><i class="bi bi-lock me-2"></i> Bảo mật thông tin</a></li>
-              <li><a href="#terms-v2" @click.prevent="scrollToSection"><i class="bi bi-file-earmark-text me-2"></i> Điều khoản sử dụng</a></li>
-              <li><a href="#contact-v2" @click.prevent="scrollToSection"><i class="bi bi-headset me-2"></i> Liên hệ hỗ trợ</a></li>
+              <!-- SỬA ĐỔI: Truyền trực tiếp ID vào hàm scrollToSection -->
+              <li><a href="#shipping-v2" @click.prevent="scrollToSection('#shipping-v2')"><i class="bi bi-truck me-2"></i> Vận chuyển & Giao hàng</a></li>
+              <li><a href="#guide-v2" @click.prevent="scrollToSection('#guide-v2')"><i class="bi bi-cart-check me-2"></i> Hướng dẫn mua hàng</a></li>
+              <li><a href="#returns-v2" @click.prevent="scrollToSection('#returns-v2')"><i class="bi bi-arrow-repeat me-2"></i> Đổi trả & Hoàn tiền</a></li>
+              <li><a href="#warranty-v2" @click.prevent="scrollToSection('#warranty-v2')"><i class="bi bi-shield-check me-2"></i> Chính sách bảo hành</a></li>
+              <li><a href="#privacy-v2" @click.prevent="scrollToSection('#privacy-v2')"><i class="bi bi-lock me-2"></i> Bảo mật thông tin</a></li>
+              <li><a href="#terms-v2" @click.prevent="scrollToSection('#terms-v2')"><i class="bi bi-file-earmark-text me-2"></i> Điều khoản sử dụng</a></li>
+              <li><a href="#contact-v2" @click.prevent="scrollToSection('#contact-v2')"><i class="bi bi-headset me-2"></i> Liên hệ hỗ trợ</a></li>
             </ul>
           </div>
 
@@ -91,7 +98,7 @@ watch(() => route.hash, () => {
         <!-- MAIN CONTENT -->
         <section class="policy-content">
           
-          <!-- 1. VẬN CHUYỂN (ID khớp với footer: shipping-v2) -->
+          <!-- 1. VẬN CHUYỂN -->
           <article id="shipping-v2" class="policy-card">
             <h2 class="policy-title">
                 <i class="bi bi-truck text-primary me-2"></i> Vận chuyển & Giao hàng
@@ -158,7 +165,7 @@ watch(() => route.hash, () => {
             </div>
           </article>
 
-          <!-- 3. ĐỔI TRẢ (ID khớp với footer: returns-v2) -->
+          <!-- 3. ĐỔI TRẢ -->
           <article id="returns-v2" class="policy-card">
              <h2 class="policy-title">
                 <i class="bi bi-arrow-repeat text-primary me-2"></i> Đổi trả & Hoàn tiền
@@ -203,7 +210,7 @@ watch(() => route.hash, () => {
             </div>
           </article>
 
-          <!-- 5. BẢO MẬT (ID khớp với footer: privacy-v2) -->
+          <!-- 5. BẢO MẬT -->
           <article id="privacy-v2" class="policy-card">
              <h2 class="policy-title">
                 <i class="bi bi-lock text-primary me-2"></i> Quyền riêng tư & Bảo mật
@@ -218,7 +225,7 @@ watch(() => route.hash, () => {
             </div>
           </article>
 
-          <!-- 6. ĐIỀU KHOẢN (ID khớp với footer: terms-v2) -->
+          <!-- 6. ĐIỀU KHOẢN -->
            <article id="terms-v2" class="policy-card">
              <h2 class="policy-title">
                 <i class="bi bi-file-earmark-text text-primary me-2"></i> Điều khoản sử dụng
