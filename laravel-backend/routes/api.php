@@ -59,8 +59,12 @@ use App\Http\Controllers\Api\Admin\AdminInventoryController; // [NEW] Import Inv
 // --- CLIENT AUTH ---
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+
 Route::get('auth/google', [AuthController::class, 'redirectToGoogle']);
 Route::get('auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
+
+Route::get('auth/facebook', [AuthController::class, 'redirectToFacebook']);
+Route::get('auth/facebook/callback', [AuthController::class, 'handleFacebookCallback']);
 
 // --- ADMIN AUTH ---
 Route::post('/admin/register', [AdminAuthController::class, 'register']);

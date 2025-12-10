@@ -11,8 +11,8 @@ const formData = reactive({
     email: '',
     password: '',
     phone: '',
-    confirmPassword: '',
-    sex: ''
+    confirmPassword: ''
+    // Đã xóa sex
 });
 
 // --- HÀM MỚI: QUAY VỀ TRANG CHỦ ---
@@ -30,7 +30,7 @@ const error = reactive({
     phone: '',
     password: '',
     confirmPassword: '',
-    sex: '',
+    // Đã xóa sex
     general: '',
     terms: ''
 });
@@ -87,11 +87,7 @@ const validateForm = () => {
         isValid = false;
     }
 
-    if (!formData.sex) {
-        error.sex = 'Vui lòng chọn giới tính';
-        isValid = false;
-    }
-
+    // Đã xóa validate sex
 
     if (!formData.confirmPassword) {
         error.confirmPassword = 'Vui lòng xác nhận mật khẩu.';
@@ -117,8 +113,8 @@ const handleRegister = async () => {
         name: formData.fullName,
         email: formData.email,
         phone: formData.phone,
-        password: formData.password,
-        sex: formData.sex
+        password: formData.password
+        // Đã xóa sex khỏi payload
     };
 
 
@@ -217,17 +213,7 @@ const handleRegister = async () => {
                         <div v-if="error.phone" class="invalid-feedback d-block">{{ error.phone }}</div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="sex">Giới tính</label>
-                        <select v-model="formData.sex" :class="['form-control', error.sex ? 'is-invalid' : '']">
-                            <option value="">-- Chọn giới tính --</option>
-                            <option value="male">Nam</option>
-                            <option value="female">Nữ</option>
-                            <option value="other">Khác</option>
-                        </select>
-                        <div v-if="error.sex" class="invalid-feedback d-block">{{ error.sex }}</div>
-                    </div>
-
+                    <!-- Đã xóa phần input giới tính ở đây -->
 
                     <div class="form-group">
                         <label for="password">Mật khẩu</label>
@@ -291,7 +277,8 @@ const handleRegister = async () => {
                 </div>
 
                 <p class="register-link">
-                    Bạn đã có tài khoản? <router-link style="color: #009981;" :to="{ name: 'login' }">Đăng nhập ngay</router-link>
+                    Bạn đã có tài khoản? <router-link style="color: #009981;" :to="{ name: 'login' }">Đăng nhập
+                        ngay</router-link>
                 </p>
             </div>
         </div>
@@ -311,7 +298,10 @@ const handleRegister = async () => {
     border-color: #dc3545 !important;
 }
 
-:root {
+/* FIX: Chuyển :root thành .login-page-wrapper 
+   để biến CSS hoạt động đúng trong scoped style 
+*/
+.login-page-wrapper {
     --primary-color: #009981;
     --text-color: #333;
     --border-color: #ddd;
