@@ -60,12 +60,18 @@ const userLayoutRoutes = {
     {
       path: "/products/:id",
       name: "ProductDetail",
-      component: () => import("../page/user/ProductDetail.vue"),
+      component: () => import("../page/user/productdetail.vue"),
     },
     {
       path: "Shop",
       name: "Shop",
       component: () => import("../page/user/Shop.vue"),
+    },
+    // Bổ sung route tìm kiếm
+    {
+      path: "search",
+      name: "search",
+      component: () => import("../page/user/Search.vue"),
     },
     {
       path: "OrderList",

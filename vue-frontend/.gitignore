@@ -7,20 +7,27 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Node build and modules
+node_modules/
+dist/
+dist-ssr/
 *.local
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# Laravel vendor
+vendor/
+
+# Environment
+.env
+
+# Uploads
+public/uploads/
+
+.vscode/
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-
-git add vue-frontend/.gitignore
+laravel-backend/public/uploads/
