@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 
 git add vue-frontend/.gitignore
+/vendor
+/composer.lock
