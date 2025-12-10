@@ -29,6 +29,10 @@ const loginWithGoogle = () => {
     window.location.href = 'http://127.0.0.1:8000/api/auth/google';
 };
 
+const loginWithFacebook = () => {
+    window.location.href = 'http://localhost:8000/api/auth/facebook';
+};
+
 // Hàm xử lý đăng nhập chuẩn Backend
 const handleLogin = async () => {
     // 1. Reset lỗi cũ
@@ -187,7 +191,7 @@ const togglePasswordVisibility = () => {
                         Google
                     </button>
 
-                    <button class="social-btn" type="button">
+                    <button @click="loginWithFacebook" class="social-btn" type="button">
                         <img src="../../assets/facebook-svgrepo-com.svg" width="500px">
                         Facebook
                     </button>

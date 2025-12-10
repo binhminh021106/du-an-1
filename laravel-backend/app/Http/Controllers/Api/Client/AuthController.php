@@ -2,19 +2,17 @@
 
 namespace App\Http\Controllers\Api\Client;
 
-use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-// Thêm 2 dòng này
 use Laravel\Socialite\Facades\Socialite;
-use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
+    // --- ĐĂNG KÝ ---
     public function register(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -22,67 +20,45 @@ class AuthController extends Controller
             'email'    => 'required|string|email|max:255|unique:users',
             'phone'    => 'required|string|max:15|unique:users',
             'password' => 'required|string|min:8',
-            'sex'      => 'required|in:male,female,other',
         ], [
             'email.unique' => 'Email này đã được sử dụng.',
             'phone.unique' => 'Số điện thoại này đã được sử dụng.',
-            'sex.required' => 'Vui lòng chọn giới tính.',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
+        if ($validator->fails()) return response()->json(['errors' => $validator->errors()], 422);
 
         $user = User::create([
-            'fullName' => $request->name,
-            'email'    => $request->email,
-            'phone'    => $request->phone,
-            'sex' => $request->sex,
-            'password' => Hash::make($request->password),
-            'status'   => 'active',
-            'avatar_url' => null,
+            'fullName'   => $request->name,
+            'email'      => $request->email,
+            'phone'      => $request->phone,
+            'password'   => Hash::make($request->password),
+            'status'     => 'active',
         ]);
 
-        return response()->json([
-            'message' => 'Đăng ký thành công!',
-            'user'    => $user
-        ], 201);
+        return response()->json(['message' => 'Đăng ký thành công!', 'user' => $user], 201);
     }
 
+    // --- ĐĂNG NHẬP ---
     public function login(Request $request)
     {
-        // 1. Validate dữ liệu gửi lên
         $validator = Validator::make($request->all(), [
             'login_id' => 'required|string',
             'password' => 'required|string',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
+        if ($validator->fails()) return response()->json($validator->errors(), 422);
+
+        // Xác định login bằng Email hay SĐT
+        $field = filter_var($request->login_id, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
+
+        if (!Auth::attempt([$field => $request->login_id, 'password' => $request->password])) {
+            return response()->json(['message' => 'Tài khoản hoặc mật khẩu không chính xác.'], 401);
         }
 
-        $loginInput = $request->login_id;
-
-        // 2. Tự động nhận diện là Email hay SĐT
-        $fieldType = filter_var($loginInput, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
-
-        $credentials = [
-            $fieldType => $loginInput,
-            'password' => $request->password,
-        ];
-
-        // 3. Xác thực (Laravel tự so sánh hash password ở đây)
-        if (!Auth::attempt($credentials)) {
-            return response()->json([
-                'message' => 'Tài khoản hoặc mật khẩu không chính xác.'
-            ], 401);
-        }
-
-        // 4. Đăng nhập thành công -> Tạo Token
         $user = Auth::user();
 
         if ($user->status !== 'active') {
-            return response()->json(['message' => 'Tài khoản của bạn đã bị khóa.'], 403);
+            return response()->json(['message' => 'Tài khoản bị khóa.'], 403);
         }
 
         $token = $user->createToken('client-token')->plainTextToken;
@@ -92,60 +68,70 @@ class AuthController extends Controller
             'user'    => $user,
             'token'   => $token,
         ], 200);
-        
     }
 
-    // ==========================================
-    // PHẦN THÊM MỚI CHO GOOGLE LOGIN
-    // ==========================================
+    // --- SOCIAL LOGIN (Google & Facebook) ---
 
     public function redirectToGoogle()
     {
         return Socialite::driver('google')->stateless()->redirect();
     }
-
     public function handleGoogleCallback()
     {
+        return $this->handleSocialCallback('google');
+    }
+
+    public function redirectToFacebook()
+    {
+        return Socialite::driver('facebook')->stateless()->redirect();
+    }
+    public function handleFacebookCallback()
+    {
+        return $this->handleSocialCallback('facebook');
+    }
+
+    // Hàm xử lý chung cho Social Login
+    protected function handleSocialCallback($driver)
+    {
+        $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
+
+        // 1. Chặn lỗi nếu user bấm Hủy
+        if (request()->has('error') || request()->missing('code')) {
+            return redirect($frontendUrl . '/login?error=social_cancelled');
+        }
+
         try {
-            $googleUser = Socialite::driver('google')->stateless()->user();
+            $socialUser = Socialite::driver($driver)->stateless()->user();
 
-            // Tìm user theo google_id hoặc email
-            $user = User::where('google_id', $googleUser->id)
-                        ->orWhere('email', $googleUser->email)
-                        ->first();
+            // 2. Tìm user theo Social ID hoặc Email
+            $user = User::where($driver . '_id', $socialUser->id)
+                ->orWhere('email', $socialUser->email)
+                ->first();
 
+            // 3. Nếu chưa có thì tạo mới, có rồi thì update ID
             if (!$user) {
-                // Tạo user mới khớp với DB của bạn
                 $user = User::create([
-                    'fullName'   => $googleUser->name, // Map sang fullName
-                    'email'      => $googleUser->email,
-                    'google_id'  => $googleUser->id,
-                    'password'   => null, // Mật khẩu null vì login Google
-                    'status'     => 'active', // Set active luôn để login được ngay
-                    'avatar_url' => $googleUser->avatar, // Lấy luôn avatar Google
-                    'phone'      => null, // Google thường không trả về phone, để null
+                    'fullName'    => $socialUser->name,
+                    'email'       => $socialUser->email ?? $socialUser->id . '@facebook.local',
+                    $driver . '_id' => $socialUser->id, // Tự động điền google_id hoặc facebook_id
+                    'status'      => 'active',
+                    'avatar_url'  => $socialUser->avatar,
+                    'sex'         => 'other',
                 ]);
             } else {
-                // Nếu user đã có email nhưng chưa có google_id thì cập nhật thêm
-                if (!$user->google_id) {
-                    $user->update(['google_id' => $googleUser->id]);
+                // Update ID mạng xã hội nếu chưa có
+                if (!$user->{$driver . '_id'}) {
+                    $user->update([$driver . '_id' => $socialUser->id]);
                 }
             }
 
-            // Kiểm tra status (dùng chung logic với login thường)
-            if ($user->status !== 'active') {
-                return response()->json(['message' => 'Tài khoản bị khóa'], 403);
-            }
+            if ($user->status !== 'active') return redirect($frontendUrl . '/login?error=account_locked');
 
-            // Tạo Token (dùng chung tên 'client-token' như hàm login của bạn)
+            // 4. Tạo token và chuyển hướng về Frontend
             $token = $user->createToken('client-token')->plainTextToken;
-
-            // Redirect về Vue
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000/google-callback');
-            return redirect($frontendUrl . '?token=' . $token);
-
+            return redirect($frontendUrl . '/google-callback?token=' . $token);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Google Login Failed: ' . $e->getMessage()], 500);
+            return redirect($frontendUrl . '/login?error=login_failed&message=' . urlencode($e->getMessage()));
         }
     }
 }
