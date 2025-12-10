@@ -1,7 +1,7 @@
 <script setup>
 import { useRouter } from "vue-router";
 const router = useRouter();
-import '@fortawesome/fontawesome-free/css/all.min.css'
+// import '@fortawesome/fontawesome-free/css/all.min.css'
 // const goHome = () => {
 //   router.push('/');
 // };

@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import Swal from 'sweetalert2';
-import '@fortawesome/fontawesome-free/css/all.min.css'
+// import '@fortawesome/fontawesome-free/css/all.min.css'
 
 const router = useRouter();
 
@@ -159,7 +159,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-@import '@fortawesome/fontawesome-free/css/all.min.css';
+/* @import '@fortawesome/fontawesome-free/css/all.min.css'; */
 /* Tinh chỉnh Navbar */
 .app-header {
     min-height: 60px;
