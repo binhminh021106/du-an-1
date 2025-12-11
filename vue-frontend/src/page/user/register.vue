@@ -24,6 +24,10 @@ const loginWithGoogle = () => {
     window.location.href = 'http://127.0.0.1:8000/api/auth/google';
 };
 
+const loginWithFacebook = () => {
+    window.location.href = 'http://localhost:8000/api/auth/facebook';
+};
+
 const error = reactive({
     fullName: '',
     email: '',
@@ -270,7 +274,7 @@ const handleRegister = async () => {
                             alt="Google">
                         Google
                     </button>
-                    <button class="social-btn">
+                    <button @click="loginWithFacebook" class="social-btn">
                         <img src="../../assets/facebook-svgrepo-com.svg" alt="Facebook">
                         Facebook
                     </button>

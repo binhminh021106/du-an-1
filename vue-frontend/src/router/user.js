@@ -109,9 +109,9 @@ const userAuthRoutes = [
     component: () => import("../page/user/login.vue"),
   },
   {
-    path: "/google-callback",
-    name: "google-callback",
-    component: () => import("../page/user/GoogleCallback.vue"),
+    path: "/social-callback",
+    name: "social-callback",
+    component: () => import("../page/user/social-callback.vue"),
   },
   {
     path: "/forgot-password",
