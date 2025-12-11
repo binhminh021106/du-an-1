@@ -2,13 +2,13 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
-import apiService from '../../../apiService'; // [QUAN TRỌNG] Kiểm tra lại đường dẫn tới file apiService.js của m
+import apiService from '../../../apiService'; 
 
 // --- STATE MANAGEMENT ---
-const emails = ref([]); // Dữ liệu thật sẽ được đổ vào đây
-const isLoading = ref(false); // Trạng thái loading
+const emails = ref([]); 
+const isLoading = ref(false); 
 const searchQuery = ref('');
-const activeTab = ref('inbox'); // inbox, sent, trash
+const activeTab = ref('inbox'); 
 const sortOption = ref('newest');
 
 // Modal State
@@ -21,20 +21,22 @@ const replyContent = ref('');
 const currentPage = ref(1);
 const itemsPerPage = 10;
 
+// [CẤU HÌNH] URL Backend để nối chuỗi hiển thị ảnh
+// Nếu bạn deploy lên host thật thì sửa dòng này thành domain thật
+const BACKEND_URL = 'http://127.0.0.1:8000'; 
+
 // --- API ACTIONS ---
 
 // 1. Lấy danh sách Email từ Server
 const fetchEmails = async () => {
     isLoading.value = true;
     try {
-        // apiService tự động gắn Token Admin nhờ interceptor m đã cấu hình
         const response = await apiService.get('/admin/support-emails');
         
         if (response.data.success) {
             // Map dữ liệu từ Backend (snake_case) sang Frontend (camelCase/Nested Object)
             emails.value = response.data.data.map(email => ({
                 id: email.id,
-                // Backend trả về sender_name, sender_email -> Gom vào object sender
                 sender: { 
                     name: email.sender_name, 
                     email: email.sender_email, 
@@ -45,14 +47,14 @@ const fetchEmails = async () => {
                 content: email.content,
                 created_at: email.created_at,
                 status: email.status,
-                // Backend trả về is_read, has_attachment -> Map sang camelCase
                 isRead: Boolean(email.is_read),
-                hasAttachment: Boolean(email.has_attachment)
+                hasAttachment: Boolean(email.has_attachment),
+                // [QUAN TRỌNG] Map thêm đường dẫn ảnh
+                attachmentPath: email.attachment_path 
             }));
         }
     } catch (error) {
         console.error("Lỗi tải email:", error);
-        // Swal.fire('Lỗi', 'Không tải được danh sách email', 'error');
     } finally {
         isLoading.value = false;
     }
@@ -65,7 +67,6 @@ const handleReply = async () => {
         return;
     }
 
-    // UI Loading
     Swal.fire({
         title: 'Đang gửi...',
         text: 'Vui lòng chờ trong giây lát',
@@ -76,12 +77,10 @@ const handleReply = async () => {
     });
     
     try {
-        // Gọi API Reply
         await apiService.post(`/admin/support-emails/${viewingEmail.value.id}/reply`, {
             content: replyContent.value
         });
 
-        // Tắt Modal & Thông báo
         viewModalInstance.value?.hide();
         Swal.fire({
             icon: 'success',
@@ -91,7 +90,6 @@ const handleReply = async () => {
             showConfirmButton: false
         });
         
-        // Reset form & Reload dữ liệu để thấy mail mới trong mục "Đã gửi"
         replyContent.value = '';
         await fetchEmails();
 
@@ -115,15 +113,9 @@ const handleDelete = async (email) => {
 
     if (result.isConfirmed) {
         try {
-            // Gọi API Xóa
             await apiService.delete(`/admin/support-emails/${email.id}`);
-            
             Swal.fire('Đã xóa!', 'Email đã được xóa.', 'success');
-            
-            // Reload lại danh sách
             await fetchEmails();
-            
-            // Nếu đang mở modal thì đóng lại
             if (viewModalInstance.value && viewingEmail.value.id === email.id) {
                 viewModalInstance.value.hide();
             }
@@ -135,16 +127,12 @@ const handleDelete = async (email) => {
 };
 
 const handlePermanentDelete = async (email) => {
-    // Nếu backend m có xử lý xóa vĩnh viễn riêng thì gọi API khác
-    // Ở đây t dùng chung logic xóa (Delete method)
     handleDelete(email); 
 };
 
-// --- COMPUTED (GIỮ NGUYÊN) ---
+// --- COMPUTED ---
 const filteredEmails = computed(() => {
     let result = emails.value.filter(e => e.status === activeTab.value);
-
-    // Search
     const query = searchQuery.value.toLowerCase().trim();
     if (query) {
         result = result.filter(e => 
@@ -153,14 +141,11 @@ const filteredEmails = computed(() => {
             e.subject.toLowerCase().includes(query)
         );
     }
-
-    // Sort
     result.sort((a, b) => {
         const dateA = new Date(a.created_at);
         const dateB = new Date(b.created_at);
         return sortOption.value === 'newest' ? dateB - dateA : dateA - dateB;
     });
-
     return result;
 });
 
@@ -193,6 +178,14 @@ const getAvatar = (name) => {
     return `https://placehold.co/50x50/009981/ffffff?text=${char}`;
 };
 
+// [MỚI] Hàm lấy full URL ảnh
+const getAttachmentUrl = (path) => {
+    if (!path) return '';
+    if (path.startsWith('http')) return path;
+    // Nối domain backend vào đường dẫn relative
+    return `${BACKEND_URL}${path}`;
+};
+
 // --- ACTIONS ---
 const setActiveTab = (tab) => {
     activeTab.value = tab;
@@ -201,7 +194,6 @@ const setActiveTab = (tab) => {
 
 const openViewModal = (email) => {
     viewingEmail.value = email;
-    // UI update only: Đánh dấu đã đọc khi mở (Backend sẽ tự update khi reply hoặc m có thể gọi thêm API update status ở đây nếu muốn)
     if (email.status === 'inbox' && !email.isRead) {
         email.isRead = true;
     }
@@ -210,7 +202,7 @@ const openViewModal = (email) => {
 };
 
 onMounted(() => {
-    fetchEmails(); // Gọi API khi component load
+    fetchEmails(); 
     nextTick(() => {
         if (viewModalRef.value) viewModalInstance.value = new Modal(viewModalRef.value);
     });
@@ -218,6 +210,7 @@ onMounted(() => {
 </script>
 
 <template>
+    <!-- ... Giữ nguyên phần Header và Tabs ... -->
     <div class="app-content-header">
         <div class="container-fluid">
             <div class="row">
@@ -235,7 +228,6 @@ onMounted(() => {
     <div class="app-content">
         <div class="container-fluid">
             <div class="card mb-4 shadow-sm border-0">
-                
                 <!-- TABS -->
                 <div class="card-header border-bottom-0 pb-0 bg-white">
                     <ul class="nav nav-tabs card-header-tabs custom-tabs">
@@ -274,7 +266,6 @@ onMounted(() => {
                             </select>
                         </div>
                         <div class="col-md-5 col-6 text-end">
-                             <!-- <button class="btn btn-primary text-white"><i class="bi bi-pencil-square me-1"></i> Soạn thư</button> -->
                         </div>
                     </div>
                 </div>
@@ -282,8 +273,6 @@ onMounted(() => {
                 <!-- EMAIL LIST (TABLE) -->
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        
-                        <!-- LOADING SPINNER -->
                         <div v-if="isLoading" class="text-center py-5">
                             <div class="spinner-border text-primary" role="status">
                                 <span class="visually-hidden">Loading...</span>
@@ -412,19 +401,33 @@ onMounted(() => {
 
                     <!-- Email Content -->
                     <div class="p-4 bg-white" style="min-height: 200px;">
-                         <!-- Hiển thị nội dung, chú ý class white-space để giữ dòng -->
                         <div class="email-body text-dark" style="white-space: pre-line;">{{ viewingEmail.content }}</div>
                     </div>
 
-                    <!-- Attachment Mock (Chỉ hiện nếu có) -->
-                    <div class="px-4 pb-4 bg-white" v-if="viewingEmail.hasAttachment">
-                        <div class="border rounded p-2 d-inline-flex align-items-center bg-light">
-                            <i class="bi bi-file-earmark-image fs-4 text-primary me-2"></i>
-                            <div>
-                                <div class="fw-bold small">attachment.png</div>
-                                <div class="text-muted" style="font-size: 11px;">1.2 MB</div>
+                    <!-- [MỚI] HIỂN THỊ ẢNH ĐÍNH KÈM -->
+                    <div class="px-4 pb-4 bg-white" v-if="viewingEmail.hasAttachment && viewingEmail.attachmentPath">
+                        <div class="border rounded p-3 bg-light">
+                            <h6 class="fw-bold mb-2 small text-muted"><i class="bi bi-paperclip"></i> Ảnh đính kèm:</h6>
+                            
+                            <!-- Hiện ảnh Preview -->
+                            <div class="mb-3">
+                                <img 
+                                    :src="getAttachmentUrl(viewingEmail.attachmentPath)" 
+                                    class="img-fluid rounded border shadow-sm" 
+                                    style="max-height: 300px; object-fit: contain;" 
+                                    alt="Ảnh đính kèm"
+                                >
                             </div>
-                            <button class="btn btn-link btn-sm ms-2"><i class="bi bi-download"></i></button>
+
+                            <!-- Nút Tải Về -->
+                            <!-- Dùng thẻ a với target blank để mở ảnh ra tab mới, user có thể save as từ đó -->
+                            <a 
+                                :href="getAttachmentUrl(viewingEmail.attachmentPath)" 
+                                target="_blank"
+                                class="btn btn-outline-primary btn-sm"
+                            >
+                                <i class="bi bi-download me-1"></i> Xem & Tải ảnh gốc
+                            </a>
                         </div>
                     </div>
 
@@ -452,6 +455,8 @@ onMounted(() => {
 .bg-primary { background-color: #009981 !important; }
 .btn-primary { background-color: #009981 !important; border-color: #009981 !important; color: white !important; }
 .btn-primary:hover { background-color: #007a67 !important; border-color: #007a67 !important; }
+.btn-outline-primary { color: #009981; border-color: #009981; }
+.btn-outline-primary:hover { background-color: #009981; color: white; }
 
 /* Tabs */
 .custom-tabs .nav-link { color: #6c757d; border: none; font-weight: 500; padding: 12px 20px; border-bottom: 3px solid transparent; cursor: pointer; }
