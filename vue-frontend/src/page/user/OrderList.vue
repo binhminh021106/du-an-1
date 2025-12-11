@@ -1,12 +1,12 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useStore } from 'vuex'; // [MỚI] Import Store để reload giỏ hàng
+import { useStore } from 'vuex'; 
 import apiService from '../../apiService.js';
 import Swal from 'sweetalert2';
 
 const router = useRouter();
-const store = useStore(); // [MỚI] Khởi tạo store
+const store = useStore();
 
 // --- CẤU HÌNH ĐƯỜNG DẪN ẢNH ---
 const SERVER_URL = 'http://127.0.0.1:8000';
@@ -18,21 +18,38 @@ const getImageUrl = (path) => {
   return `${SERVER_URL}/${cleanPath}`;
 };
 
-// [THAY ĐỔI] Biến orders lưu dữ liệu từ API
+// --- STATE ---
 const orders = ref([]);
 const isLoading = ref(false);
 
-// Biến điều khiển popup
+// Popup & Review logic
 const showPopup = ref(false);
 const selectedOrder = ref(null);
 const isReviewing = ref(false);
-const reviewText = ref('');
-const reviewRating = ref(0);
+
+// [CẬP NHẬT] reviewData lưu trạng thái đánh giá cho TỪNG sản phẩm
+// Cấu trúc: { [itemId]: { rating: 0, content: '', product_id: 123 } }
+const reviewData = ref({}); 
 
 // --- TÍNH NĂNG: Tìm kiếm và Phân trang ---
 const searchQuery = ref('');
 const currentPage = ref(1);
 const itemsPerPage = 5;
+
+// --- [MỚI] HÀM XỬ LÝ TIẾNG VIỆT ---
+const removeVietnameseTones = (str) => {
+  if (!str) return "";
+  str = str.toLowerCase();
+  str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+  str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+  str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+  str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+  str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+  str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+  str = str.replace(/đ/g, "d");
+  str = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return str;
+};
 
 // --- HELPER: LẤY NHÃN BIẾN THỂ ---
 const getVariantLabel = (item) => {
@@ -82,6 +99,9 @@ const fetchOrders = async () => {
     orders.value = rawData.map(order => {
       const statusVN = mapStatusBackendToFrontend(order.status);
       
+      // Logic xác định trạng thái hoàn thành để cho phép đánh giá
+      const canReviewState = order.status === 'delivered' || order.status === 'completed';
+
       return {
         id: String(order.id),
         date: order.created_at,
@@ -91,8 +111,8 @@ const fetchOrders = async () => {
         canCancel: order.status === 'pending',
         canRepurchase: true, // Luôn cho phép mua lại
         canReturn: order.status === 'delivered',
-        canReview: order.status === 'delivered' || order.status === 'completed',
-        isReviewed: false,
+        canReview: canReviewState,
+        isReviewed: false, // Backend cần trả về cờ này nếu muốn ẩn nút đánh giá sau khi đã đánh giá
 
         items: order.items ? order.items.map(item => {
           const variant = item.variant || {};
@@ -105,8 +125,12 @@ const fetchOrders = async () => {
           }
           const rawImagePath = variant.image || product.thumbnail_url;
 
+          // Lấy Product ID chuẩn để gửi review
+          const realProductId = product.id || item.product_id;
+
           return {
-            id: item.id,
+            id: item.id, // ID của order_item
+            product_id: realProductId, // ID sản phẩm thực tế
             name: displayName,
             variant_name: simpleVariantLabel, 
             attributes: rawAttributes, 
@@ -146,17 +170,18 @@ onMounted(() => {
   fetchOrders();
 });
 
-// --- LOGIC UI ---
+// --- LOGIC UI (Search & Pagination) ---
 const sortedOrders = computed(() => orders.value);
 
 const filteredOrders = computed(() => {
-  const query = searchQuery.value.toLowerCase().trim();
+  const query = removeVietnameseTones(searchQuery.value.trim()); // Chuẩn hóa từ khóa tìm kiếm
+  
   if (!query) return sortedOrders.value;
 
   return sortedOrders.value.filter(order => {
     const orderIdMatch = String(order.id).toLowerCase().includes(query);
     const itemMatch = order.items.some(item => 
-      String(item.name).toLowerCase().includes(query)
+      removeVietnameseTones(item.name).includes(query)
     );
     return orderIdMatch || itemMatch;
   });
@@ -175,7 +200,7 @@ const nextPage = () => { if (currentPage.value < totalPages.value) currentPage.v
 
 watch(searchQuery, () => { currentPage.value = 1; });
 
-// Logic Popup
+// --- LOGIC CHI TIẾT & HÀNH ĐỘNG ---
 const isCancellable = computed(() => selectedOrder.value?.canCancel); 
 const isRepurchasable = computed(() => selectedOrder.value?.canRepurchase);
 const isReturnable = computed(() => selectedOrder.value?.canReturn);
@@ -221,11 +246,23 @@ const getStatusClass = (status) => {
   return 'status-default';
 };
 
+// --- XỬ LÝ MỞ POPUP & REVIEW ---
 const openDetailPopup = (order, startReview = false) => {
   selectedOrder.value = order;
   isReviewing.value = startReview;
-  reviewText.value = '';
-  reviewRating.value = 0;
+  
+  // [CẬP NHẬT] Khởi tạo object reviewData cho từng sản phẩm
+  reviewData.value = {};
+  if (order && order.items) {
+      order.items.forEach(item => {
+          reviewData.value[item.id] = {
+              product_id: item.product_id,
+              rating: 0,
+              content: ''
+          };
+      });
+  }
+  
   showPopup.value = true;
 };
 
@@ -235,37 +272,18 @@ const closeDetailPopup = () => {
   isReviewing.value = false;
 };
 
-// --- [THAY ĐỔI QUAN TRỌNG] HÀM MUA LẠI GỌI API THỰC TẾ ---
+// --- API Actions ---
 const handleRepurchaseList = async (order) => {
   try {
-    // 1. Hiển thị loading (tùy chọn)
     Swal.fire({ title: 'Đang xử lý...', didOpen: () => Swal.showLoading() });
-
-    // 2. Gọi API Repurchase bên backend
-    // Đảm bảo route trong api.php là: Route::post('/orders/{id}/repurchase', [OrderController::class, 'repurchase']);
     await apiService.post(`/orders/${order.id}/repurchase`);
-
-    // 3. Reload lại Store Cart để cập nhật số lượng trên header/giỏ hàng
     await store.dispatch('fetchCart'); 
-
-    // 4. Thông báo thành công và điều hướng
-    Swal.fire({
-      title: 'Thành công!',
-      text: `Các sản phẩm từ đơn hàng #${order.id} đã được thêm vào giỏ!`,
-      icon: 'success',
-      showCancelButton: true,
-      confirmButtonText: 'Đến giỏ hàng ngay',
-      cancelButtonText: 'Tiếp tục xem',
-      confirmButtonColor: '#009981'
-    }).then((result) => {
-      if (result.isConfirmed) {
-        router.push('/cart');
-      }
+    Swal.fire('Thành công!', 'Sản phẩm đã được thêm vào giỏ!', 'success').then((r) => {
+      if (r.isConfirmed) router.push('/cart');
     });
-
   } catch (error) {
     console.error("Lỗi mua lại:", error);
-    Swal.fire('Lỗi', 'Không thể thực hiện mua lại lúc này.', 'error');
+    Swal.fire('Lỗi', 'Không thể mua lại lúc này.', 'error');
   }
 };
 
@@ -306,17 +324,56 @@ const handleStartReviewFromList = (order) => {
 
 // Wrapper functions cho Popup
 const handleCancel = () => { handleCancelList(selectedOrder.value); };
-const handleRepurchase = () => { handleRepurchaseList(selectedOrder.value); }; // Dùng chung logic mới
-const handleStartReview = () => { isReviewing.value = true; };
+const handleRepurchase = () => { handleRepurchaseList(selectedOrder.value); }; 
+const handleStartReview = () => { 
+    isReviewing.value = true;
+    // Khởi tạo lại reviewData nếu chuyển từ xem chi tiết sang đánh giá
+    if (selectedOrder.value && Object.keys(reviewData.value).length === 0) {
+        selectedOrder.value.items.forEach(item => {
+            reviewData.value[item.id] = {
+                product_id: item.product_id,
+                rating: 0,
+                content: ''
+            };
+        });
+    }
+};
 const handleReturn = () => { handleReturnList(selectedOrder.value); };
 
-const handleSubmitReview = () => {
-  if (reviewRating.value === 0) {
-    Swal.fire('Chưa đánh giá', 'Vui lòng chọn số sao để đánh giá!', 'warning');
+// --- [CẬP NHẬT] GỬI ĐÁNH GIÁ (MULTIPLE) ---
+const handleSubmitReviews = async () => {
+  // Lọc ra các sản phẩm đã được đánh giá (rating > 0)
+  const reviewsToSend = Object.values(reviewData.value).filter(r => r.rating > 0);
+
+  if (reviewsToSend.length === 0) {
+    Swal.fire('Chưa có đánh giá', 'Vui lòng chọn số sao cho ít nhất một sản phẩm!', 'warning');
     return;
   }
-  Swal.fire('Cảm ơn!', `Cảm ơn bạn đã đánh giá ${reviewRating.value} sao cho đơn hàng #${selectedOrder.value.id}!`, 'success');
-  isReviewing.value = false;
+
+  try {
+    Swal.fire({ title: 'Đang gửi đánh giá...', didOpen: () => Swal.showLoading() });
+
+    // Gửi song song các request đánh giá cho từng sản phẩm
+    const promises = reviewsToSend.map(review => 
+        apiService.post('/reviews', {
+            product_id: review.product_id,
+            rating: review.rating,
+            content: review.content
+        })
+    );
+
+    await Promise.all(promises);
+
+    Swal.fire('Cảm ơn!', 'Đánh giá của bạn đã được gửi thành công!', 'success');
+    isReviewing.value = false;
+    // Tùy chọn: Refresh lại đơn hàng để cập nhật trạng thái nếu backend có trả về isReviewed
+    // fetchOrders(); 
+    
+  } catch (error) {
+    console.error("Lỗi gửi review:", error);
+    const msg = error.response?.data?.message || 'Có lỗi xảy ra khi gửi đánh giá.';
+    Swal.fire('Thất bại', msg, 'error');
+  }
 };
 </script>
 
@@ -335,7 +392,8 @@ const handleSubmitReview = () => {
           <i class="fas fa-search search-icon"></i>
           <input 
             type="text" 
-            v-model="searchQuery" 
+            :value="searchQuery"
+            @input="searchQuery = $event.target.value"
             placeholder="Tìm theo mã đơn hàng hoặc tên sản phẩm..."
             class="search-bar"
           >
@@ -445,6 +503,7 @@ const handleSubmitReview = () => {
         <button class="close-btn" @click="closeDetailPopup">×</button>
         <h2 class="popup-title">🛒 Chi Tiết Đơn Hàng #{{ selectedOrder.id }}</h2>
 
+        <!-- Progress Bar -->
         <div class="status-progress-bar-container">
           <div v-if="getActiveStepIndex === -2" class="cancelled-status-message">
             ❌ Đơn hàng đã bị hủy
@@ -469,30 +528,26 @@ const handleSubmitReview = () => {
             </div>
           </div>
         </div>
-        <div class="detail-card info-section">
-          <h3><i class="fas fa-info-circle section-icon"></i> Thông tin Đơn hàng</h3>
-          <div class="info-row">
-            <span>Mã đơn hàng:</span>
-            <strong>#{{ selectedOrder.id }}</strong>
-          </div>
-          <div class="info-row">
-            <span>Ngày đặt:</span>
-            <span>{{ formatDate(selectedOrder.date) }}</span>
-          </div>
-          <div class="info-row">
-            <span>Trạng thái:</span>
-            <strong class="status-text">{{ selectedOrder.status }}</strong>
-          </div>
+
+        <!-- Thông tin chung -->
+        <div class="detail-grid">
+            <div class="detail-card info-section">
+                <h3><i class="fas fa-info-circle section-icon"></i> Thông tin Đơn hàng</h3>
+                <div class="info-row"><span>Mã đơn hàng:</span> <strong>#{{ selectedOrder.id }}</strong></div>
+                <div class="info-row"><span>Ngày đặt:</span> <span>{{ formatDate(selectedOrder.date) }}</span></div>
+                <div class="info-row"><span>Trạng thái:</span> <strong class="status-text">{{ selectedOrder.status }}</strong></div>
+            </div>
+
+            <div class="detail-card customer-section">
+                <h3><i class="fas fa-user section-icon"></i> Thông tin Khách hàng</h3>
+                <p><strong>{{ selectedOrder.customer.name }}</strong></p>
+                <p><i class="fas fa-phone-alt"></i> {{ selectedOrder.customer.phone }}</p>
+                <p><i class="fas fa-map-marker-alt"></i> {{ selectedOrder.customer.address }}</p>
+            </div>
         </div>
 
-        <div class="detail-card customer-section">
-          <h3><i class="fas fa-user section-icon"></i> Thông tin Khách hàng</h3>
-          <p><strong>{{ selectedOrder.customer.name }}</strong></p>
-          <p><i class="fas fa-phone-alt"></i> {{ selectedOrder.customer.phone }}</p>
-          <p><i class="fas fa-map-marker-alt"></i> {{ selectedOrder.customer.address }}</p>
-        </div>
-
-        <div class="detail-card product-section">
+        <!-- [CHỈ HIỆN KHI KHÔNG REVIEW] Danh sách sản phẩm -->
+        <div v-if="!isReviewing" class="detail-card product-section">
           <h3><i class="fas fa-box-open section-icon"></i> Sản phẩm đã đặt</h3>
           <div class="product-list-popup">
             <div v-for="item in selectedOrder.items" :key="item.id" class="product-item">
@@ -511,59 +566,74 @@ const handleSubmitReview = () => {
           </div>
         </div>
 
-        <div class="detail-card payment-section">
-          <h3><i class="fas fa-credit-card section-icon"></i> Chi tiết Thanh toán</h3>
-          <div class="summary-row">
-            <span>Tạm tính:</span>
-            <span>{{ formatCurrency(selectedOrder.payment.subtotal) }}</span>
-          </div>
-          <div class="summary-row">
-            <span>Phí giao hàng:</span>
-            <span>{{ formatCurrency(selectedOrder.payment.shippingFee) }}</span>
-          </div>
-          <div class="summary-row total">
-            <strong>Tổng cộng:</strong>
-            <strong class="total-amount">{{ formatCurrency(selectedOrder.payment.total) }}</strong>
-          </div>
-          <div class="summary-row payment-method">
-            <span>Hình thức thanh toán:</span>
-            <span><i class="fas fa-money-bill-wave"></i> {{ selectedOrder.payment.method }}</span>
-          </div>
+        <!-- [CHỈ HIỆN KHI KHÔNG REVIEW] Thanh toán & Action -->
+        <div v-if="!isReviewing">
+            <div class="detail-card payment-section">
+              <h3><i class="fas fa-credit-card section-icon"></i> Chi tiết Thanh toán</h3>
+              <div class="summary-row"><span>Tạm tính:</span> <span>{{ formatCurrency(selectedOrder.payment.subtotal) }}</span></div>
+              <div class="summary-row"><span>Phí giao hàng:</span> <span>{{ formatCurrency(selectedOrder.payment.shippingFee) }}</span></div>
+              <div class="summary-row total"><strong>Tổng cộng:</strong> <strong class="total-amount">{{ formatCurrency(selectedOrder.payment.total) }}</strong></div>
+              <div class="summary-row payment-method"><span>Hình thức thanh toán:</span> <span><i class="fas fa-money-bill-wave"></i> {{ selectedOrder.payment.method }}</span></div>
+            </div>
+
+            <div class="detail-card action-section">
+              <h3><i class="fas fa-cogs section-icon"></i> Hành Động</h3>
+              <div class="action-buttons">
+                <button v-if="isCancellable" @click="handleCancel" class="action-btn danger-btn"><i class="fas fa-times-circle"></i> Hủy Đơn Hàng</button>
+                <button v-if="isRepurchasable" @click="handleRepurchase" class="action-btn primary-btn"><i class="fas fa-redo-alt"></i> Mua Lại Đơn Này</button>
+                <button v-if="isReviewAvailable" @click="handleStartReview" class="action-btn success-btn"><i class="fas fa-star"></i> Đánh Giá</button>
+                <button v-else-if="selectedOrder.isReviewed" class="action-btn disabled-btn" disabled><i class="fas fa-check-circle"></i> Đã Đánh Giá</button>
+                <button v-if="isReturnable" @click="handleReturn" class="action-btn secondary-btn"><i class="fas fa-undo-alt"></i> Yêu Cầu Hoàn Hàng</button>
+              </div>
+            </div>
         </div>
 
-        <div class="detail-card action-section">
-          <h3><i class="fas fa-cogs section-icon"></i> Hành Động</h3>
-          <div class="action-buttons">
-            <button v-if="isCancellable" @click="handleCancel" class="action-btn danger-btn">
-              <i class="fas fa-times-circle"></i> Hủy Đơn Hàng
-            </button>
-            <button v-if="isRepurchasable" @click="handleRepurchase" class="action-btn primary-btn">
-              <i class="fas fa-redo-alt"></i> Mua Lại Đơn Này
-            </button>
-            <button v-if="isReviewAvailable" @click="handleStartReview" class="action-btn success-btn">
-              <i class="fas fa-star"></i> Đánh Giá
-            </button>
-            <button v-else-if="selectedOrder.isReviewed" class="action-btn disabled-btn" disabled>
-              <i class="fas fa-check-circle"></i> Đã Đánh Giá
-            </button>
-            <button v-if="isReturnable" @click="handleReturn" class="action-btn secondary-btn">
-              <i class="fas fa-undo-alt"></i> Yêu Cầu Hoàn Hàng
-            </button>
+        <!-- [SECTION MỚI] FORM ĐÁNH GIÁ TỪNG SẢN PHẨM -->
+        <div v-if="isReviewing" class="review-container">
+          <h3 class="review-header"><i class="fas fa-star section-icon"></i> Đánh Giá Sản Phẩm</h3>
+          <p class="review-hint">Vui lòng đánh giá các sản phẩm bạn đã mua.</p>
+          
+          <div class="review-scroll-list">
+              <div v-for="item in selectedOrder.items" :key="item.id" class="review-item-card">
+                  <!-- Thông tin sản phẩm -->
+                  <div class="review-product-info">
+                      <img :src="item.image" class="review-thumb" @error="$event.target.src = 'https://placehold.co/50x50?text=No+Img'">
+                      <div>
+                          <div class="review-prod-name">{{ item.name }}</div>
+                          <div class="review-prod-variant" v-if="getVariantLabel(item)">
+                              {{ getVariantLabel(item) }}
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <!-- Form nhập liệu -->
+                  <div class="review-input-area">
+                      <div class="rating-stars">
+                          <span v-for="star in 5" :key="star" 
+                                @click="reviewData[item.id].rating = star"
+                                :class="{ 'star-icon': true, 'active': star <= reviewData[item.id].rating }">
+                            ★
+                          </span>
+                          <span class="rating-label" v-if="reviewData[item.id].rating > 0">
+                              {{ reviewData[item.id].rating }} sao
+                          </span>
+                      </div>
+                      <textarea 
+                          v-model="reviewData[item.id].content" 
+                          placeholder="Chất lượng sản phẩm thế nào? Hãy chia sẻ với mọi người nhé..."
+                      ></textarea>
+                  </div>
+              </div>
           </div>
-        </div>
 
-        <div v-if="isReviewing" class="detail-card review-form-section">
-          <h3><i class="fas fa-comment-dots section-icon"></i> Gửi Đánh Giá Của Bạn</h3>
-          <div class="rating-stars">
-            <span v-for="star in 5" :key="star" @click="reviewRating = star"
-              :class="{ 'star-icon': true, 'active': star <= reviewRating }">
-              ★
-            </span>
+          <div class="review-actions-footer">
+              <button @click="isReviewing = false" class="action-btn secondary-btn back-btn">
+                  Quay lại
+              </button>
+              <button @click="handleSubmitReviews" class="action-btn primary-btn submit-review-btn">
+                  <i class="fas fa-paper-plane"></i> Gửi Đánh Giá
+              </button>
           </div>
-          <textarea v-model="reviewText" placeholder="Viết nhận xét của bạn..."></textarea>
-          <button @click="handleSubmitReview" class="action-btn primary-btn submit-review-btn">
-            <i class="fas fa-paper-plane"></i> Gửi Đánh Giá
-          </button>
         </div>
 
       </div>
@@ -1258,5 +1328,122 @@ const handleSubmitReview = () => {
 }
 .item-variants {
     margin-top: 2px;
+}
+
+/* [NEW] STYLE CHO DROPDOWN CHỌN SẢN PHẨM */
+.review-product-select {
+    margin-bottom: 15px;
+}
+.form-select {
+    width: 100%;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 1em;
+    background-color: #fff;
+}
+
+/* --- [CSS MỚI] CHO PHẦN ĐÁNH GIÁ TÁCH RIÊNG --- */
+.review-container {
+    margin-top: 15px;
+    border-top: 2px dashed #ddd;
+    padding-top: 15px;
+}
+.review-header {
+    text-align: center;
+    color: var(--primary-color);
+    margin-bottom: 5px;
+}
+.review-hint {
+    text-align: center;
+    color: #777;
+    margin-bottom: 15px;
+    font-size: 0.9em;
+}
+.review-scroll-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+.review-item-card {
+    background: #f9f9f9;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+.review-product-info {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #e5e5e5;
+    padding-bottom: 8px;
+}
+.review-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid #ddd;
+}
+.review-prod-name {
+    font-weight: 600;
+    font-size: 0.95em;
+    color: #333;
+}
+.review-prod-variant {
+    font-size: 0.8em;
+    color: #666;
+    background: #e0e0e0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    width: fit-content;
+    margin-top: 2px;
+}
+.review-input-area {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.rating-stars {
+    font-size: 1.8em;
+    color: #ddd;
+    cursor: pointer;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+.star-icon { transition: color 0.2s; }
+.star-icon.active { color: #FFD700; }
+.rating-label {
+    font-size: 0.6em;
+    color: #666;
+    margin-left: 10px;
+    font-weight: normal;
+}
+.review-input-area textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    min-height: 80px;
+    font-family: inherit;
+    resize: vertical;
+}
+.review-actions-footer {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+.back-btn {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0 20px;
 }
 </style>

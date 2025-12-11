@@ -272,7 +272,8 @@ watch(authorQuery, (newAuthor) => {
       </div>
     </header>
 
-    <main class="page-container">
+    <!-- [EDIT] Thêm class 'container' để đồng bộ width với Header/Footer -->
+    <main class="page-container container">
         
       <div v-if="isLoading && posts.length === 0" class="text-center py-5 loading-box">
            <div class="spinner-border text-primary" role="status">
@@ -567,9 +568,11 @@ watch(authorQuery, (newAuthor) => {
 
 /* --- LAYOUT CONTAINER --- */
 .page-container {
-  max-width: 1320px;
+  /* [EDIT] Xóa max-width cứng để dùng class .container của hệ thống */
+  /* max-width: 1320px; */
+  /* padding: 0 20px; */
+  
   margin: 50px auto;
-  padding: 0 20px;
   flex-grow: 1;
 }
 

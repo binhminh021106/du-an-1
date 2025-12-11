@@ -213,6 +213,7 @@ onMounted(async () => {
     return;
   }
 
+  // 1. Lấy thông tin cơ bản từ LocalStorage (Tên, Email, SĐT)
   const userDataString = localStorage.getItem("userData");
   if (userDataString) {
     try {
@@ -221,15 +222,37 @@ onMounted(async () => {
       form.name = userData.fullName || userData.name || "";
       form.email = userData.email || "";
       form.phone = userData.phone || "";
-      if (userData.user_addresses && Array.isArray(userData.user_addresses)) {
-        savedAddresses.value = userData.user_addresses;
-      }
+      // Không lấy savedAddresses từ đây nữa để tránh dữ liệu cũ
     } catch (e) { console.error(e); }
   }
 
+  // 2. [QUAN TRỌNG] Gọi API lấy danh sách địa chỉ mới nhất từ Database
+  try {
+      // Giả sử route API của bạn là /user/addresses (tương ứng UserAddressController@index)
+      const addrRes = await apiService.get('/user/addresses');
+      if (addrRes.data) {
+          // Xử lý nếu data trả về có dạng { data: [...] } hoặc [...]
+          savedAddresses.value = Array.isArray(addrRes.data) ? addrRes.data : (addrRes.data.data || []);
+      }
+  } catch (err) {
+      console.warn("Không tải được danh sách địa chỉ từ server:", err);
+  }
+
+  // 3. Tải danh sách Tỉnh/Thành & Tự động điền
   try {
     const res = await fetch("https://provinces.open-api.vn/api/?depth=3");
     provinces.value = await res.json();
+
+    // [UPDATED] Tự động điền địa chỉ mặc định (hoặc đầu tiên) nếu có
+    if (savedAddresses.value.length > 0) {
+        // Tìm địa chỉ mặc định (is_default là 1 hoặc true)
+        const defaultAddress = savedAddresses.value.find(addr => addr.is_default == 1 || addr.is_default === true) || savedAddresses.value[0];
+        
+        if (defaultAddress) {
+            selectedSavedAddressId.value = defaultAddress.id;
+            await fillAddressFromBook(); // Gọi hàm điền địa chỉ
+        }
+    }
   } catch (e) { console.error(e); }
 
   fetchCoupons();
@@ -310,6 +333,7 @@ const filteredWards = computed(() => {
   return wards.value.filter(w => removeVietnameseTones(w.name).includes(keyword));
 });
 
+// [UPDATED] Hàm toggleDropdown đã được sửa lỗi focus
 const toggleDropdown = (name) => {
   if (name === 'district' && !districts.value.length) return;
   if (name === 'ward' && !wards.value.length) return;
@@ -321,7 +345,13 @@ const toggleDropdown = (name) => {
     searchTerm.value = "";
     nextTick(() => {
        const inputs = document.querySelectorAll('.search-input-field');
-       if(inputs.length) inputs[0].focus();
+       // Logic cũ luôn focus input[0], gây lỗi khi mở dropdown district/ward
+       // Logic mới: focus đúng input tương ứng với thứ tự dropdown
+       let index = 0;
+       if (name === 'district') index = 1;
+       if (name === 'ward') index = 2;
+       
+       if(inputs[index]) inputs[index].focus();
     });
   }
 };
@@ -559,17 +589,7 @@ const closeModal = () => {
       <div class="checkout-form card">
         <h3>Thông tin giao hàng</h3>
         <form @submit.prevent="confirmCheckout">
-          <!-- Sổ địa chỉ -->
-          <div v-if="savedAddresses.length > 0" class="form-group">
-            <label>Chọn địa chỉ đã lưu</label>
-            <select v-model="selectedSavedAddressId" @change="fillAddressFromBook" class="saved-addr-select">
-              <option value="">-- Nhập địa chỉ mới --</option>
-              <option v-for="addr in savedAddresses" :key="addr.id" :value="addr.id">
-                {{ addr.customer_name }} - {{ addr.shipping_address }}
-              </option>
-            </select>
-          </div>
-
+          
           <div class="row">
             <div class="col-md-6 form-group">
               <label>Họ và tên <span class="text-danger">*</span></label>
@@ -591,6 +611,17 @@ const closeModal = () => {
             <span v-if="errors.email" class="error-text">{{ errors.email }}</span>
           </div>
 
+          <!-- [MOVED & UPDATED] Sổ địa chỉ -->
+          <div v-if="savedAddresses.length > 0" class="form-group">
+            <label>Chọn địa chỉ đã lưu</label>
+            <select v-model="selectedSavedAddressId" @change="fillAddressFromBook" class="saved-addr-select">
+              <option value="">-- Nhập địa chỉ mới --</option>
+              <option v-for="addr in savedAddresses" :key="addr.id" :value="addr.id">
+                {{ addr.shipping_address }} - {{ addr.ward }} - {{ addr.district }} - {{ addr.city }}
+              </option>
+            </select>
+          </div>
+
           <div class="form-group">
             <label>Địa chỉ nhận hàng <span class="text-danger">*</span></label>
             <div class="address-select-group" ref="dropdownContainer">
@@ -604,7 +635,7 @@ const closeModal = () => {
                  <div class="custom-options-dropdown" v-show="activeDropdown === 'province'">
                     <div class="search-box-container">
                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                       <input type="text" v-model="searchTerm" placeholder="Tìm tỉnh/thành..." class="search-input-field" @click.stop>
+                       <input type="text" :value="searchTerm" @input="searchTerm = $event.target.value" placeholder="Tìm tỉnh/thành..." class="search-input-field" @click.stop>
                     </div>
                     <ul class="options-list">
                        <li v-for="p in filteredProvinces" :key="p.code" @click="selectOption('province', p.name)" 
@@ -625,7 +656,7 @@ const closeModal = () => {
                  <div class="custom-options-dropdown" v-show="activeDropdown === 'district'">
                     <div class="search-box-container">
                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                       <input type="text" v-model="searchTerm" placeholder="Tìm quận/huyện..." class="search-input-field" @click.stop>
+                       <input type="text" :value="searchTerm" @input="searchTerm = $event.target.value" placeholder="Tìm quận/huyện..." class="search-input-field" @click.stop>
                     </div>
                     <ul class="options-list">
                        <li v-for="d in filteredDistricts" :key="d.code" @click="selectOption('district', d.name)"
@@ -646,7 +677,7 @@ const closeModal = () => {
                  <div class="custom-options-dropdown" v-show="activeDropdown === 'ward'">
                     <div class="search-box-container">
                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                       <input type="text" v-model="searchTerm" placeholder="Tìm phường/xã..." class="search-input-field" @click.stop>
+                       <input type="text" :value="searchTerm" @input="searchTerm = $event.target.value" placeholder="Tìm phường/xã..." class="search-input-field" @click.stop>
                     </div>
                     <ul class="options-list">
                        <li v-for="w in filteredWards" :key="w.code" @click="selectOption('ward', w.name)"

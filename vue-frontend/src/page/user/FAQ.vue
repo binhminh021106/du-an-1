@@ -36,7 +36,8 @@ onMounted(() => {
       </div>
     </header>
 
-    <main class="faq-container">
+    <!-- [EDIT] Thêm class 'container' để đồng bộ width với Header/Footer -->
+    <main class="faq-container container">
       <div class="faq-layout">
         
         <!-- SIDEBAR NAV (Bên trái) -->
@@ -268,9 +269,11 @@ onMounted(() => {
 
 /* --- CONTAINER & LAYOUT --- */
 .faq-container {
-  max-width: 1320px; /* ĐỒNG BỘ: Rộng 1320px như NewsList */
+  /* [EDIT] Xóa max-width cứng để dùng class .container của hệ thống */
+  /* max-width: 1320px; */
+  /* padding: 0 20px; */
+  
   margin: 50px auto;
-  padding: 0 20px;
   flex-grow: 1;
 }
 

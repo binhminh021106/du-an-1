@@ -15,24 +15,24 @@ const store = useStore()
 
 // --- [NEW] CẤU HÌNH TOAST (Thông báo xịn xò - Updated Style) ---
 const Toast = Swal.mixin({
-    toast: true,
-    position: 'bottom-end',
-    showConfirmButton: false,
-    timer: 3000,
-    timerProgressBar: true,
-    background: '#fff',
-    color: '#333',
-    iconColor: '#009981', // Màu xanh chủ đạo của Shop
-    // Class tùy chỉnh để style CSS
-    customClass: {
-        popup: 'elegant-toast', 
-        title: 'elegant-toast-title',
-        timerProgressBar: 'elegant-toast-progress'
-    },
-    didOpen: (toast) => {
-        toast.addEventListener('mouseenter', Swal.stopTimer)
-        toast.addEventListener('mouseleave', Swal.resumeTimer)
-    }
+  toast: true,
+  position: 'bottom-end',
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  background: '#fff',
+  color: '#333',
+  iconColor: '#009981', // Màu xanh chủ đạo của Shop
+  // Class tùy chỉnh để style CSS
+  customClass: {
+    popup: 'elegant-toast', 
+    title: 'elegant-toast-title',
+    timerProgressBar: 'elegant-toast-progress'
+  },
+  didOpen: (toast) => {
+    toast.addEventListener('mouseenter', Swal.stopTimer)
+    toast.addEventListener('mouseleave', Swal.resumeTimer)
+  }
 });
 
 // --- UTILS ---
@@ -88,7 +88,7 @@ const filters = reactive({
   categoryId: route.query.categoryId || null,
   priceMin: 0,
   priceMax: 50000000,
-  brands: [],
+  brands: [], // Mảng thương hiệu được chọn
   minRating: 0,
   inStockOnly: false,
   newArrivalsOnly: false,
@@ -115,14 +115,17 @@ const flattenedShopItems = computed(() => {
   let items = []
 
   allProducts.value.forEach(product => {
+    // [FIX QUAN TRỌNG] Chỉ xử lý sản phẩm ACTIVE
+    if (product.status !== 'active') return;
+
     // Xử lý logic tên thương hiệu an toàn
     let brandName = 'No Brand';
     if (product.brand && typeof product.brand === 'object') {
-        brandName = product.brand.name || 'No Brand';
+      brandName = product.brand.name || 'No Brand';
     } else if (product.brand) {
-        brandName = product.brand; // Trường hợp cũ nếu brand là string
+      brandName = product.brand; // Trường hợp cũ nếu brand là string
     } else if (product.brand_name) {
-        brandName = product.brand_name;
+      brandName = product.brand_name;
     }
 
     // Nếu sản phẩm có biến thể
@@ -195,10 +198,10 @@ const flattenedShopItems = computed(() => {
 // --- COMPUTED: AVAILABLE BRANDS ---
 const availableBrands = computed(() => {
   const brands = new Set()
-  // Flattened items đã xử lý chuẩn hóa tên brand rồi, lấy từ đó cho đồng bộ
+  // Flattened items đã lọc active rồi, lấy từ đó cho chuẩn
   flattenedShopItems.value.forEach(item => {
     if (item.brand && item.brand !== 'No Brand') {
-        brands.add(item.brand)
+      brands.add(item.brand)
     }
   })
   return Array.from(brands).sort()
@@ -222,7 +225,7 @@ const filteredProducts = computed(() => {
     })
   }
 
-  // 2. Tìm kiếm
+  // 2. Tìm kiếm (Keyword)
   if (filters.keyword.trim()) {
     const keywordRaw = filters.keyword.toLowerCase().trim()
     const keywordNoAccent = removeAccents(keywordRaw)
@@ -240,7 +243,7 @@ const filteredProducts = computed(() => {
     })
   }
 
-  // 3. Thương hiệu
+  // 3. Thương hiệu (Fix logic lọc theo mảng)
   if (filters.brands.length > 0) {
     result = result.filter(item => filters.brands.includes(item.brand))
   }
@@ -272,7 +275,6 @@ const filteredProducts = computed(() => {
     case 'newest': result.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)); break;
     case 'best_sell': result.sort((a, b) => (b.sold_count || 0) - (a.sold_count || 0)); break;
     case 'name_asc': result.sort((a, b) => a.name.localeCompare(b.name)); break;
-    // [UPDATE] Thêm sắp xếp theo đánh giá
     case 'rating_desc': result.sort((a, b) => (b.rating || 0) - (a.rating || 0)); break;
   }
 
@@ -298,7 +300,6 @@ watch(() => filters, () => {
 const changePage = (page) => {
     if (page >= 1 && page <= totalPages.value) {
         currentPage.value = page
-        // Scroll to top of grid
         const grid = document.querySelector('.main-content')
         if (grid) grid.scrollIntoView({ behavior: 'smooth' })
     }
@@ -307,10 +308,7 @@ const changePage = (page) => {
 // [NEW] Scroll Logic for Hot Sale
 const scrollHotSale = (direction) => {
   if (!hotSaleScrollRef.value) return
-  
-  // Cuộn mỗi lần khoảng 1 card + gap (240px + 16px)
   const scrollAmount = 260 
-  
   if (direction === 'left') {
     hotSaleScrollRef.value.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
   } else {
@@ -345,7 +343,6 @@ const fetchData = async () => {
     allProducts.value = prodRes.data.data || prodRes.data || []
     categories.value = catRes.data.data || catRes.data || []
 
-    // [UPDATE] Tăng số lượng lên 7 sản phẩm
     hotSaleProducts.value = allProducts.value.slice(0, 7).map(p => {
       let minPrice = Number(p.price) || 0;
       let displayVariant = null;
@@ -362,8 +359,6 @@ const fetchData = async () => {
         }
 
         let variantSuffix = '';
-        // [FIX] Kiểm tra cả 2 trường hợp: attribute_values (Laravel mặc định) và attributeValues (nếu có custom serializer)
-        // Điều này đảm bảo dữ liệu luôn được lấy đúng dù backend trả về format nào
         const attrs = displayVariant.attribute_values || displayVariant.attributeValues || [];
 
         if (attrs && attrs.length > 0) {
@@ -404,7 +399,6 @@ const onAddToCart = async (item) => {
       quantity: 1,
       variant: item.raw_variant
     })
-    // [FIX] Dùng Toast thay cho alert
     Toast.fire({
         icon: 'success',
         title: `Đã thêm "${item.name}" vào giỏ hàng!`
@@ -449,6 +443,8 @@ const toggleBrand = (brand) => {
   } else {
     filters.brands.push(brand)
   }
+  // [NEW] Cập nhật URL khi tick brand để đồng bộ
+  applyFiltersToRoute(); 
 }
 
 const clearAllFilters = () => {
@@ -471,10 +467,11 @@ const applyFiltersToRoute = () => {
   if (filters.keyword) query.search = filters.keyword
   if (filters.categoryId) query.categoryId = filters.categoryId
   if (filters.sortBy !== 'default') query.sort = filters.sortBy
+  // [NEW] Đẩy brand lên URL để giữ trạng thái khi reload
+  if (filters.brands.length > 0) query.brand = filters.brands[0] // Demo hỗ trợ 1 brand trên URL, hoặc join(',')
   router.push({ query })
 }
 
-// [NEW] Load Lordicon Script dynamically
 const loadLordicon = () => {
   if (!document.querySelector('script[src="https://cdn.lordicon.com/lordicon.js"]')) {
     const script = document.createElement('script')
@@ -485,18 +482,30 @@ const loadLordicon = () => {
 }
 
 onMounted(() => {
-  loadLordicon() // Load icon script
+  loadLordicon() 
   fetchData()
   countdownInterval.value = setInterval(updateCountdown, 1000)
   if (route.query.sort) filters.sortBy = route.query.sort
+  // [NEW] Bắt tham số brand từ URL khi mới vào trang
+  if (route.query.brand) filters.brands = [route.query.brand]
 })
 
+// [IMPORTANT] Watch Route để cập nhật bộ lọc khi click từ Mega Menu
 watch(() => route.query, (newQuery) => {
   if ((newQuery.search || '') !== filters.keyword) {
     filters.keyword = newQuery.search || ''
     searchInput.value = newQuery.search || ''
   }
   filters.categoryId = newQuery.categoryId || null
+  
+  // [NEW] Xử lý tham số brand
+  if (newQuery.brand) {
+      filters.brands = [newQuery.brand]
+  } else {
+      // Nếu không có brand trên URL, reset bộ lọc brand (trừ khi bạn muốn giữ lại)
+      // Ở đây reset để đúng logic chuyển trang từ menu
+      filters.brands = [] 
+  }
 })
 </script>
 

@@ -332,11 +332,18 @@ const loadProductById = async (id) => {
     }
 };
 
+// [UPDATED] Hàm loadReviews với Client-side filtering
 const loadReviews = async (productId) => {
     try {
-        const reviewRes = await apiService.get(`/reviews?productId=${productId}`);
+        // Gọi API, thử dùng params product_id (chuẩn) hoặc productId
+        const reviewRes = await apiService.get(`/reviews?product_id=${productId}`);
         const allReviews = Array.isArray(reviewRes.data) ? reviewRes.data : (reviewRes.data?.data || []);
-        reviews.value = allReviews.filter(r => r.status === 'approved');
+        
+        // LỌC REVIEW THEO PRODUCT ID TẠI ĐÂY
+        reviews.value = allReviews.filter(r => 
+            r.status === 'approved' && 
+            String(r.product_id) === String(productId)
+        );
     } catch (e) {
         reviews.value = [];
     }

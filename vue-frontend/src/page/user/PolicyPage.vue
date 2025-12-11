@@ -63,7 +63,8 @@ watch(() => route.hash, () => {
       </div>
     </header>
 
-    <main class="policy-container">
+    <!-- [EDIT] Thêm class 'container' để đồng bộ width với Header -->
+    <main class="policy-container container">
       <div class="policy-layout">
         
         <!-- SIDEBAR TOC -->
@@ -322,9 +323,11 @@ watch(() => route.hash, () => {
 
 /* --- LAYOUT --- */
 .policy-container {
-  max-width: 1320px; /* Rộng chuẩn */
+  /* [EDIT] Xóa max-width cứng và padding để dùng chung chuẩn với class .container */
+  /* max-width: 1320px; */
+  /* padding: 0 20px; */
+  
   margin: 50px auto;
-  padding: 0 20px;
   flex-grow: 1;
 }
 
