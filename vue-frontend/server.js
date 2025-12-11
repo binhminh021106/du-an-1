@@ -15,8 +15,7 @@ app.use(cors({
 app.use(bodyParser.json());
 
 // --- CẤU HÌNH API KEY ---
-const API_KEY = "AIzaSyBjMweCPWXHKWaJMIqujo1M6MAejnwAv20"; 
-
+const API_KEY = process.env.GEMINI_API_KEY || "AIzaSyDGAEVitlEFcIvQdKYc1hfUF7arAwD9mw8"; 
 const genAI = new GoogleGenerativeAI(API_KEY);
 
 // Hàm chọn model phù hợp nhất
@@ -37,79 +36,116 @@ async function getValidModel() {
 
 app.post('/api/chat-search', async (req, res) => {
     try {
-        // [QUAN TRỌNG] Nhận Context từ Client gửi lên
-        const { query, categories, brands } = req.body;
+        // [CẬP NHẬT] Nhận thêm 'history' từ client để hỗ trợ trò chuyện liên tục
+        const { query, categories, brands, history } = req.body;
         console.log(`👉 User: "${query}"`);
         
-        // Tạo chuỗi danh sách hợp lệ để "ép" AI chọn
+        const now = new Date();
+        const timeString = now.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+        const currentMonth = now.getMonth() + 1;
+        const currentDay = now.getDate();
+
         const validCategories = categories && categories.length > 0 ? categories.join(", ") : "Không có";
         const validBrands = brands && brands.length > 0 ? brands.join(", ") : "Không có";
 
         const SYSTEM_INSTRUCTION = `
-        Bạn là API trích xuất ý định tìm kiếm sản phẩm thương mại điện tử.
+        Bạn là ThinkBot, nhân viên bán hàng ảo thân thiện, thông minh của cửa hàng công nghệ ThinkHub.
         
-        DỮ LIỆU THỰC TẾ CỦA SHOP (CONTEXT):
+        THÔNG TIN NGỮ CẢNH:
+        - Thời gian hiện tại: ${timeString}.
         - Danh mục có sẵn: [${validCategories}]
         - Thương hiệu có sẵn: [${validBrands}]
 
-        NHIỆM VỤ:
-        Phân tích query: "${query}" -> Trả về JSON bộ lọc.
-
-        QUY TẮC MAPPING THÔNG MINH:
-        1. Mapping Danh mục (Category):
-           - User tìm "đt", "dế", "mobile", "smartphone" -> Chọn giá trị trong [Danh mục có sẵn] gần nghĩa nhất (VD: "Điện thoại di động").
-           - "lap", "máy tính" -> Chọn (VD: "Laptop & Macbook").
-           - "tai nghe", "headphone" -> Chọn (VD: "Thiết bị âm thanh").
+        NHIỆM VỤ CỦA BẠN:
+        1. **Trò chuyện & Hướng dẫn:**
+           - Luôn trả lời lịch sự, ngắn gọn, có thể dùng emoji 😊.
+           - Nếu người dùng chào hỏi, hãy chào lại và gợi ý sản phẩm HOT.
+           - Nếu hôm nay là ngày lễ (24-25/12 Noel, 1/1 Tết Dương, 14/2 Valentine...), hãy tự động thêm lời chúc phù hợp vào đầu câu trả lời.
         
-        2. Mapping Thương hiệu (Brand):
-           - "táo", "nhà táo", "ip" -> Nếu có "Apple" trong [Thương hiệu có sẵn], chọn "brand_name": "Apple".
-           - "ss", "sam" -> "Samsung".
-        
-        3. Xử lý xung đột Keyword:
-           - Nếu từ khóa đã được xác định là Brand hoặc Category -> KHÔNG đưa nó vào trường "keyword" nữa.
-           - Ví dụ: "Tìm laptop Dell" -> category_name="Laptop", brand_name="Dell", keyword=null. (Vì đã lọc đủ ý).
-           - Ví dụ: "Tìm laptop gaming" -> category_name="Laptop", keyword="gaming".
+        2. **Phân tích Tìm kiếm (Quan trọng):**
+           - Nếu người dùng có ý định tìm mua, hỏi giá, so sánh -> xác định intent: "search".
+           - Trích xuất bộ lọc (filters) thật thông minh.
 
-        OUTPUT JSON:
+        QUY TẮC XỬ LÝ DỮ LIỆU (MAPPING):
+        - **Giá tiền:** Hiểu mọi định dạng "teencode":
+          + "2 củ", "2tr", "2 triệu", "2000k" -> 2000000
+          + "200k", "200 nghìn" -> 200000
+          + "dưới 5 củ" -> max_price: 5000000
+          + "trên 10tr" -> min_price: 10000000
+        
+        - **Danh mục & Thương hiệu:**
+          + "điện thoại", "dế", "mobile" -> Chọn category gần nhất (VD: "Điện thoại di động").
+          + "lap", "máy tính xách tay" -> Chọn category (VD: "Laptop & Macbook").
+          + "táo", "nhà táo" -> brand_name: "Apple".
+
+        OUTPUT JSON FORM:
         {
-          "keyword": string | null,       // Chỉ chứa tên model cụ thể (VD: "S24 Ultra", "Pro Max")
-          "category_name": string | null, // Bắt buộc phải giống text trong [Danh mục có sẵn]
-          "brand_name": string | null,    // Bắt buộc phải giống text trong [Thương hiệu có sẵn]
-          "min_price": number | null,
-          "max_price": number | null
+          "intent": "search" | "chat",
+          "reply": string, // Câu trả lời của bạn (bao gồm cả lời chúc lễ nếu có)
+          "filters": {
+             "keyword": string | null,       // Từ khóa tên sản phẩm (VD: "gaming", "S24")
+             "category_name": string | null, // Phải khớp chính xác text trong [Danh mục có sẵn]
+             "brand_name": string | null,    // Phải khớp chính xác text trong [Thương hiệu có sẵn]
+             "min_price": number | null,
+             "max_price": number | null,
+             "sort": "price_asc" | "price_desc" | "newest" | null
+          }
         }
-        
-        Chỉ trả về JSON. Không giải thích thêm.
         `;
 
         const modelName = await getValidModel();
-        const model = genAI.getGenerativeModel({ model: modelName });
+        const model = genAI.getGenerativeModel({ 
+            model: modelName,
+            systemInstruction: SYSTEM_INSTRUCTION 
+        });
         
-        const result = await model.generateContent(SYSTEM_INSTRUCTION);
+        // [CẬP NHẬT] Xử lý lịch sử chat để AI nhớ ngữ cảnh
+        let chatHistory = [];
+        if (history && Array.isArray(history)) {
+            chatHistory = history.map(msg => ({
+                role: msg.role === 'ai' ? 'model' : 'user', // Gemini dùng 'model', Client dùng 'ai'
+                parts: [{ text: msg.text }]
+            }));
+        }
+
+        const chat = model.startChat({
+            history: chatHistory,
+            generationConfig: { responseMimeType: "application/json" }
+        });
+
+        const result = await chat.sendMessage(query);
         const response = await result.response;
         
         let text = response.text();
-        // Vệ sinh JSON
+        // Vệ sinh JSON (phòng trường hợp AI trả về markdown code block)
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        if (text.startsWith('JSON')) text = text.replace('JSON', '').trim();
         
-        let filters = {};
+        let aiResult = {};
         try {
-            filters = JSON.parse(text);
-            console.log("✅ AI Filter:", filters);
+            aiResult = JSON.parse(text);
+            console.log("✅ AI Intent:", aiResult.intent);
         } catch (e) {
-            console.error("⚠️ AI lỗi JSON, dùng fallback keyword.");
-            filters = { keyword: query };
+            console.error("⚠️ AI JSON Parse Error:", e);
+            aiResult = { 
+                intent: 'search', 
+                reply: 'Dạ mình chưa nghe rõ, nhưng mình tìm thấy các sản phẩm này có thể bạn thích:',
+                filters: { keyword: query } 
+            };
         }
 
-        res.json({ ai_data: filters });
+        res.json({ ai_data: aiResult });
 
     } catch (error) {
         console.error("❌ Lỗi Server:", error.message);
-        res.status(500).json({ error: "Lỗi xử lý AI" });
+        res.status(200).json({ // Trả về 200 để Frontend không bị crash, chỉ hiện lỗi chat
+            ai_data: { 
+                intent: 'chat', 
+                reply: "Xin lỗi, hiện tại server AI đang quá tải một chút. Bạn thử lại sau giây lát nhé! 🤯" 
+            } 
+        });
     }
 });
 
 app.listen(PORT, () => {
-    console.log(`\n>>> SERVER CONTEXT AWARE ĐANG CHẠY TẠI PORT ${PORT} <<<`);
+    console.log(`\n>>> SERVER THINKBOT (Context-Aware) ĐANG CHẠY TẠI PORT ${PORT} <<<`);
 });

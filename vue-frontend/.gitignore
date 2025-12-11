@@ -15,7 +15,7 @@ dist-ssr/
 
 # Laravel vendor
 vendor/
-
+/vendor/
 # Environment
 .env
 
@@ -31,3 +31,4 @@ public/uploads/
 *.sln
 *.sw?
 laravel-backend/public/uploads/
+/vendor/
