@@ -3,9 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// ==============================================================================
 // 1. IMPORT CONTROLLERS (CLIENT & ADMIN)
-// ==============================================================================
 
 // --- CLIENT CONTROLLERS ---
 use App\Http\Controllers\Api\Client\NewController;
@@ -26,6 +24,7 @@ use App\Http\Controllers\Api\admin\AdminAuthController;
 use App\Http\Controllers\Api\admin\AdminRoleController;
 use App\Http\Controllers\Api\admin\AdminUserController;
 use App\Http\Controllers\Api\Client\CategoryController;
+use App\Http\Controllers\Api\Client\ChatbotController; // [NEW] Import Chatbot Controller
 
 // --- ADMIN CONTROLLERS ---
 use App\Http\Controllers\Api\Client\CheckoutController;
@@ -52,9 +51,7 @@ use App\Http\Controllers\Api\admin\AdminPermissionController;
 use App\Http\Controllers\Api\admin\AdminImageProductController;
 use App\Http\Controllers\Api\Admin\AdminInventoryController; // [NEW] Import Inventory Controller
 
-// ==============================================================================
 // 2. AUTHENTICATION ROUTES (PUBLIC)
-// ==============================================================================
 
 // --- CLIENT AUTH ---
 Route::post('/register', [AuthController::class, 'register']);
@@ -75,9 +72,10 @@ Route::get('/login', function () {
     return response()->json(['message' => 'Unauthenticated.'], 401);
 })->name('login');
 
-// ==============================================================================
 // 3. PUBLIC DATA ROUTES (CLIENT - KHÔNG CẦN ĐĂNG NHẬP)
-// ==============================================================================
+
+// --- CHATBOT ---
+Route::get('/chatbot/search', [ChatbotController::class, 'search']); // [NEW] Chatbot Search Route
 
 // --- PRODUCTS ---
 Route::get('/products', [ProductController::class, 'index']);
@@ -133,9 +131,7 @@ Route::get('/roles', [RoleController::class, 'index']);
 Route::get('/brands', [BrandSlideController::class, 'index']);
 Route::get('/brand/{id}', [BrandSlideController::class, 'show']);
 
-// ==============================================================================
 // 4. CLIENT PROTECTED ROUTES (YÊU CẦU ĐĂNG NHẬP - auth:sanctum)
-// ==============================================================================
 Route::middleware(['auth:sanctum'])->group(function () {
 
     // --- USER INFO ---
@@ -169,6 +165,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/order/{id}', [OrderController::class, 'show']);
     Route::post('/orders', [CheckoutController::class, 'store']);
     Route::post('/orders/{id}/repurchase', [OrderController::class, 'repurchase']);
+    
+    // [FIX 404] Thêm route cho yêu cầu hoàn hàng
+    Route::post('/orders/{id}/return', [OrderController::class, 'requestReturn']);
+    
     Route::put('/order/{id}', [OrderController::class, 'update']);
     Route::delete('/order/{id}', [OrderController::class, 'destroy']);
 
@@ -178,9 +178,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('/review/{id}', [ReviewController::class, 'destroy']);
 });
 
-// ==============================================================================
 // 5. ADMIN PROTECTED ROUTES (YÊU CẦU QUYỀN ADMIN + PREFIX 'admin')
-// ==============================================================================
 Route::group([
     'prefix' => 'admin',
     'middleware' => ['auth:sanctum', 'admin']
@@ -225,7 +223,6 @@ Route::group([
 
     // --- ORDERS (Chuẩn RESTful của Admin) ---
     Route::apiResource('orders', AdminOrderController::class);
-    // [FIX] Di chuyển route order_items vào đây để có prefix /admin/
     Route::get('/order_items', [AdminOrderItemController::class, 'index']);
 
     // --- REVIEWS ---

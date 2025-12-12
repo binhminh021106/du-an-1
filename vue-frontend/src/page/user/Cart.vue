@@ -71,7 +71,7 @@ watch(cart, (newVal) => {
 // --- TOAST ĐẸP HƠN ---
 const Toast = Swal.mixin({
     toast: true,
-    position: 'bottom-end', // [UPDATE] Chuyển xuống góc phải dưới
+    position: 'top-end', 
     showConfirmButton: false,
     timer: 3000,
     timerProgressBar: true,

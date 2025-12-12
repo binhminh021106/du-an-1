@@ -7,7 +7,7 @@
           <i class="bi bi-info-circle-fill me-3"></i> Về chúng tôi
         </h2>
         <p class="text-muted fs-5">
-          <img class="icon-logo" src="../../../public/img/icon.png" alt="Logo" />
+          <img class="icon-logo" src="../../../src/components/img/logo.png" alt="Logo" />
           <strong class="text-primary ms-2"></strong> là thương hiệu hướng đến
           việc mang lại trải nghiệm mua sắm hiện đại, tiện lợi và phong cách cho mọi khách hàng.
         </p>
@@ -17,7 +17,7 @@
         <!-- Hình ảnh giới thiệu -->
         <div class="col-lg-6">
           <div class="about-image-wrapper">
-            <img src="../../../public/img/imgabout.jpg" alt="about us" class="img-fluid rounded shadow-lg" />
+            <img src="../../../src/components/img/LogoThinkHub.png" alt="about us" class="img-fluid rounded shadow-lg" />
           </div>
         </div>
 

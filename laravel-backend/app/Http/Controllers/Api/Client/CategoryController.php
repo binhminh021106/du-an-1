@@ -13,7 +13,11 @@ class CategoryController extends Controller
      */
     public function index()
     {
-        $categories = Category::all();
+        // Chỉ lấy danh mục có status là 'active'
+        // Sắp xếp theo order_number tăng dần
+        $categories = Category::where('status', 'active')
+            ->orderBy('order_number', 'asc')
+            ->get();
 
         return response()->json($categories);
     }
@@ -31,7 +35,10 @@ class CategoryController extends Controller
      */
     public function show(string $id)
     {
-        $category = Category::findOrFail($id);
+        // Tìm danh mục theo ID, đảm bảo nó đang active
+        $category = Category::where('id', $id)
+            ->where('status', 'active')
+            ->firstOrFail();
 
         return response()->json($category);
     }

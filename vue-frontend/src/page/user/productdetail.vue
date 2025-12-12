@@ -73,15 +73,23 @@ const getUserAvatar = (userObj) => {
 
 // --- NOTIFICATION SYSTEM ---
 const Toast = Swal.mixin({
-    toast: true,
-    position: 'top-end',
-    showConfirmButton: false,
-    timer: 3000,
-    timerProgressBar: true,
-    didOpen: (toast) => {
-        toast.addEventListener('mouseenter', Swal.stopTimer)
-        toast.addEventListener('mouseleave', Swal.resumeTimer)
-    }
+  toast: true,
+  position: 'top-end',
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  background: '#fff',
+  color: '#333',
+  iconColor: '#009981', 
+  customClass: {
+    popup: 'elegant-toast', 
+    title: 'elegant-toast-title',
+    timerProgressBar: 'elegant-toast-progress'
+  },
+  didOpen: (toast) => {
+    toast.addEventListener('mouseenter', Swal.stopTimer)
+    toast.addEventListener('mouseleave', Swal.resumeTimer)
+  }
 });
 
 const notify = (type, message, title = '') => {
@@ -328,7 +336,8 @@ const loadProductById = async (id) => {
         console.error("Lỗi:", error);
         notify('error', 'Không thể tải thông tin sản phẩm', 'Lỗi kết nối');
     } finally {
-        loading.value = false;
+        // [FIX] Thêm delay 2 giây để hiển thị Skeleton như yêu cầu
+        setTimeout(() => { loading.value = false }, 2000);
     }
 };
 
@@ -654,9 +663,77 @@ watchEffect(() => {
 
 <template>
     <div class="container py-5 product-detail-page">
-        <div v-if="loading" class="text-center py-5">
-            <div class="spinner-border text-theme" role="status"></div>
-            <p class="mt-2 text-muted">Đang tải sản phẩm...</p>
+        <!-- [NEW] SKELETON LOADING STRUCTURE -->
+        <div v-if="loading" class="skeleton-container fade-in">
+            <!-- 1. Product Info Skeleton -->
+            <div class="row g-5 mb-5">
+                <!-- Left: Image -->
+                <div class="col-lg-5">
+                    <div class="skeleton-box skeleton-main-img shimmer mb-3">
+                        <span class="skeleton-placeholder-text-large">ThinkHub</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <div v-for="n in 4" :key="n" class="skeleton-box skeleton-thumb shimmer"></div>
+                    </div>
+                </div>
+                <!-- Right: Info -->
+                <div class="col-lg-7">
+                    <div class="skeleton-box skeleton-title shimmer mb-3"></div>
+                    <div class="d-flex mb-4">
+                        <div class="skeleton-box skeleton-text w-25 shimmer me-3"></div>
+                        <div class="skeleton-box skeleton-text w-25 shimmer"></div>
+                    </div>
+                    
+                    <div class="skeleton-box skeleton-price-area shimmer mb-4"></div>
+                    
+                    <!-- Attributes -->
+                    <div class="mb-4">
+                        <div class="skeleton-box skeleton-text w-25 shimmer mb-2"></div>
+                        <div class="d-flex gap-2 mb-3">
+                            <div v-for="n in 3" :key="n" class="skeleton-box skeleton-chip shimmer"></div>
+                        </div>
+                        <div class="skeleton-box skeleton-text w-25 shimmer mb-2"></div>
+                        <div class="d-flex gap-2">
+                            <div v-for="n in 2" :key="n" class="skeleton-box skeleton-chip shimmer"></div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="d-flex gap-3 mt-5">
+                        <div class="skeleton-box skeleton-action-btn flex-grow-1 shimmer"></div>
+                        <div class="skeleton-box skeleton-icon-btn shimmer"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Description Skeleton -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="bg-white rounded p-4 border border-light">
+                        <div class="skeleton-box skeleton-title w-25 shimmer mb-4"></div>
+                        <div v-for="n in 5" :key="n" class="skeleton-box skeleton-text w-100 shimmer mb-2"></div>
+                        <div class="skeleton-box skeleton-text w-75 shimmer"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Recommendations Skeleton -->
+            <div class="row mt-5">
+                <div class="col-12">
+                    <div class="bg-white rounded p-4 border border-light">
+                        <div class="d-flex justify-content-between mb-4">
+                            <div class="skeleton-box skeleton-text w-25 shimmer"></div>
+                            <div class="d-flex gap-2">
+                                <div class="skeleton-box skeleton-chip shimmer" style="width: 100px;"></div>
+                                <div class="skeleton-box skeleton-chip shimmer" style="width: 100px;"></div>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-3 overflow-hidden">
+                            <div v-for="n in 5" :key="n" class="skeleton-box skeleton-card shimmer"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- 1. PRODUCT INFO SECTION -->
@@ -738,6 +815,7 @@ watchEffect(() => {
                             </div>
                         </div>
                     </div>
+                    
 
                     <!-- QUANTITY & ACTIONS -->
                     <div class="action-wrapper border-top pt-4">
@@ -1112,9 +1190,9 @@ watchEffect(() => {
                                                             <span v-if="c.user?.role === 'admin'"
                                                                 class="badge bg-danger ms-1"
                                                                 style="font-size:0.6rem">QTV</span>
+                                                            <span class="badge bg-light text-dark border mt-1">Khách
+                                                                hàng</span>
                                                         </h6>
-                                                        <span class="badge bg-light text-dark border mt-1">Khách
-                                                            hàng</span>
                                                     </div>
                                                 </div>
                                                 <div class="d-flex align-items-center gap-2">
@@ -1696,5 +1774,113 @@ watchEffect(() => {
     pointer-events: none;
     background-color: #fff;
     border-color: #dee2e6;
+}
+
+/* ------------------------------------------- */
+/* [NEW] SKELETON LOADING STYLES               */
+/* ------------------------------------------- */
+
+.skeleton-container {
+    padding-bottom: 50px;
+}
+
+/* Hiệu ứng Shimmer (Ánh sáng chạy qua) */
+.shimmer {
+  background: #f6f7f8;
+  background-image: linear-gradient(
+    to right,
+    #f6f7f8 0%,
+    #edeef1 20%,
+    #f6f7f8 40%,
+    #f6f7f8 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 800px 100%; 
+  animation: placeholderShimmer 1.5s linear infinite forwards;
+}
+
+@keyframes placeholderShimmer {
+  0% {
+    background-position: -468px 0;
+  }
+  100% {
+    background-position: 468px 0;
+  }
+}
+
+.skeleton-box {
+    background-color: #eee;
+    border-radius: 8px;
+}
+
+/* 1. Main Image */
+.skeleton-main-img {
+    width: 100%;
+    height: 500px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 2. Thumbnails */
+.skeleton-thumb {
+    width: 70px;
+    height: 70px;
+}
+
+/* 3. Info Right */
+.skeleton-title {
+    height: 32px;
+    width: 70%;
+}
+
+.skeleton-text {
+    height: 16px;
+    border-radius: 4px;
+}
+
+.skeleton-price-area {
+    height: 60px;
+    width: 100%;
+}
+
+.skeleton-chip {
+    width: 80px;
+    height: 35px;
+    border-radius: 8px;
+}
+
+.skeleton-action-btn {
+    height: 50px;
+    border-radius: 8px;
+}
+
+.skeleton-icon-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
+}
+
+/* 4. Placeholder Text */
+.skeleton-placeholder-text-large {
+  font-size: 3rem;
+  font-weight: 900;
+  color: #e5e7eb;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  opacity: 0.8;
+}
+
+/* 5. Recommendation Card Skeleton */
+.skeleton-card {
+    min-width: 240px;
+    height: 350px;
+    border-radius: 12px;
+}
+
+@media (max-width: 768px) {
+    .skeleton-main-img {
+        height: 350px;
+    }
 }
 </style>

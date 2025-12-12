@@ -8,7 +8,8 @@ import apiService from "../../apiService";
 const fileInput = ref(null);
 const router = useRouter();
 const user = ref(null);
-const isLoading = ref(false);
+// [CHANGED] Mặc định là true để Skeleton hiện ngay lập tức khi load trang
+const isLoading = ref(true);
 const selectedFile = ref(null); // Biến lưu file ảnh thực tế để upload
 
 // [FIX]: Định nghĩa URL gốc của Server (Backend)
@@ -107,7 +108,8 @@ const fetchUserData = async () => {
       Swal.fire("Phiên đăng nhập hết hạn", "Vui lòng đăng nhập lại", "warning");
     }
   } finally {
-    isLoading.value = false;
+    // [FIX] Thêm delay 2 giây để hiển thị Skeleton như yêu cầu
+    setTimeout(() => { isLoading.value = false }, 2000);
   }
 };
 
@@ -332,8 +334,69 @@ const saveProfile = async () => {
 
 <template>
   <div class="profile-page">
-    <div v-if="isLoading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i> Đang tải dữ liệu...
+    
+    <!-- [NEW] SKELETON LOADING CONTAINER -->
+    <div v-if="isLoading" class="container py-4 fade-in">
+        <div class="row g-4">
+            <!-- Left Column Skeleton -->
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body text-center p-4">
+                        <div class="skeleton-box skeleton-avatar shimmer mx-auto mb-5">
+                             <!-- [NEW] Text placeholder ThinkHub -->
+                             <span class="skeleton-placeholder-text">ThinkHub</span>
+                        </div>
+                        <div class="skeleton-box skeleton-text w-50 mx-auto mb-2 shimmer"></div>
+                        <div class="skeleton-box skeleton-text w-75 mx-auto mb-4 shimmer"></div>
+                        <hr class="my-4 opacity-10">
+                        <div class="text-start">
+                            <div class="skeleton-box skeleton-text w-25 mb-2 shimmer"></div>
+                            <div class="skeleton-box skeleton-input mb-3 shimmer"></div>
+                            <div class="skeleton-box skeleton-text w-25 mb-2 shimmer"></div>
+                            <div class="skeleton-box skeleton-input mb-3 shimmer"></div>
+                            <div class="row g-2 mb-4">
+                                <div class="col-6">
+                                    <div class="skeleton-box skeleton-text w-50 mb-2 shimmer"></div>
+                                    <div class="skeleton-box skeleton-input shimmer"></div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="skeleton-box skeleton-text w-50 mb-2 shimmer"></div>
+                                    <div class="skeleton-box skeleton-input shimmer"></div>
+                                </div>
+                            </div>
+                            <div class="skeleton-box skeleton-button shimmer"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column Skeleton -->
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                        <div class="skeleton-box skeleton-title w-25 shimmer"></div>
+                    </div>
+                    <div class="ms-4 mt-2 mb-2">
+                         <div class="skeleton-box skeleton-button w-25 shimmer" style="height: 30px;"></div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div v-for="n in 3" :key="n" class="p-4 border-bottom">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="w-75">
+                                    <div class="skeleton-box skeleton-text w-50 mb-2 shimmer"></div>
+                                    <div class="skeleton-box skeleton-text w-75 mb-1 shimmer"></div>
+                                    <div class="skeleton-box skeleton-text w-50 shimmer"></div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <div class="skeleton-box skeleton-icon-btn shimmer"></div>
+                                    <div class="skeleton-box skeleton-icon-btn shimmer"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="container py-4" v-if="user && !isLoading">
@@ -345,10 +408,24 @@ const saveProfile = async () => {
           <div class="card shadow-sm border-0 h-100">
             <div class="card-body text-center p-4">
               <!-- Avatar Section -->
-              <div class="avatar-wrapper mb-3">
-                <div class="avatar" @click="triggerImageUpload">
-                  <img :src="editUser.avatar" alt="User Avatar" class="avatar-img"
-                    @error="editUser.avatar = 'https://via.placeholder.com/150'" />
+              <!-- [FIX] Tăng margin-bottom từ mb-3 lên mb-5 để đẩy tên xuống xa hơn, tránh bị đè -->
+              <div class="avatar-wrapper mb-5">
+                <!-- Thêm style inline để cố định kích thước avatar -->
+                <div class="avatar" @click="triggerImageUpload"
+                  style="position: relative; width: 150px; height: 150px; margin: 0 auto; cursor: pointer;">
+
+                  <!-- TRƯỜNG HỢP 1: Có ảnh avatar -->
+                  <img v-if="editUser.avatar" :src="editUser.avatar" alt="User Avatar" class="avatar-img"
+                    style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; border: 4px solid #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.1);"
+                    @error="editUser.avatar = null" />
+
+                  <!-- TRƯỜNG HỢP 2: Không có ảnh -> Hiện Icon style "Xịn" -->
+                  <div v-else
+                    style="width: 100%; height: 100%; background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 4px solid #fff; box-shadow: 0 4px 15px rgba(0, 153, 129, 0.15);">
+                    <i class="fas fa-user" style="font-size: 4.5rem; color: #009981;"></i>
+                  </div>
+
+                  <!-- Lớp phủ icon Camera khi hover -->
                   <div class="avatar-overlay">
                     <i class="fas fa-camera text-white fs-4"></i>
                   </div>
@@ -356,7 +433,8 @@ const saveProfile = async () => {
                 <input type="file" ref="fileInput" accept="image/*" @change="handleImageChange" style="display: none" />
               </div>
 
-              <h5 class="fw-bold mb-1">{{ editUser.name }}</h5>
+              <!-- [FIX] Thêm mt-3 (margin-top) để đảm bảo khoảng cách an toàn với avatar -->
+              <h5 class="fw-bold mb-1 mt-3">{{ editUser.name }}</h5>
               <p class="text-muted small mb-4">{{ editUser.email }}</p>
 
               <hr class="my-4 opacity-10">
@@ -405,16 +483,17 @@ const saveProfile = async () => {
             <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
               <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-map-marker-alt text-primary-custom me-2"></i> Sổ địa
                 chỉ</h5>
-              <button type="button" class="btn btn-outline-primary-custom btn-sm" @click="openAddModal">
-                <i class="fas fa-plus me-1"></i> Thêm mới
-              </button>
             </div>
-
+            <button type="button" class="btn col-lg-4 btn-primary-custom btn-sm ms-4 mt-2" @click="openAddModal">
+              <i class="fas fa-plus me-1"></i> Thêm mới
+            </button>
             <div class="card-body p-0">
               <div v-if="!editUser.addresses || editUser.addresses.length === 0" class="text-center py-5 text-muted">
-                <img src="https://cdni.iconscout.com/illustration/premium/thumb/empty-address-2977473-2476566.png"
-                  alt="Empty" style="width: 120px; opacity: 0.6">
-                <p class="mt-3">Chưa có địa chỉ nào được lưu.</p>
+                <div
+                  style="display: inline-flex; justify-content: center; align-items: center; width: 100px; height: 100px; background-color: #f3f4f6; border-radius: 50%; margin-bottom: 15px;">
+                  <i class="fas fa-map-marker-alt" style="font-size: 3rem; color: #9ca3af;"></i>
+                </div>
+                <p class="mt-3" style="font-weight: 500; color: #6b7280;">Chưa có địa chỉ nào được lưu.</p>
               </div>
 
               <div v-else class="list-group list-group-flush">
@@ -449,7 +528,6 @@ const saveProfile = async () => {
             </div>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -739,5 +817,100 @@ const saveProfile = async () => {
   .profile-page {
     padding: 20px 0;
   }
+}
+
+/* ------------------------------------------- */
+/* [NEW] SKELETON LOADING STYLES               */
+/* ------------------------------------------- */
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Hiệu ứng Shimmer (Ánh sáng chạy qua) */
+.shimmer {
+  background: #f6f7f8;
+  background-image: linear-gradient(
+    to right,
+    #f6f7f8 0%,
+    #edeef1 20%,
+    #f6f7f8 40%,
+    #f6f7f8 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 800px 100%; 
+  animation: placeholderShimmer 1.5s linear infinite forwards;
+}
+
+@keyframes placeholderShimmer {
+  0% {
+    background-position: -468px 0;
+  }
+  100% {
+    background-position: 468px 0;
+  }
+}
+
+.skeleton-box {
+    background-color: #eee;
+    border-radius: 8px;
+}
+
+/* SKELETON COMPONENTS */
+.skeleton-avatar {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    /* [NEW] Flexbox để căn giữa chữ ThinkHub */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* [NEW] Style cho chữ placeholder */
+.skeleton-placeholder-text {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #e5e7eb; /* Màu xám nhạt */
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.8;
+}
+
+.skeleton-text {
+    height: 16px;
+    border-radius: 4px;
+}
+
+.skeleton-title {
+    height: 24px;
+    border-radius: 4px;
+}
+
+.skeleton-input {
+    height: 38px;
+    border-radius: 4px;
+    width: 100%;
+}
+
+.skeleton-button {
+    height: 40px;
+    border-radius: 4px;
+    width: 100%;
+}
+
+.skeleton-icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
 }
 </style>

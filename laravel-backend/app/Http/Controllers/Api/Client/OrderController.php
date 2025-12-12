@@ -19,21 +19,49 @@ class OrderController extends Controller
         $userId = $request->user()->id;
 
         $orders = Order::where('user_id', $userId)
-            // [FIX] Load thêm quan hệ 'attributeValues.attribute' để lấy tên biến thể (Màu, Size...)
-            // Cấu trúc: Order -> OrderDetails -> Variant -> AttributeValues -> Attribute
+            // Load thêm quan hệ để lấy tên biến thể và ĐÁNH GIÁ của user
             ->with([
                 'orderDetails.variant.product', 
-                'orderDetails.variant.attributeValues.attribute'
+                'orderDetails.variant.attributeValues.attribute',
+                // [FIX] Load Review: Chỉ lấy review MỚI NHẤT của user (orderBy id desc)
+                // Điều này giúp tránh việc lấy phải các bản ghi cũ bị rỗng/lỗi trong quá khứ
+                'orderDetails.variant.product.reviews' => function($query) use ($userId) {
+                    $query->where('user_id', $userId)->orderBy('id', 'desc');
+                }
             ]) 
             ->orderBy('created_at', 'desc')
             ->get();
 
         $formattedOrders = $orders->map(function ($order) {
-            $data = $order->toArray();
-            if (isset($data['order_details'])) {
-                $data['items'] = $data['order_details'];
+            $orderData = $order->toArray();
+            
+            // Map lại items để đưa review ra ngoài cho frontend dễ lấy
+            $items = $order->orderDetails->map(function ($detail) {
+                $itemData = $detail->toArray();
+                
+                // Lấy review từ quan hệ đã eager load ở trên
+                // orderDetail -> variant -> product -> reviews (collection)
+                $product = $detail->variant->product ?? null;
+                
+                // Lấy review đầu tiên (đã được sort desc ở query nên đây là review mới nhất)
+                $userReview = ($product && $product->reviews && $product->reviews->isNotEmpty()) 
+                    ? $product->reviews->first() 
+                    : null;
+
+                // Gán vào item để Vuejs sử dụng: item.review
+                $itemData['review'] = $userReview;
+                
+                return $itemData;
+            });
+
+            $orderData['items'] = $items;
+            
+            // Xóa key cũ để gọn data (tuỳ chọn)
+            if (isset($orderData['order_details'])) {
+                unset($orderData['order_details']);
             }
-            return $data;
+            
+            return $orderData;
         });
 
         return response()->json(['data' => $formattedOrders]);
@@ -49,26 +77,48 @@ class OrderController extends Controller
      */
     public function show(string $id)
     {
+        $userId = Auth::id();
+
         $order = Order::with([
                 'orderDetails.variant.product',
-                'orderDetails.variant.attributeValues.attribute' // [FIX] Load sâu để hiển thị chi tiết trong Popup
+                'orderDetails.variant.attributeValues.attribute',
+                // [FIX] Load Review mới nhất tương tự như index
+                'orderDetails.variant.product.reviews' => function($query) use ($userId) {
+                    $query->where('user_id', $userId)->orderBy('id', 'desc');
+                }
             ])
-            ->where('user_id', Auth::id())
+            ->where('user_id', $userId)
             ->findOrFail($id);
 
-        $data = $order->toArray();
+        $orderData = $order->toArray();
         
-        if (isset($data['order_details'])) {
-            $data['items'] = $data['order_details'];
+        // Logic map items tương tự như index để lấy review
+        $items = $order->orderDetails->map(function ($detail) {
+            $itemData = $detail->toArray();
+            
+            $product = $detail->variant->product ?? null;
+            $userReview = ($product && $product->reviews && $product->reviews->isNotEmpty()) 
+                ? $product->reviews->first() 
+                : null;
+                
+            $itemData['review'] = $userReview;
+            return $itemData;
+        });
+
+        $orderData['items'] = $items;
+        
+        if (isset($orderData['order_details'])) {
+            unset($orderData['order_details']);
         }
 
-        return response()->json(['data' => $data]);
+        return response()->json(['data' => $orderData]);
     }
 
     public function update(Request $request, string $id)
     {
         $order = Order::where('user_id', Auth::id())->findOrFail($id);
         
+        // Chỉ cho phép hủy khi đang pending
         if ($request->status === 'cancelled' && $order->status === 'pending') {
             $order->update(['status' => 'cancelled']);
             return response()->json(['message' => 'Đã hủy đơn hàng thành công', 'data' => $order]);
@@ -125,5 +175,35 @@ class OrderController extends Controller
         }
 
         return response()->json(['message' => 'Đã thêm sản phẩm vào giỏ hàng thành công']);
+    }
+
+    /**
+     * [NEW] Tính năng Yêu cầu hoàn hàng (Return Order)
+     * Chuyển trạng thái đơn hàng sang 'returning' để Admin duyệt
+     */
+    public function requestReturn(Request $request, string $id)
+    {
+        $order = Order::where('user_id', Auth::id())->findOrFail($id);
+
+        // Kiểm tra trạng thái hợp lệ để được hoàn hàng.
+        // Dựa trên yêu cầu của bạn, cho phép hoàn hàng khi status là 'completed'.
+        // Thêm 'delivered' vào nếu hệ thống của bạn cho phép hoàn ngay khi vừa giao xong.
+        $allowedStatuses = ['completed', 'delivered'];
+
+        if (in_array($order->status, $allowedStatuses)) {
+            // Chuyển sang trạng thái 'returning' (Đang trả hàng/Chờ duyệt hoàn hàng)
+            // Trạng thái này khớp với filter returnsList bên Admin: ['returning', 'returned']
+            $order->status = 'returning';
+            $order->save();
+
+            return response()->json([
+                'message' => 'Đã gửi yêu cầu hoàn hàng. Vui lòng chờ Admin xử lý.',
+                'data' => $order
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Đơn hàng không đủ điều kiện để hoàn hàng (Chỉ áp dụng cho đơn đã hoàn thành).'
+        ], 400);
     }
 }

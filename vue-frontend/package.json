@@ -33,6 +33,7 @@
     "express": "^5.2.1",
     "html2pdf.js": "^0.12.1",
     "jsvectormap": "^1.7.0",
+    "mysql2": "^3.15.3",
     "overlayscrollbars": "^2.12.0",
     "sweetalert2": "^11.26.3",
     "swiper": "^12.0.3",
