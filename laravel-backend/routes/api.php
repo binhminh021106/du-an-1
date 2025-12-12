@@ -82,6 +82,7 @@ Route::get('/products', [ProductController::class, 'index']);
 Route::get('/product/{id}', [ProductController::class, 'show']);
 
 Route::post('/contact-submit', [AdminSupportEmailController::class, 'store']);
+Route::post('/admin/support-emails/{id}/reply', [AdminSupportEmailController::class, 'reply']);
 
 Route::post('/forgot-password', [NewPasswordController::class, 'store'])
     ->name('password.email');

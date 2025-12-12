@@ -1,22 +1,39 @@
 <script setup>
 import { ref, reactive } from 'vue';
 import Swal from 'sweetalert2';
-// [LƯU Ý QUAN TRỌNG] M kiểm tra lại đường dẫn import này cho đúng với vị trí file apiService.js trong project của m nhé.
-// Ví dụ: nếu Contact.vue nằm sâu 3 cấp thư mục thì dùng ../../../apiService
+// Kiểm tra lại đường dẫn import apiService cho đúng với project của bạn
 import apiService from '../../apiService'; 
 
 // 1. Khởi tạo biến lưu dữ liệu form
 const contactForm = reactive({
   name: '',
   email: '',
-  content: ''
+  content: '',
+  attachment: null // [MỚI] Biến lưu file ảnh
 });
 
-const isSubmitting = ref(false); // Trạng thái loading của nút gửi
+// [MỚI] Biến để hiển thị tên file đã chọn cho user thấy
+const fileName = ref('');
+
+const isSubmitting = ref(false);
+
+// [MỚI] Hàm xử lý khi user chọn file
+const handleFileUpload = (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    // Validate cơ bản phía client
+    if (file.size > 5 * 1024 * 1024) { // > 5MB
+      Swal.fire('File quá lớn', 'Vui lòng chọn ảnh dưới 5MB', 'warning');
+      event.target.value = ''; // Reset input
+      return;
+    }
+    contactForm.attachment = file;
+    fileName.value = file.name;
+  }
+};
 
 // 2. Hàm xử lý khi bấm Gửi
 const submitContact = async () => {
-  // Validate cơ bản
   if (!contactForm.name || !contactForm.email || !contactForm.content) {
     Swal.fire({
       icon: 'warning',
@@ -29,15 +46,24 @@ const submitContact = async () => {
   isSubmitting.value = true;
 
   try {
-    // Gọi API (apiService tự lo phần base URL)
-    const response = await apiService.post('/contact-submit', {
-      name: contactForm.name,
-      email: contactForm.email,
-      content: contactForm.content
+    // [QUAN TRỌNG] Chuyển sang dùng FormData để gửi file
+    const formData = new FormData();
+    formData.append('name', contactForm.name);
+    formData.append('email', contactForm.email);
+    formData.append('content', contactForm.content);
+    
+    if (contactForm.attachment) {
+      formData.append('attachment', contactForm.attachment);
+    }
+
+    // Gọi API với config multipart/form-data (thường axios tự nhận diện FormData)
+    const response = await apiService.post('/contact-submit', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
     });
 
     if (response.data.success) {
-      // Thông báo thành công
       Swal.fire({
         icon: 'success',
         title: 'Thành công!',
@@ -45,10 +71,14 @@ const submitContact = async () => {
         confirmButtonColor: '#009981'
       });
 
-      // Reset form về rỗng
+      // Reset form
       contactForm.name = '';
       contactForm.email = '';
       contactForm.content = '';
+      contactForm.attachment = null;
+      fileName.value = '';
+      // Reset input file (cần dùng DOM hoặc ref để reset sạch hơn nếu muốn)
+      document.getElementById('fileInput').value = '';
     }
 
   } catch (error) {
@@ -73,21 +103,18 @@ const submitContact = async () => {
         </h2>
         <p class="text-muted fs-5">
           Chúng tôi luôn sẵn sàng hỗ trợ và lắng nghe ý kiến từ bạn.
-          Hãy để lại lời nhắn, đội ngũ của <img class="icon-logo" src="../../../public/img/icon.png" alt=""> sẽ phản hồi
-          trong thời gian sớm nhất.
+          <br>Đặc biệt hỗ trợ nhanh các vấn đề hoàn hàng, bảo hành.
         </p>
       </div>
 
       <div class="row g-4 align-items-stretch">
         <div class="col-lg-6">
           <div class="card border-0 shadow-lg p-4 h-100 contact-form">
-            <h5 class="fw-bold text-dark mb-4">Gửi lời nhắn cho chúng tôi</h5>
+            <h5 class="fw-bold text-dark mb-4">Gửi yêu cầu hỗ trợ</h5>
             
-            <!-- Thêm sự kiện submit -->
             <form @submit.prevent="submitContact">
               <div class="mb-3">
                 <label class="form-label">Họ và tên</label>
-                <!-- Thêm v-model -->
                 <input 
                   type="text" 
                   class="form-control form-control-lg" 
@@ -97,7 +124,6 @@ const submitContact = async () => {
               </div>
               <div class="mb-3">
                 <label class="form-label">Email</label>
-                <!-- Thêm v-model -->
                 <input 
                   type="email" 
                   class="form-control form-control-lg" 
@@ -107,19 +133,36 @@ const submitContact = async () => {
               </div>
               <div class="mb-3">
                 <label class="form-label">Nội dung</label>
-                <!-- Thêm v-model -->
                 <textarea 
                   class="form-control form-control-lg" 
-                  rows="5"
-                  placeholder="Nhập nội dung liên hệ..."
+                  rows="4"
+                  placeholder="Bạn cần hổ trợ gì ?"
                   v-model="contactForm.content"
                 ></textarea>
               </div>
+
+              <!-- [MỚI] Input Upload Ảnh -->
+              <div class="mb-4">
+                <label class="form-label">Hình ảnh đính kèm (nếu có)</label>
+                <div class="input-group">
+                  <input 
+                    type="file" 
+                    class="form-control" 
+                    id="fileInput"
+                    accept="image/*"
+                    @change="handleFileUpload"
+                  >
+                  <label class="input-group-text" for="fileInput"><i class="bi bi-upload"></i></label>
+                </div>
+                <div class="form-text text-muted" v-if="!fileName">Chấp nhận ảnh jpg, png (Max 5MB)</div>
+                <div class="form-text text-success fw-bold" v-if="fileName">
+                  <i class="bi bi-check-circle-fill"></i> Đã chọn: {{ fileName }}
+                </div>
+              </div>
               
-              <!-- Thêm loading state cho nút -->
               <button class="btn btn-primary btn-lg w-100 fw-semibold" :disabled="isSubmitting">
                 <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2"></span>
-                <span v-if="!isSubmitting">Gửi liên hệ <i class="bi bi-envelope-paper-fill ms-2"></i></span>
+                <span v-if="!isSubmitting">Gửi yêu cầu <i class="bi bi-send-fill ms-2"></i></span>
                 <span v-else>Đang gửi...</span>
               </button>
             </form>
@@ -127,6 +170,7 @@ const submitContact = async () => {
           </div>
         </div>
 
+        <!-- Phần thông tin bên phải giữ nguyên -->
         <div class="col-lg-6">
           <div class="card border-0 shadow-lg p-4 h-100 contact-info text-white position-relative overflow-hidden">
             <div class="overlay"></div>
@@ -164,76 +208,24 @@ const submitContact = async () => {
 </template>
 
 <style scoped>
-.icon-logo {
-  width: 150px;
-}
+/* Giữ nguyên style cũ của bạn */
+.icon-logo { width: 150px; }
+.form-control:focus { border-color: rgb(0, 153, 129); box-shadow: 0 0 0 0.25rem rgba(0, 153, 129, 0.25); }
+.contact-page { background-color: #f0f8f7; }
+.text-primary { color: rgb(0, 72, 61) !important; }
+.contact-form { border-radius: 1rem; background: #fff; transition: all 0.3s ease; }
+.contact-form:hover { transform: translateY(-4px); box-shadow: 0 0.5rem 1rem rgba(0, 72, 61, 0.15) !important; }
+.contact-info { border-radius: 1rem; background: linear-gradient(135deg, rgb(0, 153, 129), rgb(0, 72, 61)); position: relative; z-index: 1; }
+.contact-info .overlay { content: ""; position: absolute; inset: 0; background: url("https://www.transparenttextures.com/patterns/arabesque.png"); opacity: 0.15; z-index: 0; }
+.contact-info * { position: relative; z-index: 2; }
+.contact-info i { font-size: 1.2rem; color: #ffc107; }
+button.btn-primary { background-color: rgb(0, 153, 129); border-color: rgb(0, 153, 129); transition: all 0.3s; }
+button.btn-primary:hover { background-color: rgb(0, 72, 61); border-color: rgb(0, 72, 61); }
 
-.brand-name {
-  font-weight: bold;
-  color: rgb(0, 72, 61);
-  display: inline-flex;
-  align-items: center;
-}
-
-.form-control:focus {
-  border-color: rgb(0, 153, 129);
-  box-shadow: 0 0 0 0.25rem rgba(0, 153, 129, 0.25);
-}
-
-.contact-page {
-  background-color: #f0f8f7;
-}
-
-.text-primary {
-  color: rgb(0, 72, 61) !important;
-}
-
-
-.contact-form {
-  border-radius: 1rem;
-  background: #fff;
-  transition: all 0.3s ease;
-}
-
-.contact-form:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 0.5rem 1rem rgba(0, 72, 61, 0.15) !important;
-}
-
-.contact-info {
-  border-radius: 1rem;
-  background: linear-gradient(135deg, rgb(0, 153, 129), rgb(0, 72, 61));
-  position: relative;
-  z-index: 1;
-}
-
-.contact-info .overlay {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: url("https://www.transparenttextures.com/patterns/arabesque.png");
-  opacity: 0.15;
-  z-index: 0;
-}
-
-.contact-info * {
-  position: relative;
-  z-index: 2;
-}
-
-.contact-info i {
-  font-size: 1.2rem;
-  color: #ffc107;
-}
-
-button.btn-primary {
-  background-color: rgb(0, 153, 129);
-  border-color: rgb(0, 153, 129);
-  transition: all 0.3s;
-}
-
-button.btn-primary:hover {
-  background-color: rgb(0, 72, 61);
-  border-color: rgb(0, 72, 61);
+/* Style input file */
+.input-group-text {
+    background-color: #e9ecef;
+    color: #495057;
+    border: 1px solid #ced4da;
 }
 </style>

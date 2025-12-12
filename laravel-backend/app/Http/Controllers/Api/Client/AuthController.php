@@ -48,7 +48,7 @@ class AuthController extends Controller
 
         if ($validator->fails()) return response()->json($validator->errors(), 422);
 
-        // Xác định login bằng Email hay SĐT
+        // Check login bằng Email hay SĐT
         $field = filter_var($request->login_id, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
 
         if (!Auth::attempt([$field => $request->login_id, 'password' => $request->password])) {
@@ -90,12 +90,12 @@ class AuthController extends Controller
         return $this->handleSocialCallback('facebook');
     }
 
-    // Hàm xử lý chung cho Social Login
+    // Xử lý chung
     protected function handleSocialCallback($driver)
     {
         $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
 
-        // 1. Chặn lỗi nếu user bấm Hủy
+        // 1. Check lỗi/hủy thao tác
         if (request()->has('error') || request()->missing('code')) {
             return redirect($frontendUrl . '/login?error=social_cancelled');
         }
@@ -103,33 +103,30 @@ class AuthController extends Controller
         try {
             $socialUser = Socialite::driver($driver)->stateless()->user();
 
-            // 2. Tìm user theo Social ID hoặc Email
+            // 2. Tìm user (theo ID MXH hoặc Email)
             $user = User::where($driver . '_id', $socialUser->id)
                 ->orWhere('email', $socialUser->email)
                 ->first();
 
-            // 3. Nếu chưa có thì tạo mới, có rồi thì update ID
+            // 3. Tạo mới hoặc Update ID
             if (!$user) {
                 $user = User::create([
                     'fullName'    => $socialUser->name,
                     'email'       => $socialUser->email ?? $socialUser->id . '@facebook.local',
-                    $driver . '_id' => $socialUser->id, // Tự động điền google_id hoặc facebook_id
+                    $driver . '_id' => $socialUser->id,
                     'status'      => 'active',
                     'avatar_url'  => $socialUser->avatar,
                     'sex'         => 'other',
                 ]);
-            } else {
-                // Update ID mạng xã hội nếu chưa có
-                if (!$user->{$driver . '_id'}) {
-                    $user->update([$driver . '_id' => $socialUser->id]);
-                }
+            } elseif (!$user->{$driver . '_id'}) {
+                $user->update([$driver . '_id' => $socialUser->id]);
             }
 
             if ($user->status !== 'active') return redirect($frontendUrl . '/login?error=account_locked');
 
-            // 4. Tạo token và chuyển hướng về Frontend
+            // 4. Tạo token & Redirect về Frontend (kèm origin)
             $token = $user->createToken('client-token')->plainTextToken;
-            return redirect($frontendUrl . '/google-callback?token=' . $token);
+            return redirect($frontendUrl . '/social-callback?token=' . $token . '&origin=' . $driver);
         } catch (\Exception $e) {
             return redirect($frontendUrl . '/login?error=login_failed&message=' . urlencode($e->getMessage()));
         }
