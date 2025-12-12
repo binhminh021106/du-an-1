@@ -25,7 +25,8 @@ class SupportEmail extends Model
         'status',          // 'inbox', 'sent', 'trash'
         'is_read',
         'has_attachment',
-        'to_email'         // Nếu bạn gửi đi thì lưu email người nhận vào đây
+        'attachment_path', // [MỚI] Thêm cột này
+        'to_email'         
     ];
 
     protected $casts = [

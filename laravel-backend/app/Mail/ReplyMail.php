@@ -12,17 +12,19 @@ class ReplyMail extends Mailable
 
     public $content;
     public $subjectText;
+    public $customerName; // [MỚI] Biến lưu tên khách
 
-    public function __construct($subject, $content)
+    // [CẬP NHẬT] Constructor nhận thêm $customerName
+    public function __construct($subject, $content, $customerName = 'Quý khách')
     {
         $this->subjectText = $subject;
         $this->content = $content;
+        $this->customerName = $customerName;
     }
 
     public function build()
     {
-        // SỬA LẠI: Đổi thành 'emails.reply' để khớp với folder 'resources/views/emails' của m
         return $this->subject($this->subjectText)
-                    ->markdown('emails.reply'); 
+                    ->markdown('emails.reply'); // Trỏ đến file view ở Bước 3
     }
 }
