@@ -62,9 +62,8 @@ const isNewProduct = (createdAt, isNewFlag) => {
   return diffDays <= 30;
 }
 
-// [NEW] Hàm helper lấy rating an toàn cho mọi loại object sản phẩm
+// Hàm helper lấy rating an toàn
 const getRating = (product) => {
-  // Ưu tiên rating_average (từ API gốc), fallback sang rating (nếu đã qua xử lý), mặc định là 5
   return Number(product.rating_average || product.rating || 5);
 }
 
@@ -72,13 +71,11 @@ const getRating = (product) => {
 const allProducts = ref([])
 const categories = ref([])
 const hotSaleProducts = ref([])
-// [CHANGED] Mặc định là true để Skeleton hiện ngay lập tức khi load trang
 const loading = ref(true) 
 
-// [NEW] Ref cho container cuộn ngang
 const hotSaleScrollRef = ref(null)
 
-// [NEW] Pagination State
+// Pagination State
 const currentPage = ref(1)
 const itemsPerPage = 24
 
@@ -87,7 +84,7 @@ const filters = reactive({
   categoryId: route.query.categoryId || null,
   priceMin: 0,
   priceMax: 50000000,
-  brands: [], // Mảng thương hiệu được chọn
+  brands: [], 
   minRating: 0,
   inStockOnly: false,
   newArrivalsOnly: false,
@@ -107,31 +104,27 @@ saleEndTime.setDate(saleEndTime.getDate() + 1)
 const countdownDisplay = ref('00 : 00 : 00 : 00')
 const countdownInterval = ref(null)
 
-// --- CORE: LOGIC "TRẢI PHẲNG" BIẾN THỂ (FLATTEN VARIANTS) ---
+// --- CORE: LOGIC "TRẢI PHẲNG" ---
 const flattenedShopItems = computed(() => {
   if (!allProducts.value) return []
 
   let items = []
 
   allProducts.value.forEach(product => {
-    // [FIX QUAN TRỌNG] Chỉ xử lý sản phẩm ACTIVE
     if (product.status !== 'active') return;
 
-    // Xử lý logic tên thương hiệu an toàn
     let brandName = 'No Brand';
     if (product.brand && typeof product.brand === 'object') {
       brandName = product.brand.name || 'No Brand';
     } else if (product.brand) {
-      brandName = product.brand; // Trường hợp cũ nếu brand là string
+      brandName = product.brand;
     } else if (product.brand_name) {
       brandName = product.brand_name;
     }
 
-    // Nếu sản phẩm có biến thể
     if (product.variants && product.variants.length > 0) {
       product.variants.forEach((variant, index) => {
         let variantSuffix = ''
-        // Kiểm tra an toàn cả snake_case và camelCase
         const attrs = variant.attribute_values || variant.attributeValues || [];
         
         if (attrs && Array.isArray(attrs) && attrs.length > 0) {
@@ -197,7 +190,6 @@ const flattenedShopItems = computed(() => {
 // --- COMPUTED: AVAILABLE BRANDS ---
 const availableBrands = computed(() => {
   const brands = new Set()
-  // Flattened items đã lọc active rồi, lấy từ đó cho chuẩn
   flattenedShopItems.value.forEach(item => {
     if (item.brand && item.brand !== 'No Brand') {
       brands.add(item.brand)
@@ -212,7 +204,7 @@ const currentCategoryName = computed(() => {
   return cat ? cat.name : 'Danh mục không xác định'
 })
 
-// --- CORE: LOGIC LỌC VÀ TÌM KIẾM ---
+// --- CORE: FILTER LOGIC ---
 const filteredProducts = computed(() => {
   let result = [...flattenedShopItems.value]
 
@@ -224,7 +216,7 @@ const filteredProducts = computed(() => {
     })
   }
 
-  // 2. Tìm kiếm (Keyword)
+  // 2. Tìm kiếm
   if (filters.keyword.trim()) {
     const keywordRaw = filters.keyword.toLowerCase().trim()
     const keywordNoAccent = removeAccents(keywordRaw)
@@ -242,7 +234,7 @@ const filteredProducts = computed(() => {
     })
   }
 
-  // 3. Thương hiệu (Fix logic lọc theo mảng)
+  // 3. Thương hiệu
   if (filters.brands.length > 0) {
     result = result.filter(item => filters.brands.includes(item.brand))
   }
@@ -280,7 +272,7 @@ const filteredProducts = computed(() => {
   return result
 })
 
-// [NEW] Computed Pagination
+// Pagination
 const totalPages = computed(() => {
     return Math.ceil(filteredProducts.value.length / itemsPerPage)
 })
@@ -291,7 +283,6 @@ const paginatedProducts = computed(() => {
     return filteredProducts.value.slice(start, end)
 })
 
-// Watch filters change to reset page
 watch(() => filters, () => {
     currentPage.value = 1
 }, { deep: true })
@@ -304,7 +295,7 @@ const changePage = (page) => {
     }
 }
 
-// [NEW] Scroll Logic for Hot Sale
+// Scroll Logic for Hot Sale
 const scrollHotSale = (direction) => {
   if (!hotSaleScrollRef.value) return
   const scrollAmount = 260 
@@ -315,7 +306,6 @@ const scrollHotSale = (direction) => {
   }
 }
 
-// --- ACTIONS ---
 const updateCountdown = () => {
   const now = new Date()
   const distance = saleEndTime - now
@@ -333,8 +323,6 @@ const updateCountdown = () => {
 }
 
 const fetchData = async () => {
-  // [CHANGED] loading đã là true từ đầu, không cần set lại ở đây nếu chỉ chạy 1 lần.
-  // Nhưng để an toàn cho việc re-fetch sau này, ta vẫn set true.
   loading.value = true 
   try {
     const [prodRes, catRes] = await Promise.all([
@@ -388,12 +376,10 @@ const fetchData = async () => {
   } catch (err) {
     console.error('Error fetching data:', err)
   } finally {
-    // [CHANGED] Tắt loading ngay lập tức khi có dữ liệu (hoặc lỗi), không delay
     loading.value = false
   }
 }
 
-// [UPDATED] HÀM THÊM VÀO GIỎ VỚI THÔNG BÁO XỊN
 const onAddToCart = async (item) => {
   try {
     await store.dispatch('addToCart', {
@@ -445,7 +431,6 @@ const toggleBrand = (brand) => {
   } else {
     filters.brands.push(brand)
   }
-  // [NEW] Cập nhật URL khi tick brand để đồng bộ
   applyFiltersToRoute(); 
 }
 
@@ -469,8 +454,7 @@ const applyFiltersToRoute = () => {
   if (filters.keyword) query.search = filters.keyword
   if (filters.categoryId) query.categoryId = filters.categoryId
   if (filters.sortBy !== 'default') query.sort = filters.sortBy
-  // [NEW] Đẩy brand lên URL để giữ trạng thái khi reload
-  if (filters.brands.length > 0) query.brand = filters.brands[0] // Demo hỗ trợ 1 brand trên URL, hoặc join(',')
+  if (filters.brands.length > 0) query.brand = filters.brands[0]
   router.push({ query })
 }
 
@@ -488,24 +472,19 @@ onMounted(() => {
   fetchData()
   countdownInterval.value = setInterval(updateCountdown, 1000)
   if (route.query.sort) filters.sortBy = route.query.sort
-  // [NEW] Bắt tham số brand từ URL khi mới vào trang
   if (route.query.brand) filters.brands = [route.query.brand]
 })
 
-// [IMPORTANT] Watch Route để cập nhật bộ lọc khi click từ Mega Menu
 watch(() => route.query, (newQuery) => {
   if ((newQuery.search || '') !== filters.keyword) {
     filters.keyword = newQuery.search || ''
     searchInput.value = newQuery.search || ''
   }
   filters.categoryId = newQuery.categoryId || null
-  
-  // [NEW] Xử lý tham số brand
+   
   if (newQuery.brand) {
       filters.brands = [newQuery.brand]
   } else {
-      // Nếu không có brand trên URL, reset bộ lọc brand (trừ khi bạn muốn giữ lại)
-      // Ở đây reset để đúng logic chuyển trang từ menu
       filters.brands = [] 
   }
 })
@@ -519,7 +498,7 @@ watch(() => route.query, (newQuery) => {
 
         <!-- SIDEBAR -->
         <aside class="sidebar">
-          
+           
           <!-- [NEW] Wrapper chịu trách nhiệm Sticky -->
           <div class="sidebar-sticky-area">
 
@@ -561,11 +540,11 @@ watch(() => route.query, (newQuery) => {
               </li>
             </ul>
 
-            
-
             <!-- 4. THƯƠNG HIỆU -->
             <div class="filter-section mt-2" v-if="availableBrands.length > 0">
               <h2 class="sidebar-title">Thương hiệu</h2>
+              
+              <!-- [MODIFIED] Xóa max-height và overflow để không có scroll con -->
               <div class="brand-list-container">
                 <label v-for="brand in availableBrands" :key="brand" class="brand-item">
                   <input type="checkbox" :value="brand" :checked="filters.brands.includes(brand)"
@@ -610,23 +589,20 @@ watch(() => route.query, (newQuery) => {
                 <option value="default">Sắp xếp: Mặc định</option>
                 <option value="newest">Hàng mới về</option>
                 <option value="best_sell">Bán chạy nhất</option>
-                <option value="rating_desc">Đánh giá cao nhất</option> <!-- [NEW] -->
+                <option value="rating_desc">Đánh giá cao nhất</option>
                 <option value="price_asc">Giá tăng dần</option>
                 <option value="price_desc">Giá giảm dần</option>
               </select>
             </div>
           </div>
 
-          <!-- [MODIFIED] SKELETON LOADING (Thay cho text "Đang tải...") -->
+          <!-- SKELETON LOADING -->
           <div v-if="loading" class="product-grid">
             <div class="product-card skeleton-card" v-for="n in 8" :key="n">
-               <!-- Khối ảnh skeleton -->
                <div class="skeleton-image shimmer">
-                   <!-- [NEW] Text placeholder ThinkHub -->
                    <span class="skeleton-placeholder-text">ThinkHub</span>
                </div>
                <div class="product-info">
-                  <!-- Các dòng text skeleton -->
                   <div class="skeleton-line title shimmer"></div>
                   <div class="skeleton-line title-short shimmer"></div>
                   <div class="skeleton-line price shimmer"></div>
@@ -641,7 +617,6 @@ watch(() => route.query, (newQuery) => {
           </div>
 
           <section v-else class="product-listing">
-            <!-- [UPDATE] Sử dụng paginatedProducts thay vì filteredProducts -->
             <div class="product-grid">
               <div class="product-card" v-for="item in paginatedProducts" :key="item.unique_key"
                 @click="goToProduct(item.id)">
@@ -649,7 +624,6 @@ watch(() => route.query, (newQuery) => {
                 <div class="product-image mt-sm-1">
                   <img :src="getImageUrl(item.image)" :alt="item.name"
                     @error="$event.target.src = 'https://placehold.co/300x300?text=Product'" />
-                  <!-- Badges -->
                   <span v-if="isNewProduct(item.created_at, item.is_new)" class="new-tag">NEW</span>
                   <span v-else-if="item.discount" class="discount-tag">-{{ item.discount }}%</span>
                 </div>
@@ -663,25 +637,20 @@ watch(() => route.query, (newQuery) => {
                       {{ formatCurrency(item.original_price) }}
                     </span>
                   </p>
-                  
-                  <!-- Rating star visual (Optional) -->
+                   
                   <div class="product-rating" v-if="item.rating" style="font-size: 0.85em; color: #ffb400; margin-bottom: 8px;">
                       <i class="fas fa-star"></i> {{ Number(item.rating).toFixed(1) }}
                   </div>
 
                   <div class="product-actions-group">
-                    <!-- [MODIFIED] Gán class định danh unique cho target -->
                     <button class="btn-add-cart btn-variant-add" :class="`btn-target-${item.unique_key}`"
                       @click.stop="onAddToCart(item)" :disabled="item.stock <= 0">
-
-                      <!-- [NEW] LORDICON with TARGET -->
                       <div class="lord-icon-wrapper">
                         <lord-icon src="https://cdn.lordicon.com/evyuuwna.json" trigger="hover"
                           :target="`.btn-target-${item.unique_key}`" colors="primary:#ffffff,secondary:#ffffff"
                           style="width:24px;height:24px">
                         </lord-icon>
                       </div>
-
                       {{ item.stock > 0 ? 'Thêm ngay' : 'Hết hàng' }}
                     </button>
                   </div>
@@ -690,7 +659,7 @@ watch(() => route.query, (newQuery) => {
               </div>
             </div>
 
-            <!-- [NEW] PAGINATION CONTROLS with Lordicon -->
+            <!-- PAGINATION CONTROLS -->
             <div class="pagination-controls" v-if="totalPages > 1">
                 <button 
                     class="btn-page btn-page-prev" 
@@ -728,13 +697,12 @@ watch(() => route.query, (newQuery) => {
         </main>
       </div>
 
-      <!-- BOTTOM SECTIONS (Consistent Design) -->
+      <!-- BOTTOM SECTIONS -->
       <div class="mt-4">
         <!-- HOT SALE SECTION -->
         <section class="consistent-section hot-sale-section" v-if="hotSaleProducts.length > 0">
           <div class="section-header">
             <h2 class="section-title">
-                <!-- [ICON] FIRE -->
                 <lord-icon
                     src="https://cdn.lordicon.com/tqywkdcz.json"
                     trigger="loop"
@@ -747,14 +715,12 @@ watch(() => route.query, (newQuery) => {
               Kết thúc sau: <b class="timer">{{ countdownDisplay }}</b>
             </div>
           </div>
-          
-          <!-- [UPDATE] Thêm wrapper và nút scroll trái/phải -->
+           
           <div class="hot-sale-container-relative">
             <button class="scroll-btn btn-prev" @click="scrollHotSale('left')">
                 <i class="fas fa-chevron-left"></i>
             </button>
 
-            <!-- Gán ref vào div cuộn -->
             <div class="hot-sale-scroll" ref="hotSaleScrollRef">
                 <div class="product-card hot-sale-card-item" v-for="product in hotSaleProducts" :key="product.unique_key"
                 @click="goToProduct(product.id)">
@@ -764,24 +730,23 @@ watch(() => route.query, (newQuery) => {
                     @error="$event.target.src = 'https://placehold.co/300x300?text=Product'" />
                     <span class="discount-tag">-{{ product.discount || 15 }}%</span>
                 </div>
-                
+                 
                 <div class="product-info">
                     <h3 class="product-name" :title="product.name">{{ product.name }}</h3>
-                    
+                     
                     <p class="product-price">
                         {{ formatCurrency(product.sale_price) }}
                         <span class="old-price-small">{{ formatCurrency(product.old_price) }}</span>
                     </p>
 
-                    <!-- [MODIFIED] Use helper function for rating -->
                     <div class="product-rating" style="font-size: 0.85em; color: #ffb400; margin-bottom: 8px;">
                         <i class="fas fa-star"></i> {{ getRating(product).toFixed(1) }}
                     </div>
-                    
+                     
                     <div class="product-actions-group">
                         <button class="btn-add-cart btn-variant-add" :class="`hs-target-${product.id}`"
                         @click.stop="onAddToCart(product)" :disabled="product.stock <= 0">
-                        
+                         
                         <div class="lord-icon-wrapper">
                             <lord-icon
                                 src="https://cdn.lordicon.com/evyuuwna.json"
@@ -844,14 +809,13 @@ watch(() => route.query, (newQuery) => {
   </div>
 </template>
 
-<!-- [NEW] Global Style for SweetAlert -->
 <style>
-/* Style riêng cho Toast để thanh thoát hơn */
+/* Style riêng cho Toast */
 .elegant-toast {
     box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15) !important;
     border-radius: 12px !important;
     padding: 10px 16px !important;
-    border-left: 4px solid #009981 !important; /* Điểm nhấn màu xanh của trang Shop */
+    border-left: 4px solid #009981 !important; 
     background: #ffffff !important;
 }
 
@@ -865,12 +829,11 @@ watch(() => route.query, (newQuery) => {
 
 .elegant-toast-progress {
     background-color: #009981 !important;
-    height: 3px !important; /* Thanh progress mảnh hơn */
+    height: 3px !important;
 }
 </style>
 
 <style scoped>
-/* [MODIFIED] Chuyển biến vào scope của wrapper để nhận diện đúng */
 .shop-wrapper {
   --primary-color: rgb(0, 153, 129);
   --primary-hover-color: rgb(0, 137, 116);
@@ -890,24 +853,17 @@ watch(() => route.query, (newQuery) => {
   display: grid;
   grid-template-columns: 260px 1fr;
   gap: 25px;
-  /* [MODIFIED] Bỏ flex-start để Grid tự động stretch 2 cột bằng nhau */
-  /* align-items: flex-start; */ 
   position: relative;
 }
 
-/* --- SIDEBAR [MODIFIED] --- */
+/* --- SIDEBAR --- */
 .sidebar {
-  /* [MODIFIED] Đây là lớp vỏ: Trong suốt và chỉ đóng vai trò giữ chỗ trong Grid */
-  /* background: white; */ 
-  /* border... */
-  
-  height: 100%; /* Đảm bảo nó chiếm đủ chiều cao của grid cell */
+  height: 100%; 
   display: block; 
 }
 
 /* [NEW] Lớp ruột bên trong: Chịu trách nhiệm hiển thị visual và Sticky */
 .sidebar-sticky-area {
-  /* [MOVED] Chuyển visual styles vào đây */
   background: white;
   padding: 20px;
   border-radius: 12px;
@@ -917,15 +873,14 @@ watch(() => route.query, (newQuery) => {
   /* Sticky Logic */
   position: -webkit-sticky;
   position: sticky;
-  top: 20px; /* Offset khi cuộn */
+  top: 20px; 
   
-  max-height: calc(100vh - 40px); /* Giới hạn chiều cao */
-  overflow-y: auto; /* Scroll nội bộ khi nội dung dài */
+  max-height: calc(100vh - 40px); /* Giới hạn chiều cao để sidebar có thể scroll độc lập */
+  overflow-y: auto; /* Scroll chính của sidebar */
   
-  /* [IMPORTANT] Giúp sidebar co ngắn lại vừa khít nội dung */
   height: fit-content; 
 
-  padding-right: 5px; /* Tránh nội dung sát scrollbar */
+  padding-right: 5px; 
 }
 
 /* Custom Scrollbar cho phần ruột Sticky */
@@ -948,7 +903,6 @@ watch(() => route.query, (newQuery) => {
   border-left: 4px solid var(--primary-color);
   padding-left: 10px;
 }
-
 
 .category-list {
   list-style: none;
@@ -1004,47 +958,39 @@ watch(() => route.query, (newQuery) => {
   border: none;
   color: #888;
   cursor: pointer;
-  display: flex; /* Centering Lordicon */
+  display: flex; 
   align-items: center;
   justify-content: center;
 }
 
 /* Brand & Other Filters */
-/* [MODIFIED] Làm danh sách brand trông "đầy đặn" hơn */
 .brand-list-container {
-  max-height: 200px; /* Tăng chiều cao một chút */
-  overflow-y: auto;
+  /* [MODIFIED] Xóa max-height và overflow để nội dung tự expand */
+  /* max-height: 200px; */ 
+  /* overflow-y: auto; */
+  
   display: flex;
   flex-direction: column;
-  gap: 4px; /* Khoảng cách nhỏ giữa các dòng */
-  padding-right: 5px; /* Chừa chỗ cho scrollbar */
-}
-
-/* Scrollbar đẹp hơn cho list brand */
-.brand-list-container::-webkit-scrollbar {
-  width: 4px;
-}
-.brand-list-container::-webkit-scrollbar-thumb {
-  background-color: #e0e0e0;
-  border-radius: 4px;
+  gap: 8px; /* Tăng khoảng cách cho dễ bấm */
+  padding-right: 0;
 }
 
 .brand-item {
   display: flex;
   align-items: center;
-  gap: 12px; /* Tăng khoảng cách giữa checkbox và chữ */
+  gap: 12px; 
   font-size: 0.95em;
   cursor: pointer;
   color: #555;
-  padding: 8px 12px; /* Thêm padding để tạo khối */
-  border-radius: 6px; /* Bo góc nhẹ */
+  padding: 8px 12px; 
+  border-radius: 6px; 
   transition: all 0.2s ease;
-  width: 100%; /* Chiếm hết chiều ngang */
+  width: 100%; 
 }
 
 .brand-item:hover {
-  background-color: #f3f4f6; /* Nền xám nhẹ khi hover */
-  color: var(--primary-color); /* Chữ đổi màu */
+  background-color: #f3f4f6; 
+  color: var(--primary-color); 
 }
 
 .brand-item input[type="checkbox"] {
@@ -1052,7 +998,7 @@ watch(() => route.query, (newQuery) => {
   height: 16px;
   cursor: pointer;
   accent-color: var(--primary-color);
-  margin: 0; /* Xóa margin mặc định */
+  margin: 0; 
 }
 
 .mt-4 {
@@ -1083,7 +1029,6 @@ watch(() => route.query, (newQuery) => {
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
 }
 
-
 /* --- MAIN CONTENT & CONSISTENT SECTIONS --- */
 .main-content, .consistent-section {
   background: white;
@@ -1091,7 +1036,7 @@ watch(() => route.query, (newQuery) => {
   padding: 25px;
   border: 1px solid #e3e3e3;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
-  margin-bottom: 30px; /* Spacing between sections */
+  margin-bottom: 30px; 
 }
 
 /* Header Styles */
@@ -1105,7 +1050,7 @@ watch(() => route.query, (newQuery) => {
 }
 
 .section-header {
-    align-items: center; /* Center vertically for sections */
+    align-items: center; 
 }
 
 .page-title, .section-title {
@@ -1142,14 +1087,13 @@ watch(() => route.query, (newQuery) => {
   cursor: pointer;
 }
 
-/* --- PRODUCT CARDS (Unified Style) --- */
+/* --- PRODUCT CARDS --- */
 .product-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 18px;
 }
 
-/* Shared Card Styles */
 .product-card {
   background: #fdfdfd;
   border: 1px solid #eee;
@@ -1161,25 +1105,22 @@ watch(() => route.query, (newQuery) => {
   display: flex;
   flex-direction: column;
   position: relative;
-  /* Ensure consistent height in grid/flex */
   height: 100%; 
 }
 
-/* Add specialized class for hot sale scrolling item */
 .hot-sale-card-item {
-    width: 240px; /* Width fixed for scrolling card */
-    max-width: 240px; /* Prevent expansion */
+    width: 240px; 
+    max-width: 240px; 
     flex-shrink: 0;
     margin-right: 5px;
-    height: auto; /* Let flex stretch handle height */
+    height: auto; 
 }
 
 .product-card:hover {
   box-shadow: 0 8px 15px var(--shadow-color);
-  transform: translateY(-5px); /* Gentle lift */
+  transform: translateY(-5px); 
 }
 
-/* Image Area */
 .product-image {
   height: 180px;
   background: #f5f8f7;
@@ -1191,8 +1132,8 @@ watch(() => route.query, (newQuery) => {
 }
 
 .product-image img {
-  height: 100%; /* [UPDATE] Force full height per user request */
-  width: auto;  /* Width adapts */
+  height: 100%; 
+  width: auto;  
   object-fit: contain;
   transition: transform 0.5s ease;
 }
@@ -1201,7 +1142,6 @@ watch(() => route.query, (newQuery) => {
   transform: scale(1.05);
 }
 
-/* Badges */
 .discount-tag, .new-tag {
   position: absolute;
   top: 10px;
@@ -1209,7 +1149,7 @@ watch(() => route.query, (newQuery) => {
   color: white;
   padding: 2px 8px;
   font-size: 0.75em;
-  border-radius: 20px; /* Rounder consistent look */
+  border-radius: 20px; 
   font-weight: bold;
   z-index: 2;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -1234,7 +1174,7 @@ watch(() => route.query, (newQuery) => {
   font-weight: 600;
   color: #333;
   margin-bottom: 6px;
-  min-height: 2.8em; /* 2 lines */
+  min-height: 2.8em; 
   line-height: 1.4em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1293,7 +1233,6 @@ watch(() => route.query, (newQuery) => {
   box-shadow: none;
 }
 
-/* LORDICON WRAPPER */
 .lord-icon-wrapper {
   display: flex;
   align-items: center;
@@ -1308,7 +1247,6 @@ watch(() => route.query, (newQuery) => {
 }
 
 /* --- HOT SALE SPECIFIC --- */
-/* Remove old hot-sale-section styles that conflicted */
 .hot-sale-section h2 span {
   font-size: 0.7em;
   background: var(--hot-sale-color);
@@ -1316,7 +1254,7 @@ watch(() => route.query, (newQuery) => {
   padding: 3px 8px;
   border-radius: 6px;
   margin-left: 8px;
-  transform: translateY(-2px); /* Align visual */
+  transform: translateY(-2px); 
 }
 
 .countdown {
@@ -1326,24 +1264,23 @@ watch(() => route.query, (newQuery) => {
 
 .countdown .timer {
   color: var(--hot-sale-color);
-  background: #fff0f0; /* Light red bg */
+  background: #fff0f0; 
   padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid #ffd6d6;
 }
 
-/* [NEW] Styling for Hot Sale Wrapper & Buttons */
 .hot-sale-container-relative {
     position: relative;
-    padding: 0 20px; /* Space for buttons if they were outside, keeps flow inside */
+    padding: 0 20px; 
 }
 
 .hot-sale-scroll {
   display: flex;
   overflow-x: auto;
   gap: 16px;
-  padding: 5px 2px 15px 2px; /* Bottom padding for shadow */
-  scrollbar-width: none; /* Hide standard scrollbar */
+  padding: 5px 2px 15px 2px; 
+  scrollbar-width: none; 
   align-items: stretch;
   scroll-behavior: smooth;
 }
@@ -1378,7 +1315,7 @@ watch(() => route.query, (newQuery) => {
     transform: translateY(-50%) scale(1.1);
 }
 
-.btn-prev { left: -15px; } /* Adjust to stick out slightly */
+.btn-prev { left: -15px; } 
 .btn-next { right: -15px; }
 
 /* --- PROMO SPECIFIC --- */
@@ -1396,10 +1333,10 @@ watch(() => route.query, (newQuery) => {
 
 .banner-item {
   display: block;
-  border-radius: 12px; /* Match global radius */
+  border-radius: 12px; 
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  border: 1px solid #eee; /* Match global border */
+  border: 1px solid #eee; 
   aspect-ratio: 2.2 / 1;
 }
 
@@ -1415,7 +1352,7 @@ watch(() => route.query, (newQuery) => {
   object-fit: cover;
 }
 
-/* [NEW] Pagination Styles */
+/* Pagination Styles */
 .pagination-controls {
     display: flex;
     justify-content: center;
@@ -1464,7 +1401,7 @@ watch(() => route.query, (newQuery) => {
     position: relative;
     top: 0;
     margin-bottom: 20px;
-    height: auto !important; /* Mobile thì bỏ stretch */
+    height: auto !important; 
   }
 
   .promo-grid {
@@ -1472,16 +1409,12 @@ watch(() => route.query, (newQuery) => {
   }
 }
 
-/* ------------------------------------------- */
-/* [NEW] SKELETON LOADING STYLES               */
-/* ------------------------------------------- */
-
+/* SKELETON LOADING STYLES */
 .skeleton-card {
-  pointer-events: none; /* Không cho click */
+  pointer-events: none; 
   user-select: none;
 }
 
-/* Hiệu ứng Shimmer (Ánh sáng chạy qua) */
 .shimmer {
   background: #f6f7f8;
   background-image: linear-gradient(
@@ -1505,22 +1438,19 @@ watch(() => route.query, (newQuery) => {
   }
 }
 
-/* Các khối giả lập */
 .skeleton-image {
   height: 180px;
   width: 100%;
   border-bottom: 1px solid #eee;
-  /* [NEW] Flexbox để căn giữa chữ ThinkHub */
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* [NEW] Style cho chữ placeholder */
 .skeleton-placeholder-text {
   font-size: 1.8rem;
   font-weight: 900;
-  color: #e5e7eb; /* Màu xám nhạt */
+  color: #e5e7eb; 
   text-transform: uppercase;
   letter-spacing: 1px;
   opacity: 0.8;

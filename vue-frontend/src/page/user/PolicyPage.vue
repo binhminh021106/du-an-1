@@ -86,7 +86,7 @@ watch(() => route.hash, () => {
           <!-- Box hỗ trợ nhanh -->
           <div class="sidebar-widget support-box mt-4">
              <div class="d-flex align-items-center mb-3">
-                 <i class="bi bi-question-circle-fill text-primary fs-3 me-3"></i>
+                 <i class="bi bi-question-circle-fill fs-3 me-3"></i>
                  <div>
                      <h6 class="mb-0 fw-bold">Cần giải đáp gấp?</h6>
                      <small class="text-muted">Chat ngay với tư vấn viên</small>
@@ -102,7 +102,7 @@ watch(() => route.hash, () => {
           <!-- 1. VẬN CHUYỂN -->
           <article id="shipping-v2" class="policy-card">
             <h2 class="policy-title">
-                <i class="bi bi-truck text-primary me-2"></i> Vận chuyển & Giao hàng
+                <i class="bi bi-truck me-2"></i> Vận chuyển & Giao hàng
             </h2>
             <div class="policy-body">
                 <p>
@@ -127,7 +127,7 @@ watch(() => route.hash, () => {
           <!-- 2. HƯỚNG DẪN MUA HÀNG -->
           <article id="guide-v2" class="policy-card">
             <h2 class="policy-title">
-                <i class="bi bi-cart-check text-primary me-2"></i> Hướng dẫn Mua hàng
+                <i class="bi bi-cart-check me-2"></i> Hướng dẫn Mua hàng
             </h2>
             <div class="policy-body">
                 <div class="steps-container">
@@ -169,7 +169,7 @@ watch(() => route.hash, () => {
           <!-- 3. ĐỔI TRẢ -->
           <article id="returns-v2" class="policy-card">
              <h2 class="policy-title">
-                <i class="bi bi-arrow-repeat text-primary me-2"></i> Đổi trả & Hoàn tiền
+                <i class="bi bi-arrow-repeat me-2"></i> Đổi trả & Hoàn tiền
             </h2>
              <div class="policy-body">
                 <p>
@@ -188,7 +188,7 @@ watch(() => route.hash, () => {
           <!-- 4. BẢO HÀNH -->
           <article id="warranty-v2" class="policy-card">
              <h2 class="policy-title">
-                <i class="bi bi-shield-check text-primary me-2"></i> Bảo hành sản phẩm
+                <i class="bi bi-shield-check me-2"></i> Bảo hành sản phẩm
             </h2>
              <div class="policy-body">
                 <p>
@@ -214,7 +214,7 @@ watch(() => route.hash, () => {
           <!-- 5. BẢO MẬT -->
           <article id="privacy-v2" class="policy-card">
              <h2 class="policy-title">
-                <i class="bi bi-lock text-primary me-2"></i> Quyền riêng tư & Bảo mật
+                <i class="bi bi-lock me-2"></i> Quyền riêng tư & Bảo mật
             </h2>
             <div class="policy-body">
                 <p>
@@ -229,7 +229,7 @@ watch(() => route.hash, () => {
           <!-- 6. ĐIỀU KHOẢN -->
            <article id="terms-v2" class="policy-card">
              <h2 class="policy-title">
-                <i class="bi bi-file-earmark-text text-primary me-2"></i> Điều khoản sử dụng
+                <i class="bi bi-file-earmark-text ary me-2"></i> Điều khoản sử dụng
             </h2>
             <div class="policy-body">
                 <p>

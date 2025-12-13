@@ -43,14 +43,14 @@ class AdminSlideController extends Controller
     {
         $request->validate([
             'title' => 'required|string|max:255',
-            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120', 
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:10240', 
             'order' => 'nullable|integer|min:0',
             'status' => 'required|in:published,draft',
         ], [
             'title.required'  => 'Vui lòng nhập tiêu đề slide.',
             'image.required'  => 'Vui lòng chọn hình ảnh.',
             'image.image'     => 'File tải lên phải là hình ảnh.',
-            'image.max'       => 'Kích thước ảnh không được vượt quá 5MB.',
+            'image.max'       => 'Kích thước ảnh không được vượt quá 10MB.',
         ]);
 
         DB::beginTransaction();
@@ -119,7 +119,7 @@ class AdminSlideController extends Controller
 
         $request->validate([
             'title' => 'required|string|max:255',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:10240',
             'order' => 'nullable|integer|min:0',
             'status' => 'required|in:published,draft',
         ]);

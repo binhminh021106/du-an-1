@@ -6,7 +6,9 @@ import apiService from '../../apiService.js';
 // ==========================================
 // CONFIG & STATE
 // ==========================================
+// [CHANGED] Mặc định là true để Skeleton hiện ngay lập tức khi load trang
 const isLoading = ref(true);
+
 const activeDashboardTab = ref('overview'); // 'overview' | 'revenue' | 'inventory'
 
 // Stats
@@ -170,15 +172,16 @@ const fetchData = async () => {
 
         processRevenueData(completedOrders);
 
+        // [FIXED] Không gọi renderStatusChart ngay tại đây vì DOM chưa sẵn sàng (isLoading vẫn true)
         await loadChartJs();
-        if (activeDashboardTab.value === 'overview') {
-            renderStatusChart();
-        }
         
     } catch (error) {
         console.error("Dashboard Error:", error);
     } finally {
-        isLoading.value = false;
+        // [FIX] Thêm delay giả lập 2s để hiển thị Skeleton
+        setTimeout(() => { 
+            isLoading.value = false;
+        }, 2000);
     }
 };
 
@@ -384,10 +387,30 @@ const closeDetail = () => {
 // CHARTS & HELPERS
 // ==========================================
 const loadChartJs = () => { return new Promise((resolve, reject) => { if (window.Chart) return resolve(); const script = document.createElement('script'); script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js'; script.onload = () => { resolve(); }; script.onerror = (e) => { reject(e); }; document.head.appendChild(script); }); };
+
 const renderStatusChart = () => { if (!chartCanvas.value || !window.Chart) return; if (chartInstance.value) chartInstance.value.destroy(); chartConfigKeys.value = Object.keys(STATUS_CONFIG); const labels = chartConfigKeys.value.map(key => STATUS_CONFIG[key].label); const data = chartConfigKeys.value.map(key => orderStatusCounts.value[key]); const colors = chartConfigKeys.value.map(key => STATUS_CONFIG[key].color); const ctx = chartCanvas.value.getContext('2d'); chartInstance.value = markRaw(new window.Chart(ctx, { type: 'doughnut', data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 0, hoverOffset: 15, cutout: '65%' }] }, options: { responsive: true, maintainAspectRatio: false, layout: { padding: 10 }, plugins: { legend: { display: false }, tooltip: { enabled: true, callbacks: { label: function(context) { const value = context.raw; const total = context.chart._metasets[context.datasetIndex].total; const percentage = total > 0 ? Math.round((value / total) * 100) + '%' : '0%'; return ` ${context.label}: ${value} đơn (${percentage})`; } } } }, interaction: { mode: 'nearest', intersect: true }, } })); };
+
 const renderRevenueCharts = () => { if (!revenueBarCanvas.value || !revenueLineCanvas.value || !window.Chart) return; if (revenueBarInstance.value) revenueBarInstance.value.destroy(); if (revenueLineInstance.value) revenueLineInstance.value.destroy(); const ctxBar = revenueBarCanvas.value.getContext('2d'); revenueBarInstance.value = markRaw(new window.Chart(ctxBar, { type: 'bar', data: { labels: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'], datasets: [{ label: 'Doanh thu', data: monthlyRevenue.value, backgroundColor: '#009981', borderRadius: 4, barPercentage: 0.6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: (v) => formatCurrency(v, true) }, grid: { color: '#f0f0f0' }, border: { display: false } }, x: { grid: { display: false }, border: { display: false } } } } })); const years = Object.keys(yearlyRevenue.value).sort(); const yearlyData = years.map(y => yearlyRevenue.value[y]); const ctxLine = revenueLineCanvas.value.getContext('2d'); revenueLineInstance.value = markRaw(new window.Chart(ctxLine, { type: 'line', data: { labels: years.length > 0 ? years : [new Date().getFullYear()], datasets: [{ label: 'Tổng doanh thu', data: yearlyData.length > 0 ? yearlyData : [0], borderColor: '#0dcaf0', backgroundColor: 'rgba(13, 202, 240, 0.1)', fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: (v) => formatCurrency(v, true) }, grid: { color: '#f0f0f0' }, border: { display: false } }, x: { grid: { display: false }, border: { display: false } } } } })); };
+
 const onLegendHover = (key) => { if (!chartInstance.value) return; hoveredLegendKey.value = key; const index = chartConfigKeys.value.indexOf(key); if (index !== -1) { try { chartInstance.value.setActiveElements([{ datasetIndex: 0, index: index }]); chartInstance.value.update(); } catch (e) {} } };
+
 const onLegendLeave = () => { if (!chartInstance.value) return; hoveredLegendKey.value = null; try { chartInstance.value.setActiveElements([]); chartInstance.value.update(); } catch (e) {} };
+
+// [NEW] Watch isLoading để render chart khi dữ liệu đã sẵn sàng và DOM đã update
+watch(isLoading, async (newVal) => {
+    if (!newVal) {
+        await nextTick();
+        // Delay nhẹ để đảm bảo transition fade-in hoàn tất
+        setTimeout(() => {
+            if (activeDashboardTab.value === 'overview') {
+                renderStatusChart();
+            } else if (activeDashboardTab.value === 'revenue') {
+                renderRevenueCharts();
+            }
+        }, 300);
+    }
+});
+
 watch(activeDashboardTab, async (newTab) => { await nextTick(); if (newTab === 'overview') setTimeout(renderStatusChart, 100); else if (newTab === 'revenue') setTimeout(renderRevenueCharts, 100); });
 
 // [UPDATED] Hàm xử lý ảnh thông minh hơn - Loại bỏ /api ở cuối domain nếu có
@@ -432,7 +455,93 @@ onMounted(() => { fetchData(); });
         </div>
     </div>
 
-    <div class="app-content">
+    <!-- [NEW] SKELETON LOADING -->
+    <div v-if="isLoading" class="app-content fade-in">
+        <div class="container-fluid">
+            <!-- Stats Skeleton -->
+            <div class="row g-3 mb-4">
+                <div v-for="n in 4" :key="n" class="col-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100 skeleton-card">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="skeleton-box skeleton-icon-btn shimmer me-3" style="width: 50px; height: 50px; border-radius: 50%;"></div>
+                            <div class="w-100">
+                                <div class="skeleton-box skeleton-text w-50 mb-2 shimmer"></div>
+                                <div class="skeleton-box skeleton-text w-75 shimmer" style="height: 24px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs Skeleton -->
+            <div class="mb-4">
+                <div class="d-flex gap-2">
+                    <div class="skeleton-box skeleton-chip shimmer" style="width: 150px;"></div>
+                    <div class="skeleton-box skeleton-chip shimmer" style="width: 150px;"></div>
+                    <div class="skeleton-box skeleton-chip shimmer" style="width: 150px;"></div>
+                </div>
+            </div>
+
+            <!-- Dashboard Content Skeleton -->
+            <div class="row g-4 mb-4">
+                <div class="col-xl-8 col-lg-7">
+                    <div class="card shadow-sm border-0 h-100 skeleton-card">
+                         <div class="card-header bg-white border-bottom py-3">
+                            <div class="skeleton-box skeleton-title w-25 shimmer"></div>
+                         </div>
+                         <div class="p-3">
+                             <div v-for="i in 5" :key="i" class="d-flex justify-content-between mb-3">
+                                 <div class="skeleton-box skeleton-text w-20 shimmer"></div>
+                                 <div class="skeleton-box skeleton-text w-30 shimmer"></div>
+                                 <div class="skeleton-box skeleton-text w-15 shimmer"></div>
+                                 <div class="skeleton-box skeleton-text w-15 shimmer"></div>
+                             </div>
+                         </div>
+                    </div>
+                </div>
+                <div class="col-xl-4 col-lg-5">
+                    <div class="card shadow-sm border-0 h-100 skeleton-card">
+                        <div class="card-header bg-white border-bottom py-3">
+                            <div class="skeleton-box skeleton-title w-50 shimmer"></div>
+                        </div>
+                        <div class="card-body d-flex flex-column align-items-center">
+                            <!-- Chart Skeleton -->
+                            <div class="skeleton-box shimmer mb-3" style="width: 150px; height: 150px; border-radius: 50%;"></div>
+                            <!-- Legend Skeleton -->
+                            <div class="w-100 row g-2">
+                                <div class="col-6" v-for="n in 4" :key="n">
+                                    <div class="skeleton-box shimmer" style="height: 30px; border-radius: 4px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Lists Skeleton -->
+             <div class="row g-4">
+                <div v-for="col in 3" :key="col" class="col-lg-4">
+                    <div class="card shadow-sm border-0 h-100 skeleton-card">
+                        <div class="card-header bg-white border-bottom py-3">
+                            <div class="skeleton-box skeleton-title w-50 shimmer"></div>
+                        </div>
+                        <div class="p-3">
+                             <div v-for="j in 4" :key="j" class="d-flex align-items-center mb-3">
+                                 <div class="skeleton-box img-box shimmer me-3" style="width: 40px; height: 40px; border-radius: 50%;"></div>
+                                 <div class="w-100">
+                                     <div class="skeleton-box skeleton-text w-75 mb-1 shimmer"></div>
+                                     <div class="skeleton-box skeleton-text w-50 shimmer"></div>
+                                 </div>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+             </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div v-else class="app-content fade-in">
         <div class="container-fluid">
             <!-- 1. STATS CARDS -->
             <div class="row g-3 mb-4">
@@ -498,12 +607,7 @@ onMounted(() => { fetchData(); });
                                 <table class="table table-hover align-middle mb-0">
                                     <thead class="bg-light text-secondary small text-uppercase"><tr><th class="ps-3">Mã ĐH</th><th>Khách hàng</th><th>Trạng thái</th><th class="text-end pe-3">Tổng tiền</th></tr></thead>
                                     <tbody>
-                                        <tr v-if="isLoading">
-                                            <td colspan="4" class="text-center py-5">
-                                                <div class="spinner-border text-brand" role="status"><span class="visually-hidden">Loading...</span></div>
-                                            </td>
-                                        </tr>
-                                        <tr v-else-if="latestOrders.length === 0"><td colspan="4" class="text-center py-4 text-muted">Chưa có đơn hàng nào.</td></tr>
+                                        <tr v-if="latestOrders.length === 0"><td colspan="4" class="text-center py-4 text-muted">Chưa có đơn hàng nào.</td></tr>
                                         <tr v-else v-for="order in latestOrders" :key="order.id">
                                             <td class="ps-3 fw-bold text-primary">#{{ order.id }}</td>
                                             <td><div class="fw-medium text-dark">{{ order.customerName || order.customer_name }}</div><div class="small text-muted">{{ formatDate(order.createdAt || order.created_at) }}</div></td>
@@ -518,16 +622,39 @@ onMounted(() => { fetchData(); });
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- [MODIFIED] Card Tình Trạng Đơn Hàng -->
                     <div class="col-xl-4 col-lg-5">
                         <div class="card shadow-sm border-0 h-100">
                             <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
                                 <h5 class="card-title fw-bold text-brand mb-0">Tình Trạng Đơn Hàng</h5>
                                 <span class="badge bg-light text-dark border">{{ stats.totalOrders }} đơn</span>
                             </div>
-                            <div class="card-body d-flex align-items-center justify-content-center">
-                                <div style="width: 55%; height: 200px; position: relative;"><canvas ref="chartCanvas"></canvas></div>
-                                <div class="ms-3 flex-grow-1" style="max-height: 220px; overflow-y: auto;">
-                                    <div v-for="(config, key) in STATUS_CONFIG" :key="key" class="d-flex align-items-center justify-content-between py-1 px-2 rounded cursor-pointer transition-opacity mb-1" :class="{ 'opacity-25': hoveredLegendKey && hoveredLegendKey !== key }" @mouseenter="onLegendHover(key)" @mouseleave="onLegendLeave" style="font-size: 0.85rem;"><div class="d-flex align-items-center"><div class="dot rounded-circle me-2" :style="{ backgroundColor: config.color }"></div><span class="text-dark text-truncate" style="max-width: 80px;">{{ config.label }}</span></div><span class="fw-bold text-secondary">{{ orderStatusCounts[key] || 0 }}</span></div>
+                            
+                            <!-- [UPDATED] Layout flex-column để đẩy legend xuống dưới chart -->
+                            <div class="card-body d-flex flex-column align-items-center h-100 pt-0">
+                                <!-- Chart container -->
+                                <div style="width: 100%; height: 200px; position: relative; margin-bottom: 1rem;">
+                                    <canvas ref="chartCanvas"></canvas>
+                                </div>
+                                
+                                <!-- Legend container: Scrollable list below chart -->
+                                <div class="w-100 overflow-auto" style="max-height: 200px;">
+                                    <!-- Use Grid for compact view -->
+                                    <div class="row g-2">
+                                        <div v-for="(config, key) in STATUS_CONFIG" :key="key" class="col-6">
+                                            <div class="d-flex align-items-center justify-content-between p-2 rounded bg-light border cursor-pointer transition-opacity h-100" 
+                                                 :class="{ 'opacity-25': hoveredLegendKey && hoveredLegendKey !== key }" 
+                                                 @mouseenter="onLegendHover(key)" @mouseleave="onLegendLeave" 
+                                                 style="font-size: 0.8rem;">
+                                                <div class="d-flex align-items-center text-truncate">
+                                                    <div class="dot rounded-circle me-2 flex-shrink-0" :style="{ backgroundColor: config.color }"></div>
+                                                    <span class="text-dark text-truncate">{{ config.label }}</span>
+                                                </div>
+                                                <span class="fw-bold text-secondary ms-1">{{ orderStatusCounts[key] || 0 }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -538,8 +665,7 @@ onMounted(() => { fetchData(); });
                         <div class="card shadow-sm border-0 h-100">
                             <div class="card-header bg-white border-bottom py-3"><h5 class="card-title fw-bold text-brand mb-0">Đánh Giá Mới</h5></div>
                             <div class="list-group list-group-flush flex-grow-1 position-relative">
-                                <div v-if="isLoading" class="position-absolute w-100 h-100 top-0 start-0 d-flex align-items-center justify-content-center bg-white" style="z-index: 5;"><div class="spinner-border text-brand spinner-border-sm" role="status"></div></div>
-                                <div v-else-if="latestReviews.length === 0" class="p-3 text-center text-muted">Trống</div>
+                                <div v-if="latestReviews.length === 0" class="p-3 text-center text-muted">Trống</div>
                                 <div v-else v-for="review in latestReviews" :key="review.id" class="list-group-item px-3 py-2 border-bottom-0"><div class="d-flex justify-content-between align-items-center mb-1"><div class="text-truncate flex-grow-1" style="max-width: 55%;"><small class="fw-bold d-block text-truncate">{{ review.product?.name }}</small></div><div class="d-flex align-items-center"><span class="badge rounded-pill me-2 px-2" :class="getGeneralStatusClass(review.status || 'pending')" style="font-size: 0.65rem;">{{ getGeneralStatusLabel(review.status || 'pending') }}</span><span class="text-warning small" style="letter-spacing: -1px;">{{ renderStars(review.rating) }}</span></div></div><p class="mb-0 small text-muted text-truncate fst-italic">"{{ review.content }}"</p></div>
                             </div>
                             <div class="card-footer bg-white border-top-0 text-center py-3"><router-link to="/admin/reviews" class="btn btn-sm btn-light text-brand fw-bold border px-4 shadow-sm hover-brand">Xem thêm</router-link></div>
@@ -549,8 +675,7 @@ onMounted(() => { fetchData(); });
                         <div class="card shadow-sm border-0 h-100">
                             <div class="card-header bg-white border-bottom py-3"><h5 class="card-title fw-bold text-brand mb-0">Bình Luận Mới</h5></div>
                             <div class="list-group list-group-flush flex-grow-1 position-relative">
-                                <div v-if="isLoading" class="position-absolute w-100 h-100 top-0 start-0 d-flex align-items-center justify-content-center bg-white" style="z-index: 5;"><div class="spinner-border text-brand spinner-border-sm" role="status"></div></div>
-                                <div v-else-if="latestComments.length === 0" class="p-3 text-center text-muted">Trống</div>
+                                <div v-if="latestComments.length === 0" class="p-3 text-center text-muted">Trống</div>
                                 <div v-else v-for="cmt in latestComments" :key="cmt.id" class="list-group-item px-3 py-2 border-bottom-0"><div class="d-flex align-items-center justify-content-between mb-1"><div class="d-flex align-items-center"><img :src="getAvatar(cmt.user?.avatar, cmt.user?.username)" class="rounded-circle me-2" width="20"><span class="fw-bold small text-dark">{{ cmt.user?.username || 'Ẩn danh' }}</span></div><span class="badge rounded-pill px-2" :class="getGeneralStatusClass(cmt.status || 'approved')" style="font-size: 0.65rem;">{{ getGeneralStatusLabel(cmt.status || 'approved') }}</span></div><p class="mb-0 small text-muted text-truncate">"{{ cmt.content }}"</p></div>
                             </div>
                             <div class="card-footer bg-white border-top-0 text-center py-3"><router-link to="/admin/comments" class="btn btn-sm btn-light text-brand fw-bold border px-4 shadow-sm hover-brand">Xem thêm</router-link></div>
@@ -560,8 +685,7 @@ onMounted(() => { fetchData(); });
                         <div class="card shadow-sm border-0 h-100">
                             <div class="card-header bg-white border-bottom py-3"><h5 class="card-title fw-bold text-brand mb-0">Khách Hàng Mới</h5></div>
                             <div class="list-group list-group-flush flex-grow-1 position-relative">
-                                <div v-if="isLoading" class="position-absolute w-100 h-100 top-0 start-0 d-flex align-items-center justify-content-center bg-white" style="z-index: 5;"><div class="spinner-border text-brand spinner-border-sm" role="status"></div></div>
-                                <div v-else-if="newMembers.length === 0" class="p-3 text-center text-muted">Trống</div>
+                                <div v-if="newMembers.length === 0" class="p-3 text-center text-muted">Trống</div>
                                 <div v-else v-for="user in newMembers" :key="user.id" class="list-group-item px-3 py-3 d-flex align-items-center"><img :src="getAvatar(user.avatar_url, user.fullname)" class="rounded-circle me-3 border shadow-sm" width="36" height="36" style="object-fit: cover;"><div class="flex-grow-1 min-width-0"><div class="fw-bold text-dark text-truncate small">{{ user.fullname }}</div><div class="small text-muted text-truncate" style="font-size: 0.75rem;">{{ user.email }}</div></div><div class="text-end ms-2"><span class="badge rounded-pill mb-1 d-block ms-auto" :class="getGeneralStatusClass(user.status || 'active')" style="width: fit-content; font-size: 0.65rem;">{{ getGeneralStatusLabel(user.status || 'active') }}</span><div class="small text-muted" style="font-size: 0.7rem;">{{ formatDate(user.created_at) }}</div></div></div>
                             </div>
                             <div class="card-footer bg-white border-top-0 text-center py-3"><router-link to="/admin/userAccount" class="btn btn-sm btn-light text-brand fw-bold border px-4 shadow-sm hover-brand">Xem thêm</router-link></div>
@@ -663,10 +787,7 @@ onMounted(() => { fetchData(); });
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-if="isLoading">
-                                    <td colspan="6" class="text-center py-5"><div class="spinner-border text-brand" role="status"></div></td>
-                                </tr>
-                                <tr v-else-if="filteredInventory.length === 0">
+                                <tr v-if="filteredInventory.length === 0">
                                     <td colspan="6" class="text-center py-5 text-muted">Không tìm thấy sản phẩm nào phù hợp.</td>
                                 </tr>
                                 <tr v-else v-for="item in paginatedInventory" :key="item.id + item.type" class="cursor-pointer" @click="openDetail(item)">
@@ -823,10 +944,98 @@ onMounted(() => { fetchData(); });
 .opacity-25 { opacity: 0.3; }
 .dot { width: 10px; height: 10px; display: inline-block; }
 .cursor-pointer { cursor: pointer; }
-.fade-in { animation: fadeIn 0.4s ease-in-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 /* TABLE */
 :deep(.table) td { vertical-align: middle; }
 .min-width-0 { min-width: 0; }
+
+/* ------------------------------------------- */
+/* [NEW] SKELETON LOADING STYLES               */
+/* ------------------------------------------- */
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Hiệu ứng Shimmer (Ánh sáng chạy qua) */
+.shimmer {
+  background: #f6f7f8;
+  background-image: linear-gradient(
+    to right,
+    #f6f7f8 0%,
+    #edeef1 20%,
+    #f6f7f8 40%,
+    #f6f7f8 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 800px 100%; 
+  animation: placeholderShimmer 1.5s linear infinite forwards;
+}
+
+@keyframes placeholderShimmer {
+  0% { background-position: -468px 0; }
+  100% { background-position: 468px 0; }
+}
+
+.skeleton-card {
+    background-color: #fff;
+    border-radius: 8px;
+    border: 1px solid #f0f0f0;
+    pointer-events: none;
+}
+
+.skeleton-box {
+    background-color: #eee;
+    border-radius: 4px;
+}
+
+.skeleton-text {
+    height: 14px;
+    border-radius: 4px;
+}
+
+.skeleton-title {
+    height: 20px;
+    border-radius: 4px;
+}
+
+.skeleton-icon-btn {
+    border-radius: 50%;
+}
+
+.skeleton-chip {
+    height: 35px;
+    border-radius: 20px;
+}
+
+/* Skeleton Placeholder Text */
+.skeleton-placeholder-text-large {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #e5e7eb;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  opacity: 0.8;
+}
+
+.skeleton-placeholder-text-small {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #e5e7eb;
+    text-transform: uppercase;
+}
+
+/* Table Row Skeleton */
+.skeleton-box.img-box {
+    background-color: #ddd;
+    /* Flexbox to center text */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 </style>

@@ -13,6 +13,9 @@ const store = useStore();
 const SERVER_URL = 'http://127.0.0.1:8000';
 const USE_STORAGE = false;
 
+// --- STATE MEGA MENU ---
+const hoveredCategoryId = ref(null);
+
 const toSlug = (str) => {
     if (!str) return '';
     str = str.toLowerCase();
@@ -83,6 +86,62 @@ const currentSlide = ref(0);
 // [CHANGED] Mặc định là true để Skeleton hiện ngay lập tức khi load trang
 const loading = ref(true);
 let interval = null;
+
+// --- MEGA MENU LOGIC ---
+const getMegaDataForCategory = (categoryId) => {
+  if (!categoryId || products.value.length === 0) return null;
+
+  // 1. Lọc sản phẩm CHỈ thuộc danh mục này VÀ có status là 'active'
+  const categoryProducts = products.value.filter(p =>
+    String(p.category_id) === String(categoryId) &&
+    p.status === 'active'
+  );
+
+  if (categoryProducts.length === 0) return null;
+
+  // 2. Trích xuất thương hiệu
+  const brandsSet = new Set();
+  categoryProducts.forEach(p => {
+    let brandName = '';
+    if (p.brand && typeof p.brand === 'object') {
+      brandName = p.brand.name;
+    } else if (p.brand) {
+      brandName = p.brand;
+    } else if (p.brand_name) {
+      brandName = p.brand_name;
+    }
+
+    if (brandName && brandName !== 'No Brand') {
+      brandsSet.add(brandName);
+    }
+  });
+
+  // 3. Lấy 5 sản phẩm nổi bật (Bán chạy nhất)
+  const displayProducts = [...categoryProducts]
+    .sort((a, b) => (b.sold_count || 0) - (a.sold_count || 0))
+    .slice(0, 5);
+
+  // 4. Lấy 5 sản phẩm đánh giá cao (Rating cao nhất) -> "Có thể bạn thích"
+  const topRatedProducts = [...categoryProducts]
+    .sort((a, b) => getRating(b) - getRating(a))
+    .slice(0, 5);
+
+  return {
+    brands: Array.from(brandsSet).sort(),
+    products: displayProducts,
+    topRated: topRatedProducts
+  };
+};
+
+const goToShopWithBrand = (categoryId, brandName) => {
+  router.push({
+    name: 'Shop',
+    query: {
+      categoryId: categoryId,
+      brand: brandName
+    }
+  });
+};
 
 // --- FETCH DATA ---
 const fetchData = async () => {
@@ -337,15 +396,102 @@ onBeforeUnmount(stopAutoSlide);
                         </div>
                     </div>
 
-                    <div v-else class="category-list">
+                    <!-- [UPDATED] LIST CATEGORY WITH MEGA MENU -->
+                    <!-- [NOTE] Add mouseleave to container to clear hover -->
+                    <div v-else class="category-list" @mouseleave="hoveredCategoryId = null">
                         <div v-for="category in categories" :key="category.id"
-                            class="category-item-clean text-uppercase" @click="navigateToCategory(category.id)"
-                            style="cursor: pointer;">
-                            <span v-if="category.icon" v-html="category.icon" class="cat-icon"></span>
-                            <span v-else class="cat-icon"><i class="fas fa-box"></i></span>
-                            <span>{{ category.name }}</span>
-                            <i class="fas fa-chevron-right ms-auto"
-                                style="font-size: 10px; color: #ccc; margin-left: auto;"></i>
+                             @mouseenter="hoveredCategoryId = category.id">
+                            
+                            <div class="category-item-clean text-uppercase" @click="navigateToCategory(category.id)"
+                                style="cursor: pointer;">
+                                <span v-if="category.icon" v-html="category.icon" class="cat-icon"></span>
+                                <span v-else class="cat-icon"><i class="fas fa-box"></i></span>
+                                <span>{{ category.name }}</span>
+                                
+                                <!-- Arrow Icon logic -->
+                                <i v-if="getMegaDataForCategory(category.id)" class="fas fa-chevron-right ms-auto" style="font-size: 10px; color: #ccc;"></i>
+                                <i v-else class="fas fa-chevron-right ms-auto" style="font-size: 10px; color: #ccc;"></i>
+                            </div>
+
+                             <!-- MEGA MENU PANEL -->
+                             <div class="mega-menu-panel"
+                                  v-if="hoveredCategoryId === category.id && getMegaDataForCategory(category.id)">
+
+                                 <div class="mega-content-wrapper">
+                                     <!-- Cột 1: Thương hiệu (20%) -->
+                                     <div class="mega-column brands-column" v-if="getMegaDataForCategory(category.id).brands.length > 0">
+                                         <h4 class="mega-title">Thương hiệu</h4>
+                                         <div class="brands-list-vertical">
+                                             <a href="#" v-for="brand in getMegaDataForCategory(category.id).brands" :key="brand"
+                                                class="brand-link" @click.prevent="goToShopWithBrand(category.id, brand)">
+                                                 {{ brand }}
+                                             </a>
+                                         </div>
+                                     </div>
+
+                                     <!-- Cột 2: Nổi bật (40%) -->
+                                     <div class="mega-column products-column border-end">
+                                         <h4 class="mega-title">Nổi bật nhất</h4>
+                                         <ul class="mega-product-list">
+                                             <li v-for="prod in getMegaDataForCategory(category.id).products" :key="prod.id"
+                                                 @click.stop="goToProduct(prod.id)">
+                                                 <div class="search-item">
+                                                     <!-- Ảnh to hơn -->
+                                                     <img :src="getImageUrl(prod.thumbnail_url || prod.image_url)"
+                                                          class="search-item-img big-img" alt="img"
+                                                          @error="$event.target.src = 'https://placehold.co/50x50?text=No+Img'">
+                                                     <div class="search-item-info">
+                                                         <div class="search-item-name">{{ prod.name }}</div>
+                                                         <!-- Hiển thị Giá + Đã bán -->
+                                                         <div class="d-flex align-items-center gap-2 mt-1">
+                                                             <div class="search-item-price text-danger fw-bold">
+                                                                 {{ formatCurrency(prod.price || prod.min_price) }}
+                                                             </div>
+                                                             <small class="text-muted ms-auto" style="font-size: 11px;">Đã bán {{ prod.sold_count || 0 }}</small>
+                                                         </div>
+                                                         <!-- Hiển thị Rating -->
+                                                         <div class="d-flex align-items-center gap-1 mt-1">
+                                                             <div class="text-warning small" style="font-size: 11px;">
+                                                                 {{ getRating(prod).toFixed(1) }} <i class="fa-solid fa-star"></i>
+                                                             </div>
+                                                         </div>
+                                                     </div>
+                                                 </div>
+                                             </li>
+                                         </ul>
+                                     </div>
+
+                                     <!-- Cột 3: Có thể bạn thích (40%) -->
+                                     <div class="mega-column products-column">
+                                         <h4 class="mega-title">Có thể bạn thích</h4>
+                                         <ul class="mega-product-list">
+                                             <li v-for="prod in getMegaDataForCategory(category.id).topRated" :key="prod.id"
+                                                 @click.stop="goToProduct(prod.id)">
+                                                 <div class="search-item">
+                                                     <img :src="getImageUrl(prod.thumbnail_url || prod.image_url)"
+                                                          class="search-item-img big-img" alt="img"
+                                                          @error="$event.target.src = 'https://placehold.co/50x50?text=No+Img'">
+                                                     <div class="search-item-info">
+                                                         <div class="search-item-name">{{ prod.name }}</div>
+                                                         <div class="d-flex align-items-center gap-2 mt-1">
+                                                             <div class="search-item-price text-danger fw-bold">
+                                                                 {{ formatCurrency(prod.price || prod.min_price) }}
+                                                             </div>
+                                                             <small class="text-muted ms-auto" style="font-size: 11px;">Đã bán {{ prod.sold_count || 0 }}</small>
+                                                         </div>
+                                                         <div class="d-flex align-items-center gap-1 mt-1">
+                                                             <div class="text-warning small" style="font-size: 11px;">
+                                                                 {{ getRating(prod).toFixed(1) }} <i class="fa-solid fa-star"></i>
+                                                             </div>
+                                                         </div>
+                                                     </div>
+                                                 </div>
+                                             </li>
+                                         </ul>
+                                     </div>
+                                 </div>
+                             </div>
+
                         </div>
                     </div>
                 </nav>
@@ -498,7 +644,7 @@ onBeforeUnmount(stopAutoSlide);
 
             <!-- News Section -->
             <section class="product-group news-group">
-                    <h2 class="section-title">TIN TỨC CÔNG NGHỆ</h2>
+                    <h2 class="section-title mb-4">TIN TỨC CÔNG NGHỆ</h2>
                     <div class="news-grid">
                         <div class="news-card-basic" v-for="news in newsList" :key="news.id">
                             <div class="news-img-wrap">
@@ -551,6 +697,7 @@ onBeforeUnmount(stopAutoSlide);
     background-color: #10b981 !important;
     height: 3px !important; 
 }
+
 </style>
 
 <style scoped>
@@ -564,6 +711,10 @@ onBeforeUnmount(stopAutoSlide);
 * {
     box-sizing: border-box;
     font-family: 'Montserrat', sans-serif;
+}
+
+.section-title{
+    color: var(--primary-color);
 }
 
 .text-uppercase {
@@ -591,12 +742,18 @@ onBeforeUnmount(stopAutoSlide);
     height: 100%;
 }
 
+/* [IMPORTANT] Để Mega Menu hiển thị đè lên các phần tử khác */
+.category-list {
+    position: relative;
+    /* Không dùng overflow hidden ở đây */
+}
+
 .sidebar-title {
     font-size: 14px;
     font-weight: 700;
     margin-bottom: 10px;
     padding-left: 10px;
-    color: #444;
+    color: var(--primary-color);
 }
 
 .category-item-clean {
@@ -610,6 +767,7 @@ onBeforeUnmount(stopAutoSlide);
     border-radius: 5px;
     transition: 0.2s;
     text-decoration: none;
+    position: static; /* Quan trọng để Mega Menu căn theo cha .category-list */
 }
 
 .cat-icon {
@@ -631,6 +789,137 @@ onBeforeUnmount(stopAutoSlide);
     color: #00483D;
 }
 
+/* --- MEGA MENU STYLES --- */
+.mega-menu-panel {
+  position: absolute;
+  left: 103%;
+  top: -67px;
+  width: 1070px; /* Điều chỉnh độ rộng cho phù hợp với layout Home */
+  min-height: 100%;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 0 8px 8px 8px;
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+  padding: 0;
+  z-index: 1002;
+  overflow: hidden;
+}
+
+.mega-content-wrapper {
+  display: flex;
+  min-height: 350px;
+}
+
+.mega-column {
+  padding: 15px;
+}
+
+.brands-column {
+  width: 20%;
+  border-right: 1px solid #f0f0f0;
+  background-color: #fcfcfc;
+}
+
+.brands-list-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.brand-link {
+  font-size: 13px;
+  color: #555;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  background: #fff;
+  border: 1px solid #eee;
+  text-decoration: none;
+}
+
+.brand-link:hover {
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+  background: #f0fdfa;
+  padding-left: 14px;
+}
+
+.products-column {
+  width: 40%;
+  background: #fff;
+}
+
+.mega-product-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.mega-product-list li {
+  border-bottom: 1px solid #f5f5f5;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.mega-product-list li:last-child {
+  border-bottom: none;
+}
+
+.mega-product-list li:hover {
+  background-color: #fafafa;
+}
+
+.mega-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #DBF9EB;
+  text-transform: uppercase;
+}
+
+/* Search Item Styles inside Mega Menu */
+.search-item {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+}
+
+.search-item-img.big-img {
+  width: 60px;
+  height: 60px;
+  margin-right: 15px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #eee;
+}
+
+.search-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+
+.search-item-price {
+    font-size: 13px;
+    color: #d9534f;
+    font-weight: 700;
+    margin-top: 2px;
+}
+
+/* --- END MEGA MENU STYLES --- */
+
 .slider {
     position: relative;
     overflow: hidden;
@@ -651,9 +940,8 @@ onBeforeUnmount(stopAutoSlide);
     min-width: 100%;
     width: 100%;
     flex: 0 0 100%;
-    position: relative;
+    position: relative; 
 }
-
 .slide img {
     width: 100%;
     height: 100%;
@@ -1044,6 +1332,7 @@ onBeforeUnmount(stopAutoSlide);
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: top; 
     transition: 0.3s;
 }
 

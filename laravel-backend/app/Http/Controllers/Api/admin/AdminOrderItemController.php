@@ -26,7 +26,7 @@ class AdminOrderItemController extends Controller
             // Lọc theo Order ID
             $query->where('order_id', $request->orderId);
 
-            // Eager Load quan hệ để lấy thông tin sản phẩm
+            // Eager Load quan hệ để lấy thông tin sản phẩm và thuộc tính
             // Cấu trúc: OrderItem -> Variant -> Product
             // Cấu trúc: OrderItem -> Variant -> AttributeValues -> Attribute (Màu/Size)
             if ($request->has('_expand') && $request->_expand == 'product') {
@@ -41,16 +41,18 @@ class AdminOrderItemController extends Controller
                 $items->transform(function ($item) {
                     $productData = null;
                     
-                    // Logic lấy thông tin product từ quan hệ variant
+                    // Ưu tiên lấy từ variant (vì order item lưu variant_id)
+                    // (Sử dụng relation variant đã được withTrashed ở Model OrderItem)
                     if ($item->variant && $item->variant->product) {
                         $productData = $item->variant->product;
                     } 
-                    // Fallback: Nếu order_item lưu trực tiếp product_id (tùy cấu trúc DB cũ/mới)
+                    // Fallback: Nếu không tìm thấy qua variant (ví dụ variant bị xóa cứng và relation trả về null)
+                    // thì thử lấy qua relation product trực tiếp (nếu có)
                     elseif ($item->product) {
                         $productData = $item->product;
                     }
 
-                    // Gán relation ảo 'product'
+                    // Gán relation ảo 'product' để frontend truy cập item.product
                     $item->setRelation('product', $productData);
                     
                     return $item;
@@ -64,9 +66,13 @@ class AdminOrderItemController extends Controller
 
         } catch (\Exception $e) {
             Log::error("Lỗi lấy chi tiết Order Items: " . $e->getMessage());
+            
+            // Trả về lỗi chi tiết để dễ dàng debug ở phía Frontend
             return response()->json([
                 'message' => 'Lỗi Server khi lấy chi tiết đơn hàng.',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(), // Giúp tìm vị trí lỗi nhanh hơn
+                'line' => $e->getLine()
             ], 500);
         }
     }

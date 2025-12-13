@@ -1,3 +1,7 @@
+<script setup>
+// Không có logic phức tạp, giữ nguyên script setup đơn giản
+</script>
+
 <template>
   <section class="about-page py-5">
     <div class="container">
@@ -7,35 +11,38 @@
           <i class="bi bi-info-circle-fill me-3"></i> Về chúng tôi
         </h2>
         <p class="text-muted fs-5">
-          <img class="icon-logo" src="../../../src/components/img/logo.png" alt="Logo" />
-          <strong class="text-primary ms-2"></strong> là thương hiệu hướng đến
+          <img class="icon-logo" src="../../../src/components/img/LogoThinkHub.png" alt="Logo" />
+          <strong class="text-primary ms-2">ThinkHub</strong> là thương hiệu hướng đến
           việc mang lại trải nghiệm mua sắm hiện đại, tiện lợi và phong cách cho mọi khách hàng.
         </p>
       </div>
 
-      <div class="row g-5 align-items-center">
+      <!-- [FIX] Bỏ 'align-items-center' để 2 cột tự động cao bằng nhau (stretch) -->
+      <div class="row g-5"> 
+        
         <!-- Hình ảnh giới thiệu -->
-        <div class="col-lg-6">
-          <div class="about-image-wrapper">
-            <img src="../../../src/components/img/LogoThinkHub.png" alt="about us" class="img-fluid rounded shadow-lg" />
+        <div class="col-lg-6 d-flex"> <!-- Thêm d-flex để wrapper con có thể full height -->
+          <div class="about-image-wrapper w-100">
+            <!-- [FIX] Thêm object-position: left để căn ảnh từ trái qua -->
+            <img src="../../components/img/thinkhubabout1.png" alt="about us" class="img-fluid rounded shadow-lg h-100 w-100" style="object-fit: cover; object-position: left;" />
           </div>
         </div>
 
         <!-- Nội dung giới thiệu -->
-        <div class="col-lg-6">
+        <div class="col-lg-6 d-flex flex-column justify-content-center"> <!-- Căn giữa nội dung theo chiều dọc -->
           <h3 class="fw-bold text-primary mb-3">Câu chuyện của chúng tôi</h3>
           <p class="text-muted fs-6 mb-4">
             Được thành lập với niềm đam mê về công nghệ và phong cách sống hiện đại,
-            <strong></strong> mong muốn trở thành cầu nối giữa sản phẩm chất lượng
+            <strong class="text-primary">ThinkHub</strong> mong muốn trở thành cầu nối giữa sản phẩm chất lượng
             và trải nghiệm người dùng hoàn hảo.
           </p>
 
           <ul class="list-unstyled fs-6 mb-4">
-            <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Sản phẩm chính hãng, chất lượng
+            <li class="mb-2"><i class="bi bi-check-circle-fill text-success-custom me-2"></i> Sản phẩm chính hãng, chất lượng
               cao</li>
-            <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Giao hàng nhanh chóng và an toàn
+            <li class="mb-2"><i class="bi bi-check-circle-fill text-success-custom me-2"></i> Giao hàng nhanh chóng và an toàn
             </li>
-            <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Hỗ trợ khách hàng tận tâm 24/7
+            <li class="mb-2"><i class="bi bi-check-circle-fill text-success-custom me-2"></i> Hỗ trợ khách hàng tận tâm 24/7
             </li>
           </ul>
 
@@ -44,22 +51,20 @@
             từ những sản phẩm nhỏ nhất đến dịch vụ sau bán hàng.
           </p>
 
-          <router-link to="/Shop" class="btn btn-primary btn-lg fw-semibold"
-            style="text-decoration: none; color: white; background-color: #009981;">
-            Khám phá sản phẩm
-            <i class="bi bi-arrow-right-circle ms-2"></i>
-          </router-link>
-
-
-
+          <div class="mt-auto"> <!-- Đẩy nút xuống dưới nếu cần -->
+            <router-link to="/Shop" class="btn btn-primary btn-lg fw-semibold">
+              Khám phá sản phẩm
+              <i class="bi bi-arrow-right-circle ms-2"></i>
+            </router-link>
+          </div>
         </div>
       </div>
 
       <!-- Phần sứ mệnh & tầm nhìn -->
       <div class="row mt-5">
-        <div class="col-lg-4">
-          <div class="card border-0 shadow-lg p-4 h-100 text-center mission-card">
-            <i class="bi bi-bullseye text-primary fs-1 mb-3"></i>
+        <div class="col-lg-4 d-flex">
+          <div class="card border-0 shadow-lg p-4 h-100 text-center mission-card w-100">
+            <div class="mb-3"><i class="bi bi-bullseye text-primary fs-1"></i></div>
             <h5 class="fw-bold mb-3">Sứ mệnh</h5>
             <p class="text-muted">
               Mang lại những sản phẩm tốt nhất, giúp khách hàng tận hưởng
@@ -68,9 +73,9 @@
           </div>
         </div>
 
-        <div class="col-lg-4">
-          <div class="card border-0 shadow-lg p-4 h-100 text-center mission-card">
-            <i class="bi bi-eye-fill text-primary fs-1 mb-3"></i>
+        <div class="col-lg-4 d-flex">
+          <div class="card border-0 shadow-lg p-4 h-100 text-center mission-card w-100">
+            <div class="mb-3"><i class="bi bi-eye-fill text-primary fs-1"></i></div>
             <h5 class="fw-bold mb-3">Tầm nhìn</h5>
             <p class="text-muted">
               Trở thành thương hiệu đáng tin cậy hàng đầu trong lĩnh vực bán lẻ trực tuyến tại Việt Nam.
@@ -78,9 +83,9 @@
           </div>
         </div>
 
-        <div class="col-lg-4">
-          <div class="card border-0 shadow-lg p-4 h-100 text-center mission-card">
-            <i class="bi bi-heart-fill text-primary fs-1 mb-3"></i>
+        <div class="col-lg-4 d-flex">
+          <div class="card border-0 shadow-lg p-4 h-100 text-center mission-card w-100">
+            <div class="mb-3"><i class="bi bi-heart-fill text-primary fs-1"></i></div>
             <h5 class="fw-bold mb-3">Giá trị cốt lõi</h5>
             <p class="text-muted">
               Uy tín – Chất lượng – Tận tâm. Mọi hành động của chúng tôi đều hướng đến khách hàng.
@@ -94,11 +99,17 @@
 
 <style scoped>
 .about-page {
-  background-color: #f0f8f7;
+  background-color: #f8f9fa;
 }
 
+/* Override màu primary của Bootstrap bằng màu ThinkHub */
 .text-primary {
-  color: rgb(0, 72, 61) !important;
+  color: #009981 !important;
+}
+
+/* Tạo class riêng cho icon check để đồng bộ màu */
+.text-success-custom {
+  color: #009981 !important;
 }
 
 .icon-logo {
@@ -106,34 +117,47 @@
   vertical-align: middle;
 }
 
-.about-image-wrapper img {
-  transition: transform 0.4s ease, box-shadow 0.4s ease;
+.about-image-wrapper {
+  height: 100%; /* Quan trọng: để wrapper cao bằng cột cha */
+  overflow: hidden;
   border-radius: 1rem;
+}
+
+.about-image-wrapper img {
+  transition: transform 0.5s ease, box-shadow 0.4s ease;
+  /* object-fit: cover đã được thêm inline trong template để đảm bảo ảnh không bị méo */
 }
 
 .about-image-wrapper img:hover {
   transform: scale(1.03);
-  box-shadow: 0 0.75rem 1.5rem rgba(0, 72, 61, 0.25);
+  box-shadow: 0 0.75rem 1.5rem rgba(0, 153, 129, 0.15);
 }
 
 .mission-card {
   border-radius: 1rem;
   transition: all 0.3s ease;
+  background-color: #fff;
 }
 
 .mission-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 0.5rem 1rem rgba(0, 72, 61, 0.15);
+  box-shadow: 0 1rem 2rem rgba(0, 153, 129, 0.1) !important;
+  border-bottom: 3px solid #009981 !important;
 }
 
-button.btn-primary {
-  background-color: rgb(0, 153, 129);
-  border-color: rgb(0, 153, 129);
+/* Button style */
+.btn-primary {
+  background-color: #009981 !important;
+  border-color: #009981 !important;
+  color: white !important;
   transition: all 0.3s ease;
+  padding: 10px 25px;
 }
 
-button.btn-primary:hover {
-  background-color: rgb(0, 72, 61);
-  border-color: rgb(0, 72, 61);
+.btn-primary:hover {
+  background-color: #007f6b !important;
+  border-color: #007f6b !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 153, 129, 0.3);
 }
 </style>

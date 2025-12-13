@@ -8,6 +8,9 @@ import Swal from 'sweetalert2'; // Import SweetAlert2
 
 const store = useStore(); // 2. Khởi tạo store
 
+// [NEW] Loading State for Skeleton
+const isLoading = ref(true);
+
 // --- CẤU HÌNH TOAST (Theo yêu cầu) ---
 const Toast = Swal.mixin({
   toast: true,
@@ -67,7 +70,10 @@ const getProductStock = (product) => {
 
 // 2. Hàm làm mới dữ liệu từ API
 const enrichWishlistData = async () => {
-  if (!wishlist.value || !wishlist.value.length) return;
+  if (!wishlist.value || !wishlist.value.length) {
+      isLoading.value = false;
+      return;
+  }
 
   const promises = wishlist.value.map(async (item) => {
     try {
@@ -91,11 +97,18 @@ const enrichWishlistData = async () => {
   });
 
   await Promise.all(promises);
+  // [FIX] Delay to show skeleton
+  setTimeout(() => { isLoading.value = false }, 1500);
 };
 
 // --- LIFECYCLE ---
 onMounted(() => {
-    enrichWishlistData();
+    // Nếu wishlist rỗng thì tắt loading luôn
+    if (wishlist.value.length === 0) {
+        isLoading.value = false;
+    } else {
+        enrichWishlistData();
+    }
 });
 
 // --- ACTIONS ---
@@ -150,9 +163,44 @@ const moveItemToCart = (item) => {
   <div class="wishlist-page">
     <div class="container">
       <div class="wishlist-card">
-        <h2>❤️ Danh sách Yêu thích ({{ wishlist.length }})</h2>
+        <h2>❤️ Danh sách Yêu thích <span v-if="!isLoading">({{ wishlist.length }})</span></h2>
 
-        <div v-if="wishlist.length">
+        <!-- [NEW] SKELETON LOADING -->
+        <div v-if="isLoading">
+            <table class="wishlist-table">
+                <thead>
+                    <tr>
+                        <th width="50%">Sản phẩm</th>
+                        <th width="20%">Giá</th>
+                        <th width="30%" class="text-right">Hành động</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="n in 3" :key="n" class="skeleton-row-container">
+                        <td>
+                            <div class="product-info">
+                                <div class="skeleton-box img-box shimmer" style="width: 70px; height: 70px;">
+                                     <span class="skeleton-placeholder-text-tiny">ThinkHub</span>
+                                </div>
+                                <div class="product-details w-100">
+                                    <div class="skeleton-box text-box w-75 mb-2 shimmer"></div>
+                                    <div class="skeleton-box text-box w-25 shimmer"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td><div class="skeleton-box text-box w-50 shimmer"></div></td>
+                        <td class="actions-cell">
+                            <div class="action-buttons">
+                                <div class="skeleton-box btn-box shimmer" style="width: 120px;"></div>
+                                <div class="skeleton-box btn-icon-box shimmer"></div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div v-else-if="wishlist.length" class="fade-in">
             <table class="wishlist-table">
             <thead>
                 <tr>
@@ -207,7 +255,7 @@ const moveItemToCart = (item) => {
              </div>
         </div>
 
-        <div v-else class="empty-wishlist">
+        <div v-else class="empty-wishlist fade-in">
             <i class="fas fa-heart-broken"></i>
             <p>Danh sách yêu thích của bạn đang trống.</p>
             <router-link to="/Shop" class="continue-shopping">Khám phá sản phẩm ngay</router-link>
@@ -447,5 +495,79 @@ h2 {
     .add-cart-btn {
         padding: 8px 10px;
     }
+}
+
+/* ------------------------------------------- */
+/* [NEW] SKELETON LOADING STYLES               */
+/* ------------------------------------------- */
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Hiệu ứng Shimmer (Ánh sáng chạy qua) */
+.shimmer {
+  background: #f6f7f8;
+  background-image: linear-gradient(
+    to right,
+    #f6f7f8 0%,
+    #edeef1 20%,
+    #f6f7f8 40%,
+    #f6f7f8 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 800px 100%; 
+  animation: placeholderShimmer 1.5s linear infinite forwards;
+}
+
+@keyframes placeholderShimmer {
+  0% { background-position: -468px 0; }
+  100% { background-position: 468px 0; }
+}
+
+.skeleton-box {
+    background-color: #eee;
+    border-radius: 4px;
+}
+
+.skeleton-box.img-box {
+    background-color: #ddd;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.skeleton-box.text-box {
+    height: 14px;
+    border-radius: 4px;
+}
+
+.skeleton-box.btn-box {
+    height: 35px;
+    border-radius: 6px;
+}
+
+.skeleton-box.btn-icon-box {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+}
+
+.skeleton-placeholder-text-tiny {
+    font-size: 0.6rem;
+    font-weight: 800;
+    color: #e5e7eb;
+    text-transform: uppercase;
+}
+
+.skeleton-row-container td {
+    vertical-align: top;
+    padding-top: 20px;
 }
 </style>

@@ -11,7 +11,7 @@ const router = useRouter();
   <div class="notfound-page">
     <div class="content-404">
       <h1>404</h1>
-      <p>Ô mai chuối! Trang bạn đang tìm kiếm không tồn tại.</p>
+      <p>ThinkHub thông báo! Trang bạn đang tìm kiếm không tồn tại.</p>
       <router-link to="/" class="home-btn">
         <i class="fa-solid fa-arrow-left"></i> Quay về trang chủ
       </router-link>
