@@ -20,7 +20,8 @@ const getImageUrl = (path) => {
 
 // --- STATE ---
 const orders = ref([]);
-const isLoading = ref(false);
+// [CHANGED] Mặc định là true để Skeleton hiện ngay lập tức khi load trang
+const isLoading = ref(true);
 
 // Popup & Review logic
 const showPopup = ref(false);
@@ -223,7 +224,8 @@ const fetchOrders = async () => {
   } catch (error) {
     console.error("Lỗi tải đơn hàng:", error);
   } finally {
-    isLoading.value = false;
+    // [FIX] Thêm delay 2 giây để hiển thị Skeleton
+    setTimeout(() => { isLoading.value = false }, 2000);
   }
 };
 
@@ -457,8 +459,50 @@ const handleSubmitReviews = async () => {
   <div class="order-list-container">
     <h2 class="title">📋 Danh Sách Đơn Hàng</h2>
 
-    <div v-if="isLoading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i> Đang tải dữ liệu...
+    <!-- [NEW] SKELETON LOADING -->
+    <div v-if="isLoading" class="order-cards fade-in">
+        <div v-for="n in 3" :key="n" class="order-card skeleton-card">
+            <!-- Header Skeleton -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                 <div class="skeleton-box skeleton-text w-25 shimmer"></div>
+                 <div class="skeleton-box skeleton-badge w-15 shimmer"></div>
+            </div>
+            
+            <div class="skeleton-box skeleton-text w-20 mb-3 shimmer"></div>
+
+            <!-- Table Header Mock -->
+            <div class="skeleton-box skeleton-text w-100 mb-2 shimmer" style="height: 30px;"></div>
+
+            <!-- Items Skeleton -->
+            <div class="product-table">
+                <div v-for="i in 2" :key="i" class="product-row skeleton-row">
+                    <div class="col-name-wrapper col-name d-flex align-items-center">
+                        <!-- Img placeholder with Text -->
+                        <div class="skeleton-box img-box me-3 shimmer" style="width: 60px; height: 60px;">
+                             <!-- [NEW] Text placeholder ThinkHub -->
+                             <span class="skeleton-placeholder-text-small">ThinkHub</span>
+                        </div>
+                        <!-- Text placeholder -->
+                        <div class="w-50">
+                            <div class="skeleton-box skeleton-text w-75 mb-1 shimmer"></div>
+                            <div class="skeleton-box skeleton-text w-50 shimmer"></div>
+                        </div>
+                    </div>
+                    <div class="col-qty skeleton-box skeleton-text w-10 shimmer"></div>
+                    <div class="col-price skeleton-box skeleton-text w-20 shimmer"></div>
+                </div>
+            </div>
+
+            <!-- Footer Skeleton -->
+            <div class="d-flex justify-content-end mt-3 mb-3">
+                <div class="skeleton-box skeleton-text w-25 shimmer" style="height: 24px;"></div>
+            </div>
+            
+            <div class="card-action-buttons">
+                <div class="skeleton-box action-btn-skeleton shimmer"></div>
+                <div class="skeleton-box action-btn-skeleton shimmer"></div>
+            </div>
+        </div>
     </div>
 
     <div v-else>
@@ -659,8 +703,8 @@ const handleSubmitReviews = async () => {
             <h3 class="review-header"><i class="fas fa-star section-icon"></i> {{ selectedOrder.hasAnyReview ? 'Cập Nhật Đánh Giá' : 'Đánh Giá Sản Phẩm' }}</h3>
             <p class="review-hint">
               {{ selectedOrder.hasAnyReview 
-                 ? 'Bạn có thể chỉnh sửa lại đánh giá của mình. Đánh giá sẽ được gửi lại để duyệt.' 
-                 : 'Vui lòng đánh giá các sản phẩm bạn đã mua.' 
+                  ? 'Bạn có thể chỉnh sửa lại đánh giá của mình. Đánh giá sẽ được gửi lại để duyệt.' 
+                  : 'Vui lòng đánh giá các sản phẩm bạn đã mua.' 
               }}
             </p>
             <div class="review-scroll-list">
@@ -1596,5 +1640,97 @@ const handleSubmitReviews = async () => {
 
 .back-btn:hover {
   background-color: #5a6268;
+}
+
+/* ------------------------------------------- */
+/* [NEW] SKELETON LOADING STYLES               */
+/* ------------------------------------------- */
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Hiệu ứng Shimmer (Ánh sáng chạy qua) */
+.shimmer {
+  background: #f6f7f8;
+  background-image: linear-gradient(
+    to right,
+    #f6f7f8 0%,
+    #edeef1 20%,
+    #f6f7f8 40%,
+    #f6f7f8 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 800px 100%; 
+  animation: placeholderShimmer 1.5s linear infinite forwards;
+}
+
+@keyframes placeholderShimmer {
+  0% { background-position: -468px 0; }
+  100% { background-position: 468px 0; }
+}
+
+.skeleton-box {
+    background-color: #eee;
+    border-radius: 4px;
+}
+
+/* Skeleton Specifics for Order Card */
+.skeleton-card {
+    border: 1px solid transparent; /* Maintain border space */
+    border-left: 5px solid #eee; /* Maintain left border style */
+    pointer-events: none;
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+}
+
+.skeleton-text {
+    height: 16px;
+    border-radius: 4px;
+}
+
+.skeleton-badge {
+    height: 24px;
+    border-radius: 4px;
+}
+
+.skeleton-row {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed #eee;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.skeleton-box.img-box {
+    border-radius: 6px;
+    background-color: #ddd;
+    /* Flexbox to center text */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.skeleton-placeholder-text-small {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #e5e7eb;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.skeleton-box.action-btn-skeleton {
+    height: 40px;
+    flex-grow: 1;
+    flex-basis: 120px;
+    border-radius: 5px;
 }
 </style>

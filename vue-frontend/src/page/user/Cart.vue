@@ -11,6 +11,8 @@ const router = useRouter();
 const cart = computed(() => store.getters.cartItems);
 const total = computed(() => store.getters.cartTotal);
 const updatingIds = ref([]);
+// [CHANGED] Mặc định là true để Skeleton hiện ngay lập tức khi load trang
+const loading = ref(true);
 
 // --- UTILS ---
 const parsePrice = (value) => {
@@ -59,7 +61,10 @@ const loadLordicon = () => {
 
 onMounted(() => {
     loadLordicon(); // Load script icon
-    store.dispatch('enrichCartData');
+    store.dispatch('enrichCartData').finally(() => {
+        // [FIX] Thêm delay giả lập 2s để hiển thị Skeleton
+        setTimeout(() => { loading.value = false }, 2000);
+    });
 });
 
 watch(cart, (newVal) => {
@@ -228,10 +233,55 @@ const proceedToCheckout = () => {
                     </lord-icon>
                     Giỏ hàng của bạn
                 </h1>
-                <span class="item-count">{{ cart.length }} sản phẩm</span>
+                <span v-if="!loading" class="item-count">{{ cart.length }} sản phẩm</span>
             </div>
 
-            <div v-if="cart.length === 0" class="empty-state">
+            <!-- [NEW] SKELETON LOADING -->
+            <div v-if="loading" class="cart-layout fade-in">
+                <!-- Left: Items Skeleton -->
+                <div class="cart-items-section">
+                    <div class="item-list">
+                        <div v-for="n in 3" :key="n" class="cart-item-card skeleton-card">
+                            <!-- Image -->
+                            <div class="item-image skeleton-box img-box shimmer">
+                                <!-- [NEW] Text placeholder ThinkHub -->
+                                <span class="skeleton-placeholder-text-small">ThinkHub</span>
+                            </div>
+                            <!-- Content -->
+                            <div class="item-content w-100">
+                                <div class="item-info w-100">
+                                    <div class="skeleton-box text-box w-25 mb-2 shimmer"></div>
+                                    <div class="skeleton-box text-box w-75 mb-2 shimmer"></div>
+                                    <div class="skeleton-box text-box w-50 shimmer"></div>
+                                </div>
+                                <div class="item-actions-mobile mt-3">
+                                    <div class="skeleton-box text-box w-25 shimmer"></div>
+                                    <div class="skeleton-box input-box shimmer" style="width: 100px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Summary Skeleton -->
+                <div class="cart-summary-section">
+                    <div class="summary-card">
+                        <div class="skeleton-box title-box w-50 mb-4 shimmer"></div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <div class="skeleton-box text-box w-25 shimmer"></div>
+                            <div class="skeleton-box text-box w-25 shimmer"></div>
+                        </div>
+                        <div class="divider"></div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <div class="skeleton-box text-box w-25 shimmer"></div>
+                            <div class="skeleton-box text-box w-25 shimmer"></div>
+                        </div>
+                        <div class="skeleton-box button-box w-100 mt-4 shimmer"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else-if="cart.length === 0" class="empty-state fade-in">
                 <!-- Giữ nguyên ảnh tĩnh cho empty state vì nó to và đẹp -->
                 <img src="https://cdni.iconscout.com/illustration/premium/thumb/empty-cart-2130356-1800917.png"
                     alt="Empty Cart">
@@ -240,7 +290,7 @@ const proceedToCheckout = () => {
                 <router-link to="/shop" class="btn-primary">Tiếp tục mua sắm</router-link>
             </div>
 
-            <div v-else class="cart-layout">
+            <div v-else class="cart-layout fade-in">
 
                 <!-- CỘT TRÁI: DANH SÁCH ITEM -->
                 <div class="cart-items-section">
@@ -296,9 +346,9 @@ const proceedToCheckout = () => {
 
                                         <button @click="updateQty(item.cartId, item.qty, -1)"
                                             :disabled="item.qty <= 1 || updatingIds.includes(item.cartId)">-</button>
-                                       
+                                    
                                         <input type="number" :value="item.qty" readonly>
-                                       
+                                        
                                         <button @click="updateQty(item.cartId, item.qty, 1)"
                                             :disabled="item.qty >= (item.stock || 999) || updatingIds.includes(item.cartId)">+</button>
                                     </div>
@@ -833,6 +883,104 @@ const proceedToCheckout = () => {
         justify-content: space-between;
         width: 100%;
         margin-top: 10px;
+    }
+}
+
+/* ------------------------------------------- */
+/* [NEW] SKELETON LOADING STYLES               */
+/* ------------------------------------------- */
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Hiệu ứng Shimmer (Ánh sáng chạy qua) */
+.shimmer {
+  background: #f6f7f8;
+  background-image: linear-gradient(
+    to right,
+    #f6f7f8 0%,
+    #edeef1 20%,
+    #f6f7f8 40%,
+    #f6f7f8 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 800px 100%; 
+  animation: placeholderShimmer 1.5s linear infinite forwards;
+}
+
+@keyframes placeholderShimmer {
+  0% {
+    background-position: -468px 0;
+  }
+  100% {
+    background-position: 468px 0;
+  }
+}
+
+.skeleton-box {
+    background-color: #eee;
+    border-radius: 4px;
+}
+
+/* Skeleton Specifics for Cart */
+.skeleton-card {
+    border: 1px solid #eee;
+    pointer-events: none;
+}
+
+.skeleton-box.img-box {
+    width: 100px;
+    height: 100px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    /* Flexbox to center text */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.skeleton-placeholder-text-small {
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: #e5e7eb;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.skeleton-box.text-box {
+    height: 16px;
+    border-radius: 4px;
+}
+
+.skeleton-box.input-box {
+    height: 32px;
+    border-radius: 4px;
+}
+
+.skeleton-box.title-box {
+    height: 24px;
+    border-radius: 4px;
+}
+
+.skeleton-box.button-box {
+    height: 48px;
+    border-radius: 8px;
+}
+
+@media (max-width: 576px) {
+    .skeleton-box.img-box {
+        width: 100%;
+        height: 200px;
     }
 }
 </style>

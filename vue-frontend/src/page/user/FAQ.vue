@@ -70,7 +70,7 @@ onMounted(() => {
 
           <!-- Banner phụ hoặc Contact nhanh -->
           <div class="sidebar-widget contact-widget mt-4 text-center">
-              <i class="bi bi-headset display-4 text-primary mb-3"></i>
+              <i class="bi bi-headset display-4 mb-3"></i>
               <h5>Cần hỗ trợ trực tiếp?</h5>
               <p class="small text-muted mb-3">Hotline hỗ trợ 24/7</p>
               <a href="tel:19001234" class="btn btn-primary w-100 fw-bold">1900 1234</a>
@@ -83,7 +83,7 @@ onMounted(() => {
           <!-- GROUP 1: GIAO DỊCH -->
           <article id="giao-dich" class="faq-group">
             <h3 class="group-title">
-                <i class="bi bi-credit-card-2-front text-primary me-2"></i> Giao dịch & Thanh toán
+                <i class="bi bi-credit-card-2-front me-2"></i> Giao dịch & Thanh toán
             </h3>
             <div class="accordion-list">
               
@@ -214,8 +214,7 @@ onMounted(() => {
     </footer>
   </section>
 </template>
-
-<style scoped>
+<style>
 /* --- VARIABLES --- */
 :root {
   --primary: #009981;
@@ -225,6 +224,11 @@ onMounted(() => {
   --text-subtle: #636e72;
   --bg-light: #F8F9FA;
   --white: #FFFFFF;
+}
+</style>
+<style scoped>
+.sidebar-widget i{
+  color: var(--primary);
 }
 
 /* --- BASE --- */

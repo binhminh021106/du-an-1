@@ -29,9 +29,12 @@ const slideFileInputRef = ref(null);
 const slideFormData = reactive({
   id: null, title: '', description: '', imageUrl: '', linkUrl: '', status: 'published', order: 0
 });
+// [UPDATE] Thêm trường description vào object lỗi
 const slideErrors = reactive({
-  title: '', imageUrl: '', order: ''
+  title: '', description: '', imageUrl: '', order: ''
 });
+// [NEW] Checkbox để bật/tắt tự động cập nhật link cho Slide
+const autoUpdateSlideLink = ref(true); 
 
 // --- STATE BRANDS ---
 const allBrands = ref([]);
@@ -51,6 +54,55 @@ const brandFormData = reactive({
 const brandErrors = reactive({
   name: '', imageUrl: '', order: ''
 });
+// [NEW] Checkbox để bật/tắt tự động cập nhật link cho Brand
+const autoUpdateBrandLink = ref(true);
+
+// --- HELPER SLUG ---
+function generateSlug(str) {
+    if (!str) return '';
+    str = str.toLowerCase();
+    str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+    str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+    str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+    str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+    str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+    str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+    str = str.replace(/đ/g, "d");
+    str = str.replace(/\u0300|\u0301|\u0303|\u0309|\u0323/g, ""); 
+    str = str.replace(/\u02C6|\u0306|\u031B/g, ""); 
+    str = str.replace(/ + /g, " ");
+    str = str.trim();
+    // Loại bỏ các ký tự đặc biệt
+    str = str.replace(/[!@%^&*()+=<>?/,.:;'"`&#[\]~$_\\-]/g, " ");
+    str = str.replace(/\s+/g, "-"); // Thay khoảng trắng bằng dấu gạch ngang
+    return str;
+}
+
+// --- WATCHERS TỰ ĐỘNG ĐIỀN LINK ---
+watch(() => slideFormData.title, (newVal) => {
+    // [UPDATE] Logic tự động điền:
+    // 1. Nếu đang bật chế độ auto update (autoUpdateSlideLink = true)
+    // 2. HOẶC nếu đang tạo mới và chưa tắt auto update
+    if (autoUpdateSlideLink.value) {
+        slideFormData.linkUrl = newVal ? '/' + generateSlug(newVal) : '';
+    }
+});
+
+watch(() => brandFormData.name, (newVal) => {
+    // [UPDATE] Tương tự cho Brand
+    if (autoUpdateBrandLink.value) {
+        brandFormData.linkUrl = newVal ? '/thuong-hieu/' + generateSlug(newVal) : '';
+    }
+});
+
+// Khi người dùng nhập tay vào ô link, tắt chế độ auto update để không bị ghi đè
+function onManualLinkInput(type) {
+    if (type === 'slide') {
+        autoUpdateSlideLink.value = false;
+    } else if (type === 'brand') {
+        autoUpdateBrandLink.value = false;
+    }
+}
 
 // --- VÒNG ĐỜI (LIFECYCLE) ---
 onMounted(() => {
@@ -205,8 +257,8 @@ function onSlideFileChange(event) {
       Swal.fire('Lỗi', 'Vui lòng chọn file hình ảnh.', 'error');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      Swal.fire('Lỗi', 'Kích thước ảnh không được quá 5MB.', 'error');
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      Swal.fire('Lỗi', 'Kích thước ảnh không được quá MB.', 'error');
       return;
     }
     slideFile.value = file;
@@ -224,6 +276,9 @@ function resetSlideForm() {
   slidePreviewImage.value = '';
   if (slideFileInputRef.value) slideFileInputRef.value.value = '';
   Object.keys(slideErrors).forEach(key => slideErrors[key] = '');
+  
+  // [NEW] Reset trạng thái auto update về mặc định (true)
+  autoUpdateSlideLink.value = true;
 }
 
 function openCreateSlideModal() {
@@ -250,6 +305,10 @@ function openEditSlideModal(slide) {
   if (slideFileInputRef.value) slideFileInputRef.value.value = '';
 
   Object.keys(slideErrors).forEach(key => slideErrors[key] = '');
+  
+  // [NEW] Khi sửa, mặc định tắt auto update để giữ link cũ, người dùng có thể bật lại nếu muốn
+  autoUpdateSlideLink.value = false; 
+  
   slideModalInstance.value.show();
 }
 
@@ -264,6 +323,12 @@ function validateSlideForm() {
 
   if (!slideFormData.title.trim()) {
     slideErrors.title = 'Vui lòng nhập tiêu đề slide.';
+    isValid = false;
+  }
+
+  // [UPDATE] Validate Mô tả ngắn vì DB yêu cầu NOT NULL
+  if (!slideFormData.description || !slideFormData.description.trim()) {
+    slideErrors.description = 'Vui lòng nhập mô tả ngắn.';
     isValid = false;
   }
 
@@ -290,7 +355,7 @@ async function handleSaveSlide() {
   try {
     const formData = new FormData();
     formData.append('title', slideFormData.title);
-    formData.append('description', slideFormData.description || '');
+    formData.append('description', slideFormData.description); // Đã validate, không cần || '' nữa
     formData.append('linkUrl', slideFormData.linkUrl || '');
     formData.append('order', slideFormData.order);
     formData.append('status', slideFormData.status);
@@ -320,6 +385,7 @@ async function handleSaveSlide() {
     if (error.response && error.response.data && error.response.data.errors) {
       const errs = error.response.data.errors;
       if (errs.title) slideErrors.title = errs.title[0];
+      if (errs.description) slideErrors.description = errs.description[0]; // Hiển thị lỗi từ backend nếu có
       if (errs.image) slideErrors.imageUrl = errs.image[0];
       Swal.fire('Lỗi nhập liệu', 'Vui lòng kiểm tra lại thông tin.', 'warning');
     } else {
@@ -340,6 +406,8 @@ async function handleSlideToggleStatus(slide) {
 
     const formData = new FormData();
     formData.append('title', slide.title);
+    // [UPDATE] DB yêu cầu description NOT NULL, nên cần gửi kèm giá trị hiện tại khi update status
+    formData.append('description', slide.description || ' '); 
     formData.append('status', newStatus);
     formData.append('_method', 'PUT');
 
@@ -399,6 +467,9 @@ function resetBrandForm() {
   brandPreviewImage.value = '';
   if (brandFileInputRef.value) brandFileInputRef.value.value = '';
   Object.keys(brandErrors).forEach(key => brandErrors[key] = '');
+  
+  // [NEW] Reset trạng thái auto update
+  autoUpdateBrandLink.value = true;
 }
 
 function openCreateBrandModal() {
@@ -424,6 +495,10 @@ function openEditBrandModal(brand) {
   if (brandFileInputRef.value) brandFileInputRef.value.value = '';
 
   Object.keys(brandErrors).forEach(key => brandErrors[key] = '');
+  
+  // [NEW] Tắt auto update khi sửa
+  autoUpdateBrandLink.value = false;
+  
   brandModalInstance.value.show();
 }
 
@@ -851,15 +926,22 @@ async function handleDeleteBrand(brand) {
                   </div>
 
                   <div class="mb-3">
-                    <label for="description" class="form-label">Mô tả ngắn</label>
-                    <textarea class="form-control" id="description" rows="3"
+                    <label for="description" class="form-label required">Mô tả ngắn</label>
+                    <textarea class="form-control" :class="{ 'is-invalid': slideErrors.description }" id="description" rows="3"
                       v-model="slideFormData.description"></textarea>
+                    <div class="invalid-feedback" v-if="slideErrors.description">{{ slideErrors.description }}</div>
                   </div>
 
                   <div class="mb-3">
-                    <label for="linkUrl" class="form-label">Link liên kết</label>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label for="linkUrl" class="form-label mb-0">Link liên kết</label>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="autoUpdateSlideLink" v-model="autoUpdateSlideLink">
+                            <label class="form-check-label small text-muted" for="autoUpdateSlideLink">Tự động tạo link</label>
+                        </div>
+                    </div>
                     <input type="text" class="form-control" id="linkUrl" v-model="slideFormData.linkUrl"
-                      placeholder="ví dụ: /san-pham/ao-thun">
+                      placeholder="ví dụ: /san-pham/ao-thun" @input="onManualLinkInput('slide')">
                   </div>
 
                   <div class="row">
@@ -944,9 +1026,15 @@ async function handleDeleteBrand(brand) {
                   </div>
 
                   <div class="mb-3">
-                    <label for="brandLinkUrl" class="form-label">Link liên kết</label>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label for="brandLinkUrl" class="form-label mb-0">Link liên kết</label>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="autoUpdateBrandLink" v-model="autoUpdateBrandLink">
+                            <label class="form-check-label small text-muted" for="autoUpdateBrandLink">Tự động tạo link</label>
+                        </div>
+                    </div>
                     <input type="text" class="form-control" id="brandLinkUrl" v-model="brandFormData.linkUrl"
-                      placeholder="ví dụ: /thuong-hieu/apple">
+                      placeholder="ví dụ: /thuong-hieu/apple" @input="onManualLinkInput('brand')">
                   </div>
 
                   <div class="row">
@@ -1118,6 +1206,7 @@ h3, .card-title, .modal-title {
 .page-item.active .page-link {
     background-color: #009981 !important;
     border-color: #009981 !important;
+    color: white !important;
 }
 .page-link {
     color: #00483D !important;
