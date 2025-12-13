@@ -102,14 +102,14 @@
     </div>
 
     <!-- Truyền biến products vào Chatbot -->
-    <Chatbot :products="products" />
+   
+
   </footer>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
 import Swal from 'sweetalert2';
-import Chatbot from '../../page/user/Chatbot.vue';
 import apiService from '../../apiService.js'; // Import apiService để gọi API
 
 // Khai báo biến products

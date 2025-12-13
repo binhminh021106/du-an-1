@@ -56,9 +56,24 @@ onMounted(async () => {
             // ------------------------------------
 
             const Toast = Swal.mixin({
-                toast: true, position: 'top-end', showConfirmButton: false, timer: 3000
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true,
+                background: '#fff',
+                color: '#333',
+                iconColor: '#009981',
+                customClass: {
+                    popup: 'elegant-toast',
+                    title: 'elegant-toast-title',
+                    timerProgressBar: 'elegant-toast-progress'
+                },
+                didOpen: (toast) => {
+                    toast.addEventListener('mouseenter', Swal.stopTimer)
+                    toast.addEventListener('mouseleave', Swal.resumeTimer)
+                }
             });
-            Toast.fire({ icon: 'success', title: 'Thanh toán thành công!' });
 
         } else {
             status.value = 'error';

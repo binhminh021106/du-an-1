@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useStore } from 'vuex'; 
+import { useStore } from 'vuex';
 import apiService from '../../apiService.js';
 import Swal from 'sweetalert2';
 
@@ -27,16 +27,25 @@ const showPopup = ref(false);
 const selectedOrder = ref(null);
 const isReviewing = ref(false);
 
-// [CẬP NHẬT] reviewData lưu trạng thái đánh giá cho TỪNG sản phẩm
-// Cấu trúc: { [itemId]: { rating: 0, content: '', product_id: 123 } }
-const reviewData = ref({}); 
+// reviewData lưu trạng thái đánh giá cho TỪNG sản phẩm
+const reviewData = ref({});
 
-// --- TÍNH NĂNG: Tìm kiếm và Phân trang ---
+// --- TÍNH NĂNG: Tìm kiếm, Tabs và Phân trang ---
 const searchQuery = ref('');
+const currentTab = ref('all');
 const currentPage = ref(1);
 const itemsPerPage = 5;
 
-// --- [MỚI] HÀM XỬ LÝ TIẾNG VIỆT ---
+const tabs = [
+  { label: 'Tất cả', value: 'all' },
+  { label: 'Chờ xác nhận', value: 'pending' },
+  { label: 'Chờ lấy hàng', value: 'processing' },
+  { label: 'Đang giao', value: 'shipping' },
+  { label: 'Hoàn thành', value: 'completed' },
+  { label: 'Đã hủy/Trả', value: 'cancelled' }
+];
+
+// --- HÀM XỬ LÝ TIẾNG VIỆT ---
 const removeVietnameseTones = (str) => {
   if (!str) return "";
   str = str.toLowerCase();
@@ -54,28 +63,29 @@ const removeVietnameseTones = (str) => {
 // --- HELPER: LẤY NHÃN BIẾN THỂ ---
 const getVariantLabel = (item) => {
   if (item.variant_name && item.variant_name !== 'Mặc định') return item.variant_name;
-  
   if (Array.isArray(item.attributes) && item.attributes.length > 0) {
-      if (typeof item.attributes[0] === 'object') {
-          return item.attributes.map(a => {
-              const attrName = a.name || a.attribute?.name || ''; 
-              const attrValue = a.value || '';
-              return attrName ? `${attrName}: ${attrValue}` : attrValue;
-          }).join(' - ').replace(/^: | :$/g, '');
-      }
-      return item.attributes.join(' - ');
+    if (typeof item.attributes[0] === 'object') {
+      return item.attributes.map(a => {
+        const attrName = a.name || a.attribute?.name || '';
+        const attrValue = a.value || '';
+        return attrName ? `${attrName}: ${attrValue}` : attrValue;
+      }).join(' - ').replace(/^: | :$/g, '');
+    }
+    return item.attributes.join(' - ');
   }
-
   if (item.attributes && typeof item.attributes === 'object') {
-     return Object.values(item.attributes).join(' - ');
+    return Object.values(item.attributes).join(' - ');
   }
   return null;
 };
 
 // --- Helper Map Trạng thái ---
 const mapStatusBackendToFrontend = (status) => {
+  if (!status) return 'Đã đặt hàng';
+  const s = status.toLowerCase().trim();
   const map = {
     'pending': 'Đã đặt hàng',
+    'approved': 'Đã duyệt',
     'confirmed': 'Chờ chuyển phát',
     'processing': 'Chờ chuyển phát',
     'shipping': 'Đang giao hàng',
@@ -86,8 +96,55 @@ const mapStatusBackendToFrontend = (status) => {
     'returned': 'Đã trả hàng',
     'returning': 'Đang trả hàng'
   };
-  return map[status] || 'Đã đặt hàng';
+  return map[s] || map[status] || 'Đã đặt hàng';
 };
+
+// --- Helper Class CSS cho Badge ---
+const getStatusClass = (statusRaw) => {
+  if (!statusRaw) return 'status-default';
+  const s = statusRaw.toLowerCase().trim();
+  
+  if (['cancelled'].includes(s)) return 'status-da-huy';
+  if (['returning', 'return'].includes(s)) return 'status-dang-tra-hang';
+  if (['returned', 'refunded'].includes(s)) return 'status-da-tra-hang';
+  
+  if (['pending'].includes(s)) return 'status-da-dat-hang';
+  if (['shipping', 'shipped', 'processing', 'confirmed', 'approved'].includes(s)) return 'status-dang-giao-hang';
+  if (['delivered', 'completed'].includes(s)) return 'status-da-giao-thanh-cong';
+  return 'status-default';
+};
+
+// [NEW IMPROVED] Logic xác định loại trạng thái ngoại lệ (Exception Type)
+// Hàm này là "trái tim" để đảm bảo hiển thị đúng
+const getExceptionType = (statusRaw) => {
+  const s = statusRaw ? statusRaw.toLowerCase().trim() : '';
+  if (['returning', 'return', 'processing_return'].includes(s)) return 'returning';
+  if (['returned', 'refunded', 'return_completed'].includes(s)) return 'returned';
+  // Mặc định là cancelled nếu rơi vào nhóm ẩn progress bar nhưng không phải hoàn trả
+  return 'cancelled';
+};
+
+const getExceptionMessage = (statusRaw) => {
+    const type = getExceptionType(statusRaw);
+    if (type === 'returning') return 'Đơn hàng đang được xử lý hoàn trả';
+    if (type === 'returned') return 'Đơn hàng đã hoàn trả thành công';
+    return 'Đơn hàng đã bị hủy';
+};
+
+const getExceptionIcon = (statusRaw) => {
+    const type = getExceptionType(statusRaw);
+    if (type === 'returning') return 'fas fa-shipping-fast fa-flip-horizontal'; // Icon xe tải quay đầu
+    if (type === 'returned') return 'fas fa-clipboard-check'; // Icon check list
+    return 'fas fa-times-circle'; // Icon X
+};
+
+const getExceptionStyleClass = (statusRaw) => {
+    const type = getExceptionType(statusRaw);
+    if (type === 'returning') return 'msg-returning';
+    if (type === 'returned') return 'msg-returned';
+    return ''; // Mặc định style của cancelled
+};
+
 
 // --- FETCH ORDERS ---
 const fetchOrders = async () => {
@@ -98,62 +155,66 @@ const fetchOrders = async () => {
 
     orders.value = rawData.map(order => {
       const statusVN = mapStatusBackendToFrontend(order.status);
-      
-      // Logic xác định trạng thái hoàn thành để cho phép đánh giá
       const canReviewState = order.status === 'delivered' || order.status === 'completed';
+
+      // Map Items và thông tin Review (nếu có)
+      const mappedItems = order.items ? order.items.map(item => {
+        const variant = item.variant || {};
+        const product = variant.product || {};
+        let displayName = product.name || item.product_name || 'Sản phẩm';
+        const rawAttributes = variant.attribute_values || variant.attributes;
+        let simpleVariantLabel = null;
+        if (variant.name && variant.name !== 'Mặc định' && variant.name !== displayName) {
+          simpleVariantLabel = variant.name;
+        }
+        const rawImagePath = variant.image || product.thumbnail_url;
+        const realProductId = product.id || item.product_id;
+
+        // [QUAN TRỌNG] Lấy thông tin review từ item
+        const existingReview = item.review || null;
+
+        return {
+          id: item.id,
+          product_id: realProductId,
+          name: displayName,
+          variant_name: simpleVariantLabel,
+          attributes: rawAttributes,
+          image: getImageUrl(rawImagePath),
+          qty: item.quantity,
+          price: item.price,
+          quantity: item.quantity,
+          review: existingReview // Lưu lại review cũ
+        };
+      }) : [];
+
+      const hasAnyReview = mappedItems.some(i => i.review);
 
       return {
         id: String(order.id),
         date: order.created_at,
         status: statusVN,
         statusRaw: order.status,
-        
+
         canCancel: order.status === 'pending',
-        canRepurchase: true, // Luôn cho phép mua lại
-        canReturn: order.status === 'delivered',
+        canRepurchase: true,
+        canReturn: ['delivered', 'completed'].includes(order.status),
         canReview: canReviewState,
-        isReviewed: false, // Backend cần trả về cờ này nếu muốn ẩn nút đánh giá sau khi đã đánh giá
+        hasAnyReview: hasAnyReview, 
 
-        items: order.items ? order.items.map(item => {
-          const variant = item.variant || {};
-          const product = variant.product || {};
-          let displayName = product.name || item.product_name || 'Sản phẩm';
-          const rawAttributes = variant.attribute_values || variant.attributes;
-          let simpleVariantLabel = null;
-          if (variant.name && variant.name !== 'Mặc định' && variant.name !== displayName) {
-             simpleVariantLabel = variant.name;
-          }
-          const rawImagePath = variant.image || product.thumbnail_url;
-
-          // Lấy Product ID chuẩn để gửi review
-          const realProductId = product.id || item.product_id;
-
-          return {
-            id: item.id, // ID của order_item
-            product_id: realProductId, // ID sản phẩm thực tế
-            name: displayName,
-            variant_name: simpleVariantLabel, 
-            attributes: rawAttributes, 
-            image: getImageUrl(rawImagePath),
-            qty: item.quantity,
-            price: item.price,
-            quantity: item.quantity
-          };
-        }) : [],
+        items: mappedItems,
 
         customer: {
           name: order.customer_name,
           phone: order.customer_phone,
           address: order.shipping_address
         },
-
         payment: {
           subtotal: order.subtotal_amount,
           shippingFee: order.shipping_fee,
           total: order.total_amount,
           method: order.payment_method
         },
-        total: order.total_amount 
+        total: order.total_amount
       };
     });
 
@@ -170,21 +231,46 @@ onMounted(() => {
   fetchOrders();
 });
 
-// --- LOGIC UI (Search & Pagination) ---
+// [FIX] Xóa thanh cuộn body khi popup mở
+watch(showPopup, (newVal) => {
+  if (newVal) {
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
+});
+
+onUnmounted(() => {
+  document.body.style.overflow = '';
+});
+
+// --- LOGIC UI ---
 const sortedOrders = computed(() => orders.value);
 
 const filteredOrders = computed(() => {
-  const query = removeVietnameseTones(searchQuery.value.trim()); // Chuẩn hóa từ khóa tìm kiếm
-  
-  if (!query) return sortedOrders.value;
-
-  return sortedOrders.value.filter(order => {
-    const orderIdMatch = String(order.id).toLowerCase().includes(query);
-    const itemMatch = order.items.some(item => 
-      removeVietnameseTones(item.name).includes(query)
-    );
-    return orderIdMatch || itemMatch;
-  });
+  let result = sortedOrders.value;
+  if (currentTab.value !== 'all') {
+    result = result.filter(order => {
+      const s = order.statusRaw ? order.statusRaw.toLowerCase().trim() : '';
+      if (currentTab.value === 'pending') return s === 'pending';
+      if (currentTab.value === 'processing') return ['confirmed', 'processing', 'approved'].includes(s);
+      if (currentTab.value === 'shipping') return ['shipping', 'shipped'].includes(s);
+      if (currentTab.value === 'completed') return ['delivered', 'completed'].includes(s);
+      if (currentTab.value === 'cancelled') return ['cancelled', 'returned', 'returning'].includes(s);
+      return true;
+    });
+  }
+  const query = removeVietnameseTones(searchQuery.value.trim());
+  if (query) {
+    result = result.filter(order => {
+      const orderIdMatch = String(order.id).toLowerCase().includes(query);
+      const itemMatch = order.items.some(item =>
+        removeVietnameseTones(item.name).includes(query)
+      );
+      return orderIdMatch || itemMatch;
+    });
+  }
+  return result;
 });
 
 const totalPages = computed(() => Math.ceil(filteredOrders.value.length / itemsPerPage));
@@ -198,34 +284,39 @@ const setPage = (page) => { if (page >= 1 && page <= totalPages.value) currentPa
 const prevPage = () => { if (currentPage.value > 1) currentPage.value--; };
 const nextPage = () => { if (currentPage.value < totalPages.value) currentPage.value++; };
 
-watch(searchQuery, () => { currentPage.value = 1; });
+watch([searchQuery, currentTab], () => { currentPage.value = 1; });
 
 // --- LOGIC CHI TIẾT & HÀNH ĐỘNG ---
-const isCancellable = computed(() => selectedOrder.value?.canCancel); 
+const isCancellable = computed(() => selectedOrder.value?.canCancel);
 const isRepurchasable = computed(() => selectedOrder.value?.canRepurchase);
 const isReturnable = computed(() => selectedOrder.value?.canReturn);
-const isReviewAvailable = computed(() => selectedOrder.value?.canReview && !selectedOrder.value?.isReviewed);
+// Vẫn cho phép review nếu trạng thái ok, không chặn bởi biến isReviewed cũ nữa
+const isReviewAvailable = computed(() => selectedOrder.value?.canReview);
 
 const orderSteps = [
   { key: 'placed', label: 'Đã đặt hàng', statusMatch: ['Đã đặt hàng', 'pending'] },
-  { key: 'shipping_prep', label: 'Chờ chuyển phát', statusMatch: ['Chờ chuyển phát', 'processing', 'confirmed'] },
+  { key: 'shipping_prep', label: 'Chờ chuyển phát', statusMatch: ['Chờ chuyển phát', 'processing', 'confirmed', 'approved'] },
   { key: 'in_transit', label: 'Đang giao hàng', statusMatch: ['Đang giao hàng', 'shipping', 'shipped'] },
   { key: 'delivered', label: 'Đã giao đơn hàng', statusMatch: ['Đã giao thành công', 'Hoàn thành, có thể đánh giá', 'delivered', 'completed'] },
 ];
 
 const getActiveStepIndex = computed(() => {
   if (!selectedOrder.value) return -1;
-  if (selectedOrder.value.status === 'Đã hủy' || selectedOrder.value.statusRaw === 'cancelled') return -2;
+  const raw = selectedOrder.value.statusRaw ? selectedOrder.value.statusRaw.toLowerCase().trim() : '';
+  
+  // Xác định xem có phải là nhóm trạng thái đặc biệt (Hủy/Trả) hay không
+  // Dùng includes để bắt cả các biến thể (vd: returned_pending)
+  if (['cancelled', 'returned', 'returning', 'refunded', 'return'].some(k => raw.includes(k))) {
+    return -2;
+  }
+
   let activeIndex = -1;
-  const currentStatus = selectedOrder.value.status;
   for (let i = orderSteps.length - 1; i >= 0; i--) {
-    if (orderSteps[i].label === currentStatus || orderSteps[i].statusMatch.includes(currentStatus) || orderSteps[i].statusMatch.includes(selectedOrder.value.statusRaw)) {
-        activeIndex = i;
-        break;
+    if (orderSteps[i].statusMatch.map(s => s.toLowerCase()).includes(raw)) {
+      activeIndex = i;
+      break;
     }
   }
-  if (currentStatus === 'Đang giao hàng') return 2;
-  if (currentStatus === 'Đã đặt hàng') return 0;
   return activeIndex;
 });
 
@@ -236,33 +327,24 @@ const formatDate = (isoDate) => {
   return date.toLocaleDateString('vi-VN');
 };
 
-const getStatusClass = (status) => {
-  if (!status) return '';
-  const s = status.toLowerCase();
-  if (s.includes('hủy')) return 'status-da-huy';
-  if (s.includes('đặt hàng')) return 'status-da-dat-hang';
-  if (s.includes('giao hàng')) return 'status-dang-giao-hang';
-  if (s.includes('thành công') || s.includes('hoàn thành')) return 'status-da-giao-thanh-cong';
-  return 'status-default';
-};
-
-// --- XỬ LÝ MỞ POPUP & REVIEW ---
 const openDetailPopup = (order, startReview = false) => {
   selectedOrder.value = order;
   isReviewing.value = startReview;
-  
-  // [CẬP NHẬT] Khởi tạo object reviewData cho từng sản phẩm
   reviewData.value = {};
+
   if (order && order.items) {
-      order.items.forEach(item => {
-          reviewData.value[item.id] = {
-              product_id: item.product_id,
-              rating: 0,
-              content: ''
-          };
-      });
+    order.items.forEach(item => {
+      if (item.review) {
+        reviewData.value[item.id] = { 
+          product_id: item.product_id, 
+          rating: item.review.rating || 5, 
+          content: item.review.content || '' 
+        };
+      } else {
+        reviewData.value[item.id] = { product_id: item.product_id, rating: 0, content: '' };
+      }
+    });
   }
-  
   showPopup.value = true;
 };
 
@@ -272,17 +354,16 @@ const closeDetailPopup = () => {
   isReviewing.value = false;
 };
 
-// --- API Actions ---
+// --- API ACTIONS ---
 const handleRepurchaseList = async (order) => {
   try {
     Swal.fire({ title: 'Đang xử lý...', didOpen: () => Swal.showLoading() });
     await apiService.post(`/orders/${order.id}/repurchase`);
-    await store.dispatch('fetchCart'); 
+    await store.dispatch('fetchCart');
     Swal.fire('Thành công!', 'Sản phẩm đã được thêm vào giỏ!', 'success').then((r) => {
       if (r.isConfirmed) router.push('/cart');
     });
   } catch (error) {
-    console.error("Lỗi mua lại:", error);
     Swal.fire('Lỗi', 'Không thể mua lại lúc này.', 'error');
   }
 };
@@ -294,7 +375,6 @@ const handleCancelList = async (order) => {
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#d33',
-    cancelButtonColor: '#3085d6',
     confirmButtonText: 'Đồng ý hủy',
     cancelButtonText: 'Không'
   });
@@ -303,76 +383,72 @@ const handleCancelList = async (order) => {
     try {
       await apiService.delete(`/order/${order.id}`);
       Swal.fire('Thành công!', `Đơn hàng #${order.id} đã được hủy.`, 'success');
-      await fetchOrders(); 
+      await fetchOrders();
       if (selectedOrder.value && String(selectedOrder.value.id) === String(order.id)) {
         closeDetailPopup();
       }
     } catch (error) {
-      console.error("Lỗi hủy đơn:", error);
       Swal.fire('Lỗi', 'Không thể hủy đơn hàng này.', 'error');
     }
   }
 };
 
-const handleReturnList = (order) => {
-  Swal.fire('Yêu cầu hoàn hàng', `Đã gửi yêu cầu hoàn hàng cho đơn hàng #${order.id}.`, 'info');
-};
+const handleReturnList = async (order) => {
+  const result = await Swal.fire({
+    title: 'Yêu cầu hoàn hàng?',
+    text: `Bạn có chắc muốn yêu cầu hoàn hàng cho đơn #${order.id}?`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    confirmButtonText: 'Gửi yêu cầu',
+    cancelButtonText: 'Hủy'
+  });
 
-const handleStartReviewFromList = (order) => {
-  openDetailPopup(order, true);
-};
-
-// Wrapper functions cho Popup
-const handleCancel = () => { handleCancelList(selectedOrder.value); };
-const handleRepurchase = () => { handleRepurchaseList(selectedOrder.value); }; 
-const handleStartReview = () => { 
-    isReviewing.value = true;
-    // Khởi tạo lại reviewData nếu chuyển từ xem chi tiết sang đánh giá
-    if (selectedOrder.value && Object.keys(reviewData.value).length === 0) {
-        selectedOrder.value.items.forEach(item => {
-            reviewData.value[item.id] = {
-                product_id: item.product_id,
-                rating: 0,
-                content: ''
-            };
-        });
+  if (result.isConfirmed) {
+    try {
+      Swal.fire({ title: 'Đang xử lý...', didOpen: () => Swal.showLoading() });
+      await apiService.post(`/orders/${order.id}/return`);
+      
+      Swal.fire('Thành công!', 'Yêu cầu hoàn hàng đã được gửi. Vui lòng chờ Admin xử lý.', 'success');
+      await fetchOrders(); 
+      
+      if (selectedOrder.value && String(selectedOrder.value.id) === String(order.id)) {
+        closeDetailPopup();
+      }
+    } catch (error) {
+       Swal.fire('Lỗi', error.response?.data?.message || 'Không thể gửi yêu cầu hoàn hàng.', 'error');
     }
+  }
 };
-const handleReturn = () => { handleReturnList(selectedOrder.value); };
 
-// --- [CẬP NHẬT] GỬI ĐÁNH GIÁ (MULTIPLE) ---
+const handleStartReviewFromList = (order) => openDetailPopup(order, true);
+const handleCancel = () => handleCancelList(selectedOrder.value);
+const handleRepurchase = () => handleRepurchaseList(selectedOrder.value);
+const handleStartReview = () => isReviewing.value = true;
+const handleReturn = () => handleReturnList(selectedOrder.value);
+
 const handleSubmitReviews = async () => {
-  // Lọc ra các sản phẩm đã được đánh giá (rating > 0)
   const reviewsToSend = Object.values(reviewData.value).filter(r => r.rating > 0);
-
   if (reviewsToSend.length === 0) {
     Swal.fire('Chưa có đánh giá', 'Vui lòng chọn số sao cho ít nhất một sản phẩm!', 'warning');
     return;
   }
-
   try {
     Swal.fire({ title: 'Đang gửi đánh giá...', didOpen: () => Swal.showLoading() });
-
-    // Gửi song song các request đánh giá cho từng sản phẩm
-    const promises = reviewsToSend.map(review => 
-        apiService.post('/reviews', {
-            product_id: review.product_id,
-            rating: review.rating,
-            content: review.content
-        })
+    const promises = reviewsToSend.map(review =>
+      apiService.post('/reviews', { 
+        product_id: review.product_id, 
+        rating: review.rating, 
+        content: review.content,
+        order_id: selectedOrder.value.id 
+      })
     );
-
     await Promise.all(promises);
-
     Swal.fire('Cảm ơn!', 'Đánh giá của bạn đã được gửi thành công!', 'success');
     isReviewing.value = false;
-    // Tùy chọn: Refresh lại đơn hàng để cập nhật trạng thái nếu backend có trả về isReviewed
-    // fetchOrders(); 
-    
+    await fetchOrders();
   } catch (error) {
-    console.error("Lỗi gửi review:", error);
-    const msg = error.response?.data?.message || 'Có lỗi xảy ra khi gửi đánh giá.';
-    Swal.fire('Thất bại', msg, 'error');
+    Swal.fire('Thất bại', error.response?.data?.message || 'Có lỗi xảy ra.', 'error');
   }
 };
 </script>
@@ -387,34 +463,36 @@ const handleSubmitReviews = async () => {
 
     <div v-else>
       <div v-if="orders.length > 0">
-        
+
+        <div class="tabs-container">
+          <button v-for="tab in tabs" :key="tab.value" @click="currentTab = tab.value"
+            :class="['tab-btn', { active: currentTab === tab.value }]">
+            {{ tab.label }}
+          </button>
+        </div>
+
         <div class="search-container">
           <i class="fas fa-search search-icon"></i>
-          <input 
-            type="text" 
-            :value="searchQuery"
-            @input="searchQuery = $event.target.value"
-            placeholder="Tìm theo mã đơn hàng hoặc tên sản phẩm..."
-            class="search-bar"
-          >
+          <input type="text" :value="searchQuery" @input="searchQuery = $event.target.value"
+            placeholder="Tìm theo mã đơn hàng hoặc tên sản phẩm..." class="search-bar">
         </div>
 
         <div v-if="filteredOrders.length > 0">
           <div class="order-cards">
             <div v-for="order in paginatedOrders" :key="order.id" class="order-card">
-              
+
               <div @click.stop="openDetailPopup(order)">
                 <div class="card-header">
                   <strong>Đơn hàng #{{ order.id }}</strong>
                 </div>
-                
+
                 <p class="card-status-line">
-                  Trạng thái: 
-                  <span :class="['status-badge', getStatusClass(order.status)]">
+                  Trạng thái:
+                  <span :class="['status-badge', getStatusClass(order.statusRaw)]">
                     {{ order.status }}
                   </span>
                 </p>
-                
+
                 <p>Ngày đặt: {{ formatDate(order.date) }}</p>
 
                 <div class="product-table">
@@ -423,76 +501,52 @@ const handleSubmitReviews = async () => {
                     <span class="col-qty">SL</span>
                     <span class="col-price">Giá</span>
                   </div>
-                  <div v-for="(product, index) in order.items" :key="index" class="product-row">
+                  <div v-for="(product, index) in order.items.slice(0, 3)" :key="index" class="product-row">
                     <div class="col-name-wrapper col-name">
-                        <div class="product-name-text">{{ product.name }}</div>
-                        <div class="item-variants" v-if="getVariantLabel(product)">
-                            <span class="variant-badge">
-                                <i class="fa-solid fa-layer-group"></i> {{ getVariantLabel(product) }}
-                            </span>
-                        </div>
+                      <div class="product-name-text">{{ product.name }}</div>
+                      <div class="item-variants" v-if="getVariantLabel(product)">
+                        <span class="variant-badge"><i class="fa-solid fa-layer-group"></i> {{ getVariantLabel(product)
+                          }}</span>
+                      </div>
                     </div>
                     <span class="col-qty">x{{ product.qty || product.quantity }}</span>
                     <span class="col-price">{{ formatCurrency(product.price) }}</span>
+                  </div>
+                  <div v-if="order.items.length > 3" class="more-items-hint">
+                    ... và {{ order.items.length - 3 }} sản phẩm khác
                   </div>
                 </div>
                 <p class="total-amount">Tổng cộng: <strong>{{ formatCurrency(order.total) }}</strong></p>
               </div>
 
               <div class="card-action-buttons">
-                <button class="detail-btn" @click.stop="openDetailPopup(order)">
-                  <i class="fas fa-eye"></i> Xem Chi Tiết
-                </button>
-                <button
-                  v-if="order.canCancel && (order.status === 'Đã đặt hàng' || order.status === 'Đang giao hàng')"
-                  class="action-btn-list danger-btn-list"
-                  @click.stop="handleCancelList(order)">
-                  <i class="fas fa-times-circle"></i> Hủy Đơn
-                </button>
-                <button
-                  v-if="order.canRepurchase"
-                  class="action-btn-list primary-btn-list"
-                  @click.stop="handleRepurchaseList(order)">
-                  <i class="fas fa-redo-alt"></i> Mua Lại
-                </button>
-                <button
-                  v-if="order.canReturn && (order.status === 'Đã giao thành công' || order.status === 'Hoàn thành, có thể đánh giá')"
-                  class="action-btn-list secondary-btn-list"
-                  @click.stop="handleReturnList(order)">
-                  <i class="fas fa-undo-alt"></i> Hoàn Hàng
-                </button>
-                <button
-                  v-if="order.canReview && !order.isReviewed && (order.status === 'Đã giao thành công' || order.status === 'Hoàn thành, có thể đánh giá')"
-                  class="action-btn-list success-btn-list"
+                <button class="detail-btn" @click.stop="openDetailPopup(order)"><i class="fas fa-eye"></i> Xem Chi
+                  Tiết</button>
+                <button v-if="order.canCancel" class="action-btn-list danger-btn-list"
+                  @click.stop="handleCancelList(order)"><i class="fas fa-times-circle"></i> Hủy Đơn</button>
+                <button v-if="order.canRepurchase" class="action-btn-list primary-btn-list"
+                  @click.stop="handleRepurchaseList(order)"><i class="fas fa-redo-alt"></i> Mua Lại</button>
+                <button v-if="order.canReturn" class="action-btn-list secondary-btn-list"
+                  @click.stop="handleReturnList(order)"><i class="fas fa-undo-alt"></i> Hoàn Hàng</button>
+                
+                <button v-if="order.canReview" 
+                  :class="['action-btn-list', order.hasAnyReview ? 'warning-btn-list' : 'success-btn-list']"
                   @click.stop="handleStartReviewFromList(order)">
-                  <i class="fas fa-star"></i> Đánh Giá
+                  <i :class="order.hasAnyReview ? 'fas fa-edit' : 'fas fa-star'"></i> 
+                  {{ order.hasAnyReview ? 'Sửa Đánh Giá' : 'Đánh Giá' }}
                 </button>
               </div>
-              
             </div>
           </div>
 
           <div class="pagination-container" v-if="totalPages > 1">
-            <button @click="prevPage" :disabled="currentPage === 1" class="page-btn">
-              &laquo; Trước
-            </button>
-            <button 
-              v-for="page in totalPages" 
-              :key="page"
-              @click="setPage(page)"
-              :class="['page-btn', { 'active': currentPage === page }]"
-            >
-              {{ page }}
-            </button>
-            <button @click="nextPage" :disabled="currentPage === totalPages" class="page-btn">
-              Sau &raquo;
-            </button>
+            <button @click="prevPage" :disabled="currentPage === 1" class="page-btn">&laquo; Trước</button>
+            <button v-for="page in totalPages" :key="page" @click="setPage(page)"
+              :class="['page-btn', { 'active': currentPage === page }]">{{ page }}</button>
+            <button @click="nextPage" :disabled="currentPage === totalPages" class="page-btn">Sau &raquo;</button>
           </div>
-
         </div>
-        <p v-else class="no-results">
-          Không tìm thấy đơn hàng nào khớp với tìm kiếm của bạn.
-        </p>
+        <p v-else class="no-results">Không tìm thấy đơn hàng nào ở mục này.</p>
       </div>
       <p v-else class="no-orders">Bạn chưa có đơn hàng nào.</p>
     </div>
@@ -503,16 +557,16 @@ const handleSubmitReviews = async () => {
         <button class="close-btn" @click="closeDetailPopup">×</button>
         <h2 class="popup-title">🛒 Chi Tiết Đơn Hàng #{{ selectedOrder.id }}</h2>
 
-        <!-- Progress Bar -->
         <div class="status-progress-bar-container">
-          <div v-if="getActiveStepIndex === -2" class="cancelled-status-message">
-            ❌ Đơn hàng đã bị hủy
+          <!-- [MODIFIED] Logic hiển thị thông báo trạng thái đặc biệt -->
+          <div v-if="getActiveStepIndex === -2" 
+               :class="['cancelled-status-message', getExceptionStyleClass(selectedOrder.statusRaw)]">
+             <i :class="getExceptionIcon(selectedOrder.statusRaw)"></i> {{ getExceptionMessage(selectedOrder.statusRaw) }}
           </div>
+          
           <div v-else class="status-progress-bar">
-            <div v-for="(step, index) in orderSteps" :key="step.key" class="step" :class="{
-              'active': index <= getActiveStepIndex,
-              'current': index === getActiveStepIndex
-            }">
+            <div v-for="(step, index) in orderSteps" :key="step.key" class="step"
+              :class="{ 'active': index <= getActiveStepIndex, 'current': index === getActiveStepIndex }">
               <div class="icon-container">
                 <i v-if="step.key === 'placed'" class="fas fa-box-open"></i>
                 <i v-else-if="step.key === 'shipping_prep'" class="fas fa-truck-loading"></i>
@@ -529,120 +583,122 @@ const handleSubmitReviews = async () => {
           </div>
         </div>
 
-        <!-- Thông tin chung -->
-        <div class="detail-grid">
+        <div class="popup-body-scroll">
+          <div class="detail-grid">
             <div class="detail-card info-section">
-                <h3><i class="fas fa-info-circle section-icon"></i> Thông tin Đơn hàng</h3>
-                <div class="info-row"><span>Mã đơn hàng:</span> <strong>#{{ selectedOrder.id }}</strong></div>
-                <div class="info-row"><span>Ngày đặt:</span> <span>{{ formatDate(selectedOrder.date) }}</span></div>
-                <div class="info-row"><span>Trạng thái:</span> <strong class="status-text">{{ selectedOrder.status }}</strong></div>
-            </div>
-
-            <div class="detail-card customer-section">
-                <h3><i class="fas fa-user section-icon"></i> Thông tin Khách hàng</h3>
-                <p><strong>{{ selectedOrder.customer.name }}</strong></p>
-                <p><i class="fas fa-phone-alt"></i> {{ selectedOrder.customer.phone }}</p>
-                <p><i class="fas fa-map-marker-alt"></i> {{ selectedOrder.customer.address }}</p>
-            </div>
-        </div>
-
-        <!-- [CHỈ HIỆN KHI KHÔNG REVIEW] Danh sách sản phẩm -->
-        <div v-if="!isReviewing" class="detail-card product-section">
-          <h3><i class="fas fa-box-open section-icon"></i> Sản phẩm đã đặt</h3>
-          <div class="product-list-popup">
-            <div v-for="item in selectedOrder.items" :key="item.id" class="product-item">
-              <img :src="item.image" :alt="item.name" class="product-image" @error="$event.target.src = 'https://placehold.co/70x70?text=No+Img'">
-              <div class="product-info">
-                <span class="product-name">{{ item.name }}</span>
-                <div class="item-variants" v-if="getVariantLabel(item)">
-                    <span class="variant-badge">
-                        <i class="fa-solid fa-layer-group"></i> {{ getVariantLabel(item) }}
-                    </span>
-                </div>
-                <span class="product-qty">Số lượng: x{{ item.qty || item.quantity }}</span>
+              <h3><i class="fas fa-info-circle section-icon"></i> Thông tin Đơn hàng</h3>
+              <div class="info-row"><span>Mã đơn hàng:</span> <strong>#{{ selectedOrder.id }}</strong></div>
+              <div class="info-row"><span>Ngày đặt:</span> <span>{{ formatDate(selectedOrder.date) }}</span></div>
+              <div class="info-row"><span>Trạng thái:</span> <strong
+                  :class="['status-badge', getStatusClass(selectedOrder.statusRaw)]">{{ selectedOrder.status }}</strong>
               </div>
-              <span class="product-price">{{ formatCurrency(item.price * (item.qty || item.quantity)) }}</span>
+            </div>
+            <div class="detail-card customer-section">
+              <h3><i class="fas fa-user section-icon"></i> Thông tin Khách hàng</h3>
+              <p><strong>{{ selectedOrder.customer.name }}</strong></p>
+              <p><i class="fas fa-phone-alt"></i> {{ selectedOrder.customer.phone }}</p>
+              <p><i class="fas fa-map-marker-alt"></i> {{ selectedOrder.customer.address }}</p>
             </div>
           </div>
-        </div>
 
-        <!-- [CHỈ HIỆN KHI KHÔNG REVIEW] Thanh toán & Action -->
-        <div v-if="!isReviewing">
+          <div v-if="!isReviewing" class="detail-card product-section">
+            <h3><i class="fas fa-box-open section-icon"></i> Sản phẩm đã đặt</h3>
+            <div class="product-list-popup">
+              <div v-for="item in selectedOrder.items" :key="item.id" class="product-item">
+                <img :src="item.image" @error="$event.target.src = 'https://placehold.co/70x70?text=No+Img'"
+                  class="product-image">
+                <div class="product-info">
+                  <span class="product-name">{{ item.name }}</span>
+                  <div class="item-variants" v-if="getVariantLabel(item)">
+                    <span class="variant-badge"><i class="fa-solid fa-layer-group"></i> {{ getVariantLabel(item)
+                      }}</span>
+                  </div>
+                  <span class="product-qty">Số lượng: x{{ item.qty || item.quantity }}</span>
+                  <div v-if="item.review" class="reviewed-badge">
+                    <i class="fas fa-check-circle"></i> Đã đánh giá: {{ item.review.rating }} sao
+                  </div>
+                </div>
+                <span class="product-price">{{ formatCurrency(item.price * (item.qty || item.quantity)) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="!isReviewing">
             <div class="detail-card payment-section">
               <h3><i class="fas fa-credit-card section-icon"></i> Chi tiết Thanh toán</h3>
-              <div class="summary-row"><span>Tạm tính:</span> <span>{{ formatCurrency(selectedOrder.payment.subtotal) }}</span></div>
-              <div class="summary-row"><span>Phí giao hàng:</span> <span>{{ formatCurrency(selectedOrder.payment.shippingFee) }}</span></div>
-              <div class="summary-row total"><strong>Tổng cộng:</strong> <strong class="total-amount">{{ formatCurrency(selectedOrder.payment.total) }}</strong></div>
-              <div class="summary-row payment-method"><span>Hình thức thanh toán:</span> <span><i class="fas fa-money-bill-wave"></i> {{ selectedOrder.payment.method }}</span></div>
+              <div class="summary-row"><span>Tạm tính:</span> <span>{{ formatCurrency(selectedOrder.payment.subtotal)
+                  }}</span></div>
+              <div class="summary-row"><span>Phí giao hàng:</span> <span>{{
+                formatCurrency(selectedOrder.payment.shippingFee) }}</span></div>
+              <div class="summary-row total"><strong>Tổng cộng:</strong> <strong class="total-amount">{{
+                formatCurrency(selectedOrder.payment.total) }}</strong></div>
+              <div class="summary-row payment-method"><span>Hình thức thanh toán:</span> <span><i
+                    class="fas fa-money-bill-wave"></i> {{ selectedOrder.payment.method }}</span></div>
             </div>
-
             <div class="detail-card action-section">
               <h3><i class="fas fa-cogs section-icon"></i> Hành Động</h3>
               <div class="action-buttons">
-                <button v-if="isCancellable" @click="handleCancel" class="action-btn danger-btn"><i class="fas fa-times-circle"></i> Hủy Đơn Hàng</button>
-                <button v-if="isRepurchasable" @click="handleRepurchase" class="action-btn primary-btn"><i class="fas fa-redo-alt"></i> Mua Lại Đơn Này</button>
-                <button v-if="isReviewAvailable" @click="handleStartReview" class="action-btn success-btn"><i class="fas fa-star"></i> Đánh Giá</button>
-                <button v-else-if="selectedOrder.isReviewed" class="action-btn disabled-btn" disabled><i class="fas fa-check-circle"></i> Đã Đánh Giá</button>
-                <button v-if="isReturnable" @click="handleReturn" class="action-btn secondary-btn"><i class="fas fa-undo-alt"></i> Yêu Cầu Hoàn Hàng</button>
+                <button v-if="isCancellable" @click="handleCancel" class="action-btn danger-btn"><i
+                    class="fas fa-times-circle"></i> Hủy Đơn Hàng</button>
+                <button v-if="isRepurchasable" @click="handleRepurchase" class="action-btn primary-btn"><i
+                    class="fas fa-redo-alt"></i> Mua Lại Đơn Này</button>
+                
+                <button v-if="isReviewAvailable" @click="handleStartReview" 
+                  :class="['action-btn', selectedOrder.hasAnyReview ? 'warning-btn' : 'success-btn']">
+                  <i :class="selectedOrder.hasAnyReview ? 'fas fa-edit' : 'fas fa-star'"></i> 
+                  {{ selectedOrder.hasAnyReview ? 'Xem/Sửa Đánh Giá' : 'Đánh Giá' }}
+                </button>
+                
+                <button v-if="isReturnable" @click="handleReturn" class="action-btn secondary-btn"><i
+                    class="fas fa-undo-alt"></i> Yêu Cầu Hoàn Hàng</button>
               </div>
             </div>
-        </div>
+          </div>
 
-        <!-- [SECTION MỚI] FORM ĐÁNH GIÁ TỪNG SẢN PHẨM -->
-        <div v-if="isReviewing" class="review-container">
-          <h3 class="review-header"><i class="fas fa-star section-icon"></i> Đánh Giá Sản Phẩm</h3>
-          <p class="review-hint">Vui lòng đánh giá các sản phẩm bạn đã mua.</p>
-          
-          <div class="review-scroll-list">
+          <div v-if="isReviewing" class="review-container">
+            <h3 class="review-header"><i class="fas fa-star section-icon"></i> {{ selectedOrder.hasAnyReview ? 'Cập Nhật Đánh Giá' : 'Đánh Giá Sản Phẩm' }}</h3>
+            <p class="review-hint">
+              {{ selectedOrder.hasAnyReview 
+                 ? 'Bạn có thể chỉnh sửa lại đánh giá của mình. Đánh giá sẽ được gửi lại để duyệt.' 
+                 : 'Vui lòng đánh giá các sản phẩm bạn đã mua.' 
+              }}
+            </p>
+            <div class="review-scroll-list">
               <div v-for="item in selectedOrder.items" :key="item.id" class="review-item-card">
-                  <!-- Thông tin sản phẩm -->
-                  <div class="review-product-info">
-                      <img :src="item.image" class="review-thumb" @error="$event.target.src = 'https://placehold.co/50x50?text=No+Img'">
-                      <div>
-                          <div class="review-prod-name">{{ item.name }}</div>
-                          <div class="review-prod-variant" v-if="getVariantLabel(item)">
-                              {{ getVariantLabel(item) }}
-                          </div>
-                      </div>
+                <div class="review-product-info">
+                  <img :src="item.image" @error="$event.target.src = 'https://placehold.co/50x50?text=No+Img'"
+                    class="review-thumb">
+                  <div>
+                    <div class="review-prod-name">{{ item.name }}</div>
+                    <div class="review-prod-variant" v-if="getVariantLabel(item)">{{ getVariantLabel(item) }}</div>
                   </div>
-                  
-                  <!-- Form nhập liệu -->
-                  <div class="review-input-area">
-                      <div class="rating-stars">
-                          <span v-for="star in 5" :key="star" 
-                                @click="reviewData[item.id].rating = star"
-                                :class="{ 'star-icon': true, 'active': star <= reviewData[item.id].rating }">
-                            ★
-                          </span>
-                          <span class="rating-label" v-if="reviewData[item.id].rating > 0">
-                              {{ reviewData[item.id].rating }} sao
-                          </span>
-                      </div>
-                      <textarea 
-                          v-model="reviewData[item.id].content" 
-                          placeholder="Chất lượng sản phẩm thế nào? Hãy chia sẻ với mọi người nhé..."
-                      ></textarea>
+                </div>
+                <div class="review-input-area">
+                  <div class="rating-stars">
+                    <span v-for="star in 5" :key="star" @click="reviewData[item.id].rating = star"
+                      :class="{ 'star-icon': true, 'active': star <= reviewData[item.id].rating }">★</span>
+                    <span class="rating-label" v-if="reviewData[item.id].rating > 0">{{ reviewData[item.id].rating }}
+                      sao</span>
                   </div>
+                  <textarea v-model="reviewData[item.id].content"
+                    placeholder="Chất lượng sản phẩm thế nào? Hãy chia sẻ với mọi người nhé..."></textarea>
+                </div>
               </div>
-          </div>
-
-          <div class="review-actions-footer">
-              <button @click="isReviewing = false" class="action-btn secondary-btn back-btn">
-                  Quay lại
-              </button>
-              <button @click="handleSubmitReviews" class="action-btn primary-btn submit-review-btn">
-                  <i class="fas fa-paper-plane"></i> Gửi Đánh Giá
-              </button>
+            </div>
+            <div class="review-actions-footer">
+              <button @click="isReviewing = false" class="action-btn secondary-btn back-btn"><i class="fas fa-eye"></i>  Xem Chi Tiết</button>
+              <button @click="handleSubmitReviews" class="action-btn primary-btn submit-review-btn"><i
+                  class="fas fa-paper-plane"></i> {{ selectedOrder.hasAnyReview ? 'Cập Nhật' : 'Gửi Đánh Giá' }}</button>
+            </div>
           </div>
         </div>
-
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* STYLES GIỮ NGUYÊN (Thêm 1 class loading) */
+/* STYLES GỐC CỦA BẠN (Đã fix cứng màu để hiển thị tốt) */
 :root {
   --primary-color: #009981;
   --danger-color: #E74C3C;
@@ -712,33 +768,50 @@ const handleSubmitReviews = async () => {
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
-  margin-top: 5px; 
+  margin-top: 5px;
   font-weight: 500;
   color: #555;
 }
-
 
 .status-badge {
   padding: 5px 10px;
   border-radius: 5px;
   font-size: 0.85em;
   font-weight: bold;
-  color:#fff;
+  color: #fff;
 }
 
+/* [FIXED] Set cứng màu Hex để đảm bảo hiển thị */
 .status-dang-giao-hang {
-  background-color: var(--secondary-color);
+  background-color: #3498DB;
 }
-.status-da-giao-thanh-cong,
-.status-hoan-thanh-co-the-danh-gia {
-  background-color: var(--success-color);
+
+/* Blue */
+.status-da-giao-thanh-cong {
+  background-color: #28A745;
 }
+
+/* Green */
 .status-da-huy {
-  background-color: #95A5A6;
+  background-color: #DC3545;
 }
+
+/* Red */
 .status-da-dat-hang {
-  background-color: var(--warning-color); 
+  background-color: #F39C12;
 }
+
+/* [NEW] Style cho trạng thái trả hàng */
+.status-dang-tra-hang {
+  background-color: #8e44ad; /* Tím cho trạng thái đang xử lý trả */
+}
+
+.status-da-tra-hang {
+  background-color: #34495e; /* Màu tối cho đã hoàn tất trả */
+}
+
+
+/* Orange */
 .status-default {
   background-color: #777;
 }
@@ -767,19 +840,30 @@ const handleSubmitReviews = async () => {
   align-items: center;
 }
 
-/* [UPDATED] CSS cho cột tên sản phẩm trong danh sách */
 .col-name-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-}
-.product-name-text {
-    /* Styles cho tên sản phẩm */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
-.col-name { text-align: left; }
-.col-qty { text-align: center; }
-.col-price { text-align: right; }
+.col-name {
+  text-align: left;
+}
+
+.col-qty {
+  text-align: center;
+}
+
+.col-price {
+  text-align: right;
+}
+
+.more-items-hint {
+  font-size: 0.85em;
+  color: #888;
+  font-style: italic;
+  padding-top: 5px;
+}
 
 .total-amount {
   margin-top: 10px;
@@ -802,6 +886,7 @@ const handleSubmitReviews = async () => {
   font-weight: 600;
   font-size: 0.9em;
 }
+
 .detail-btn:hover {
   background-color: #007A65;
 }
@@ -837,37 +922,29 @@ const handleSubmitReviews = async () => {
   flex-basis: 120px;
 }
 
-.action-btn-list i {
-  font-size: 1em;
-}
-
 .primary-btn-list {
   background-color: var(--primary-color);
   color: white;
 }
-.primary-btn-list:hover {
-  background-color: #007A65;
-}
+
 .danger-btn-list {
   background-color: red;
   color: white;
 }
-.danger-btn-list:hover {
-  background-color: #C0392B;
-}
+
 .secondary-btn-list {
   background-color: rgb(220, 53, 69);
   color: white;
 }
-.secondary-btn-list:hover {
-  background-color: rgb(192, 44, 59);
-}
+
 .success-btn-list {
   background-color: green;
   color: white;
 }
-.success-btn-list:hover {
-  background-color: #218838;
+
+.warning-btn-list {
+  background-color: #F39C12;
+  color: white;
 }
 
 .no-orders {
@@ -878,8 +955,38 @@ const handleSubmitReviews = async () => {
   padding: 20px;
 }
 
+.tabs-container {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  padding-bottom: 5px;
+  border-bottom: 2px solid #eee;
+}
 
-/* --- ** STYLES MỚI CHO TÌM KIẾM, PHÂN TRANG, NO-RESULTS ** --- */
+.tab-btn {
+  padding: 10px 15px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1em;
+  font-weight: 500;
+  color: #666;
+  border-bottom: 3px solid transparent;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  color: var(--primary-color);
+  background-color: rgba(0, 153, 129, 0.05);
+}
+
+.tab-btn.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+  font-weight: bold;
+}
 
 .search-container {
   margin-bottom: 25px;
@@ -894,7 +1001,7 @@ const handleSubmitReviews = async () => {
 .search-icon {
   position: absolute;
   top: 50%;
-  left: 30px; /* 15px padding của container + 15px */
+  left: 30px;
   transform: translateY(-50%);
   color: #999;
   font-size: 1em;
@@ -907,9 +1014,9 @@ const handleSubmitReviews = async () => {
   font-size: 1em;
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-sizing: border-box; 
+  box-sizing: border-box;
   transition: border-color 0.2s, box-shadow 0.2s;
-  padding-left: 45px; 
+  padding-left: 45px;
 }
 
 .search-bar:focus {
@@ -935,7 +1042,7 @@ const handleSubmitReviews = async () => {
   border-radius: 5px;
   cursor: pointer;
   font-weight: 600;
-  transition: background-color 0.2s, color 0.2s;
+  transition: background-color 0.2s;
 }
 
 .page-btn:hover:not(:disabled) {
@@ -966,8 +1073,6 @@ const handleSubmitReviews = async () => {
   border: 1px dashed var(--border-color);
 }
 
-
-/* --- STYLES CHO POPUP (Giữ nguyên toàn bộ) --- */
 .popup-overlay {
   position: fixed;
   top: 0;
@@ -984,13 +1089,31 @@ const handleSubmitReviews = async () => {
 .popup-content {
   background: #FFFFFF;
   border-radius: 12px;
-  padding: 25px 30px;
+  padding: 0;
   width: 95%;
-  max-width: 650px;
+  max-width: 900px;
+  height: 90vh;
+  max-height: 90vh;
   position: relative;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-title {
+  text-align: center;
+  font-size: 1.6em;
+  font-weight: bold;
+  color: var(--primary-color);
+  padding: 20px 0 10px 0;
+  margin: 0;
+  border-bottom: 1px solid #eee;
+}
+
+.popup-body-scroll {
+  flex: 1;
   overflow-y: auto;
+  padding: 20px 30px;
 }
 
 .close-btn {
@@ -1003,17 +1126,11 @@ const handleSubmitReviews = async () => {
   color: #888;
   cursor: pointer;
   transition: color 0.2s;
-}
-.close-btn:hover {
-  color: #000;
+  z-index: 10;
 }
 
-.popup-title {
-  text-align: center;
-  font-size: 1.6em;
-  font-weight: bold;
-  color: var(--primary-color);
-  margin-bottom: 20px;
+.close-btn:hover {
+  color: #000;
 }
 
 .detail-card {
@@ -1024,17 +1141,20 @@ const handleSubmitReviews = async () => {
   padding: 15px 20px;
   margin-bottom: 15px;
 }
+
 .detail-card h3 {
   border-left: 5px solid var(--primary-color);
   padding-left: 15px;
   font-size: 1.2em;
   margin-bottom: 15px;
 }
+
 .product-list-popup {
   display: flex;
   flex-direction: column;
   gap: 15px;
 }
+
 .info-section .info-row {
   display: flex;
   justify-content: space-between;
@@ -1042,10 +1162,7 @@ const handleSubmitReviews = async () => {
   font-size: 1em;
   border-bottom: 1px dashed var(--border-color);
 }
-.info-section .status-text {
-  color: var(--primary-color);
-  font-weight: bold;
-}
+
 .customer-section p {
   margin: 8px 0;
   color: #555;
@@ -1054,9 +1171,7 @@ const handleSubmitReviews = async () => {
   align-items: center;
   gap: 10px;
 }
-.customer-section p strong {
-  color: var(--text-color);
-}
+
 .product-item {
   display: flex;
   align-items: center;
@@ -1064,10 +1179,7 @@ const handleSubmitReviews = async () => {
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border-color);
 }
-.product-list-popup .product-item:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
+
 .product-image {
   width: 60px;
   height: 60px;
@@ -1075,22 +1187,26 @@ const handleSubmitReviews = async () => {
   object-fit: cover;
   flex-shrink: 0;
 }
+
 .product-name {
   font-weight: bold;
   color: var(--text-color);
   margin-bottom: 3px;
   font-size: 1em;
 }
+
 .product-qty {
   font-size: 0.9em;
   color: #777;
 }
+
 .product-price {
   font-weight: bold;
   color: var(--primary-color);
   white-space: nowrap;
   font-size: 1em;
 }
+
 .payment-section .summary-row {
   display: flex;
   justify-content: space-between;
@@ -1098,6 +1214,7 @@ const handleSubmitReviews = async () => {
   font-size: 1em;
   color: #555;
 }
+
 .payment-section .summary-row.total {
   font-size: 1.2em;
   font-weight: bold;
@@ -1106,9 +1223,11 @@ const handleSubmitReviews = async () => {
   padding-top: 10px;
   margin-top: 5px;
 }
+
 .payment-section .total-amount {
   color: var(--primary-color);
 }
+
 .payment-method {
   font-size: 0.95em;
   color: #777;
@@ -1118,11 +1237,13 @@ const handleSubmitReviews = async () => {
   align-items: center;
   gap: 8px;
 }
+
 .action-buttons {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
 }
+
 .action-btn {
   padding: 12px 20px;
   border: none;
@@ -1138,94 +1259,99 @@ const handleSubmitReviews = async () => {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   flex-grow: 1;
 }
-.action-btn i {
-  font-size: 1.1em;
-}
+
 .primary-btn {
   background-color: var(--primary-color);
   color: white;
 }
-.primary-btn:hover {
-  background-color: #007A65;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-}
+
 .danger-btn {
   background-color: red;
   color: white;
 }
-.danger-btn:hover {
-  background-color: #C0392B;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-}
+
 .success-btn {
   background-color: green;
   color: white;
 }
-.success-btn:hover {
-  background-color: #218838;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-}
+
 .secondary-btn {
   background-color: rgb(220, 53, 69);
   color: white;
 }
-.secondary-btn:hover {
-  background-color: rgb(192, 44, 59);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+
+.warning-btn {
+  background-color: #F39C12;
+  color: white;
 }
+
 .disabled-btn {
   background-color: #e0e0e0;
   color: #999;
   cursor: not-allowed;
-  box-shadow: none;
-  opacity: 0.8;
 }
-.disabled-btn:hover {
-  transform: none;
-  box-shadow: none;
-}
-.review-form-section textarea {
+
+/* === UPDATED STYLES FOR REVIEW FORM === */
+
+/* Style cho Textarea */
+.review-input-area textarea {
   width: 100%;
-  min-height: 120px;
+  min-height: 100px;
   padding: 12px;
-  margin: 15px 0;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  margin-bottom: 10px; /* Thêm khoảng cách dưới */
+  border: 1px solid #ccebe6; /* Viền xanh nhạt */
+  border-radius: 8px; /* Bo tròn */
   box-sizing: border-box;
   font-family: inherit;
-  font-size: 1em;
+  font-size: 0.95em;
+  background-color: #fff;
+  transition: all 0.3s ease;
+  resize: vertical; /* Chỉ cho phép kéo dãn chiều dọc */
 }
+
+.review-input-area textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(0, 153, 129, 0.1); /* Hiệu ứng focus */
+}
+
+/* Style cho hàng Sao */
 .rating-stars {
   font-size: 1.8em;
   cursor: pointer;
-  color: #ccc;
+  color: #e0e0e0; /* Màu sao chưa chọn */
   display: flex;
+  align-items: center; /* Căn giữa theo chiều dọc */
   gap: 5px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
-.star-icon {
-  transition: color 0.1s ease-in-out;
-}
+
 .star-icon.active {
-  color: gold;
+  color: #FFD700; /* Màu vàng đậm hơn */
 }
+
+.rating-label {
+  font-size: 0.85em; /* Tăng kích thước chữ lên một chút */
+  color: var(--primary-color); /* Đồng bộ màu text với theme */
+  margin-left: 10px;
+  font-weight: 600;
+  padding-top: 4px; /* Tinh chỉnh nhỏ để thẳng hàng với sao */
+}
+
 .submit-review-btn {
-  width: auto;
-  margin-top: 10px;
+  /* Xóa margin-top cũ, dùng gap của cha */
+  margin-top: 0; 
 }
 
 .status-progress-bar-container {
-  padding: 20px 10px;
+  padding: 0px 10px;
   margin-bottom: 20px;
   background-color: #f5f5ff;
   border-radius: 8px;
   position: relative;
   border: 1px solid #ddd;
 }
+
 .status-progress-bar {
   display: flex;
   justify-content: space-between;
@@ -1233,6 +1359,7 @@ const handleSubmitReviews = async () => {
   position: relative;
   padding-top: 20px;
 }
+
 .progress-line {
   position: absolute;
   top: 30px;
@@ -1243,12 +1370,14 @@ const handleSubmitReviews = async () => {
   z-index: 1;
   border-radius: 2px;
 }
+
 .progress-fill {
   height: 100%;
   background-color: var(--primary-color);
   transition: width 0.5s ease-in-out;
   border-radius: 2px;
 }
+
 .step {
   display: flex;
   flex-direction: column;
@@ -1258,6 +1387,7 @@ const handleSubmitReviews = async () => {
   position: relative;
   z-index: 2;
 }
+
 .icon-container {
   width: 40px;
   height: 40px;
@@ -1272,10 +1402,12 @@ const handleSubmitReviews = async () => {
   margin-bottom: 10px;
   transition: all 0.3s ease;
 }
+
 .step.active .icon-container {
   border-color: var(--primary-color);
   color: var(--primary-color);
 }
+
 .step.current .icon-container {
   background-color: var(--primary-color);
   color: white;
@@ -1283,6 +1415,7 @@ const handleSubmitReviews = async () => {
   transform: scale(1.1);
   box-shadow: 0 0 0 5px rgba(0, 153, 129, 0.2);
 }
+
 .step-label {
   font-size: 0.9em;
   font-weight: 500;
@@ -1290,13 +1423,17 @@ const handleSubmitReviews = async () => {
   min-height: 40px;
   transition: color 0.3s ease;
 }
+
 .step.active .step-label {
   color: var(--text-color);
 }
+
 .step.current .step-label {
   font-weight: bold;
   color: var(--primary-color);
 }
+
+/* [MODIFIED] Style chung cho thông báo trạng thái ngoại lệ */
 .cancelled-status-message {
   text-align: center;
   padding: 15px;
@@ -1306,144 +1443,158 @@ const handleSubmitReviews = async () => {
   border-radius: 6px;
   font-weight: bold;
   font-size: 1.1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 
-/* [UPDATED] STYLES CHO BADGE BIẾN THỂ */
+/* [NEW] Style riêng cho đang hoàn (màu cam/vàng hoặc xanh nhạt) */
+.msg-returning {
+  background-color: #fcf3cf !important; /* Dùng !important để override class gốc */
+  color: #d35400 !important;
+  border-color: #f39c12 !important;
+}
+
+/* [NEW] Style riêng cho đã hoàn (màu xanh lá nhạt hoặc xám) */
+.msg-returned {
+  background-color: #d6eaf8 !important; /* Dùng !important để override class gốc */
+  color: #2c3e50 !important;
+  border-color: #34495e !important;
+}
+
+
 .variant-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background: #f3f4f6;
-    color: #4b5563;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 0.85em;
-    border: 1px solid #e5e7eb;
-    margin-top: 4px;
-    font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f3f4f6;
+  color: #4b5563;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  border: 1px solid #e5e7eb;
+  margin-top: 4px;
+  font-weight: 500;
 }
+
 .variant-badge i {
-    font-size: 0.9em;
-    color: var(--primary-color);
+  font-size: 0.9em;
+  color: var(--primary-color);
 }
+
 .item-variants {
-    margin-top: 2px;
+  margin-top: 2px;
 }
 
-/* [NEW] STYLE CHO DROPDOWN CHỌN SẢN PHẨM */
-.review-product-select {
-    margin-bottom: 15px;
-}
-.form-select {
-    width: 100%;
-    padding: 10px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    font-size: 1em;
-    background-color: #fff;
+.reviewed-badge {
+  color: var(--success-color);
+  font-size: 0.85em;
+  margin-top: 4px;
+  font-weight: 600;
 }
 
-/* --- [CSS MỚI] CHO PHẦN ĐÁNH GIÁ TÁCH RIÊNG --- */
 .review-container {
-    margin-top: 15px;
-    border-top: 2px dashed #ddd;
-    padding-top: 15px;
+  margin-top: 15px;
+  border-top: 2px dashed #ddd;
+  padding-top: 15px;
 }
+
 .review-header {
-    text-align: center;
-    color: var(--primary-color);
-    margin-bottom: 5px;
+  text-align: center;
+  color: var(--primary-color);
+  margin-bottom: 5px;
 }
+
 .review-hint {
-    text-align: center;
-    color: #777;
-    margin-bottom: 15px;
-    font-size: 0.9em;
+  text-align: center;
+  color: #777;
+  margin-bottom: 15px;
+  font-size: 0.9em;
 }
+
 .review-scroll-list {
-    max-height: 400px;
-    overflow-y: auto;
-    padding-right: 5px;
+  padding-right: 5px;
 }
+
+/* Updated Review Item Card */
 .review-item-card {
-    background: #f9f9f9;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
+  background: rgba(0, 153, 129, 0.04); /* Xanh nhạt theo tông màu */
+  border: 1px solid rgba(0, 153, 129, 0.2); /* Viền xanh rất nhạt */
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
 }
+
 .review-product-info {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    margin-bottom: 12px;
-    border-bottom: 1px solid #e5e5e5;
-    padding-bottom: 8px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.05); /* Viền mờ hơn */
+  padding-bottom: 8px;
 }
+
 .review-thumb {
-    width: 40px;
-    height: 40px;
-    border-radius: 4px;
-    object-fit: cover;
-    border: 1px solid #ddd;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 1px solid #ddd;
 }
+
 .review-prod-name {
-    font-weight: 600;
-    font-size: 0.95em;
-    color: #333;
+  font-weight: 600;
+  font-size: 0.95em;
+  color: var(--primary-color); /* Đồng bộ màu tiêu đề sản phẩm */
 }
+
 .review-prod-variant {
-    font-size: 0.8em;
-    color: #666;
-    background: #e0e0e0;
-    padding: 2px 6px;
-    border-radius: 3px;
-    width: fit-content;
-    margin-top: 2px;
+  font-size: 0.8em;
+  color: #666;
+  background: #fff; /* Nền trắng cho nổi bật trên nền xanh nhạt */
+  padding: 2px 6px;
+  border-radius: 3px;
+  width: fit-content;
+  margin-top: 2px;
+  border: 1px solid #eee;
 }
+
 .review-input-area {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px; /* Giảm gap vì đã có margin trong elements */
 }
-.rating-stars {
-    font-size: 1.8em;
-    color: #ddd;
-    cursor: pointer;
-    display: flex;
-    gap: 5px;
-    align-items: center;
-}
-.star-icon { transition: color 0.2s; }
-.star-icon.active { color: #FFD700; }
-.rating-label {
-    font-size: 0.6em;
-    color: #666;
-    margin-left: 10px;
-    font-weight: normal;
-}
-.review-input-area textarea {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    min-height: 80px;
-    font-family: inherit;
-    resize: vertical;
-}
+ 
+/* Footer Buttons */
 .review-actions-footer {
-    display: flex;
-    gap: 10px;
-    margin-top: 15px;
-    position: sticky;
-    bottom: 0;
-    background: #fff;
-    padding-top: 10px;
-    border-top: 1px solid #eee;
+  display: flex;
+  gap: 15px; /* Tăng khoảng cách giữa 2 nút */
+  margin-top: 15px;
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
 }
+
+.review-actions-footer .action-btn {
+  flex: 1; /* Chia đều chiều rộng cho 2 nút */
+  height: 45px; /* Chiều cao cố định bằng nhau */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 15px;
+  margin: 0; /* Xóa margin thừa */
+}
+
 .back-btn {
-    flex: 0 0 auto;
-    width: auto;
-    padding: 0 20px;
+  /* Kế thừa style chung, không cần ghi đè width nữa */
+  background-color: #6c757d; /* Màu xám chuẩn cho nút Back/Secondary */
+  color: white;
+}
+
+.back-btn:hover {
+  background-color: #5a6268;
 }
 </style>

@@ -4,8 +4,30 @@ import { useStore } from 'vuex'; // 1. Import Vuex
 // Import store wishlist (giữ nguyên logic quản lý wishlist)
 import { wishlist, removeItemFromWishlist } from "../../store/wishlistStore.js"; 
 import apiService from '../../apiService.js';
+import Swal from 'sweetalert2'; // Import SweetAlert2
 
 const store = useStore(); // 2. Khởi tạo store
+
+// --- CẤU HÌNH TOAST (Theo yêu cầu) ---
+const Toast = Swal.mixin({
+  toast: true,
+  position: 'top-end',
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  background: '#fff',
+  color: '#333',
+  iconColor: '#009981', 
+  customClass: {
+    popup: 'elegant-toast', 
+    title: 'elegant-toast-title',
+    timerProgressBar: 'elegant-toast-progress'
+  },
+  didOpen: (toast) => {
+    toast.addEventListener('mouseenter', Swal.stopTimer)
+    toast.addEventListener('mouseleave', Swal.resumeTimer)
+  }
+});
 
 // --- CẤU HÌNH SERVER ẢNH ---
 const SERVER_URL = 'http://127.0.0.1:8000'; 
@@ -78,9 +100,25 @@ onMounted(() => {
 
 // --- ACTIONS ---
 // SỬA: Nhận vào nguyên object item thay vì chỉ itemId để lấy name
-const handleRemove = (item) => {
-    if(confirm(`Bạn có chắc muốn xóa "${item.name}" này khỏi danh sách yêu thích?`)) {
+const handleRemove = async (item) => {
+    const result = await Swal.fire({
+        title: 'Xác nhận xóa',
+        html: `Bạn có chắc muốn xóa <strong>"${item.name}"</strong> khỏi danh sách yêu thích?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#009981',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Xóa',
+        cancelButtonText: 'Hủy',
+        reverseButtons: true
+    });
+
+    if (result.isConfirmed) {
         removeItemFromWishlist(item.id);
+        Toast.fire({
+            icon: 'success',
+            title: 'Đã xóa khỏi yêu thích'
+        });
     }
 };
 
@@ -99,7 +137,12 @@ const moveItemToCart = (item) => {
 
     // Xóa khỏi wishlist sau khi thêm vào giỏ
     removeItemFromWishlist(item.id); 
-    alert(`Đã chuyển "${item.name}" sang Giỏ hàng!`);
+    
+    // Hiển thị toast thông báo thành công
+    Toast.fire({
+        icon: 'success',
+        title: `Đã chuyển "${item.name}" sang Giỏ hàng!`
+    });
 };
 </script>
 

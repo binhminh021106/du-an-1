@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import apiService from '../../apiService.js'
-import Swal from 'sweetalert2' // [NEW] Import SweetAlert2
+import Swal from 'sweetalert2'
 
 // --- CẤU HÌNH ---
 const SERVER_URL = 'http://127.0.0.1:8000'
@@ -13,17 +13,15 @@ const route = useRoute()
 const router = useRouter()
 const store = useStore()
 
-// --- [NEW] CẤU HÌNH TOAST (Thông báo xịn xò - Updated Style) ---
 const Toast = Swal.mixin({
   toast: true,
-  position: 'bottom-end',
+  position: 'top-end',
   showConfirmButton: false,
   timer: 3000,
   timerProgressBar: true,
   background: '#fff',
   color: '#333',
-  iconColor: '#009981', // Màu xanh chủ đạo của Shop
-  // Class tùy chỉnh để style CSS
+  iconColor: '#009981', 
   customClass: {
     popup: 'elegant-toast', 
     title: 'elegant-toast-title',
@@ -74,7 +72,8 @@ const getRating = (product) => {
 const allProducts = ref([])
 const categories = ref([])
 const hotSaleProducts = ref([])
-const loading = ref(false)
+// [CHANGED] Mặc định là true để Skeleton hiện ngay lập tức khi load trang
+const loading = ref(true) 
 
 // [NEW] Ref cho container cuộn ngang
 const hotSaleScrollRef = ref(null)
@@ -334,7 +333,9 @@ const updateCountdown = () => {
 }
 
 const fetchData = async () => {
-  loading.value = true
+  // [CHANGED] loading đã là true từ đầu, không cần set lại ở đây nếu chỉ chạy 1 lần.
+  // Nhưng để an toàn cho việc re-fetch sau này, ta vẫn set true.
+  loading.value = true 
   try {
     const [prodRes, catRes] = await Promise.all([
       apiService.get(`/products`),
@@ -387,6 +388,7 @@ const fetchData = async () => {
   } catch (err) {
     console.error('Error fetching data:', err)
   } finally {
+    // [CHANGED] Tắt loading ngay lập tức khi có dữ liệu (hoặc lỗi), không delay
     loading.value = false
   }
 }
@@ -615,7 +617,24 @@ watch(() => route.query, (newQuery) => {
             </div>
           </div>
 
-          <div v-if="loading" class="text-center py-5">Đang tải...</div>
+          <!-- [MODIFIED] SKELETON LOADING (Thay cho text "Đang tải...") -->
+          <div v-if="loading" class="product-grid">
+            <div class="product-card skeleton-card" v-for="n in 8" :key="n">
+               <!-- Khối ảnh skeleton -->
+               <div class="skeleton-image shimmer">
+                   <!-- [NEW] Text placeholder ThinkHub -->
+                   <span class="skeleton-placeholder-text">ThinkHub</span>
+               </div>
+               <div class="product-info">
+                  <!-- Các dòng text skeleton -->
+                  <div class="skeleton-line title shimmer"></div>
+                  <div class="skeleton-line title-short shimmer"></div>
+                  <div class="skeleton-line price shimmer"></div>
+                  <div class="skeleton-line rating shimmer"></div>
+                  <div class="skeleton-button shimmer"></div>
+               </div>
+            </div>
+          </div>
 
           <div v-else-if="filteredProducts.length === 0" class="no-products">
             Không tìm thấy sản phẩm phù hợp.
@@ -1451,5 +1470,95 @@ watch(() => route.query, (newQuery) => {
   .promo-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ------------------------------------------- */
+/* [NEW] SKELETON LOADING STYLES               */
+/* ------------------------------------------- */
+
+.skeleton-card {
+  pointer-events: none; /* Không cho click */
+  user-select: none;
+}
+
+/* Hiệu ứng Shimmer (Ánh sáng chạy qua) */
+.shimmer {
+  background: #f6f7f8;
+  background-image: linear-gradient(
+    to right,
+    #f6f7f8 0%,
+    #edeef1 20%,
+    #f6f7f8 40%,
+    #f6f7f8 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 800px 100%; 
+  animation: placeholderShimmer 1.5s linear infinite forwards;
+}
+
+@keyframes placeholderShimmer {
+  0% {
+    background-position: -468px 0;
+  }
+  100% {
+    background-position: 468px 0;
+  }
+}
+
+/* Các khối giả lập */
+.skeleton-image {
+  height: 180px;
+  width: 100%;
+  border-bottom: 1px solid #eee;
+  /* [NEW] Flexbox để căn giữa chữ ThinkHub */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* [NEW] Style cho chữ placeholder */
+.skeleton-placeholder-text {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #e5e7eb; /* Màu xám nhạt */
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.8;
+}
+
+.skeleton-line {
+  background-color: #eee;
+  border-radius: 4px;
+}
+
+.skeleton-line.title {
+  height: 16px;
+  width: 90%;
+  margin-bottom: 8px;
+}
+
+.skeleton-line.title-short {
+  height: 16px;
+  width: 60%;
+  margin-bottom: 16px;
+}
+
+.skeleton-line.price {
+  height: 20px;
+  width: 40%;
+  margin-bottom: 12px;
+}
+
+.skeleton-line.rating {
+  height: 12px;
+  width: 30%;
+  margin-bottom: 20px;
+}
+
+.skeleton-button {
+  width: 100%;
+  height: 40px;
+  border-radius: 8px;
+  margin-top: auto;
 }
 </style>

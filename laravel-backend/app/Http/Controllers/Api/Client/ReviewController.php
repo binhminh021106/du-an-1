@@ -15,20 +15,20 @@ class ReviewController extends Controller
      */
     public function index()
     {
-        // Lấy danh sách review, kèm thông tin user và product để hiển thị nếu cần
         $reviews = Review::with(['user', 'product'])->latest()->get();
         return response()->json($reviews);
     }
 
     /**
      * Store a newly created resource in storage.
+     * HOẶC Update nếu đã tồn tại.
      */
     public function store(Request $request)
     {
         // 1. VALIDATION
-        // Lưu ý: Đã sửa 'products' thành 'product' để khớp với tên bảng trong DB của bạn
         $request->validate([
-            'product_id' => 'required|integer|exists:product,id', 
+            'product_id' => 'required|integer|exists:product,id',
+            // Bỏ validation order_id vì Model Review không có cột này
             'rating'     => 'required|integer|min:1|max:5',
             'content'    => 'nullable|string',
         ]);
@@ -37,28 +37,40 @@ class ReviewController extends Controller
             // 2. Lấy ID user hiện tại
             $userId = Auth::id();
             
-            // Nếu $userId null (do chưa đăng nhập hoặc lỗi token), trả về lỗi 401 thay vì 500
             if (!$userId) {
                 return response()->json(['message' => 'Vui lòng đăng nhập để đánh giá.'], 401);
             }
 
-            // 3. Tạo review
-            $review = Review::create([
+            // 3. XÁC ĐỊNH ĐIỀU KIỆN TÌM KIẾM
+            // Vì bảng reviews không có order_id, ta xác định duy nhất bằng User + Product
+            $matchConditions = [
                 'user_id'    => $userId,
                 'product_id' => $request->product_id,
-                'rating'     => $request->rating,
-                'content'    => $request->content,
-                'status'     => 'pending',
-            ]);
+            ];
+
+            // 4. UPDATE HOẶC CREATE
+            // Tìm review cũ của user cho sản phẩm này -> Update nội dung & Reset status
+            // Nếu chưa có -> Tạo mới
+            $review = Review::updateOrCreate(
+                $matchConditions,
+                [
+                    'rating'  => $request->rating,
+                    'content' => $request->content,
+                    'status'  => 'pending', // [QUAN TRỌNG] Reset trạng thái về pending để Admin duyệt lại
+                ]
+            );
+
+            $message = $review->wasRecentlyCreated 
+                ? 'Đánh giá thành công!' 
+                : 'Cập nhật đánh giá thành công! Đang chờ duyệt lại.';
 
             return response()->json([
-                'message' => 'Đánh giá thành công!',
+                'message' => $message,
                 'data'    => $review
-            ], 201);
+            ], 200);
 
         } catch (\Exception $e) {
-            // Log lỗi ra file storage/logs/laravel.log để debug
-            Log::error("Lỗi tạo review: " . $e->getMessage());
+            Log::error("Lỗi ReviewController@store: " . $e->getMessage());
             
             return response()->json([
                 'message' => 'Lỗi Server: ' . $e->getMessage()
@@ -66,28 +78,19 @@ class ReviewController extends Controller
         }
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show(string $id)
     {
         $review = Review::findOrFail($id);
         return response()->json($review);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, string $id)
     {
-        // Logic update (ví dụ cho phép sửa đánh giá của chính mình)
+        // Update logic if needed
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(string $id)
     {
-        // Logic delete
+        // Delete logic if needed
     }
 }

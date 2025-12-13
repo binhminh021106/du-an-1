@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import apiService from '../../apiService';
 import Swal from 'sweetalert2';
+import Chatbot from '../../page/user/Chatbot.vue';
 
 const router = useRouter();
 const store = useStore();
@@ -335,6 +336,8 @@ onUnmounted(() => {
 </script>
 
 <template>
+ <Chatbot :products="products" />
+
   <header class="site-header">
     <!-- Top Bar -->
     <div class="top-bar">

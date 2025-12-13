@@ -1,5 +1,10 @@
 <script setup>
 import { ref, nextTick, onMounted, watch } from 'vue';
+import { useRouter } from 'vue-router'; 
+import Swal from 'sweetalert2'; // Import SweetAlert2
+
+// Giả sử bạn có store wishlist tương tự ProductDetail, nếu không có thì comment dòng này lại
+// import { isInWishlist, toggleWishlist } from "../../store/wishlistStore.js"; 
 
 // --- PROPS ---
 const props = defineProps({
@@ -10,17 +15,29 @@ const props = defineProps({
 });
 
 // --- CẤU HÌNH ---
-const SERVER_URL = 'http://127.0.0.1:8000'; // URL Backend Laravel
-const CHATBOT_API_URL = 'http://localhost:3000/api/chat-search'; // URL Node.js AI
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+const CHATBOT_API_URL = `${API_BASE_URL}/chatbot/search`;
+const SERVER_ROOT_URL = API_BASE_URL.replace('/api', '');
+
 const STORAGE_KEY = 'thinkhub_chat_history';
+const SESSION_KEY = 'thinkhub_chat_session_id';
 
 // --- STATE ---
+const router = useRouter();
 const isChatOpen = ref(false);
 const isChatExpanded = ref(false);
 const chatInput = ref("");
 const isChatLoading = ref(false);
 const chatBodyRef = ref(null);
 const inputRef = ref(null);
+const sessionId = ref("");
+
+// Mock hàm wishlist nếu chưa import được store thật (để tránh lỗi UI)
+const isProductInWishlist = (id) => false; // Thay bằng logic thật nếu có: isInWishlist(id)
+const toggleProductWishlist = (p) => {
+    // console.log("Toggle wishlist", p.id); 
+    // toggleWishlist(p); // Gọi action thật
+};
 
 const defaultMessage = {
     role: 'ai',
@@ -31,31 +48,63 @@ const defaultMessage = {
 const chatMessages = ref([defaultMessage]);
 
 const quickSuggestions = ref([
-    "Laptop gaming dưới 20 triệu",
-    "iPhone 15 Pro Max",
-    "Hôm nay ngày bao nhiêu?",
-    "Shop có bán trả góp không?"
+    "Laptop ",
+    "iPhone ",
+    "Điện thoại Samsung",
+    "Tai nghe Bluetooth"
 ]);
 
-// --- HELPER FUNCTIONS ---
+// --- HELPER: XỬ LÝ ẢNH & TIỀN TỆ ---
 const getImageUrl = (path) => {
     if (!path) return 'https://placehold.co/100x100?text=No+Img';
     if (path.startsWith('http') || path.startsWith('data:')) return path;
     const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    return `${SERVER_URL}/${cleanPath}`;
+    return `${SERVER_ROOT_URL}/${cleanPath}`;
 };
 
 const formatCurrency = (val) => {
-    if (!val) return '0 ₫';
+    if (val === undefined || val === null || isNaN(val)) return '0 ₫';
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
 };
 
-const getProductPrice = (p) => {
-    if (p.variants && p.variants.length > 0) {
-        const prices = p.variants.map(v => Number(v.price));
-        return Math.min(...prices);
+// Hàm hiển thị giá thông minh (Logic cũ vẫn ok)
+const getDisplayPrice = (p) => {
+    if (typeof p.price === 'string' && p.price.includes('đ')) {
+        return p.price;
     }
-    return Number(p.price) || 0;
+    const min = Number(p.min_price || p.price || 0);
+    const max = Number(p.max_price || p.price || 0);
+
+    if (max > min) {
+        return `${formatCurrency(min)} - ${formatCurrency(max)}`;
+    }
+    return formatCurrency(min);
+};
+
+// Helper tính phần trăm giảm giá (cho badge)
+const calculateDiscount = (price, original) => {
+    const p = Number(price || 0);
+    const o = Number(original || 0);
+    if (!o || o <= p) return 0;
+    return Math.round(((o - p) / o) * 100);
+};
+
+// Helper check sản phẩm mới
+const isNewProduct = (createdAt) => {
+    if (!createdAt) return false;
+    const date = new Date(createdAt);
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 30; 
+};
+
+const getProductPriceVal = (p) => {
+    if (typeof p.price === 'string') {
+        const cleanStr = p.price.replace(/\./g, '').replace(/[^\d]/g, '');
+        return parseFloat(cleanStr) || 0;
+    }
+    return Number(p.min_price || p.price || 0);
 };
 
 const formatMessage = (text) => {
@@ -63,11 +112,184 @@ const formatMessage = (text) => {
     return text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
 };
 
-const clearHistory = () => {
-    if (confirm('Bạn có chắc muốn xóa lịch sử trò chuyện?')) {
-        chatMessages.value = [defaultMessage];
-        try { localStorage.removeItem(STORAGE_KEY); } catch (e) { }
+// [QUAN TRỌNG] Hàm điều hướng
+const goToProduct = (p) => {
+    if (p.id) {
+        // Sử dụng router.push để chuyển trang SPA mượt mà
+        router.push(`/products/${p.id}`);
+        // Đóng chat hoặc thu nhỏ lại để user xem sản phẩm dễ hơn
+        // isChatOpen.value = false; 
+    } else if (p.url) {
+        window.location.href = p.url;
     }
+};
+
+// --- LOGIC BOT --- (Giữ nguyên logic thông minh)
+const parseMoney = (text) => {
+    let num = parseFloat(text.replace(/,/g, '.'));
+    if (text.includes('triệu') || text.includes('tr')) num *= 1000000;
+    else if (text.includes('k') || text.includes('nghìn')) num *= 1000;
+    return num;
+};
+
+const analyzeIntent = (message) => {
+    const lowerMsg = message.toLowerCase();
+    const greetings = ['hi', 'hello', 'chào', 'hé lô', 'xin chào'];
+    const isGreeting = greetings.some(g => lowerMsg.includes(g) && lowerMsg.length < 20);
+
+    if (isGreeting) {
+        return {
+            type: 'greeting',
+            response: 'Dạ em chào anh/chị ạ! 👋<br>Chúc anh/chị một ngày tốt lành.<br>Anh/chị đang quan tâm đến sản phẩm nào bên em ạ? Dưới đây là một số mẫu đang <b>HOT</b> nè:',
+            searchKeyword: 'hot' 
+        };
+    }
+
+    const priceRegex = /(trên|dưới|tầm|khoảng|từ)\s+(\d+(?:[.,]\d+)?)\s*(triệu|tr|k|nghìn|đ)?/i;
+    const match = lowerMsg.match(priceRegex);
+
+    if (match) {
+        const operator = match[1]; 
+        const numberPart = match[2];
+        const unitPart = match[3] || '';
+        const priceVal = parseMoney(numberPart + unitPart);
+        
+        let keyword = lowerMsg.replace(match[0], '').trim();
+        keyword = keyword.replace(/(điện thoại|mua|cần tìm|cái|chiếc)\s/g, '').trim();
+        if (!keyword) keyword = 'all';
+
+        return {
+            type: 'price_filter',
+            keyword: keyword,
+            min: ['trên', 'từ'].includes(operator) ? priceVal : 0,
+            max: ['dưới', 'tầm', 'khoảng'].includes(operator) ? priceVal : Infinity,
+            originalText: message
+        };
+    }
+    return { type: 'normal', keyword: message };
+};
+
+const handleSend = async (text) => {
+    const msg = text || chatInput.value;
+    if (!msg || !msg.trim()) return;
+
+    chatMessages.value.push({ role: 'user', text: msg });
+    chatInput.value = "";
+    isChatLoading.value = true;
+    scrollToBottom();
+
+    try {
+        const intent = analyzeIntent(msg);
+        let apiQuery = msg; 
+        let clientSideFilter = null; 
+
+        if (intent.type === 'greeting') {
+            apiQuery = "iphone"; 
+        } else if (intent.type === 'price_filter') {
+            apiQuery = intent.keyword === 'all' ? '' : intent.keyword;
+            clientSideFilter = (product) => {
+                const p = getProductPriceVal(product);
+                if (intent.max !== Infinity && intent.originalText.includes('tầm')) {
+                    return p >= intent.min && p <= (intent.max * 1.1);
+                }
+                return p >= intent.min && p <= intent.max;
+            };
+        }
+
+        const url = new URL(CHATBOT_API_URL);
+        if (apiQuery) url.searchParams.append('q', apiQuery);
+        if (sessionId.value) url.searchParams.append('session_id', sessionId.value);
+
+        const response = await fetch(url.toString(), {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) throw new Error('API Error');
+        const data = await response.json();
+
+        if (data.session_id) {
+            sessionId.value = data.session_id;
+            localStorage.setItem(SESSION_KEY, data.session_id);
+        }
+
+        let finalProducts = data.results || [];
+
+        if (clientSideFilter && finalProducts.length > 0) {
+            finalProducts = finalProducts.filter(clientSideFilter);
+        }
+
+        let botResponseText = "";
+        if (intent.type === 'greeting') {
+            botResponseText = intent.response;
+        } else if (intent.type === 'price_filter') {
+             if (finalProducts.length > 0) {
+                botResponseText = `Dạ, em tìm thấy <b>${finalProducts.length}</b> sản phẩm ${intent.keyword} có giá ${msg.replace(intent.keyword, '').trim()} đây ạ:`;
+            } else {
+                botResponseText = `Dạ em tìm ${intent.keyword} nhưng không thấy món nào trong khoảng giá này ạ. Anh/chị thử xem các mẫu khác nhé?`;
+                finalProducts = (data.results || []).slice(0, 5); 
+            }
+        } else {
+            if (data.messages && data.messages.length > 0) {
+                botResponseText = data.messages[0].text;
+            } else {
+                botResponseText = finalProducts.length > 0 
+                    ? "Dạ em tìm thấy các sản phẩm này ạ:" 
+                    : "Hmm, em chưa tìm thấy sản phẩm nào phù hợp. Bạn thử từ khóa khác nhé (ví dụ: iPhone, Samsung...)";
+            }
+        }
+
+        chatMessages.value.push({
+            role: 'ai',
+            text: botResponseText,
+            products: finalProducts,
+            type: finalProducts.length > 0 ? 'search' : 'chat'
+        });
+
+    } catch (err) {
+        console.error("Chat Error:", err);
+        chatMessages.value.push({ role: 'ai', text: "Hệ thống đang bận xíu, bạn thử lại sau nhé!", type: 'chat' });
+    } finally {
+        isChatLoading.value = false;
+        scrollToBottom();
+    }
+};
+
+const clearHistory = () => {
+    // Không cần confirm nữa, xóa trực tiếp
+    chatMessages.value = [defaultMessage];
+    sessionId.value = "";
+    try { 
+        localStorage.removeItem(STORAGE_KEY); 
+        localStorage.removeItem(SESSION_KEY);
+    } catch (e) { }
+
+    // Cấu hình Toast như yêu cầu
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        background: '#fff',
+        color: '#333',
+        iconColor: '#009981',
+        customClass: {
+            popup: 'elegant-toast',
+            title: 'elegant-toast-title',
+            timerProgressBar: 'elegant-toast-progress'
+        },
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer)
+            toast.addEventListener('mouseleave', Swal.resumeTimer)
+        }
+    });
+
+    // Hiển thị Toast
+    Toast.fire({
+        icon: 'success',
+        title: 'Đã xóa lịch sử trò chuyện'
+    });
 };
 
 const toggleChat = () => isChatOpen.value = !isChatOpen.value;
@@ -81,119 +303,12 @@ const scrollToBottom = () => {
     });
 };
 
-// --- LOGIC GỬI TIN NHẮN ---
-const handleSend = async (text) => {
-    const msg = text || chatInput.value;
-    if (!msg || !msg.trim()) return;
-
-    chatMessages.value.push({ role: 'user', text: msg });
-    chatInput.value = "";
-    isChatLoading.value = true;
-    scrollToBottom();
-
-    try {
-        const categories = [...new Set(props.products.map(p => p.category?.name).filter(Boolean))].slice(0, 15);
-        const brands = [...new Set(props.products.map(p => p.brand?.name).filter(Boolean))].slice(0, 15);
-
-        // [CẬP NHẬT] Lấy 10 tin nhắn gần nhất để gửi làm lịch sử (Context)
-        const historyContext = chatMessages.value.slice(-10).map(m => ({
-            role: m.role,
-            text: m.text
-        }));
-
-        const res = await fetch(CHATBOT_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                query: msg,
-                categories,
-                brands,
-                history: historyContext // Gửi lịch sử lên server
-            })
-        });
-
-        if (!res.ok) throw new Error("API Error");
-
-        const data = await res.json();
-        const aiData = data.ai_data || data.data || {};
-        const filters = aiData.filters || {};
-
-        if (aiData.intent === 'chat') {
-            chatMessages.value.push({
-                role: 'ai',
-                text: aiData.reply || "Mình đang lắng nghe bạn đây!",
-                type: 'chat'
-            });
-        } else {
-            // Logic SEARCH (Đã tối ưu hóa)
-            let results = props.products.filter(p => {
-                let match = true;
-                const pName = (p.name || '').toLowerCase();
-                const pBrand = (p.brand?.name || '').toLowerCase();
-                const pCat = (p.category?.name || '').toLowerCase();
-                const price = getProductPrice(p);
-
-                // 1. Lọc Keyword & Category (Logic OR thông minh)
-                // Nếu AI trả về category_name (VD: "Laptop"), ta tìm cả trong Category lẫn Name
-                if (filters.category_name) {
-                    const c = filters.category_name.toLowerCase();
-                    match = match && (pCat.includes(c) || pName.includes(c));
-                }
-
-                // Nếu có keyword riêng (VD: "Gaming")
-                if (filters.keyword) {
-                    const k = filters.keyword.toLowerCase();
-                    match = match && (pName.includes(k) || pCat.includes(k));
-                }
-
-                // 2. Lọc Brand
-                if (filters.brand_name) {
-                    const b = filters.brand_name.toLowerCase();
-                    match = match && (pBrand.includes(b) || pName.includes(b));
-                }
-
-                // 3. Lọc Giá
-                if (filters.min_price !== null && filters.min_price !== undefined) {
-                    match = match && price >= filters.min_price;
-                }
-                if (filters.max_price !== null && filters.max_price !== undefined) {
-                    match = match && price <= filters.max_price;
-                }
-
-                return match;
-            });
-
-            // Sắp xếp
-            if (filters.sort === 'price_asc') results.sort((a, b) => getProductPrice(a) - getProductPrice(b));
-            if (filters.sort === 'price_desc') results.sort((a, b) => getProductPrice(b) - getProductPrice(a));
-            if (filters.sort === 'newest') results.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-            const finalProducts = results.slice(0, 5);
-
-            chatMessages.value.push({
-                role: 'ai',
-                text: aiData.reply || (finalProducts.length > 0 ? `Mình tìm thấy ${finalProducts.length} sản phẩm này:` : "Tiếc quá, không tìm thấy sản phẩm nào khớp bộ lọc."),
-                products: finalProducts,
-                type: 'search'
-            });
-        }
-
-    } catch (err) {
-        console.error("Chat Error:", err);
-        chatMessages.value.push({ role: 'ai', text: "Hệ thống đang bảo trì một chút, bạn chờ xíu nhé!", type: 'chat' });
-    } finally {
-        isChatLoading.value = false;
-        scrollToBottom();
-    }
-};
-
-const sendChatMessage = () => handleSend();
-
-// --- LIFECYCLE & WATCHERS ---
 onMounted(() => {
     try {
         const savedChat = localStorage.getItem(STORAGE_KEY);
         if (savedChat) chatMessages.value = JSON.parse(savedChat);
+        const savedSession = localStorage.getItem(SESSION_KEY);
+        if (savedSession) sessionId.value = savedSession;
     } catch (e) { }
 });
 
@@ -235,7 +350,7 @@ watch(isChatExpanded, () => scrollToBottom());
                             <i class="fas" :class="isChatExpanded ? 'fa-compress' : 'fa-expand'"></i>
                         </button>
                         <button @click="clearHistory" title="Xóa lịch sử"><i class="fas fa-trash-alt"></i></button>
-                        <button @click="toggleChat" title="Thu nhỏ"><i class="fas fa-minus"></i></button>
+                        <button @click="toggleChat" title="Đóng"><i class="fas fa-minus"></i></button>
                     </div>
                 </div>
 
@@ -249,15 +364,58 @@ watch(isChatExpanded, () => scrollToBottom());
                             <div class="bubble" v-html="formatMessage(msg.text)"></div>
 
                             <div v-if="msg.products && msg.products.length" class="product-slider">
-                                <div v-for="p in msg.products" :key="p.id" class="product-card"
-                                    @click="$router.push(`/products/${p.id}`)">
-                                    <div class="pc-img">
-                                        <img :src="getImageUrl(p.thumbnail_url || p.image)" alt="Product">
+                                <div v-for="p in msg.products" :key="p.id" class="product-card-pro border shadow-sm position-relative"
+                                    @click="goToProduct(p)">
+                                    
+                                    <!-- BADGES (Overlay) -->
+                                    <div class="badges-overlay position-absolute top-0 start-0 p-2 z-index-2 d-flex flex-column gap-1">
+                                        <!-- Giả định lấy original_price nếu có, hoặc tính toán -->
+                                        <span v-if="p.original_price && calculateDiscount(getProductPriceVal(p), p.original_price) > 0" class="badge bg-danger rounded-pill shadow-sm">
+                                            -{{ calculateDiscount(getProductPriceVal(p), p.original_price) }}%
+                                        </span>
+                                        <span v-if="isNewProduct(p.created_at)" class="badge bg-primary rounded-pill shadow-sm">NEW</span>
+                                        <span v-if="p.sold_count > 100" class="badge bg-warning text-dark rounded-pill shadow-sm">HOT</span>
                                     </div>
-                                    <div class="pc-info">
-                                        <div class="pc-name" :title="p.name">{{ p.name }}</div>
-                                        <div class="pc-price">{{ formatCurrency(getProductPrice(p)) }}</div>
-                                        <button class="pc-btn">Xem ngay</button>
+
+                                    <!-- Wishlist Button -->
+                                    <button class="btn btn-light rounded-circle shadow-sm position-absolute top-0 end-0 m-2 wish-btn-visible"
+                                        @click.stop="toggleProductWishlist(p)" title="Yêu thích">
+                                        <i :class="['bi', isProductInWishlist(p.id) ? 'bi-heart-fill text-danger' : 'bi-heart text-secondary']"></i>
+                                    </button>
+
+                                    <!-- Image -->
+                                    <div class="card-img-top-wrapper overflow-hidden position-relative">
+                                        <img :src="getImageUrl(p.image_url || p.thumbnail_url || p.image)" class="card-img-top product-img" :alt="p.name" 
+                                            @error="$event.target.src='https://placehold.co/100x100?text=Error'">
+                                    </div>
+
+                                    <!-- Body -->
+                                    <div class="card-body p-3 d-flex flex-column">
+                                        <!-- Brand -->
+                                        <small class="text-muted text-uppercase mb-1" style="font-size: 0.7rem; letter-spacing: 0.5px;">
+                                            {{ p.brand || p.brand_name || 'THƯƠNG HIỆU' }}
+                                        </small>
+                                        
+                                        <!-- Name -->
+                                        <h6 class="card-title fw-bold text-dark text-truncate-2 mb-2" style="height: 36px; font-size: 0.9rem;" :title="p.name">
+                                            {{ p.name }}
+                                        </h6>
+
+                                        <!-- Rating & Sold -->
+                                        <div class="d-flex align-items-center mb-2 small text-muted">
+                                            <div class="d-flex text-warning me-2" v-if="p.average_rating || p.rating_avg">
+                                                <i class="bi bi-star-fill" style="font-size: 0.8rem;"></i>
+                                                <span class="ms-1 text-dark fw-bold">{{ Number(p.average_rating || p.rating_avg).toFixed(1) }}</span>
+                                            </div>
+                                            <span class="border-start ps-2" v-if="p.sold_count">Đã bán {{ p.sold_count }}</span>
+                                        </div>
+
+                                        <!-- Price -->
+                                        <div class="mt-auto">
+                                            <div class="d-flex align-items-baseline flex-wrap gap-2">
+                                                <span class="text-theme fw-bold fs-6" style="color: #dc2626;">{{ getDisplayPrice(p) }}</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -287,7 +445,7 @@ watch(isChatExpanded, () => scrollToBottom());
 
                 <div class="chat-input-area">
                     <input ref="inputRef" v-model="chatInput" @keyup.enter="handleSend()"
-                        placeholder="Nhập tin nhắn..." />
+                        placeholder="Nhập tên sản phẩm, hãng..." />
                     <button @click="handleSend()" :disabled="!chatInput.trim()"><i
                             class="fas fa-paper-plane"></i></button>
                 </div>
@@ -377,6 +535,8 @@ watch(isChatExpanded, () => scrollToBottom());
     border: 1px solid #e5e7eb;
     transform-origin: bottom right;
     z-index: 10002;
+    /* [NEW] Thêm transition để hiệu ứng phóng to/thu nhỏ mượt mà hơn */
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .zoom-fade-enter-active,
@@ -400,10 +560,12 @@ watch(isChatExpanded, () => scrollToBottom());
 
 .chat-window.expanded {
     width: 800px;
-    height: 80vh;
+    /* [FIX] Tăng chiều cao lên 90vh để thấy rõ sự thay đổi */
+    height: 90vh; 
+    /* [FIX] Override max-height của class gốc */
+    max-height: 95vh; 
     max-width: 90vw;
 }
-
 /* Header */
 .chat-header {
     background: linear-gradient(to right, #10b981, #059669);
@@ -497,80 +659,93 @@ watch(isChatExpanded, () => scrollToBottom());
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-/* Product Slider */
+/* Product Slider Styles */
 .product-slider {
     display: flex;
-    gap: 10px;
+    gap: 12px;
     overflow-x: auto;
     margin-top: 8px;
-    padding-bottom: 5px;
-    scrollbar-width: none;
+    padding-bottom: 8px;
+    scrollbar-width: thin;
     max-width: 300px;
+    padding-left: 2px; /* Tránh bóng bị cắt */
 }
 
 .expanded .product-slider {
     max-width: 700px;
 }
 
-.product-card {
-    min-width: 140px;
-    width: 140px;
+/* ====== NEW CARD STYLES (Adapted from ProductDetail) ====== */
+.product-card-pro {
+    min-width: 180px; 
+    width: 180px;
     background: white;
-    border-radius: 10px;
-    padding: 8px;
-    border: 1px solid #e5e7eb;
+    border-radius: 12px;
     cursor: pointer;
-    transition: transform 0.2s;
+    transition: all 0.3s ease;
+    flex-shrink: 0; /* Quan trọng để không bị co lại trong flex */
+}
+
+.product-card-pro:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+    border-color: #10b981 !important;
+}
+
+.card-img-top-wrapper {
+    height: 140px;
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #f8f9fa;
+    padding: 5px;
+    overflow: hidden;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
 }
 
-.product-card:hover {
-    transform: translateY(-3px);
-    border-color: #10b981;
+.product-img {
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+    transition: transform 0.5s ease;
 }
 
-.pc-img img {
-    width: 100%;
-    height: 100px;
-    object-fit: cover;
-    border-radius: 6px;
+.product-card-pro:hover .product-img {
+    transform: scale(1.1);
 }
 
-.pc-info {
-    margin-top: 6px;
-}
-
-.pc-name {
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
+.text-truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-bottom: 2px;
 }
 
-.pc-price {
-    color: #dc2626;
-    font-weight: bold;
-    font-size: 12px;
-}
-
-.pc-btn {
-    width: 100%;
-    background: #e5e7eb;
+.wish-btn-visible {
+    z-index: 5;
+    transition: all 0.2s;
+    background: rgba(255, 255, 255, 0.9);
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border: none;
-    font-size: 11px;
-    padding: 4px;
-    margin-top: 5px;
-    border-radius: 4px;
-    cursor: pointer;
 }
 
-.product-card:hover .pc-btn {
-    background: #10b981;
-    color: white;
+.wish-btn-visible:hover {
+    background-color: #fee2e2;
+    transform: scale(1.1);
 }
+
+.badges-overlay .badge {
+    font-size: 9px;
+    padding: 3px 6px;
+}
+
+/* ========================================================== */
 
 .no-result {
     font-size: 12px;

@@ -33,7 +33,7 @@ const toSlug = (str) => {
 // --- TOAST CONFIG ---
 const Toast = Swal.mixin({
     toast: true,
-    position: 'bottom-end',
+    position: 'top-end',
     showConfirmButton: false,
     timer: 3000,
     timerProgressBar: true,
@@ -80,6 +80,7 @@ const newsList = ref([]);
 const vouchers = ref([]);
 const activeCategoryId = ref(null);
 const currentSlide = ref(0);
+// [CHANGED] Mặc định là true để Skeleton hiện ngay lập tức khi load trang
 const loading = ref(true);
 let interval = null;
 
@@ -104,7 +105,26 @@ const fetchData = async () => {
 
         const rawVouchers = couponRes?.data?.data || couponRes?.data || [];
         if (Array.isArray(rawVouchers)) {
-            vouchers.value = rawVouchers.map(c => ({
+            // [UPDATED LOGIC] Lọc voucher: Chỉ lấy voucher Active và Chưa hết hạn
+            const now = new Date();
+            vouchers.value = rawVouchers.filter(c => {
+                // 1. Kiểm tra trạng thái (nếu API có trả về status hoặc is_active)
+                if (c.status && c.status !== 'active') return false;
+                if (c.is_active === false || c.is_active === 0) return false;
+
+                // 2. Kiểm tra ngày hết hạn (hỗ trợ cả key expiry_date và end_date)
+                const dateString = c.expiry_date || c.end_date;
+                if (dateString) {
+                    const expiryDate = new Date(dateString);
+                    // Nếu ngày hết hạn nhỏ hơn ngày hiện tại -> Loại
+                    if (expiryDate < now) return false;
+                }
+
+                // 3. (Tuỳ chọn) Kiểm tra số lượng
+                if (c.quantity !== undefined && c.quantity <= 0) return false;
+
+                return true;
+            }).map(c => ({
                 id: c.id, code: c.code, name: c.name, min_spend: c.min_spend, value: c.value,
                 desc: `Giảm ${formatCurrency(c.value)} đơn ${formatCurrency(c.min_spend)}`
             }));
@@ -115,7 +135,8 @@ const fetchData = async () => {
     } catch (err) {
         console.error("Lỗi tải trang chủ:", err);
     } finally {
-        loading.value = false;
+        // [FIX] Thêm delay giả lập 2s để nhìn thấy skeleton theo yêu cầu
+        setTimeout(() => { loading.value = false }, 2000)
     }
 };
 
@@ -307,7 +328,16 @@ onBeforeUnmount(stopAutoSlide);
             <section class="top-section-layout">
                 <nav class="categories-sidebar">
                     <h3 class="sidebar-title">DANH MỤC</h3>
-                    <div class="category-list">
+                    
+                    <!-- [NEW] SKELETON CATEGORIES -->
+                    <div v-if="loading" class="category-list">
+                        <div v-for="n in 8" :key="n" class="skeleton-category-item shimmer">
+                            <div class="skeleton-cat-icon"></div>
+                            <div class="skeleton-cat-text"></div>
+                        </div>
+                    </div>
+
+                    <div v-else class="category-list">
                         <div v-for="category in categories" :key="category.id"
                             class="category-item-clean text-uppercase" @click="navigateToCategory(category.id)"
                             style="cursor: pointer;">
@@ -321,18 +351,29 @@ onBeforeUnmount(stopAutoSlide);
                 </nav>
 
                 <section class="slider" @mouseenter="stopAutoSlide" @mouseleave="startAutoSlide">
-                    <div class="slider-wrapper" :style="{ transform: 'translateX(-' + currentSlide * 100 + '%)' }">
+                    <!-- [NEW] SKELETON SLIDER -->
+                    <div v-if="loading" class="skeleton-slide-box shimmer">
+                        <span class="skeleton-placeholder-text-large">ThinkHub</span>
+                    </div>
+
+                    <div v-else class="slider-wrapper" :style="{ transform: 'translateX(-' + currentSlide * 100 + '%)' }">
                         <div class="slide" v-for="slide in slides" :key="slide.id">
                             <img :src="getImageUrl(slide.imageUrl || slide.image_url)" alt="Slide">
                         </div>
                     </div>
-                    <button class="slider-control prev" @click="prevSlide"><i class="fas fa-chevron-left"></i></button>
-                    <button class="slider-control next" @click="nextSlide"><i class="fas fa-chevron-right"></i></button>
+                    <button v-if="!loading" class="slider-control prev" @click="prevSlide"><i class="fas fa-chevron-left"></i></button>
+                    <button v-if="!loading" class="slider-control next" @click="nextSlide"><i class="fas fa-chevron-right"></i></button>
                 </section>
 
                 <section class="voucher-sidebar">
                     <h3 class="sidebar-title">MÃ GIẢM GIÁ</h3>
-                    <div class="voucher-list">
+                    
+                    <!-- [NEW] SKELETON VOUCHERS -->
+                    <div v-if="loading" class="voucher-list">
+                        <div v-for="n in 4" :key="n" class="skeleton-voucher-item shimmer"></div>
+                    </div>
+
+                    <div v-else class="voucher-list">
                         <div class="voucher-card" v-for="v in vouchers" :key="v.id">
                             <div class="voucher-info">
                                 <span class="voucher-code">{{ v.code }}</span>
@@ -346,10 +387,15 @@ onBeforeUnmount(stopAutoSlide);
             </section>
 
             <!-- Brand Banner -->
-            <section class="brand-banner" v-if="brands.length > 0">
-                <a :href="brands[0].linkUrl || '#'">
-                    <img :src="getImageUrl(brands[0].imageUrl || brands[0].image)" alt="Brand Banner">
-                </a>
+            <section class="brand-banner">
+                <!-- [NEW] SKELETON BRAND BANNER -->
+                <div v-if="loading" class="skeleton-brand-banner shimmer"></div>
+
+                <div v-else-if="brands.length > 0">
+                    <a :href="brands[0].linkUrl || '#'">
+                        <img :src="getImageUrl(brands[0].imageUrl || brands[0].image)" alt="Brand Banner">
+                    </a>
+                </div>
             </section>
 
             <!-- Trust Block -->
@@ -362,7 +408,22 @@ onBeforeUnmount(stopAutoSlide);
 
             <!-- Product Sections -->
             <section class="product-section-container">
-                <div v-if="loading" class="text-center py-5">Đang tải sản phẩm...</div>
+                <!-- [NEW] SKELETON LOADING (Thay cho text "Đang tải...") -->
+                <div v-if="loading" class="product-grid-layout">
+                    <div class="product-card skeleton-card" v-for="n in 10" :key="n">
+                        <div class="skeleton-image shimmer">
+                            <!-- [NEW] Text placeholder ThinkHub -->
+                            <span class="skeleton-placeholder-text">ThinkHub</span>
+                        </div>
+                        <div class="product-info">
+                            <div class="skeleton-line title shimmer"></div>
+                            <div class="skeleton-line title-short shimmer"></div>
+                            <div class="skeleton-line price shimmer"></div>
+                            <div class="skeleton-line rating shimmer"></div>
+                            <div class="skeleton-button shimmer"></div>
+                        </div>
+                    </div>
+                </div>
 
                 <div v-else v-for="(pair, index) in categoryPairs" :key="index" class="category-section">
                     
@@ -1071,5 +1132,156 @@ onBeforeUnmount(stopAutoSlide);
         width: 100%;
         justify-content: flex-start;
     }
+}
+
+/* ------------------------------------------- */
+/* [NEW] SKELETON LOADING STYLES               */
+/* ------------------------------------------- */
+
+.skeleton-card {
+  pointer-events: none; /* Không cho click */
+  user-select: none;
+}
+
+/* Hiệu ứng Shimmer (Ánh sáng chạy qua) */
+.shimmer {
+  background: #f6f7f8;
+  background-image: linear-gradient(
+    to right,
+    #f6f7f8 0%,
+    #edeef1 20%,
+    #f6f7f8 40%,
+    #f6f7f8 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 800px 100%; 
+  animation: placeholderShimmer 1.5s linear infinite forwards;
+}
+
+@keyframes placeholderShimmer {
+  0% {
+    background-position: -468px 0;
+  }
+  100% {
+    background-position: 468px 0;
+  }
+}
+
+/* Các khối giả lập PRODUCT */
+.skeleton-image {
+  height: 180px;
+  width: 100%;
+  border-bottom: 1px solid #eee;
+  /* [NEW] Flexbox để căn giữa chữ ThinkHub */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* [NEW] Style cho chữ placeholder */
+.skeleton-placeholder-text {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #e5e7eb; /* Màu xám nhạt */
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.8;
+}
+
+/* [NEW] Style cho chữ placeholder Slider */
+.skeleton-placeholder-text-large {
+  font-size: 3rem;
+  font-weight: 900;
+  color: #e5e7eb;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  opacity: 0.8;
+}
+
+.skeleton-line {
+  background-color: #eee;
+  border-radius: 4px;
+}
+
+.skeleton-line.title {
+  height: 16px;
+  width: 90%;
+  margin-bottom: 8px;
+}
+
+.skeleton-line.title-short {
+  height: 16px;
+  width: 60%;
+  margin-bottom: 16px;
+}
+
+.skeleton-line.price {
+  height: 20px;
+  width: 40%;
+  margin-bottom: 12px;
+}
+
+.skeleton-line.rating {
+  height: 12px;
+  width: 30%;
+  margin-bottom: 20px;
+}
+
+.skeleton-button {
+  width: 100%;
+  height: 40px;
+  border-radius: 8px;
+  margin-top: auto;
+}
+
+/* [NEW] SKELETON CATEGORY */
+.skeleton-category-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 5px;
+    border-radius: 5px;
+}
+.skeleton-cat-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    background: #e0e0e0;
+}
+.skeleton-cat-text {
+    height: 14px;
+    flex: 1;
+    border-radius: 4px;
+    background: #e0e0e0;
+}
+
+/* [NEW] SKELETON SLIDER */
+.skeleton-slide-box {
+    width: 100%;
+    height: 100%;
+    background: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px; /* Khớp với height của slider thật */
+}
+
+/* [NEW] SKELETON VOUCHER */
+.skeleton-voucher-item {
+    height: 60px;
+    width: 100%;
+    border-radius: 6px;
+    background: #f0f0f0;
+    margin-bottom: 10px;
+    border: 1px dashed #ddd;
+}
+
+/* [NEW] SKELETON BRAND BANNER */
+.skeleton-brand-banner {
+    width: 100%;
+    height: 120px; /* Match the image height */
+    border-radius: 10px;
+    background: #e0e0e0;
 }
 </style>
