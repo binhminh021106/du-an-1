@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue';
-import apiService from '../../../apiService.js';
+import apiService from '../../../apiService.js'; // Đảm bảo đường dẫn đúng
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
 
@@ -102,7 +102,8 @@ const processedComments = computed(() => {
     const query = searchQuery.value.toLowerCase().trim();
     if (query) {
         result = result.filter(c =>
-            (c.user?.username && c.user.username.toLowerCase().includes(query)) ||
+            // FIX: Đổi username thành fullName
+            (c.user?.fullName && c.user.fullName.toLowerCase().includes(query)) ||
             (c.product?.name && c.product.name.toLowerCase().includes(query)) ||
             (c.content && c.content.toLowerCase().includes(query))
         );
@@ -183,7 +184,8 @@ async function fetchComments() {
     if (allComments.value.length === 0) isLoading.value = true;
     try {
         const response = await apiService.get(`admin/comments`);
-        allComments.value = response.data;
+        // Kiểm tra xem dữ liệu trả về có nằm trong wrapper 'data' không (Laravel Resource thường trả về { data: [...] })
+        allComments.value = Array.isArray(response.data) ? response.data : (response.data.data || []);
     } catch (error) {
         console.error("Lỗi tải bình luận:", error);
     } finally {
@@ -333,7 +335,8 @@ onMounted(async () => {
                                         <tr v-else v-for="comment in pagedPending.data" :key="comment.id">
                                             <td class="ps-3 fw-bold text-muted">{{ comment.id }}</td>
                                             <td><span class="fw-bold text-dark">{{ comment.product?.name || 'N/A' }}</span></td>
-                                            <td>{{ comment.user?.username || 'Ẩn danh' }}</td>
+                                            <!-- FIX: Đổi username thành fullName -->
+                                            <td>{{ comment.user?.fullName || 'Ẩn danh' }}</td>
                                             <td><span class="d-inline-block text-truncate text-muted" style="max-width: 300px;">{{ comment.content }}</span></td>
                                             <td class="small text-muted">{{ formatDate(comment.created_at || comment.createdAt) }}</td>
                                             <td class="text-end pe-3">
@@ -345,6 +348,7 @@ onMounted(async () => {
                                     </tbody>
                                 </table>
                             </div>
+                            <!-- Pagination logic remains same, hidden for brevity if no changes needed but kept in structure -->
                             <div class="card-footer bg-white border-top-0 py-3" v-if="pagedPending.totalPages > 1">
                                 <ul class="pagination pagination-sm m-0 justify-content-end">
                                     <li class="page-item" :class="{ disabled: pagination.pending.currentPage === 1 }"><button class="page-link border-0" @click="changePage('pending', pagination.pending.currentPage - 1)">&laquo;</button></li>
@@ -374,7 +378,8 @@ onMounted(async () => {
                                         <tr v-else v-for="comment in pagedApproved.data" :key="comment.id">
                                             <td class="ps-3 fw-bold text-muted">{{ comment.id }}</td>
                                             <td><span class="fw-bold text-dark">{{ comment.product?.name || 'N/A' }}</span></td>
-                                            <td>{{ comment.user?.username || 'Ẩn danh' }}</td>
+                                            <!-- FIX: Đổi username thành fullName -->
+                                            <td>{{ comment.user?.fullName || 'Ẩn danh' }}</td>
                                             <td><span class="d-inline-block text-truncate text-muted" style="max-width: 300px;">{{ comment.content }}</span></td>
                                             <td class="small text-muted">{{ formatDate(comment.created_at || comment.createdAt) }}</td>
                                             <td class="text-end pe-3">
@@ -415,7 +420,8 @@ onMounted(async () => {
                                         <tr v-else v-for="comment in pagedRejected.data" :key="comment.id">
                                             <td class="ps-3 fw-bold text-muted">{{ comment.id }}</td>
                                             <td><span class="fw-bold text-dark">{{ comment.product?.name || 'N/A' }}</span></td>
-                                            <td>{{ comment.user?.username || 'Ẩn danh' }}</td>
+                                            <!-- FIX: Đổi username thành fullName -->
+                                            <td>{{ comment.user?.fullName || 'Ẩn danh' }}</td>
                                             <td><span class="d-inline-block text-truncate text-muted" style="max-width: 300px;">{{ comment.content }}</span></td>
                                             <td class="small text-muted">{{ formatDate(comment.created_at || comment.createdAt) }}</td>
                                             <td class="text-end pe-3">
@@ -469,9 +475,11 @@ onMounted(async () => {
                         <!-- Comment Info -->
                         <div class="col-md-7">
                             <div class="d-flex align-items-center mb-4 p-3 bg-light rounded">
-                                <img :src="viewingComment.user?.avatar || `https://placehold.co/50x50/009981/ffffff?text=${viewingComment.user?.username?.charAt(0).toUpperCase() || 'U'}`" class="rounded-circle me-3 border" width="50" height="50">
+                                <!-- FIX: Đổi avatar thành avatar_url và fullName -->
+                                <img :src="viewingComment.user?.avatar_url || `https://placehold.co/50x50/009981/ffffff?text=${viewingComment.user?.fullName?.charAt(0).toUpperCase() || 'U'}`" class="rounded-circle me-3 border" width="50" height="50">
                                 <div>
-                                    <div class="fw-bold fs-6">{{ viewingComment.user?.username || 'Người dùng ẩn danh' }}</div>
+                                    <!-- FIX: Đổi username thành fullName -->
+                                    <div class="fw-bold fs-6">{{ viewingComment.user?.fullName || 'Người dùng ẩn danh' }}</div>
                                     <div class="text-muted small">User ID: #{{ viewingComment.user?.id }}</div>
                                 </div>
                             </div>

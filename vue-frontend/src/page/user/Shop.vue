@@ -775,7 +775,7 @@ watch(() => route.query, (newQuery) => {
             <div class="promo-column">
               <h3 class="section-subtitle">ƯU ĐÃI SINH VIÊN</h3>
               <div class="banner-grid">
-                <a href="#" class="banner-item"><img src="https://intphcm.com/data/upload/banner-la-gi.jpg"
+                <a href="#" class="banner-item"><img src="https://cdn2.fptshop.com.vn/unsafe/1920x0/filters:format(webp):quality(75)/2024_5_13_638512221715029732_tra-gop-0-dong-la-gi.jpeg"
                     alt="Banner 1"></a>
                 <a href="#" class="banner-item"><img
                     src="https://truonggiang.vn/wp-content/uploads/2021/07/banner-laptop-sinh-vien-scaled.jpg"
