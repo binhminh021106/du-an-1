@@ -67,6 +67,9 @@ Route::get('auth/facebook/callback', [AuthController::class, 'handleFacebookCall
 Route::post('/admin/register', [AdminAuthController::class, 'register']);
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
+Route::post('/admin/forgot-password', [AdminAuthController::class, 'forgotPassword']);
+Route::post('/admin/reset-password', [AdminAuthController::class, 'resetPassword']);
+
 // Route fallback cho unauthenticated request
 Route::get('/login', function () {
     return response()->json(['message' => 'Unauthenticated.'], 401);
@@ -168,10 +171,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/order/{id}', [OrderController::class, 'show']);
     Route::post('/orders', [CheckoutController::class, 'store']);
     Route::post('/orders/{id}/repurchase', [OrderController::class, 'repurchase']);
-    
+
     // [FIX 404] Thêm route cho yêu cầu hoàn hàng
     Route::post('/orders/{id}/return', [OrderController::class, 'requestReturn']);
-    
+
     Route::put('/order/{id}', [OrderController::class, 'update']);
     Route::delete('/order/{id}', [OrderController::class, 'destroy']);
 

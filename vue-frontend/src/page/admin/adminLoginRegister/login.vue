@@ -145,8 +145,10 @@ const handleLogin = async () => {
                                             Ghi nhớ tôi
                                         </label>
                                     </div>
-                                    <a href="#" class="text-decoration-none fw-medium" style="color: #009981;">Quên mật
-                                        khẩu?</a>
+                                    <router-link :to="{ name: 'admin-forgot-password' }"
+                                        class="text-decoration-none fw-medium" style="color: #009981;">
+                                        Quên mật khẩu?
+                                    </router-link>
                                 </div>
 
                                 <div class="d-grid mt-4">
