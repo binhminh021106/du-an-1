@@ -4,20 +4,27 @@ import apiService from '../../apiService.js';
 
 // --- CONFIG ---
 const BACKEND_URL = 'http://127.0.0.1:8000';
-const ITEMS_PER_PAGE = 4; // Số bài viết mỗi trang
-const SITE_NAME = 'ThinkHub Blog'; // Tên website của bạn
+const ITEMS_PER_PAGE = 4; 
+const SITE_NAME = 'ThinkHub Blog'; 
+
+// DANH SÁCH CATEGORY 
+const CATEGORIES = [
+    { name: 'Đánh giá sản phẩm', icon: 'bi-star' },
+    { name: 'Tin tức công nghệ', icon: 'bi-cpu' },
+    { name: 'Mẹo & Thủ thuật', icon: 'bi-tools' },
+    { name: 'Khuyến mãi', icon: 'bi-gift' }
+];
 
 // --- STATE ---
 const posts = ref([]);
-// [CHANGED] Mặc định là true để Skeleton hiện ngay lập tức khi load trang
+const popularPosts = ref([]); // [NEW] State lưu bài viết phổ biến
 const isLoading = ref(true);
-const searchQuery = ref(''); // State tìm kiếm theo tên bài viết
-const authorQuery = ref(''); // State tìm kiếm theo Tác giả
+const searchQuery = ref(''); 
+const authorQuery = ref(''); 
+const categoryQuery = ref(''); 
 const currentPage = ref(1);
 
 // --- HELPER METHODS ---
-
-// [MỚI] Hàm tạo Slug cho tiêu đề bài viết
 const toSlug = (str) => {
     if (!str) return '';
     str = str.toLowerCase();
@@ -35,15 +42,20 @@ const toSlug = (str) => {
     return str;
 };
 
-// --- SEO HELPER FOR LISTING PAGE ---
+// [MỚI] Helper format số view (VD: 1200 -> 1.2K)
+const formatViews = (count) => {
+    if (!count) return 0;
+    if (count >= 1000000) return (count / 1000000).toFixed(1) + 'M';
+    if (count >= 1000) return (count / 1000).toFixed(1) + 'K';
+    return count.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+};
+
 const updateListingSeo = () => {
-    // 1. Basic Meta
     document.title = `Tin tức Công Nghệ & Thủ Thuật - ${SITE_NAME}`;
     const desc = "Cập nhật xu hướng công nghệ mới nhất, đánh giá sản phẩm, thủ thuật và mẹo hay từ đội ngũ chuyên gia.";
     const url = window.location.href;
-    const image = 'https://placehold.co/1200x630?text=News+Page'; // Ảnh đại diện mặc định cho trang tin
+    const image = 'https://placehold.co/1200x630?text=News+Page'; 
 
-    // Helper set meta tag
     const setMetaName = (name, content) => {
         let element = document.querySelector(`meta[name="${name}"]`);
         if (!element) {
@@ -64,7 +76,6 @@ const updateListingSeo = () => {
         element.setAttribute('content', content);
     };
 
-    // 2. Canonical (Tránh trùng lặp nội dung)
     let canonical = document.querySelector('link[rel="canonical"]');
     if (!canonical) {
         canonical = document.createElement('link');
@@ -73,7 +84,6 @@ const updateListingSeo = () => {
     }
     canonical.setAttribute('href', url.split('?')[0]);
 
-    // 3. Open Graph & Twitter Card (Fix lỗi thiếu Twitter Card)
     setMetaName('description', desc);
     setMetaProperty('og:title', document.title);
     setMetaProperty('og:description', desc);
@@ -81,13 +91,11 @@ const updateListingSeo = () => {
     setMetaProperty('og:url', url);
     setMetaProperty('og:type', 'website');
 
-    // [FIX] Thêm Twitter Card
     setMetaName('twitter:card', 'summary_large_image');
     setMetaName('twitter:title', document.title);
     setMetaName('twitter:description', desc);
     setMetaName('twitter:image', image);
 
-    // 4. Schema.org (CollectionPage)
     let schemaScript = document.querySelector('#news-listing-schema');
     if (!schemaScript) {
         schemaScript = document.createElement('script');
@@ -115,8 +123,6 @@ const updateListingSeo = () => {
 };
 
 // --- HELPER FUNCTIONS ---
-
-// Hàm Debounce: Chờ một khoảng thời gian (ms) trước khi gọi hàm
 let debounceTimer = null;
 const debounce = (func, delay) => {
     return function (...args) {
@@ -142,49 +148,38 @@ const formatDate = (dateString) => {
 };
 
 // --- COMPUTED ---
-
-// Kiểm tra xem có đang tìm kiếm hay không (tên bài hoặc tác giả)
 const isSearching = computed(() => {
-    return !!searchQuery.value || !!authorQuery.value;
+    return !!searchQuery.value || !!authorQuery.value || !!categoryQuery.value;
 });
 
-// 1. Bài viết nổi bật (Lấy bài đầu tiên)
 const featuredPost = computed(() => {
     return posts.value.length > 0 ? posts.value[0] : null;
 });
 
-// 2. Danh sách tin tức (Lấy từ bài thứ 2 trở đi)
 const allLatestPosts = computed(() => {
     return posts.value.length > 0 ? posts.value.slice(1) : [];
 });
 
-// 3. Tổng số trang
 const totalPages = computed(() => {
     return Math.ceil(allLatestPosts.value.length / ITEMS_PER_PAGE);
 });
 
-// 4. Danh sách tin cũ ĐÃ PHÂN TRANG (Chỉ hiển thị bài của trang hiện tại)
 const paginatedPosts = computed(() => {
     const start = (currentPage.value - 1) * ITEMS_PER_PAGE;
     const end = start + ITEMS_PER_PAGE;
     return allLatestPosts.value.slice(start, end);
 });
 
-
 // --- METHODS ---
-
-const fetchPosts = async (query = '', author = '') => {
+const fetchPosts = async (query = '', author = '', category = '') => {
     isLoading.value = true;
     try {
         let url = '/news';
         const params = new URLSearchParams();
 
-        if (query) {
-            params.append('q', query);
-        }
-        if (author) {
-            params.append('author', author);
-        }
+        if (query) params.append('q', query);
+        if (author) params.append('author', author);
+        if (category) params.append('category', category); 
 
         if (params.toString()) {
             url += `?${params.toString()}`;
@@ -200,32 +195,49 @@ const fetchPosts = async (query = '', author = '') => {
         console.error("Lỗi tải bài viết:", error);
         posts.value = [];
     } finally {
-        // [FIX] Thêm delay giả lập 2s để hiển thị Skeleton
         setTimeout(() => {
             isLoading.value = false;
-            // FIX CUỘN TRANG (Cuộn lên đầu trang sau khi tìm kiếm/load data)
             window.scrollTo({ top: 0, behavior: 'smooth' });
-        }, 2000);
+        }, 1000);
+    }
+};
+
+// [MỚI] Hàm tải bài viết phổ biến
+const fetchPopularPosts = async () => {
+    try {
+        const response = await apiService.get('/news/popular');
+        popularPosts.value = response.data || [];
+    } catch (error) {
+        console.error("Lỗi tải bài phổ biến:", error);
     }
 };
 
 const triggerSearch = () => {
     const finalQuery = searchQuery.value || '';
     const finalAuthor = authorQuery.value || '';
-    fetchPosts(finalQuery, finalAuthor);
+    const finalCategory = categoryQuery.value || '';
+    fetchPosts(finalQuery, finalAuthor, finalCategory);
 };
 
 const searchByAuthor = (authorName) => {
-    searchQuery.value = ''; // Xóa tìm kiếm theo tên bài viết
-    authorQuery.value = authorName; // Đặt tên tác giả
-    triggerSearch(); // Bỏ qua watcher, gọi trực tiếp để phản hồi ngay lập tức
+    searchQuery.value = ''; 
+    categoryQuery.value = '';
+    authorQuery.value = authorName; 
+    triggerSearch(); 
 };
 
-const handleSearch = () => {
-    authorQuery.value = ''; // Nếu click nút search, ưu tiên tìm kiếm theo tên bài viết
+const searchByCategory = (catName) => {
+    searchQuery.value = '';
+    authorQuery.value = '';
+    categoryQuery.value = catName;
     triggerSearch();
 };
 
+const handleSearch = () => {
+    authorQuery.value = ''; 
+    categoryQuery.value = '';
+    triggerSearch();
+};
 
 const changePage = (page) => {
     if (page >= 1 && page <= totalPages.value) {
@@ -237,27 +249,26 @@ const changePage = (page) => {
     }
 };
 
-// --- LIFECYCLE & WATCHER ---
 onMounted(() => {
-    // Gọi triggerSearch để tải bài viết khi trang được mount (lần đầu)
     triggerSearch();
-    updateListingSeo(); // Cập nhật SEO cho trang danh sách
+    fetchPopularPosts(); // [MỚI] Gọi hàm tải popular posts khi vào trang
+    updateListingSeo(); 
 });
 
-// Watcher 1: Theo dõi thay đổi của searchQuery (Tên bài viết) và dùng Debounce
 watch(searchQuery, debounce((newQuery) => {
     if (newQuery !== null) {
-        authorQuery.value = ''; // Hủy lọc theo tác giả nếu người dùng gõ tìm kiếm mới
+        authorQuery.value = ''; 
+        categoryQuery.value = '';
         triggerSearch();
     }
 }, 400));
 
-// Watcher cho AuthorQuery: Khi bấm nút X reset filter
 watch(authorQuery, (newAuthor) => {
-    if (newAuthor === '') {
-        // Nếu authorQuery bị reset (Xóa bộ lọc), gọi lại tìm kiếm/load mặc định
-        triggerSearch();
-    }
+    if (newAuthor === '') triggerSearch();
+});
+
+watch(categoryQuery, (newCat) => {
+    if (newCat === '') triggerSearch();
 });
 </script>
 
@@ -267,7 +278,9 @@ watch(authorQuery, (newAuthor) => {
         <header class="page-hero">
             <div class="hero-inner">
                 <p class="hero-pre-title">THÔNG TIN & KIẾN THỨC</p>
-                <h1 v-if="isSearching">Kết quả tìm kiếm</h1>
+                <h1 v-if="searchQuery">Tìm kiếm: "{{ searchQuery }}"</h1>
+                <h1 v-else-if="authorQuery">Tác giả: "{{ authorQuery }}"</h1>
+                <h1 v-else-if="categoryQuery">Danh mục: "{{ categoryQuery }}"</h1>
                 <h1 v-else>ThinkHub Công Nghệ</h1>
                 <p class="hero-subtitle">
                     Cập nhật xu hướng công nghệ mới nhất, đánh giá sản phẩm và mẹo hay từ đội ngũ chuyên gia.
@@ -275,18 +288,13 @@ watch(authorQuery, (newAuthor) => {
             </div>
         </header>
 
-        <!-- [EDIT] Thêm class 'container' để đồng bộ width với Header/Footer -->
         <main class="page-container container">
 
-            <!-- [NEW] SKELETON LOADING -->
             <div v-if="isLoading" class="page-layout fade-in">
                 <section class="content-column">
                     <div class="featured-heading skeleton-box skeleton-text w-50 mb-4 shimmer"></div>
-
-                    <!-- Featured Post Skeleton -->
                     <div class="featured-post card-style skeleton-card">
                         <div class="featured-image-wrap skeleton-box img-box shimmer">
-                            <!-- [NEW] Text placeholder ThinkHub -->
                             <span class="skeleton-placeholder-text-large">ThinkHub</span>
                         </div>
                         <div class="featured-body">
@@ -301,8 +309,6 @@ watch(authorQuery, (newAuthor) => {
                             </div>
                         </div>
                     </div>
-
-                    <!-- Grid Post Skeleton -->
                     <div class="latest-section">
                         <div class="skeleton-box skeleton-text w-25 mb-4 shimmer"></div>
                         <div class="latest-posts-grid">
@@ -321,28 +327,14 @@ watch(authorQuery, (newAuthor) => {
                         </div>
                     </div>
                 </section>
-
                 <aside class="sidebar-column">
                     <div class="sidebar-widget skeleton-card">
                         <div class="skeleton-box skeleton-title w-50 mb-3 shimmer"></div>
                         <div class="skeleton-box skeleton-input shimmer" style="height: 45px;"></div>
                     </div>
-
                     <div class="sidebar-widget skeleton-card">
                         <div class="skeleton-box skeleton-title w-50 mb-3 shimmer"></div>
                         <div v-for="i in 4" :key="i" class="skeleton-box skeleton-text w-100 mb-2 shimmer"></div>
-                    </div>
-
-                    <div class="sidebar-widget skeleton-card">
-                        <div class="skeleton-box skeleton-title w-50 mb-3 shimmer"></div>
-                        <div v-for="j in 3" :key="j" class="d-flex gap-3 mb-3">
-                            <div class="skeleton-box img-box shimmer"
-                                style="width: 40px; height: 40px; border-radius: 50%;"></div>
-                            <div class="w-100">
-                                <div class="skeleton-box skeleton-text w-75 mb-1 shimmer"></div>
-                                <div class="skeleton-box skeleton-text w-50 shimmer"></div>
-                            </div>
-                        </div>
                     </div>
                 </aside>
             </div>
@@ -355,14 +347,16 @@ watch(authorQuery, (newAuthor) => {
                         <i class="bi bi-newspaper display-4 text-muted mb-3"></i>
                         <h3 v-if="searchQuery">Không tìm thấy kết quả cho "{{ searchQuery }}"</h3>
                         <h3 v-else-if="authorQuery">Không tìm thấy bài viết của "{{ authorQuery }}"</h3>
+                        <h3 v-else-if="categoryQuery">Chưa có bài viết trong "{{ categoryQuery }}"</h3>
                         <h3 v-else>Chưa có tin tức nào</h3>
                         <p class="text-muted">Vui lòng thử lại với từ khóa khác hoặc quay lại sau.</p>
+                        <button v-if="isSearching" @click="handleSearch" class="btn btn-outline-primary mt-3">Xem tất cả bài viết</button>
                     </div>
 
                     <template v-else>
                         <h3 class="featured-heading">
                             <i class="bi bi-bullseye me-2 icon-color"></i>
-                            {{ isSearching ? 'Bài viết liên quan nhất' : 'Tin tức nổi bật' }}
+                            {{ isSearching ? 'Kết quả lọc' : 'Tin tức nổi bật' }}
                         </h3>
 
                         <article v-if="featuredPost" class="featured-post card-style">
@@ -372,6 +366,7 @@ watch(authorQuery, (newAuthor) => {
                                     class="full-link">
                                     <div class="featured-image"
                                         :style="{ backgroundImage: `url(${getFullImage(featuredPost.image_url)})` }">
+                                        <div class="cat-badge" v-if="featuredPost.category">{{ featuredPost.category }}</div>
                                     </div>
                                 </router-link>
                             </div>
@@ -425,6 +420,7 @@ watch(authorQuery, (newAuthor) => {
                                             class="full-link">
                                             <div class="img-bg"
                                                 :style="{ backgroundImage: `url(${getFullImage(post.image_url)})` }">
+                                                <div class="cat-badge-small" v-if="post.category">{{ post.category }}</div>
                                             </div>
                                         </router-link>
                                     </div>
@@ -459,14 +455,12 @@ watch(authorQuery, (newAuthor) => {
                                     @click="changePage(currentPage - 1)">
                                     <i class="bi bi-chevron-left"></i>
                                 </button>
-
                                 <div class="page-numbers">
                                     <button v-for="page in totalPages" :key="page" class="page-btn"
                                         :class="{ active: currentPage === page }" @click="changePage(page)">
                                         {{ page }}
                                     </button>
                                 </div>
-
                                 <button class="page-btn next" :disabled="currentPage === totalPages"
                                     @click="changePage(currentPage + 1)">
                                     <i class="bi bi-chevron-right"></i>
@@ -485,47 +479,50 @@ watch(authorQuery, (newAuthor) => {
                             <input type="text" v-model="searchQuery" placeholder="Nhập từ khóa...">
                             <button @click="handleSearch"><i class="bi bi-search"></i></button>
                         </div>
+                        <!-- Active Filters Display -->
                         <div v-if="authorQuery"
                             class="alert alert-info mt-3 py-2 px-3 d-flex justify-content-between align-items-center small">
-                            <span>Đang lọc theo: <strong>{{ authorQuery }}</strong></span>
+                            <span>Tác giả: <strong>{{ authorQuery }}</strong></span>
                             <button @click="authorQuery = ''" class="btn-close ms-2" aria-label="Close"></button>
+                        </div>
+                        <div v-if="categoryQuery"
+                            class="alert alert-info mt-3 py-2 px-3 d-flex justify-content-between align-items-center small">
+                            <span>Danh mục: <strong>{{ categoryQuery }}</strong></span>
+                            <button @click="categoryQuery = ''" class="btn-close ms-2" aria-label="Close"></button>
                         </div>
                     </div>
 
-                    <!-- <div class="sidebar-widget category-widget">
+                    <div class="sidebar-widget category-widget">
                         <h4><i class="bi bi-tags-fill me-2"></i> Danh mục</h4>
                         <ul>
-                            <li><a href="#"><i class="bi bi-caret-right-fill me-1 bullet-icon"></i> Đánh giá sản
-                                    phẩm</a></li>
-                            <li><a href="#"><i class="bi bi-caret-right-fill me-1 bullet-icon"></i> Tin tức công
-                                    nghệ</a></li>
-                            <li><a href="#"><i class="bi bi-caret-right-fill me-1 bullet-icon"></i> Mẹo & Thủ thuật</a>
+                            <li v-for="cat in CATEGORIES" :key="cat.name">
+                                <a href="#" @click.prevent="searchByCategory(cat.name)" 
+                                   :class="{ 'active-cat': categoryQuery === cat.name }">
+                                    <i class="bi me-2" :class="cat.icon || 'bi-caret-right-fill'"></i> {{ cat.name }}
+                                </a>
                             </li>
-                            <li><a href="#"><i class="bi bi-caret-right-fill me-1 bullet-icon"></i> Khuyến mãi</a></li>
                         </ul>
-                    </div> -->
+                    </div>
 
+                    <!-- [UPDATED] DYNAMIC POPULAR WIDGET -->
                     <div class="sidebar-widget popular-widget">
                         <h4><i class="bi bi-star-fill me-2"></i> Phổ biến</h4>
-                        <div class="popular-post-item">
-                            <div class="pop-number">1</div>
-                            <div>
-                                <p>Top laptop gaming đáng mua 2025</p>
-                                <span class="post-meta-small"><i class="bi bi-eye"></i> 5,200 view</span>
-                            </div>
+                        
+                        <!-- Loading State -->
+                        <div v-if="popularPosts.length === 0" class="text-center py-3 text-muted small">
+                            Chưa có dữ liệu nổi bật
                         </div>
-                        <div class="popular-post-item">
-                            <div class="pop-number">2</div>
-                            <div>
-                                <p>Hướng dẫn vệ sinh bàn phím cơ</p>
-                                <span class="post-meta-small"><i class="bi bi-eye"></i> 4,150 view</span>
-                            </div>
-                        </div>
-                        <div class="popular-post-item">
-                            <div class="pop-number">3</div>
-                            <div>
-                                <p>So sánh iPhone 15 và 16</p>
-                                <span class="post-meta-small"><i class="bi bi-eye"></i> 3,800 view</span>
+
+                        <!-- Dynamic List -->
+                        <div v-for="(post, index) in popularPosts" :key="post.id" class="popular-post-item">
+                            <div class="pop-number">{{ index + 1 }}</div>
+                            <div class="flex-grow-1">
+                                <router-link :to="{ name: 'PostDetailt', params: { id: post.id, slug: post.slug || toSlug(post.title) } }" class="text-reset text-decoration-none">
+                                    <p>{{ post.title }}</p>
+                                </router-link>
+                                <span class="post-meta-small">
+                                    <i class="bi bi-eye"></i> {{ formatViews(post.views) }} view
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -548,7 +545,6 @@ watch(authorQuery, (newAuthor) => {
     </section>
 </template>
 <style>
-/* --- VARIABLES --- */
 :root {
     --primary: #009981;
     --primary-dark: #007a67;
@@ -573,16 +569,43 @@ watch(authorQuery, (newAuthor) => {
     background-color: #007a67;
 }
 
-/* --- UTILS --- */
 .full-link {
     display: block;
     width: 100%;
     height: 100%;
     text-decoration: none;
+    position: relative;
+}
+
+/* Category Badge on Images */
+.cat-badge {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 153, 129, 0.9);
+    color: white;
+    padding: 5px 15px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    border-radius: 4px;
+    z-index: 2;
+}
+
+.cat-badge-small {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 153, 129, 0.9);
+    color: white;
+    padding: 3px 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 3px;
+    z-index: 2;
 }
 
 .author-link {
-    /* Style cho link tác giả trong featured post */
     color: var(--text-dark);
     text-decoration: underline;
     font-weight: 600;
@@ -612,8 +635,6 @@ watch(authorQuery, (newAuthor) => {
     opacity: 1;
 }
 
-
-/* --- BASE --- */
 .blog-page {
     font-family: 'Inter', system-ui, sans-serif;
     background-color: var(--bg-light);
@@ -638,7 +659,6 @@ watch(authorQuery, (newAuthor) => {
     margin-right: 5px;
 }
 
-/* --- HERO --- */
 .page-hero {
     background: linear-gradient(135deg, #e0f2f1 0%, #ffffff 100%);
     padding: 60px 20px;
@@ -672,27 +692,19 @@ watch(authorQuery, (newAuthor) => {
     line-height: 1.6;
 }
 
-/* --- LAYOUT CONTAINER --- */
 .page-container {
-    /* [EDIT] Xóa max-width cứng để dùng class .container của hệ thống */
-    /* max-width: 1320px; */
-    /* padding: 0 20px; */
-
     margin: 50px auto;
     flex-grow: 1;
 }
 
-/* --- GRID LAYOUT --- */
 .page-layout {
     display: grid;
     grid-template-columns: 1fr 320px;
     gap: 48px;
     align-items: start;
     position: relative;
-    /* Thêm position relative cho overlay */
 }
 
-/* --- SHARED CARD STYLE --- */
 .card-style {
     background: var(--white);
     border-radius: 12px;
@@ -705,12 +717,9 @@ watch(authorQuery, (newAuthor) => {
     padding: 60px 0;
     text-align: center;
     grid-column: 1 / -1;
-    /* Chiếm hết chiều ngang nếu không có bài nào */
 }
 
-/* --- FEATURED POST --- */
 .featured-heading {
-    /* NEW STYLE: Đặt riêng tiêu đề cho Featured Post */
     font-size: 1.5rem;
     font-weight: 700;
     margin-bottom: 20px;
@@ -816,9 +825,7 @@ h3 {
     padding-left: 5px;
 }
 
-/* --- LIST POSTS --- */
 .section-heading {
-    /* Đã tách ra, giờ chỉ dùng cho List Grid */
     font-size: 1.5rem;
     font-weight: 700;
     margin-bottom: 25px;
@@ -916,7 +923,6 @@ h3 {
     color: var(--accent);
 }
 
-/* --- SIDEBAR --- */
 .sidebar-column {
     display: flex;
     flex-direction: column;
@@ -945,7 +951,6 @@ h3 {
     color: #007a67;
 }
 
-/* Search Box */
 .search-box {
     display: flex;
     gap: 8px;
@@ -980,7 +985,6 @@ h3 {
     background-color: var(--accent);
 }
 
-/* Category */
 .category-widget ul {
     list-style: none;
     padding: 0;
@@ -1002,23 +1006,12 @@ h3 {
     transition: all 0.2s;
 }
 
-.category-widget a:hover {
+.category-widget a:hover, .category-widget a.active-cat {
     background-color: rgba(0, 153, 129, 0.08);
     color: var(--primary);
     padding-left: 15px;
 }
 
-.bullet-icon {
-    font-size: 0.7rem;
-    color: #ccc;
-    transition: color 0.2s;
-}
-
-.category-widget a:hover .bullet-icon {
-    color: var(--primary);
-}
-
-/* Popular Posts */
 .popular-post-item {
     display: flex;
     align-items: flex-start;
@@ -1064,13 +1057,6 @@ h3 {
     color: #999;
 }
 
-/* Empty State */
-.empty-state {
-    text-align: center;
-    padding: 60px 0;
-}
-
-/* Footer */
 .page-footer {
     border-top: 1px solid #eee;
     padding: 30px 0;
@@ -1078,7 +1064,6 @@ h3 {
     background: var(--white);
 }
 
-/* --- PAGINATION CSS --- */
 .pagination-wrapper {
     display: flex;
     justify-content: center;
@@ -1125,7 +1110,6 @@ h3 {
     border-color: #eee;
 }
 
-/* --- RESPONSIVE --- */
 @media (max-width: 992px) {
     .page-layout {
         grid-template-columns: 1fr;
@@ -1156,34 +1140,6 @@ h3 {
     }
 }
 
-/* Thêm CSS cho Overlay */
-.content-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(255, 255, 255, 0.8);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 10;
-    border-radius: 12px;
-    margin: 50px 0;
-    /* Cho phép header và sidebar không bị mờ */
-}
-
-/* Điều chỉnh lại vị trí của Overlay trong page-layout */
-.page-layout {
-    position: relative;
-    /* ... các thuộc tính grid khác ... */
-}
-
-/* ------------------------------------------- */
-/* [NEW] SKELETON LOADING STYLES               */
-/* ------------------------------------------- */
-
 .fade-in {
     animation: fadeIn 0.3s ease-in;
 }
@@ -1192,13 +1148,11 @@ h3 {
     from {
         opacity: 0;
     }
-
     to {
         opacity: 1;
     }
 }
 
-/* Hiệu ứng Shimmer */
 .shimmer {
     background: #f6f7f8;
     background-image: linear-gradient(to right,
@@ -1215,7 +1169,6 @@ h3 {
     0% {
         background-position: -468px 0;
     }
-
     100% {
         background-position: 468px 0;
     }
@@ -1247,13 +1200,11 @@ h3 {
 
 .skeleton-box.img-box {
     background-color: #ddd;
-    /* Flexbox to center text */
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-/* Placeholder Text */
 .skeleton-placeholder-text-large {
     font-size: 3rem;
     font-weight: 900;

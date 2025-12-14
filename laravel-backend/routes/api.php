@@ -118,6 +118,7 @@ Route::get('/imageProducts', [ImageProductController::class, 'index']);
 Route::get('/imageProduct/{id}', [ImageProductController::class, 'show']);
 
 // --- NEWS ---
+Route::get('/news/popular', [NewController::class, 'popular']);
 Route::get('/news', [NewController::class, 'index']);
 Route::get('/news/{slug}', [NewController::class, 'show']);
 

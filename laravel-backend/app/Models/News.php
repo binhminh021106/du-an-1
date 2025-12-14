@@ -16,11 +16,13 @@ class News extends Model
     // Chỉ cho phép fill các trường dữ liệu, KHÔNG bao gồm timestamp
     protected $fillable = [
         'title',
+        'category',
         'excerpt', 
         'content', 
         'image_url',
         'slug', 
         'status',
+        'views',
         'author_name',
         // [SEO UPGRADE] Thêm các trường Meta cho SEO
         'meta_title',

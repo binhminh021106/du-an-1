@@ -3,7 +3,6 @@ import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue';
 import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
-// Đã sửa lại dòng import đúng tên thư viện
 import { QuillEditor } from '@vueup/vue-quill';
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
 import html2pdf from 'html2pdf.js';
@@ -12,6 +11,15 @@ import html2pdf from 'html2pdf.js';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 const BACKEND_URL = API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
 const FRONTEND_URL = window.location.origin;
+
+// [NEW] DANH SÁCH CATEGORY CỐ ĐỊNH (Khớp với client)
+const CATEGORIES = [
+    { id: 'tech', name: 'Tin tức công nghệ' },
+    { id: 'review', name: 'Đánh giá sản phẩm' },
+    { id: 'tips', name: 'Mẹo & Thủ thuật' },
+    { id: 'promo', name: 'Khuyến mãi' },
+    { id: 'other', name: 'Khác' }
+];
 
 // AUTHENTICATION & PERMISSIONS
 const currentUser = ref({});
@@ -94,36 +102,31 @@ const isEditMode = ref(false);
 const news = ref([]);
 const searchQuery = ref('');
 
-// [NEW] Tab & Sorting State
-const currentTab = ref('pending'); // Mặc định tab đầu tiên là 'pending'
-const sortOption = ref('newest');  // Mặc định mới nhất
+const currentTab = ref('pending');
+const sortOption = ref('newest');
 
-// File Handling
 const selectedFile = ref(null);
 const previewImage = ref(null);
 
-// Pagination
 const currentPage = ref(1);
 const itemsPerPage = ref(5);
 
-// Modals
 const modalInstance = ref(null);
 const modalRef = ref(null);
 const viewModalInstance = ref(null);
 const viewModalRef = ref(null);
 const viewingNewsItem = ref({});
 
-// Form Data
 const formData = reactive({
     id: null, title: '', excerpt: '', content: '', slug: '',
     status: 'pending', author_name: '',
-    // [SEO UPGRADE] Init SEO fields
+    // [NEW] Thêm trường category vào formData
+    category: '',
     meta_title: '', meta_description: '', meta_keywords: ''
 });
 
 const errors = reactive({ title: '', slug: '', content: '', author_name: '' });
 
-// Quill Editor Config
 const quillInstance = ref(null);
 const quillToolbar = [
     ['bold', 'italic', 'underline', 'strike'], ['blockquote', 'code-block'],
@@ -135,8 +138,6 @@ const quillToolbar = [
 ];
 
 // COMPUTED & WATCHERS
-
-// [NEW] Tính toán số lượng bài viết cho từng trạng thái để hiện lên Tab
 const statusCounts = computed(() => {
     const list = news.value;
     return {
@@ -150,18 +151,15 @@ const statusCounts = computed(() => {
 const processedNews = computed(() => {
     let result = news.value;
 
-    // 1. Filter by Search Query
     const query = searchQuery.value.toLowerCase().trim();
     if (query) {
         result = result.filter(item => item.title.toLowerCase().includes(query));
     }
 
-    // 2. Filter by Tab Status
     if (currentTab.value !== 'all') {
         result = result.filter(item => item.status === currentTab.value);
     }
 
-    // 3. Sorting
     result = [...result].sort((a, b) => {
         if (sortOption.value === 'newest') {
             return new Date(b.created_at) - new Date(a.created_at);
@@ -182,7 +180,6 @@ const totalPages = computed(() => Math.ceil(processedNews.value.length / itemsPe
 
 const paginatedNews = computed(() => {
     const start = (currentPage.value - 1) * itemsPerPage.value;
-    // Fix lỗi nếu đang ở trang xa mà đổi tab bị trắng trang
     if (start >= processedNews.value.length && currentPage.value > 1) {
         currentPage.value = 1;
         return processedNews.value.slice(0, itemsPerPage.value);
@@ -190,19 +187,16 @@ const paginatedNews = computed(() => {
     return processedNews.value.slice(start, start + itemsPerPage.value);
 });
 
-// Reset trang về 1 khi đổi tab hoặc search
 watch([searchQuery, currentTab, sortOption], () => currentPage.value = 1);
 
 watch(() => formData.title, (newTitle) => {
     if (!isEditMode.value && newTitle) {
         formData.slug = slugify(newTitle);
-        // [SEO UPGRADE] Tự động điền Meta Title nếu chưa có
         if(!formData.meta_title) formData.meta_title = newTitle;
     }
 });
 
 watch(() => formData.excerpt, (newExcerpt) => {
-     // [SEO UPGRADE] Tự động điền Meta Description nếu chưa có và đang viết bài mới
      if (!isEditMode.value && newExcerpt && !formData.meta_description) {
         formData.meta_description = newExcerpt;
     }
@@ -257,7 +251,7 @@ function resetForm() {
         id: null, title: '', excerpt: '', content: '', slug: '',
         status: 'pending',
         author_name: currentUser.value.name || '',
-        // [SEO UPGRADE] Reset SEO fields
+        category: '', // Reset category
         meta_title: '', meta_description: '', meta_keywords: ''
     });
     selectedFile.value = null;
@@ -321,6 +315,8 @@ const openEditModal = (newsItem) => {
     const itemCopy = JSON.parse(JSON.stringify(newsItem));
     resetForm();
     Object.assign(formData, { ...itemCopy, content: itemCopy.content || '' });
+    // Nếu category null thì set về rỗng
+    if (!formData.category) formData.category = ''; 
     if (!formData.author_name) formData.author_name = currentUser.value.name;
     previewImage.value = itemCopy.image_url || null;
     isEditMode.value = true;
@@ -342,6 +338,7 @@ const exportToPDF = (item = null) => {
         <h1 style="text-align: center; font-size: 24pt; margin-bottom: 20px;">${sourceData.title || 'Bài viết'}</h1>
         <div style="text-align: center; margin-bottom: 20px; color: #666;">
             <strong>Tác giả:</strong> ${displayAuthor} <br/>
+            <strong>Danh mục:</strong> ${sourceData.category || 'Chưa phân loại'} <br/>
             <strong>Ngày tạo:</strong> ${getFormattedDate(sourceData.created_at || new Date())}
         </div>
         <p style="font-style: italic; color: #555; padding-left: 10px; border-left: 3px solid #ccc;">${sourceData.excerpt || ''}</p>
@@ -380,7 +377,6 @@ async function handleSave() {
         const plainText = formData.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
         formData.excerpt = plainText.slice(0, 160) + (plainText.length > 160 ? '...' : '');
     }
-    // [SEO UPGRADE] Fallback cho SEO nếu người dùng lười điền
     if (!formData.meta_title) formData.meta_title = formData.title;
     if (!formData.meta_description) formData.meta_description = formData.excerpt;
 
@@ -465,7 +461,6 @@ onMounted(async () => {
     <div class="app-content">
         <div class="container-fluid">
             <div class="card mb-4 shadow-sm border-0">
-                <!-- [NEW] CUSTOM TABS WITH COUNTS -->
                 <div class="card-header border-bottom-0 pb-0 bg-white">
                     <ul class="nav nav-tabs card-header-tabs custom-tabs">
                         <li class="nav-item">
@@ -507,11 +502,9 @@ onMounted(async () => {
                     </ul>
                 </div>
 
-                <!-- [NEW] FILTER BAR BIGGER -->
                 <div class="card-body bg-light border-bottom py-3">
                     <div class="row align-items-center g-3">
                         <div class="col-md-4 col-12">
-                            <!-- Removed input-group-sm for bigger size -->
                             <div class="input-group">
                                 <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
                                 <input type="text" class="form-control border-start-0 ps-0"
@@ -519,7 +512,6 @@ onMounted(async () => {
                             </div>
                         </div>
                         <div class="col-md-3 col-6">
-                            <!-- Removed form-select-sm -->
                             <select class="form-select" v-model="sortOption">
                                 <option value="newest">⏱️ Mới nhất</option>
                                 <option value="oldest">⏳ Cũ nhất</option>
@@ -528,14 +520,12 @@ onMounted(async () => {
                             </select>
                         </div>
                         <div class="col-md-5 col-6 text-end">
-                            <!-- Increased padding and remove btn-sm -->
                             <button class="btn btn-primary px-4 shadow-sm" @click="openCreateModal"><i
                                     class="bi bi-pen me-1"></i> Viết bài mới</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- MAIN TABLE -->
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0 custom-table">
@@ -543,7 +533,7 @@ onMounted(async () => {
                                 <tr>
                                     <th class="ps-3" style="width: 50px;">ID</th>
                                     <th style="width: 100px;">Ảnh</th>
-                                    <th>Tiêu đề</th>
+                                    <th>Tiêu đề / Danh mục</th>
                                     <th class="d-none d-md-table-cell" style="width: 150px;">Tác giả</th>
                                     <th style="width: 120px;">Trạng thái</th>
                                     <th class="d-none d-lg-table-cell" style="width: 130px;">Ngày tạo</th>
@@ -573,6 +563,7 @@ onMounted(async () => {
                                         </div>
                                     </td>
                                     <td>
+                                        <span class="badge bg-light text-dark border mb-1" v-if="item.category">{{ item.category }}</span>
                                         <span class="fw-bold d-block text-dark text-truncate" style="max-width: 280px;"
                                             :title="item.title">{{ item.title }}</span>
                                         <small class="text-muted d-block text-truncate" style="max-width: 280px;">{{
@@ -616,7 +607,6 @@ onMounted(async () => {
                     </div>
                 </div>
 
-                <!-- PAGINATION -->
                 <div class="card-footer bg-white border-top-0 py-3" v-if="!isLoading && totalPages > 1">
                     <div class="d-flex justify-content-between align-items-center">
                         <small class="text-muted">Hiển thị {{ paginatedNews.length }} / {{ processedNews.length }} bài
@@ -639,7 +629,6 @@ onMounted(async () => {
         </div>
     </div>
 
-    <!-- CREATE/EDIT MODAL -->
     <div class="modal fade" id="newsModal" ref="modalRef" tabindex="-1" data-bs-backdrop="static">
         <div class="modal-dialog modal-fullscreen modal-dialog-scrollable">
             <div class="modal-content">
@@ -660,6 +649,16 @@ onMounted(async () => {
                                             placeholder="Nhập tiêu đề hấp dẫn...">
                                         <div class="invalid-feedback">{{ errors.title }}</div>
                                     </div>
+                                    
+                                    <!-- [NEW] SELECT CATEGORY -->
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold text-brand">Danh mục bài viết</label>
+                                        <select class="form-select" v-model="formData.category">
+                                            <option value="">-- Chọn danh mục --</option>
+                                            <option v-for="cat in CATEGORIES" :key="cat.id" :value="cat.name">{{ cat.name }}</option>
+                                        </select>
+                                    </div>
+
                                     <div class="mb-3"><label class="form-label required fw-bold text-muted small">Slug
                                             (URL)</label><input type="text"
                                             class="form-control form-control-sm bg-light text-muted"
@@ -729,7 +728,6 @@ onMounted(async () => {
                                         </div>
                                     </div>
                                     
-                                    <!-- [SEO UPGRADE] THÊM CARD CẤU HÌNH SEO MỚI -->
                                     <div class="card mb-3 border-0 shadow-sm">
                                         <div class="card-header fw-bold bg-white text-primary border-bottom">
                                             <i class="bi bi-google me-1"></i> Cấu hình SEO (Google)
@@ -749,7 +747,6 @@ onMounted(async () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <!-- END SEO CARD -->
 
                                     <div class="d-grid"><button type="button" @click="exportToPDF(null)"
                                             class="btn btn-outline-danger"><i class="bi bi-file-earmark-pdf"></i> Xem
@@ -768,7 +765,6 @@ onMounted(async () => {
         </div>
     </div>
 
-    <!-- VIEW MODAL -->
     <div class="modal fade" id="viewNewsModal" ref="viewModalRef" tabindex="-1">
         <div class="modal-dialog modal-fullscreen modal-dialog-scrollable">
             <div class="modal-content bg-light">
@@ -822,7 +818,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* CUSTOM TABS STYLE */
 .custom-tabs .nav-link {
     color: #6c757d;
     border: none;
@@ -841,7 +836,6 @@ onMounted(async () => {
     border-bottom: 3px solid #009981;
 }
 
-/* THEME COLORS */
 .text-brand {
     color: #009981 !important;
 }
@@ -876,7 +870,6 @@ onMounted(async () => {
     border-color: #009981 !important;
 }
 
-/* [NEW] Cursor Pointer for Switch */
 .custom-switch {
     cursor: pointer;
 }
@@ -886,7 +879,6 @@ onMounted(async () => {
     border-color: #009981;
 }
 
-/* COMPONENTS */
 .form-label.required::after {
     content: " *";
     color: red;
