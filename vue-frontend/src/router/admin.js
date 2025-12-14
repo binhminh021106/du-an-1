@@ -2,7 +2,7 @@ const adminLayoutRoutes = [
   {
     path: "/admin",
     component: () => import("../layout/layoutAdmin.vue"),
-    meta: { requiresAuthAdmin: true }, 
+    meta: { requiresAuthAdmin: true },
     children: [
       {
         path: "",
@@ -69,7 +69,6 @@ const adminLayoutRoutes = [
         name: "EmailManager",
         component: () => import("../page/admin/content/EmailManager.vue"),
       },
-      
     ],
   },
 ];
@@ -84,6 +83,18 @@ const adminAuthRoutes = [
     path: "/admin/login",
     name: "admin-login",
     component: () => import("../page/admin/adminLoginRegister/login.vue"),
+  },
+  {
+    path: "/admin/forgot-password",
+    name: "admin-forgot-password",
+    component: () =>
+      import("../page/admin/adminLoginRegister/forgotPassword.vue"),
+  },
+  {
+    path: "/admin/reset-password",
+    name: "admin-reset-password",
+    component: () =>
+      import("../page/admin/adminLoginRegister/resetPassword.vue"),
   },
 ];
 

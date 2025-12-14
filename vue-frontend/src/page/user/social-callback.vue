@@ -36,7 +36,7 @@ onMounted(async () => {
     await Swal.fire({
       icon: 'success',
       title: 'Đăng nhập thành công!',
-      text: `Chào mừng ${user.full_name || user.name} đến với ThinkHub`,
+      text: `Chào mừng bạn đến với ThinkHub`,
       timer: 1500,
       showConfirmButton: false,
       confirmButtonColor: '#009981'
