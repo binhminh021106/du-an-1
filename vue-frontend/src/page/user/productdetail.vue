@@ -717,7 +717,7 @@ watchEffect(() => {
                 </div>
             </div>
 
-            <!-- 3. Recommendations Skeleton -->
+            <!-- 3. Recommendations Skeleton (Updated to match Wishlist style) -->
             <div class="row mt-5">
                 <div class="col-12">
                     <div class="bg-white rounded p-4 border border-light">
@@ -729,7 +729,20 @@ watchEffect(() => {
                             </div>
                         </div>
                         <div class="d-flex gap-3 overflow-hidden">
-                            <div v-for="n in 5" :key="n" class="skeleton-box skeleton-card shimmer"></div>
+                            <!-- [UPDATED] Detailed Card Skeleton for Recommendations -->
+                            <div v-for="n in 5" :key="n" class="skeleton-card-pro border shadow-sm position-relative bg-white" style="min-width: 240px; height: 380px; border-radius: 12px; overflow: hidden;">
+                                <div class="card-img-top-wrapper position-relative shimmer d-flex align-items-center justify-content-center" style="height: 220px; background-color: #f8f9fa;">
+                                    <span class="fw-bold text-muted opacity-25 fs-4 user-select-none">THINKHUB</span>
+                                </div>
+                                <div class="p-3">
+                                    <div class="shimmer mb-2 rounded" style="height: 12px; width: 40%;"></div>
+                                    <div class="shimmer mb-2 rounded" style="height: 18px; width: 90%;"></div>
+                                    <div class="shimmer mb-3 rounded" style="height: 18px; width: 60%;"></div>
+                                    <div class="mt-4">
+                                        <div class="shimmer rounded-pill" style="height: 38px; width: 100%;"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1693,6 +1706,7 @@ watchEffect(() => {
     color: white;
 }
 
+/* --- PRODUCT CARD PRO STYLES (MATCHING WISHLIST) --- */
 .product-card-pro {
     transition: all 0.3s ease;
     cursor: pointer;
@@ -1712,16 +1726,16 @@ watchEffect(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f8f9fa;
-    padding: 10px;
-    overflow: hidden;
-    /* Ensure image zoom stays inside */
+    background: #fff;
+    padding: 0; /* [FIX] Xóa padding để ảnh full width */
+    position: relative;
+    overflow: hidden; /* [FIX] Đảm bảo ảnh zoom không bị tràn ra ngoài */
 }
 
 .product-img {
-    max-height: 100%;
-    max-width: 100%;
-    object-fit: contain;
+    width: 100%; /* [FIX] Full width */
+    height: 100%;
+    object-fit: contain; /* Giữ contain để thấy hết sản phẩm */
     transition: transform 0.5s ease;
 }
 
@@ -1876,6 +1890,11 @@ watchEffect(() => {
     min-width: 240px;
     height: 350px;
     border-radius: 12px;
+}
+
+/* [NEW] Detailed Skeleton for Recommendations */
+.skeleton-card-pro {
+    transition: all 0.3s ease;
 }
 
 @media (max-width: 768px) {

@@ -492,7 +492,7 @@ watch(authorQuery, (newAuthor) => {
                         </div>
                     </div>
 
-                    <div class="sidebar-widget category-widget">
+                    <!-- <div class="sidebar-widget category-widget">
                         <h4><i class="bi bi-tags-fill me-2"></i> Danh mục</h4>
                         <ul>
                             <li><a href="#"><i class="bi bi-caret-right-fill me-1 bullet-icon"></i> Đánh giá sản
@@ -503,7 +503,7 @@ watch(authorQuery, (newAuthor) => {
                             </li>
                             <li><a href="#"><i class="bi bi-caret-right-fill me-1 bullet-icon"></i> Khuyến mãi</a></li>
                         </ul>
-                    </div>
+                    </div> -->
 
                     <div class="sidebar-widget popular-widget">
                         <h4><i class="bi bi-star-fill me-2"></i> Phổ biến</h4>

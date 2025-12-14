@@ -24,7 +24,7 @@ use App\Http\Controllers\Api\admin\AdminAuthController;
 use App\Http\Controllers\Api\admin\AdminRoleController;
 use App\Http\Controllers\Api\admin\AdminUserController;
 use App\Http\Controllers\Api\Client\CategoryController;
-use App\Http\Controllers\Api\Client\ChatbotController; // [NEW] Import Chatbot Controller
+use App\Http\Controllers\Api\Client\ChatbotController; // Import Chatbot Controller
 
 // --- ADMIN CONTROLLERS ---
 use App\Http\Controllers\Api\Client\CheckoutController;
@@ -49,7 +49,7 @@ use App\Http\Controllers\Api\admin\AdminOrderItemController;
 use App\Http\Controllers\Api\admin\AdminBrandSlideController;
 use App\Http\Controllers\Api\admin\AdminPermissionController;
 use App\Http\Controllers\Api\admin\AdminImageProductController;
-use App\Http\Controllers\Api\Admin\AdminInventoryController; // [NEW] Import Inventory Controller
+use App\Http\Controllers\Api\Admin\AdminInventoryController; // Import Inventory Controller
 
 // 2. AUTHENTICATION ROUTES (PUBLIC)
 
@@ -75,7 +75,7 @@ Route::get('/login', function () {
 // 3. PUBLIC DATA ROUTES (CLIENT - KHÔNG CẦN ĐĂNG NHẬP)
 
 // --- CHATBOT ---
-Route::get('/chatbot/search', [ChatbotController::class, 'search']); // [NEW] Chatbot Search Route
+Route::get('/chatbot/search', [ChatbotController::class, 'search']); // Chatbot Search Route
 
 // --- PRODUCTS ---
 Route::get('/products', [ProductController::class, 'index']);
@@ -156,6 +156,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // --- WISHLIST ---
     Route::get('/wishlist', [WishlistController::class, 'index']);
     Route::post('/wishlist/toggle', [WishlistController::class, 'toggle']);
+    Route::delete('/wishlist/{productId}', [WishlistController::class, 'destroy']);
 
     // --- COMMENTS (Gửi bình luận) ---
     Route::post('/comments', [CommentController::class, 'store']);
@@ -185,7 +186,7 @@ Route::group([
     'middleware' => ['auth:sanctum', 'admin']
 ], function () {
 
-    // --- INVENTORY (QUẢN LÝ KHO) [NEW] ---
+    // --- INVENTORY (QUẢN LÝ KHO) ---
     Route::get('inventory', [AdminInventoryController::class, 'index']);
     Route::put('inventory/variants/{id}/stock', [AdminInventoryController::class, 'updateStock']);
 

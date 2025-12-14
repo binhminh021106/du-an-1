@@ -1,4 +1,3 @@
-// src/store/wishlistStore.js
 import { ref } from 'vue';
 import apiService from '../apiService'; // Đảm bảo import axios instance
 
@@ -9,10 +8,34 @@ const initializeWishlist = async () => {
     if (token) {
         try {
             const response = await apiService.get('/wishlist');
-            // Map dữ liệu từ API về format của store
-            return response.data.data.map(item => item.product);
+            
+            // [FIX CORE] Map dữ liệu cẩn thận để đảm bảo cấu trúc đồng nhất với Frontend
+            // Thay vì chỉ return item.product, ta map lại để đảm bảo có image_url và id chuẩn
+            return response.data.data.map(wishlistItem => {
+                // wishlistItem là wrapper { id: 29, product_id: 123, product: {...} }
+                const product = wishlistItem.product || {};
+                
+                return {
+                    // QUAN TRỌNG: ID của item trong store PHẢI là Product ID để hàm isInWishlist hoạt động đúng
+                    id: product.id || wishlistItem.product_id, 
+                    
+                    product_id: product.id || wishlistItem.product_id,
+                    name: product.name,
+                    price: Number(product.price || 0),
+                    
+                    // [FIX] Xử lý nhiều trường hợp tên field ảnh từ Backend (image, thumbnail, thumbnail_url...)
+                    // Để đảm bảo UI có ảnh hiển thị ngay lập tức
+                    image_url: product.image_url || product.thumbnail_url || product.thumbnail || product.image,
+                    
+                    stock: product.stock,
+                    
+                    // Giữ lại object product gốc lồng bên trong để Wishlist.vue nhận diện được logic "if (item.product)"
+                    product: product
+                };
+            });
         } catch (error) {
             console.error("Lỗi tải wishlist từ server:", error);
+            // Nếu lỗi API, thử fallback về localStorage để không trắng trang
         }
     }
 
@@ -40,11 +63,11 @@ const saveWishlistLocal = () => {
 
 // Kiểm tra xem sản phẩm có trong Wishlist không
 const isInWishlist = (productId) => {
+    // Vì ta đã chuẩn hóa item.id = product.id ở trên nên phép so sánh này luôn đúng
     return wishlist.value.some(item => String(item.id) === String(productId));
 };
 
 // --- HÀM TOGGLE QUAN TRỌNG: GỌI API ---
-// [FIX] Bỏ 'async' để hàm trả về boolean ngay lập tức, không trả về Promise
 const toggleWishlist = (product) => {
     const productId = product.id;
     const index = wishlist.value.findIndex(item => String(item.id) === String(productId));
@@ -59,9 +82,12 @@ const toggleWishlist = (product) => {
     } else {
         const newItem = {
             id: product.id,
+            product_id: product.id, // Thêm trường này cho chắc chắn
             name: product.name,
-            image_url: product.image_url || product.thumbnail_url,
-            price: product.price || 0, 
+            // Đảm bảo lấy được ảnh dù ở property nào
+            image_url: product.image_url || product.thumbnail_url || product.thumbnail || product.image,
+            price: product.price || 0,
+            product: product // Lưu lại chính nó vào field product để đồng bộ cấu trúc
         };
         wishlist.value.push(newItem); // Thêm vào danh sách
         isAdded = true;

@@ -20,7 +20,6 @@ const getImageUrl = (path) => {
 
 // --- STATE ---
 const orders = ref([]);
-// [CHANGED] Mặc định là true để Skeleton hiện ngay lập tức khi load trang
 const isLoading = ref(true);
 
 // Popup & Review logic
@@ -36,6 +35,11 @@ const searchQuery = ref('');
 const currentTab = ref('all');
 const currentPage = ref(1);
 const itemsPerPage = 5;
+
+// [NEW] Filter States
+const sortOrder = ref('newest'); // 'newest' | 'oldest'
+const dateFilterType = ref('all'); // 'all' | '1_day_ago' | '2_days_ago' | 'specific'
+const specificDate = ref('');
 
 const tabs = [
   { label: 'Tất cả', value: 'all' },
@@ -115,13 +119,11 @@ const getStatusClass = (statusRaw) => {
   return 'status-default';
 };
 
-// [NEW IMPROVED] Logic xác định loại trạng thái ngoại lệ (Exception Type)
-// Hàm này là "trái tim" để đảm bảo hiển thị đúng
+// Logic xác định loại trạng thái ngoại lệ
 const getExceptionType = (statusRaw) => {
   const s = statusRaw ? statusRaw.toLowerCase().trim() : '';
   if (['returning', 'return', 'processing_return'].includes(s)) return 'returning';
   if (['returned', 'refunded', 'return_completed'].includes(s)) return 'returned';
-  // Mặc định là cancelled nếu rơi vào nhóm ẩn progress bar nhưng không phải hoàn trả
   return 'cancelled';
 };
 
@@ -134,16 +136,16 @@ const getExceptionMessage = (statusRaw) => {
 
 const getExceptionIcon = (statusRaw) => {
     const type = getExceptionType(statusRaw);
-    if (type === 'returning') return 'fas fa-shipping-fast fa-flip-horizontal'; // Icon xe tải quay đầu
-    if (type === 'returned') return 'fas fa-clipboard-check'; // Icon check list
-    return 'fas fa-times-circle'; // Icon X
+    if (type === 'returning') return 'fas fa-shipping-fast fa-flip-horizontal';
+    if (type === 'returned') return 'fas fa-clipboard-check';
+    return 'fas fa-times-circle';
 };
 
 const getExceptionStyleClass = (statusRaw) => {
     const type = getExceptionType(statusRaw);
     if (type === 'returning') return 'msg-returning';
     if (type === 'returned') return 'msg-returned';
-    return ''; // Mặc định style của cancelled
+    return ''; 
 };
 
 
@@ -158,7 +160,6 @@ const fetchOrders = async () => {
       const statusVN = mapStatusBackendToFrontend(order.status);
       const canReviewState = order.status === 'delivered' || order.status === 'completed';
 
-      // Map Items và thông tin Review (nếu có)
       const mappedItems = order.items ? order.items.map(item => {
         const variant = item.variant || {};
         const product = variant.product || {};
@@ -171,7 +172,6 @@ const fetchOrders = async () => {
         const rawImagePath = variant.image || product.thumbnail_url;
         const realProductId = product.id || item.product_id;
 
-        // [QUAN TRỌNG] Lấy thông tin review từ item
         const existingReview = item.review || null;
 
         return {
@@ -184,7 +184,7 @@ const fetchOrders = async () => {
           qty: item.quantity,
           price: item.price,
           quantity: item.quantity,
-          review: existingReview // Lưu lại review cũ
+          review: existingReview 
         };
       }) : [];
 
@@ -219,12 +219,10 @@ const fetchOrders = async () => {
       };
     });
 
-    orders.value.sort((a, b) => new Date(b.date) - new Date(a.date));
-
+    // Default sort will be handled by computed 'filteredOrders'
   } catch (error) {
     console.error("Lỗi tải đơn hàng:", error);
   } finally {
-    // [FIX] Thêm delay 2 giây để hiển thị Skeleton
     setTimeout(() => { isLoading.value = false }, 2000);
   }
 };
@@ -233,7 +231,6 @@ onMounted(() => {
   fetchOrders();
 });
 
-// [FIX] Xóa thanh cuộn body khi popup mở
 watch(showPopup, (newVal) => {
   if (newVal) {
     document.body.style.overflow = 'hidden';
@@ -247,10 +244,15 @@ onUnmounted(() => {
 });
 
 // --- LOGIC UI ---
-const sortedOrders = computed(() => orders.value);
-
 const filteredOrders = computed(() => {
-  let result = sortedOrders.value;
+  // 1. Sort First
+  let result = [...orders.value].sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return sortOrder.value === 'newest' ? dateB - dateA : dateA - dateB;
+  });
+
+  // 2. Filter by Tab
   if (currentTab.value !== 'all') {
     result = result.filter(order => {
       const s = order.statusRaw ? order.statusRaw.toLowerCase().trim() : '';
@@ -262,6 +264,38 @@ const filteredOrders = computed(() => {
       return true;
     });
   }
+
+  // 3. Filter by Date (Improved)
+  if (dateFilterType.value !== 'all') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Start of today
+
+      result = result.filter(order => {
+          const orderDate = new Date(order.date);
+          orderDate.setHours(0, 0, 0, 0); // Normalize order date
+
+          if (dateFilterType.value === '1_day_ago') {
+              // 1 ngày trước = Hôm qua
+              const yesterday = new Date(today);
+              yesterday.setDate(today.getDate() - 1);
+              return orderDate.getTime() === yesterday.getTime();
+          }
+          if (dateFilterType.value === '2_days_ago') {
+              // 2 ngày trước
+              const twoDaysAgo = new Date(today);
+              twoDaysAgo.setDate(today.getDate() - 2);
+              return orderDate.getTime() === twoDaysAgo.getTime();
+          }
+          if (dateFilterType.value === 'specific' && specificDate.value) {
+              const targetDate = new Date(specificDate.value);
+              targetDate.setHours(0, 0, 0, 0);
+              return orderDate.getTime() === targetDate.getTime();
+          }
+          return true;
+      });
+  }
+
+  // 4. Search Query
   const query = removeVietnameseTones(searchQuery.value.trim());
   if (query) {
     result = result.filter(order => {
@@ -286,13 +320,15 @@ const setPage = (page) => { if (page >= 1 && page <= totalPages.value) currentPa
 const prevPage = () => { if (currentPage.value > 1) currentPage.value--; };
 const nextPage = () => { if (currentPage.value < totalPages.value) currentPage.value++; };
 
-watch([searchQuery, currentTab], () => { currentPage.value = 1; });
+// Reset page when filters change
+watch([searchQuery, currentTab, dateFilterType, specificDate, sortOrder], () => { 
+    currentPage.value = 1; 
+});
 
 // --- LOGIC CHI TIẾT & HÀNH ĐỘNG ---
 const isCancellable = computed(() => selectedOrder.value?.canCancel);
 const isRepurchasable = computed(() => selectedOrder.value?.canRepurchase);
 const isReturnable = computed(() => selectedOrder.value?.canReturn);
-// Vẫn cho phép review nếu trạng thái ok, không chặn bởi biến isReviewed cũ nữa
 const isReviewAvailable = computed(() => selectedOrder.value?.canReview);
 
 const orderSteps = [
@@ -306,8 +342,6 @@ const getActiveStepIndex = computed(() => {
   if (!selectedOrder.value) return -1;
   const raw = selectedOrder.value.statusRaw ? selectedOrder.value.statusRaw.toLowerCase().trim() : '';
   
-  // Xác định xem có phải là nhóm trạng thái đặc biệt (Hủy/Trả) hay không
-  // Dùng includes để bắt cả các biến thể (vd: returned_pending)
   if (['cancelled', 'returned', 'returning', 'refunded', 'return'].some(k => raw.includes(k))) {
     return -2;
   }
@@ -477,18 +511,15 @@ const handleSubmitReviews = async () => {
             <div class="product-table">
                 <div v-for="i in 2" :key="i" class="product-row skeleton-row">
                     <div class="col-name-wrapper col-name d-flex align-items-center">
-                        <!-- Img placeholder with Text -->
                         <div class="skeleton-box img-box me-3 shimmer" style="width: 60px; height: 60px;">
-                             <!-- [NEW] Text placeholder ThinkHub -->
                              <span class="skeleton-placeholder-text-small">ThinkHub</span>
                         </div>
-                        <!-- Text placeholder -->
                         <div class="w-50">
                             <div class="skeleton-box skeleton-text w-75 mb-1 shimmer"></div>
                             <div class="skeleton-box skeleton-text w-50 shimmer"></div>
                         </div>
                     </div>
-                    <div class="col-qty skeleton-box skeleton-text w-10 shimmer"></div>
+                    <div class="col-qty skeleton-box skeleton-text w-1 shimmer"></div>
                     <div class="col-price skeleton-box skeleton-text w-20 shimmer"></div>
                 </div>
             </div>
@@ -515,10 +546,39 @@ const handleSubmitReviews = async () => {
           </button>
         </div>
 
-        <div class="search-container">
-          <i class="fas fa-search search-icon"></i>
-          <input type="text" :value="searchQuery" @input="searchQuery = $event.target.value"
-            placeholder="Tìm theo mã đơn hàng hoặc tên sản phẩm..." class="search-bar">
+        <!-- [NEW] FILTER & SEARCH TOOLBAR -->
+        <div class="filter-toolbar mb-3 p-3 bg-white rounded border d-flex flex-wrap gap-3 align-items-end shadow-sm">
+            <div class="filter-group flex-grow-1">
+                <label class="small fw-bold text-muted mb-1 d-block">Tìm kiếm</label>
+                <div class="position-relative">
+                    <i class="fas fa-search search-icon-input"></i>
+                    <input type="text" :value="searchQuery" @input="searchQuery = $event.target.value"
+                        placeholder="Mã đơn hàng / Tên sản phẩm..." class="form-control ps-5">
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label class="small fw-bold text-muted mb-1 d-block">Sắp xếp</label>
+                <select v-model="sortOrder" class="form-select" style="min-width: 140px;">
+                    <option value="newest">Mới nhất</option>
+                    <option value="oldest">Cũ nhất</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label class="small fw-bold text-muted mb-1 d-block">Thời gian</label>
+                <select v-model="dateFilterType" class="form-select" style="min-width: 160px;">
+                    <option value="all">Tất cả</option>
+                    <option value="1_day_ago">Hôm qua</option>
+                    <option value="2_days_ago">2 ngày trước</option>
+                    <option value="specific">Chọn ngày...</option>
+                </select>
+            </div>
+
+            <div v-if="dateFilterType === 'specific'" class="filter-group fade-in-right">
+                <label class="small fw-bold text-muted mb-1 d-block">Ngày cụ thể</label>
+                <input type="date" v-model="specificDate" class="form-control">
+            </div>
         </div>
 
         <div v-if="filteredOrders.length > 0">
@@ -1032,41 +1092,33 @@ const handleSubmitReviews = async () => {
   font-weight: bold;
 }
 
-.search-container {
-  margin-bottom: 25px;
-  background-color: #fff;
-  padding: 15px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  position: relative;
+/* FILTER BAR STYLES */
+.filter-toolbar {
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
 }
 
-.search-icon {
-  position: absolute;
-  top: 50%;
-  left: 30px;
-  transform: translateY(-50%);
-  color: #999;
-  font-size: 1em;
-  z-index: 10;
+.filter-group {
+    min-width: 150px;
 }
 
-.search-bar {
-  width: 100%;
-  padding: 12px 15px;
-  font-size: 1em;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-sizing: border-box;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  padding-left: 45px;
+.search-icon-input {
+    position: absolute;
+    top: 50%;
+    left: 15px;
+    transform: translateY(-50%);
+    color: #999;
+    pointer-events: none;
 }
 
-.search-bar:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(0, 153, 129, 0.1);
+.fade-in-right {
+    animation: fadeInRight 0.3s ease-out;
+}
+
+@keyframes fadeInRight {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
 }
 
 .pagination-container {
@@ -1647,12 +1699,12 @@ const handleSubmitReviews = async () => {
 /* ------------------------------------------- */
 
 .fade-in {
-    animation: fadeIn 0.3s ease-in;
+  animation: fadeIn 0.3s ease-in;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* Hiệu ứng Shimmer (Ánh sáng chạy qua) */
@@ -1676,61 +1728,61 @@ const handleSubmitReviews = async () => {
 }
 
 .skeleton-box {
-    background-color: #eee;
-    border-radius: 4px;
+  background-color: #eee;
+  border-radius: 4px;
 }
 
 /* Skeleton Specifics for Order Card */
 .skeleton-card {
-    border: 1px solid transparent; /* Maintain border space */
-    border-left: 5px solid #eee; /* Maintain left border style */
-    pointer-events: none;
-    background-color: #fff;
-    border-radius: 8px;
-    padding: 15px 20px;
-    margin-bottom: 20px;
+  border: 1px solid transparent; /* Maintain border space */
+  border-left: 5px solid #eee; /* Maintain left border style */
+  pointer-events: none;
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 15px 20px;
+  margin-bottom: 20px;
 }
 
 .skeleton-text {
-    height: 16px;
-    border-radius: 4px;
+  height: 16px;
+  border-radius: 4px;
 }
 
 .skeleton-badge {
-    height: 24px;
-    border-radius: 4px;
+  height: 24px;
+  border-radius: 4px;
 }
 
 .skeleton-row {
-    margin-bottom: 10px;
-    padding-bottom: 10px;
-    border-bottom: 1px dashed #eee;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed #eee;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .skeleton-box.img-box {
-    border-radius: 6px;
-    background-color: #ddd;
-    /* Flexbox to center text */
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  border-radius: 6px;
+  background-color: #ddd;
+  /* Flexbox to center text */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .skeleton-placeholder-text-small {
-    font-size: 0.7rem;
-    font-weight: 800;
-    color: #e5e7eb;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #e5e7eb;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .skeleton-box.action-btn-skeleton {
-    height: 40px;
-    flex-grow: 1;
-    flex-basis: 120px;
-    border-radius: 5px;
+  height: 40px;
+  flex-grow: 1;
+  flex-basis: 120px;
+  border-radius: 5px;
 }
 </style>
