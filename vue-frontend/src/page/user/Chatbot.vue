@@ -1,10 +1,8 @@
 <script setup>
 import { ref, nextTick, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router'; 
-import Swal from 'sweetalert2'; // Import SweetAlert2
+import Swal from 'sweetalert2'; 
 
-// Giả sử bạn có store wishlist tương tự ProductDetail, nếu không có thì comment dòng này lại
-// import { isInWishlist, toggleWishlist } from "../../store/wishlistStore.js"; 
 
 // --- PROPS ---
 const props = defineProps({
