@@ -181,7 +181,7 @@ const submitContact = async () => {
                 <i class="bi bi-shop me-2"></i> <strong>ThinkHub Store</strong>
               </li>
               <li class="mb-3">
-                <i class="bi bi-pin-map me-2"></i> 123 Nguyễn Trãi, Quận 5, TP. Hồ Chí Minh
+                <i class="bi bi-pin-map me-2"></i>  15a Lương Thế Vinh, Tân An, Phường Buôn Ma Thuột
               </li>
               <li class="mb-3">
                 <i class="bi bi-headset me-2"></i> 0909 123 456

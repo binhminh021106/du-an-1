@@ -158,7 +158,7 @@ onMounted(() => {
                     <div class="accordion-body">
                         <p>Thời gian giao hàng dự kiến:</p>
                         <ul class="mb-0 ps-3">
-                            <li><strong>Nội thành TP.HCM/Hà Nội:</strong> 1 - 2 ngày làm việc.</li>
+                            <li><strong>Phường Buôn Ma Thuột:</strong> 1 - 2 ngày làm việc.</li>
                             <li><strong>Các tỉnh thành khác:</strong> 3 - 5 ngày làm việc.</li>
                         </ul>
                     </div>
