@@ -1495,7 +1495,6 @@ watchEffect(() => {
 
 .thumbnail-wrapper.active {
     border-color: var(--primary-color);
-    transform: translateY(-2px);
 }
 
 .thumbnail-img {
