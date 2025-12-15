@@ -82,7 +82,6 @@ class CartController extends Controller
                 $cartItem->quantity += $request->quantity;
                 $cartItem->save();
             } else {
-                // [FIX] Bỏ cột 'product_id' vì bảng cart_items thường chỉ liên kết qua variant_id
                 CartItem::create([
                     'cart_id'    => $cart->id,
                     'variant_id' => $variantId,

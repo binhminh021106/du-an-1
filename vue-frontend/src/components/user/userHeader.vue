@@ -9,7 +9,6 @@ import Chatbot from '../../page/user/Chatbot.vue';
 const router = useRouter();
 const store = useStore();
 
-// [FIX] Đồng bộ URL server với Product Detail
 const BACKEND_URL = 'http://127.0.0.1:8000';
 
 // --- STATE QUẢN LÝ MENU ---
@@ -55,12 +54,12 @@ const formatCurrency = (value) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 };
 
-// [NEW] Helper lấy rating an toàn
+// Helper lấy rating an toàn
 const getRating = (product) => {
   return Number(product.rating_average || product.rating || 5);
 };
 
-// [UPDATED] Logic lấy dữ liệu Mega Menu
+// Logic lấy dữ liệu Mega Menu
 const getMegaDataForCategory = (categoryId) => {
   if (!categoryId || products.value.length === 0) return null;
 
@@ -792,7 +791,6 @@ ul {
   border-left: 3px solid transparent;
 }
 
-/* FIX RIÊNG CHO USER MENU: Đưa icon và text về cùng phía trái */
 .user-dropdown .menu-list li > a {
   justify-content: flex-start;
 }

@@ -12,7 +12,6 @@ const user = ref(null);
 const isLoading = ref(true);
 const selectedFile = ref(null); // Biến lưu file ảnh thực tế để upload
 
-// [FIX]: Định nghĩa URL gốc của Server (Backend)
 const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 // modal địa chỉ
@@ -65,7 +64,6 @@ const calculatedAge = computed(() => {
   return age < 0 ? 0 : age;
 });
 
-// [FIX]: Hàm xử lý hiển thị ảnh
 const getFullImageUrl = (url) => {
   if (!url) return "https://via.placeholder.com/150";
   if (url.startsWith("http") || url.startsWith("https")) return url;
@@ -88,7 +86,6 @@ const fetchUserData = async () => {
     editUser.email = userData.email || "";
     editUser.phone = userData.phone || "";
 
-    // [FIX]: Sử dụng hàm getFullImageUrl
     editUser.avatar = getFullImageUrl(userData.avatar_url);
 
     editUser.birthday = userData.birthday || "";
@@ -108,7 +105,6 @@ const fetchUserData = async () => {
       Swal.fire("Phiên đăng nhập hết hạn", "Vui lòng đăng nhập lại", "warning");
     }
   } finally {
-    // [FIX] Thêm delay 2 giây để hiển thị Skeleton như yêu cầu
     setTimeout(() => { isLoading.value = false }, 2000);
   }
 };
@@ -408,7 +404,6 @@ const saveProfile = async () => {
           <div class="card shadow-sm border-0 h-100">
             <div class="card-body text-center p-4">
               <!-- Avatar Section -->
-              <!-- [FIX] Tăng margin-bottom từ mb-3 lên mb-5 để đẩy tên xuống xa hơn, tránh bị đè -->
               <div class="avatar-wrapper mb-5">
                 <!-- Thêm style inline để cố định kích thước avatar -->
                 <div class="avatar" @click="triggerImageUpload"
@@ -433,7 +428,6 @@ const saveProfile = async () => {
                 <input type="file" ref="fileInput" accept="image/*" @change="handleImageChange" style="display: none" />
               </div>
 
-              <!-- [FIX] Thêm mt-3 (margin-top) để đảm bảo khoảng cách an toàn với avatar -->
               <h5 class="fw-bold mb-1 mt-3">{{ editUser.name }}</h5>
               <p class="text-muted small mb-4">{{ editUser.email }}</p>
 

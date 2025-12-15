@@ -208,7 +208,6 @@ const togglePasswordVisibility = () => {
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
-/* [FIX LỖI MẤT MÀU] Đổi :root thành .login-page-wrapper để biến CSS không bị mất khi chuyển trang */
 .login-page-wrapper {
     --primary-color: #009981;
     --text-color: #333;
@@ -352,7 +351,6 @@ const togglePasswordVisibility = () => {
 .login-form input {
     width: 100%;
     padding: 12px 15px;
-    /* [FIX LỖI VIỀN ĐEN] Đổi từ 'black' sang biến màu viền để nó xám nhẹ đẹp như cũ */
     border: 1px solid var(--border-color);
     border-radius: 8px;
     font-size: 1rem;

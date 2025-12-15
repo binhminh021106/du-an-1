@@ -11,7 +11,6 @@ class AttributeValue extends Model
 
     protected $table = 'attribute_values';
 
-    // FIX: Thêm 'attribute_id' vào fillable vì bảng trong DB có cột này
     protected $fillable = [
         'attribute_id', 
         'value',

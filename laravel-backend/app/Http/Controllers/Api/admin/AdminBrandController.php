@@ -15,7 +15,13 @@ class AdminBrandController extends Controller
      */
     public function index(Request $request)
     {
-        $brands = Brand::orderBy('order_number', 'asc')->orderBy('id', 'desc')->get();
+        // [CẬP NHẬT]: Thêm withCount('products') để lấy số lượng sản phẩm cho Frontend hiển thị
+        // Lưu ý: Trong Model Brand phải có function products() { return $this->hasMany(Product::class); }
+        $brands = Brand::withCount('products')
+            ->orderBy('order_number', 'asc')
+            ->orderBy('id', 'desc')
+            ->get();
+            
         return response()->json($brands);
     }
 
@@ -98,7 +104,8 @@ class AdminBrandController extends Controller
      */
     public function show(string $id)
     {
-        return response()->json(Brand::findOrFail($id));
+        // Kèm theo số lượng sản phẩm khi xem chi tiết
+        return response()->json(Brand::withCount('products')->findOrFail($id));
     }
 
     /**
@@ -107,6 +114,18 @@ class AdminBrandController extends Controller
     public function destroy(string $id)
     {
         $brand = Brand::findOrFail($id);
+
+        // [CẬP NHẬT QUAN TRỌNG]: Kiểm tra ràng buộc dữ liệu
+        // Đếm số sản phẩm thuộc thương hiệu này
+        $productCount = $brand->products()->count(); 
+
+        if ($productCount > 0) {
+            // Trả về lỗi 422 (Unprocessable Entity) để Frontend bắt được
+            return response()->json([
+                'message' => "Không thể xoá! Thương hiệu này đang được sử dụng bởi {$productCount} sản phẩm."
+            ], 422); 
+        }
+
         $brand->delete();
         return response()->json(['message' => 'Đã chuyển vào thùng rác thành công']);
     }
@@ -136,6 +155,14 @@ class AdminBrandController extends Controller
     public function forceDelete(string $id)
     {
         $brand = Brand::onlyTrashed()->findOrFail($id);
+        
+        // Kiểm tra an toàn lần cuối (tuỳ chọn)
+        if ($brand->products()->count() > 0) {
+            return response()->json([
+                'message' => 'Không thể xóa vĩnh viễn vì vẫn còn sản phẩm liên kết.'
+            ], 422);
+        }
+
         if ($brand->logo_url && Storage::disk('public')->exists($brand->logo_url)) {
             Storage::disk('public')->delete($brand->logo_url);
         }

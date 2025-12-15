@@ -36,7 +36,7 @@ const orderStatusCounts = ref({});
 const inventoryThreshold = ref(10);
 const inventoryViewMode = ref('variant'); // 'variant' | 'product'
 const isUpdatingStock = ref(null);
-const stockAdditions = ref({}); // [NEW] Lưu trữ số lượng muốn cộng thêm cho từng variant
+const stockAdditions = ref({}); // Lưu trữ số lượng muốn cộng thêm cho từng variant
 const currentPage = ref(1);
 const itemsPerPage = ref(10);
 
@@ -71,8 +71,6 @@ const revenueLineCanvas = ref(null);
 // Base URL của API (thường có /api ở cuối)
 const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
-// [FIX 404 IMAGE] Tạo Base URL riêng cho ảnh bằng cách loại bỏ '/api' ở cuối BACKEND_URL
-// Ví dụ: 'http://localhost:8000/api' -> 'http://localhost:8000'
 const IMAGE_BASE_URL = BACKEND_URL.replace(/\/api\/?$/, ''); 
 
 const STATUS_CONFIG = {
@@ -172,13 +170,11 @@ const fetchData = async () => {
 
         processRevenueData(completedOrders);
 
-        // [FIXED] Không gọi renderStatusChart ngay tại đây vì DOM chưa sẵn sàng (isLoading vẫn true)
         await loadChartJs();
         
     } catch (error) {
         console.error("Dashboard Error:", error);
     } finally {
-        // [FIX] Thêm delay giả lập 2s để hiển thị Skeleton
         setTimeout(() => { 
             isLoading.value = false;
         }, 2000);
@@ -226,7 +222,7 @@ const checkPrice = (price) => {
     return true;
 };
 
-// [NEW] Computed: Đếm tổng số lượng Variants đang ở mức cảnh báo (Toàn cục)
+// Computed: Đếm tổng số lượng Variants đang ở mức cảnh báo (Toàn cục)
 const lowStockCount = computed(() => {
     const threshold = Number(inventoryThreshold.value) || 0;
     let count = 0;
@@ -396,7 +392,7 @@ const onLegendHover = (key) => { if (!chartInstance.value) return; hoveredLegend
 
 const onLegendLeave = () => { if (!chartInstance.value) return; hoveredLegendKey.value = null; try { chartInstance.value.setActiveElements([]); chartInstance.value.update(); } catch (e) {} };
 
-// [NEW] Watch isLoading để render chart khi dữ liệu đã sẵn sàng và DOM đã update
+// Watch isLoading để render chart khi dữ liệu đã sẵn sàng và DOM đã update
 watch(isLoading, async (newVal) => {
     if (!newVal) {
         await nextTick();
@@ -455,7 +451,7 @@ onMounted(() => { fetchData(); });
         </div>
     </div>
 
-    <!-- [NEW] SKELETON LOADING -->
+    <!-- SKELETON LOADING -->
     <div v-if="isLoading" class="app-content fade-in">
         <div class="container-fluid">
             <!-- Stats Skeleton -->
@@ -666,7 +662,6 @@ onMounted(() => { fetchData(); });
                             <div class="card-header bg-white border-bottom py-3"><h5 class="card-title fw-bold text-brand mb-0">Đánh Giá Mới</h5></div>
                             <div class="list-group list-group-flush flex-grow-1 position-relative">
                                 <div v-if="latestReviews.length === 0" class="p-3 text-center text-muted">Trống</div>
-                                <!-- FIX: Đổi username thành fullName -->
                                 <div v-else v-for="review in latestReviews" :key="review.id" class="list-group-item px-3 py-2 border-bottom-0"><div class="d-flex justify-content-between align-items-center mb-1"><div class="text-truncate flex-grow-1" style="max-width: 55%;"><small class="fw-bold d-block text-truncate">{{ review.product?.name }}</small></div><div class="d-flex align-items-center"><span class="badge rounded-pill me-2 px-2" :class="getGeneralStatusClass(review.status || 'pending')" style="font-size: 0.65rem;">{{ getGeneralStatusLabel(review.status || 'pending') }}</span><span class="text-warning small" style="letter-spacing: -1px;">{{ renderStars(review.rating) }}</span></div></div><p class="mb-0 small text-muted text-truncate fst-italic">"{{ review.content }}"</p><div class="small fw-bold text-end mt-1" style="font-size: 0.7rem;">- {{ review.user?.fullName || 'Ẩn danh' }}</div></div>
                             </div>
                             <div class="card-footer bg-white border-top-0 text-center py-3"><router-link to="/admin/reviews" class="btn btn-sm btn-light text-brand fw-bold border px-4 shadow-sm hover-brand">Xem thêm</router-link></div>
@@ -677,7 +672,6 @@ onMounted(() => { fetchData(); });
                             <div class="card-header bg-white border-bottom py-3"><h5 class="card-title fw-bold text-brand mb-0">Bình Luận Mới</h5></div>
                             <div class="list-group list-group-flush flex-grow-1 position-relative">
                                 <div v-if="latestComments.length === 0" class="p-3 text-center text-muted">Trống</div>
-                                <!-- FIX: Đổi username thành fullName, avatar thành avatar_url -->
                                 <div v-else v-for="cmt in latestComments" :key="cmt.id" class="list-group-item px-3 py-2 border-bottom-0"><div class="d-flex align-items-center justify-content-between mb-1"><div class="d-flex align-items-center"><img :src="getAvatar(cmt.user?.avatar_url, cmt.user?.fullName)" class="rounded-circle me-2" width="20"><span class="fw-bold small text-dark">{{ cmt.user?.fullName || 'Ẩn danh' }}</span></div><span class="badge rounded-pill px-2" :class="getGeneralStatusClass(cmt.status || 'approved')" style="font-size: 0.65rem;">{{ getGeneralStatusLabel(cmt.status || 'approved') }}</span></div><p class="mb-0 small text-muted text-truncate">"{{ cmt.content }}"</p></div>
                             </div>
                             <div class="card-footer bg-white border-top-0 text-center py-3"><router-link to="/admin/comments" class="btn btn-sm btn-light text-brand fw-bold border px-4 shadow-sm hover-brand">Xem thêm</router-link></div>
@@ -950,10 +944,6 @@ onMounted(() => { fetchData(); });
 /* TABLE */
 :deep(.table) td { vertical-align: middle; }
 .min-width-0 { min-width: 0; }
-
-/* ------------------------------------------- */
-/* [NEW] SKELETON LOADING STYLES               */
-/* ------------------------------------------- */
 
 .fade-in {
     animation: fadeIn 0.3s ease-in;

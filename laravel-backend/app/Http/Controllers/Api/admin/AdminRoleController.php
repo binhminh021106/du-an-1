@@ -61,7 +61,7 @@ class AdminRoleController extends Controller
     }
 
     /**
-     * [NEW] Hàm Cấp Quyền cho Vai Trò
+     * Hàm Cấp Quyền cho Vai Trò
      * API: POST /api/admin/roles/{id}/permissions
      * Body: { "permissions": [1, 2, 5, ...] }  (Mảng các ID của quyền)
      */

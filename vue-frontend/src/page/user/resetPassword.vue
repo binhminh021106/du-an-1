@@ -167,7 +167,6 @@ const handleReset = async () => {
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
-/* FIX: Thay :root bằng class wrapper để giữ biến màu khi chuyển trang */
 .login-page-wrapper {
     --primary-color: #009981;
     --text-color: #333;
@@ -192,7 +191,6 @@ const handleReset = async () => {
     grid-template-columns: 1fr 1fr;
     max-width: 1000px;
     width: 90%;
-    /* FIX: 90% để tránh dính lề trên mobile */
     background-color: #fff;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
     border-radius: 12px;
@@ -211,7 +209,6 @@ const handleReset = async () => {
     color: #999;
     cursor: pointer;
     z-index: 100;
-    /* FIX: Tăng z-index */
     transition: all 0.2s ease;
     width: 32px;
     height: 32px;
@@ -310,7 +307,6 @@ const handleReset = async () => {
     border-radius: 8px;
     font-size: 1rem;
     box-sizing: border-box;
-    /* FIX: Quan trọng */
     outline: none;
     transition: border-color 0.3s;
 }

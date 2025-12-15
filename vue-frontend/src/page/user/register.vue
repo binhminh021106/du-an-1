@@ -302,7 +302,6 @@ const handleRegister = async () => {
     border-color: #dc3545 !important;
 }
 
-/* FIX: Chuyển :root thành .login-page-wrapper 
    để biến CSS hoạt động đúng trong scoped style 
 */
 .login-page-wrapper {

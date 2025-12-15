@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\ImageProduct;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\DB; // [NEW] Import Transaction
+use Illuminate\Support\Facades\DB; // Import Transaction
 
 class AdminImageProductController extends Controller
 {

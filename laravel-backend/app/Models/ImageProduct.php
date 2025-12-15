@@ -20,7 +20,6 @@ class ImageProduct extends Model
         'image_url' // Tên trường lưu trữ đường dẫn ảnh thô trong DB
     ];
     
-    // FIX CÚ PHÁP: Thêm dấu chấm phẩy sau mảng.
     // Tùy chọn: Ẩn các trường không cần thiết khi trả về JSON
     protected $hidden = [
         'product_id', 

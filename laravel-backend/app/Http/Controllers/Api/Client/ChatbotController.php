@@ -11,11 +11,7 @@ use Illuminate\Support\Facades\Log;
 
 class ChatbotController extends Controller
 {
-    /**
-     * API Tìm kiếm sản phẩm dành cho Chatbot
-     * Phương thức: GET
-     * Param: ?q={từ_khóa}&session_id={uuid_nếu_có}
-     */
+    
     public function search(Request $request)
     {
         try {

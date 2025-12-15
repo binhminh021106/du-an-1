@@ -23,7 +23,6 @@ class OrderController extends Controller
             ->with([
                 'orderDetails.variant.product', 
                 'orderDetails.variant.attributeValues.attribute',
-                // [FIX] Load Review: Chỉ lấy review MỚI NHẤT của user (orderBy id desc)
                 // Điều này giúp tránh việc lấy phải các bản ghi cũ bị rỗng/lỗi trong quá khứ
                 'orderDetails.variant.product.reviews' => function($query) use ($userId) {
                     $query->where('user_id', $userId)->orderBy('id', 'desc');
@@ -82,7 +81,6 @@ class OrderController extends Controller
         $order = Order::with([
                 'orderDetails.variant.product',
                 'orderDetails.variant.attributeValues.attribute',
-                // [FIX] Load Review mới nhất tương tự như index
                 'orderDetails.variant.product.reviews' => function($query) use ($userId) {
                     $query->where('user_id', $userId)->orderBy('id', 'desc');
                 }
@@ -141,7 +139,7 @@ class OrderController extends Controller
     }
 
     /**
-     * [NEW] Tính năng Mua lại (Re-purchase)
+     * Tính năng Mua lại (Re-purchase)
      * Copy các sản phẩm từ đơn hàng cũ vào bảng giỏ hàng (cart_items)
      */
     public function repurchase(Request $request, string $id)
@@ -178,7 +176,7 @@ class OrderController extends Controller
     }
 
     /**
-     * [NEW] Tính năng Yêu cầu hoàn hàng (Return Order)
+     * Tính năng Yêu cầu hoàn hàng (Return Order)
      * Chuyển trạng thái đơn hàng sang 'returning' để Admin duyệt
      */
     public function requestReturn(Request $request, string $id)

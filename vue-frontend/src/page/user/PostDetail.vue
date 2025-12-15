@@ -135,7 +135,6 @@ const fetchRelatedPosts = async (currentId) => {
 const fetchPostDetail = async () => {
     const id = route.params.id;
 
-    // [FIX BUG] Nếu không có ID, tắt loading ngay để hiển thị thông báo lỗi thay vì xoay mãi
     if (!id) {
         isLoading.value = false;
         post.value = null;
@@ -195,7 +194,6 @@ onMounted(() => {
 
 // Theo dõi thay đổi ID trên URL (khi click vào sidebar)
 watch(() => route.params.id, (newId) => {
-    // [FIX] Gọi hàm fetchPostDetail ngay cả khi newId rỗng để logic bên trong xử lý tắt loading
     fetchPostDetail();
 });
 </script>

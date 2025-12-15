@@ -172,7 +172,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/orders', [CheckoutController::class, 'store']);
     Route::post('/orders/{id}/repurchase', [OrderController::class, 'repurchase']);
 
-    // [FIX 404] Thêm route cho yêu cầu hoàn hàng
     Route::post('/orders/{id}/return', [OrderController::class, 'requestReturn']);
 
     Route::put('/order/{id}', [OrderController::class, 'update']);

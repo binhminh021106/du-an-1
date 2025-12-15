@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
-    // ... Giữ nguyên hàm createPaymentUrl cũ của bạn ...
     public function createPaymentUrl(Request $request)
     {
         $request->validate([

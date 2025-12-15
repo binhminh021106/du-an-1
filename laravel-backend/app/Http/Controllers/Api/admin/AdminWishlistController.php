@@ -14,7 +14,7 @@ class WishlistController extends Controller
      */
     public function index(Request $request)
     {
-        $user = $request->user(); // Lấy user từ token (Sanctum)
+        $user = $request->user(); 
 
         if (!$user) {
             return response()->json([
@@ -23,16 +23,12 @@ class WishlistController extends Controller
             ], 401);
         }
 
-        // Eager load product để lấy thông tin sản phẩm luôn
-        // Giả sử Product có quan hệ 'brand' hoặc các thuộc tính khác cần load
         $wishlistItems = Wishlist::with(['product'])
             ->where('user_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // Transform dữ liệu để trả về format giống Vue mong đợi (nếu cần)
-        // Tuy nhiên, ở Vue bạn đang gọi /product/{id} để enrich data, 
-        // nên ở đây trả về danh sách basic là đủ.
+    
         
         return response()->json([
             'status' => 'success',

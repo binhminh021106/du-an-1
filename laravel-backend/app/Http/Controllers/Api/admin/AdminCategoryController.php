@@ -5,9 +5,10 @@ namespace App\Http\Controllers\Api\admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Category;
+use App\Models\Product; // [THÊM MỚI] Import để kiểm tra trực tiếp
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\DB; // [NEW] Dùng để quản lý Transaction
-use Illuminate\Support\Facades\Log; // [NEW] Dùng để ghi log lỗi nếu có
+use Illuminate\Support\Facades\DB; 
+use Illuminate\Support\Facades\Log; 
 
 class AdminCategoryController extends Controller
 {
@@ -17,8 +18,17 @@ class AdminCategoryController extends Controller
      */
     public function index()
     {
-        // Sắp xếp tăng dần theo order_number để hiển thị đúng vị trí trên menu
+        // Sắp xếp tăng dần theo order_number
         $categories = Category::orderBy('order_number', 'asc')->get();
+
+        // Thay vì gọi relation trong Model (gây lỗi), 
+        // ta query trực tiếp vào bảng Products để đếm số lượng.
+        // Giả sử bảng products có cột 'category_id'.
+        $categories->transform(function ($category) {
+            $category->products_count = Product::where('category_id', $category->id)->count();
+            return $category;
+        });
+
         return response()->json($categories);
     }
 
@@ -58,6 +68,9 @@ class AdminCategoryController extends Controller
     public function show(string $id)
     {
         $category = Category::findOrFail($id);
+        // Gán thêm số lượng sản phẩm thủ công
+        $category->products_count = Product::where('category_id', $category->id)->count();
+        
         return response()->json($category);
     }
 
@@ -91,12 +104,7 @@ class AdminCategoryController extends Controller
     }
 
     /**
-     * [NEW] Cập nhật thứ tự sắp xếp (Drag & Drop)
-     * Test cases đã cover:
-     * - Không gửi ids -> Lỗi 422
-     * - Gửi ids rỗng -> Lỗi 422
-     * - Gửi id không tồn tại -> Lỗi 422
-     * - Gửi id trùng lặp -> Lỗi 422
+     *  Cập nhật thứ tự sắp xếp (Drag & Drop)
      */
     public function updateOrder(Request $request)
     {
@@ -148,10 +156,14 @@ class AdminCategoryController extends Controller
     {
         $category = Category::findOrFail($id);
         
-        // (Optional) Kiểm tra xem danh mục có đang chứa sản phẩm không
-        // Note: Bạn check kỹ tên relation trong Model Category nhé (product hay products)
-        if ($category->product()->exists()) { 
-             return response()->json(['message' => 'Không thể xóa danh mục đang chứa sản phẩm.'], 422);
+        //  KHÔNG dùng $category->product()->exists() vì Model định nghĩa sai quan hệ
+        // Query trực tiếp: Đếm xem có bao nhiêu sản phẩm có category_id bằng id này
+        $count = Product::where('category_id', $id)->count();
+
+        if ($count > 0) { 
+             return response()->json([
+                 'message' => "Không thể xóa danh mục đang chứa {$count} sản phẩm."
+             ], 422);
         }
 
         $category->delete();

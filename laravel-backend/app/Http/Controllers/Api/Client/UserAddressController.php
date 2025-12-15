@@ -12,7 +12,7 @@ class UserAddressController extends Controller
     {
         // Chỉ lấy địa chỉ của user đang đăng nhập
         $addresses = UserAddress::where('user_id', $request->user()->id)
-            ->orderBy('is_default', 'desc') // Mặc định lên đầu
+            ->orderBy('is_default', 'desc')
             ->get();
         return response()->json($addresses);
     }
