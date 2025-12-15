@@ -1,8 +1,9 @@
 <script setup>
 import { ref, nextTick, onMounted, watch } from 'vue';
-import { useRouter } from 'vue-router'; 
-import Swal from 'sweetalert2'; 
-
+import { useRouter } from 'vue-router';
+import Swal from 'sweetalert2';
+// [UPDATED] Import logic wishlist từ store
+import { isInWishlist, toggleWishlist } from '../../store/wishlistStore.js';
 
 // --- PROPS ---
 const props = defineProps({
@@ -30,29 +31,82 @@ const chatBodyRef = ref(null);
 const inputRef = ref(null);
 const sessionId = ref("");
 
-// Mock hàm wishlist nếu chưa import được store thật (để tránh lỗi UI)
-const isProductInWishlist = (id) => false; // Thay bằng logic thật nếu có: isInWishlist(id)
-const toggleProductWishlist = (p) => {
-    // console.log("Toggle wishlist", p.id); 
-    // toggleWishlist(p); // Gọi action thật
+// [NEW] Biến lưu ngữ cảnh tìm kiếm gần nhất
+const lastSearchContext = ref({
+    keyword: '',
+    detectedBrands: [],
+    detectedCategories: []
+});
+
+// --- WISHLIST LOGIC (UPDATED) ---
+// Sử dụng trực tiếp isInWishlist từ store trong template
+
+const handleToggleWishlist = (p) => {
+    // Sử dụng toggleWishlist từ store (trả về true nếu added, false nếu removed)
+    const added = toggleWishlist(p);
+    
+    // Cấu hình Toast giống ProductDetail
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        background: '#fff',
+        color: '#333',
+        iconColor: '#009981',
+        customClass: {
+            popup: 'elegant-toast',
+            title: 'elegant-toast-title',
+            timerProgressBar: 'elegant-toast-progress'
+        },
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer)
+            toast.addEventListener('mouseleave', Swal.resumeTimer)
+        }
+    });
+
+    if (added) {
+        Toast.fire({ icon: 'success', title: 'Đã thêm vào yêu thích' });
+    } else {
+        Toast.fire({ icon: 'info', title: 'Đã xóa khỏi yêu thích' });
+    }
 };
 
 const defaultMessage = {
     role: 'ai',
-    text: 'Xin chào! Mình là ThinkBot 🤖. Bạn cần tìm điện thoại, laptop hay muốn tâm sự mỏng với mình?',
+    text: 'Xin chào! Mình là ThinkBot 🤖. Bạn đang tìm điện thoại, macbook hay tai nghe? Nhắn cho mình biết nhé!',
     type: 'chat'
 };
 
 const chatMessages = ref([defaultMessage]);
 
+// Gợi ý nhanh
 const quickSuggestions = ref([
-    "Laptop ",
-    "iPhone ",
-    "Điện thoại Samsung",
-    "Tai nghe Bluetooth"
+    "iPhone 15 Promax",
+    "Macbook Air M2",
+    "Âm thanh",
+    "Đồng hồ ",
+    "Samsung "
 ]);
 
-// --- HELPER: XỬ LÝ ẢNH & TIỀN TỆ ---
+// --- TỪ ĐIỂN NHẬN DIỆN (Knowledge Base) ---
+const knownBrands = [
+    'samsung', 'apple', 'iphone', 'ipad', 'macbook', 'xiaomi', 'oppo', 'vivo', 'realme', 
+    'dell', 'asus', 'hp', 'lenovo', 'acer', 'msi', 'sony', 'jbl', 'marshall', 'lg', 
+    'garmin', 'huawei', 'logitech', 'corsair', 'razer'
+];
+
+const knownCategories = [
+    'điện thoại', 'mobile', 'smartphone', 'di động', 'dế',
+    'laptop', 'macbook', 'máy tính xách tay', 'notebook', 'pc', 'máy tính',
+    'thiết bị âm thanh', 'âm thanh', 'tai nghe', 'headphone', 'earphone', 'loa', 'speaker', 
+    'mic', 'micro', 'máy nghe nhạc', 'dàn âm thanh', 'soundbar', 'amply',
+    'đồng hồ', 'đồng hồ thông minh', 'smartwatch', 'watch',
+    'máy tính bảng', 'tablet', 'ipad', 'tab'
+];
+
+// --- HELPER FUNCTIONS ---
 const getImageUrl = (path) => {
     if (!path) return 'https://placehold.co/100x100?text=No+Img';
     if (path.startsWith('http') || path.startsWith('data:')) return path;
@@ -65,21 +119,14 @@ const formatCurrency = (val) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
 };
 
-// Hàm hiển thị giá thông minh (Logic cũ vẫn ok)
 const getDisplayPrice = (p) => {
-    if (typeof p.price === 'string' && p.price.includes('đ')) {
-        return p.price;
-    }
+    if (typeof p.price === 'string' && p.price.includes('đ')) return p.price;
     const min = Number(p.min_price || p.price || 0);
     const max = Number(p.max_price || p.price || 0);
-
-    if (max > min) {
-        return `${formatCurrency(min)} - ${formatCurrency(max)}`;
-    }
+    if (max > min) return `${formatCurrency(min)} - ${formatCurrency(max)}`;
     return formatCurrency(min);
 };
 
-// Helper tính phần trăm giảm giá (cho badge)
 const calculateDiscount = (price, original) => {
     const p = Number(price || 0);
     const o = Number(original || 0);
@@ -87,7 +134,6 @@ const calculateDiscount = (price, original) => {
     return Math.round(((o - p) / o) * 100);
 };
 
-// Helper check sản phẩm mới
 const isNewProduct = (createdAt) => {
     if (!createdAt) return false;
     const date = new Date(createdAt);
@@ -110,61 +156,165 @@ const formatMessage = (text) => {
     return text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
 };
 
-// [QUAN TRỌNG] Hàm điều hướng
 const goToProduct = (p) => {
-    if (p.id) {
-        // Sử dụng router.push để chuyển trang SPA mượt mà
-        router.push(`/products/${p.id}`);
-        // Đóng chat hoặc thu nhỏ lại để user xem sản phẩm dễ hơn
-        // isChatOpen.value = false; 
-    } else if (p.url) {
-        window.location.href = p.url;
-    }
+    if (p.id) router.push(`/products/${p.id}`);
+    else if (p.url) window.location.href = p.url;
 };
 
-// --- LOGIC BOT --- (Giữ nguyên logic thông minh)
+// --- LOGIC BOT CẢI TIẾN ---
+
 const parseMoney = (text) => {
-    let num = parseFloat(text.replace(/,/g, '.'));
-    if (text.includes('triệu') || text.includes('tr')) num *= 1000000;
-    else if (text.includes('k') || text.includes('nghìn')) num *= 1000;
+    if (!text) return 0;
+    const cleanText = text.toLowerCase().trim();
+    let numStr = cleanText.replace(/,/g, '.').replace(/[^\d.]/g, '');
+    let num = parseFloat(numStr);
+    if (isNaN(num)) return 0;
+
+    if (cleanText.includes('tr') || cleanText.includes('tỷ') || cleanText.includes('củ')) {
+        num *= 1000000;
+    } else if (cleanText.includes('k') || cleanText.includes('nghìn') || cleanText.includes('ngàn')) {
+        num *= 1000;
+    }
     return num;
 };
 
+const removeVietnameseTones = (str) => {
+    str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g,"a"); 
+    str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g,"e"); 
+    str = str.replace(/ì|í|ị|ỉ|ĩ/g,"i"); 
+    str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g,"o"); 
+    str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g,"u"); 
+    str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g,"y"); 
+    str = str.replace(/đ/g,"d");
+    return str;
+}
+
 const analyzeIntent = (message) => {
     const lowerMsg = message.toLowerCase();
-    const greetings = ['hi', 'hello', 'chào', 'hé lô', 'xin chào'];
-    const isGreeting = greetings.some(g => lowerMsg.includes(g) && lowerMsg.length < 20);
-
-    if (isGreeting) {
-        return {
-            type: 'greeting',
-            response: 'Dạ em chào anh/chị ạ! 👋<br>Chúc anh/chị một ngày tốt lành.<br>Anh/chị đang quan tâm đến sản phẩm nào bên em ạ? Dưới đây là một số mẫu đang <b>HOT</b> nè:',
-            searchKeyword: 'hot' 
-        };
+    
+    // 1. Chào hỏi
+    const greetings = ['hi', 'hello', 'chào', 'hé lô', 'xin chào', 'bot ơi'];
+    if (greetings.some(g => lowerMsg.includes(g) && lowerMsg.length < 20)) {
+        return { type: 'greeting', response: 'Dạ em chào anh/chị ạ! 👋' };
     }
 
-    const priceRegex = /(trên|dưới|tầm|khoảng|từ)\s+(\d+(?:[.,]\d+)?)\s*(triệu|tr|k|nghìn|đ)?/i;
+    // 2. Phân tích giá
+    let min = 0;
+    let max = Infinity;
+    let isPriceFilter = false;
+    
+    // Regex bắt các cụm từ chỉ giá
+    const priceRegex = /(?:giá\s*)?(dưới|trên|hơn|tầm|khoảng|từ)\s*(\d+(?:[.,]\d+)?)\s*(triệu|tr|củ|tỷ|k|nghìn|ngàn|đ|vnd)?/i;
     const match = lowerMsg.match(priceRegex);
 
+    let textToAnalyze = lowerMsg;
+
     if (match) {
-        const operator = match[1]; 
+        isPriceFilter = true;
+        const operator = match[1];
         const numberPart = match[2];
         const unitPart = match[3] || '';
         const priceVal = parseMoney(numberPart + unitPart);
         
-        let keyword = lowerMsg.replace(match[0], '').trim();
-        keyword = keyword.replace(/(điện thoại|mua|cần tìm|cái|chiếc)\s/g, '').trim();
-        if (!keyword) keyword = 'all';
+        // Xóa phần giá khỏi text để tìm từ khóa sản phẩm
+        textToAnalyze = lowerMsg.replace(match[0], '').trim();
 
-        return {
-            type: 'price_filter',
-            keyword: keyword,
-            min: ['trên', 'từ'].includes(operator) ? priceVal : 0,
-            max: ['dưới', 'tầm', 'khoảng'].includes(operator) ? priceVal : Infinity,
-            originalText: message
-        };
+        if (['trên', 'từ', 'hơn'].includes(operator)) {
+            min = priceVal;
+        } else if (['dưới', 'bé hơn', 'nhỏ hơn', 'thấp hơn'].includes(operator)) {
+            max = priceVal;
+        } else if (['tầm', 'khoảng'].includes(operator)) {
+            min = priceVal * 0.9;
+            max = priceVal * 1.1;
+        }
     }
-    return { type: 'normal', keyword: message };
+
+    // 3. Tách thực thể (Brand/Category)
+    let detectedBrands = [];
+    let detectedCategories = [];
+    const normalizedText = removeVietnameseTones(textToAnalyze);
+    const textNoSpaces = normalizedText.replace(/\s+/g, '');
+
+    // Quét Brands
+    knownBrands.forEach(brand => {
+        if (textToAnalyze.includes(brand) || normalizedText.includes(brand)) {
+            detectedBrands.push(brand);
+        }
+        else if (brand.length > 2 && textNoSpaces.includes(brand)) {
+             detectedBrands.push(brand);
+        }
+    });
+
+    // Quét Categories
+    knownCategories.forEach(cat => {
+        if (textToAnalyze.includes(cat) || normalizedText.includes(removeVietnameseTones(cat))) {
+            if (['mobile', 'smartphone', 'di động', 'dế'].includes(cat)) detectedCategories.push('điện thoại');
+            else if (['pc', 'máy tính', 'notebook'].includes(cat)) detectedCategories.push('laptop');
+            else if (['headphone', 'earphone', 'loa', 'speaker', 'mic', 'micro', 'máy nghe nhạc', 'dàn âm thanh', 'soundbar', 'amply'].includes(cat)) {
+                detectedCategories.push(cat); 
+            }
+            else if (['watch', 'smartwatch'].includes(cat)) detectedCategories.push('đồng hồ');
+            else if (['tablet', 'ipad', 'tab'].includes(cat)) detectedCategories.push('máy tính bảng');
+            else detectedCategories.push(cat);
+        }
+    });
+
+    // 4. Xác định xem người dùng có nhập "Chủ ngữ" (Sản phẩm) không?
+    let finalKeyword = "";
+    let isExplicitSubject = false; // Cờ đánh dấu có chủ ngữ rõ ràng
+
+    if (detectedBrands.length > 0) {
+        finalKeyword = detectedBrands[0]; 
+        isExplicitSubject = true;
+        if (detectedCategories.length > 0) {
+            if (!detectedBrands[0].includes(detectedCategories[0]) && !detectedCategories[0].includes(detectedBrands[0])) {
+                finalKeyword = `${detectedCategories[0]} ${detectedBrands[0]}`;
+            }
+        }
+    } else if (detectedCategories.length > 0) {
+        finalKeyword = detectedCategories[0];
+        isExplicitSubject = true;
+    } else {
+        // Clean stop words
+        const stopWords = ['mua', 'cần tìm', 'tìm', 'kiếm', 'bán', 'cho mình', 'cho tớ', 'em muốn', 'tôi muốn', 'cái', 'chiếc', 'loại', 'sản phẩm', 'shop', 'ơi', 'hỏi', 'giá', 'nào', 'tốt', 'nhất', 'rẻ', 'tư vấn'];
+        const stopWordsRegex = new RegExp(`\\b(${stopWords.join('|')})\\b`, 'gi');
+        finalKeyword = textToAnalyze.replace(stopWordsRegex, '').replace(/\s+/g, ' ').trim();
+        
+        if (!finalKeyword) finalKeyword = 'all';
+        else isExplicitSubject = true; // Có từ khóa khác rỗng (vd: tên model cụ thể ko nằm trong từ điển)
+    }
+
+    // 5. Trả về kết quả phân tích
+    return {
+        type: isPriceFilter ? 'price_filter' : 'search',
+        keyword: finalKeyword,
+        detectedBrands,
+        detectedCategories,
+        min,
+        max,
+        rawText: textToAnalyze,
+        isExplicitSubject // [NEW] Quan trọng để quyết định dùng context cũ hay không
+    };
+};
+
+// Hàm tìm kiếm API
+const performSearch = async (query) => {
+    if (!query) return { results: [], messages: [] };
+    const url = new URL(CHATBOT_API_URL);
+    url.searchParams.append('q', query);
+    if (sessionId.value) url.searchParams.append('session_id', sessionId.value);
+
+    try {
+        const response = await fetch(url.toString(), {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!response.ok) return { results: [], messages: [] };
+        return await response.json();
+    } catch (e) {
+        console.error("API Error", e);
+        return { results: [], messages: [] };
+    }
 };
 
 const handleSend = async (text) => {
@@ -178,63 +328,113 @@ const handleSend = async (text) => {
 
     try {
         const intent = analyzeIntent(msg);
-        let apiQuery = msg; 
-        let clientSideFilter = null; 
-
-        if (intent.type === 'greeting') {
-            apiQuery = "iphone"; 
-        } else if (intent.type === 'price_filter') {
-            apiQuery = intent.keyword === 'all' ? '' : intent.keyword;
-            clientSideFilter = (product) => {
-                const p = getProductPriceVal(product);
-                if (intent.max !== Infinity && intent.originalText.includes('tầm')) {
-                    return p >= intent.min && p <= (intent.max * 1.1);
-                }
-                return p >= intent.min && p <= intent.max;
-            };
-        }
-
-        const url = new URL(CHATBOT_API_URL);
-        if (apiQuery) url.searchParams.append('q', apiQuery);
-        if (sessionId.value) url.searchParams.append('session_id', sessionId.value);
-
-        const response = await fetch(url.toString(), {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        if (!response.ok) throw new Error('API Error');
-        const data = await response.json();
-
-        if (data.session_id) {
-            sessionId.value = data.session_id;
-            localStorage.setItem(SESSION_KEY, data.session_id);
-        }
-
-        let finalProducts = data.results || [];
-
-        if (clientSideFilter && finalProducts.length > 0) {
-            finalProducts = finalProducts.filter(clientSideFilter);
-        }
-
+        let finalProducts = [];
         let botResponseText = "";
+        
+        // [QUAN TRỌNG] Xử lý ngữ cảnh (Context)
+        // Nếu câu hỏi chỉ có giá (không có chủ ngữ rõ ràng) VÀ ta có ngữ cảnh cũ -> Dùng ngữ cảnh cũ
+        let currentSearchKeyword = intent.keyword;
+        let isUsingContext = false;
+
+        if (intent.keyword === 'all' && !intent.isExplicitSubject && lastSearchContext.value.keyword && lastSearchContext.value.keyword !== 'all') {
+            currentSearchKeyword = lastSearchContext.value.keyword;
+            // Kế thừa cả brand/category cũ để hiển thị lời thoại cho mượt
+            if (intent.detectedBrands.length === 0) intent.detectedBrands = lastSearchContext.value.detectedBrands;
+            if (intent.detectedCategories.length === 0) intent.detectedCategories = lastSearchContext.value.detectedCategories;
+            isUsingContext = true;
+        }
+
         if (intent.type === 'greeting') {
             botResponseText = intent.response;
-        } else if (intent.type === 'price_filter') {
-             if (finalProducts.length > 0) {
-                botResponseText = `Dạ, em tìm thấy <b>${finalProducts.length}</b> sản phẩm ${intent.keyword} có giá ${msg.replace(intent.keyword, '').trim()} đây ạ:`;
-            } else {
-                botResponseText = `Dạ em tìm ${intent.keyword} nhưng không thấy món nào trong khoảng giá này ạ. Anh/chị thử xem các mẫu khác nhé?`;
-                finalProducts = (data.results || []).slice(0, 5); 
-            }
+            const data = await performSearch('iphone');
+            finalProducts = data.results || [];
         } else {
-            if (data.messages && data.messages.length > 0) {
-                botResponseText = data.messages[0].text;
+            // --- CHIẾN THUẬT TÌM KIẾM ĐA TẦNG ---
+            
+            // Bước 1: Tìm theo keyword đã xử lý (có thể là keyword mới hoặc lấy từ context)
+            let attempt1_Query = "";
+            if (intent.detectedCategories.length > 0 && intent.detectedBrands.length > 0) {
+                // Nếu người dùng nhập mới thì ưu tiên ghép lại, nếu dùng context thì lấy keyword gốc
+                attempt1_Query = isUsingContext ? currentSearchKeyword : `${intent.detectedCategories[0]} ${intent.detectedBrands[0]}`;
             } else {
-                botResponseText = finalProducts.length > 0 
-                    ? "Dạ em tìm thấy các sản phẩm này ạ:" 
-                    : "Hmm, em chưa tìm thấy sản phẩm nào phù hợp. Bạn thử từ khóa khác nhé (ví dụ: iPhone, Samsung...)";
+                attempt1_Query = currentSearchKeyword === 'all' ? intent.rawText : currentSearchKeyword;
             }
+
+            let searchData = await performSearch(attempt1_Query);
+            
+            if (searchData.results && searchData.results.length > 0) {
+                finalProducts = searchData.results;
+            } else {
+                // FALLBACKS (Chỉ chạy nếu không dùng context hoặc context cũng fail)
+                if (intent.detectedBrands.length > 0) {
+                    const brandQuery = intent.detectedBrands[0];
+                    searchData = await performSearch(brandQuery);
+                    if (searchData.results?.length > 0) {
+                        finalProducts = searchData.results;
+                        currentSearchKeyword = brandQuery; // Update keyword thực tế tìm được
+                    }
+                }
+
+                if (finalProducts.length === 0 && intent.detectedCategories.length > 0) {
+                    const catQuery = intent.detectedCategories[0];
+                    searchData = await performSearch(catQuery);
+                    if (searchData.results?.length > 0) {
+                        finalProducts = searchData.results;
+                        currentSearchKeyword = catQuery;
+                    }
+                }
+            }
+
+            // [CONTEXT UPDATE] Nếu tìm thấy sản phẩm và có từ khóa rõ ràng, lưu lại ngữ cảnh
+            if (finalProducts.length > 0) {
+                // Nếu đang dùng context cũ thì không cần update, trừ khi người dùng đổi chủ đề
+                if (intent.isExplicitSubject) {
+                    lastSearchContext.value = {
+                        keyword: currentSearchKeyword,
+                        detectedBrands: intent.detectedBrands,
+                        detectedCategories: intent.detectedCategories
+                    };
+                }
+            }
+
+            // Xây dựng câu trả lời
+            if (finalProducts.length > 0) {
+                const brandStr = intent.detectedBrands.length ? intent.detectedBrands.join(', ') : '';
+                const catStr = intent.detectedCategories.length ? intent.detectedCategories.join(', ') : '';
+                const subject = (catStr || brandStr) ? `${catStr} ${brandStr}` : `"${currentSearchKeyword}"`;
+                
+                botResponseText = isUsingContext 
+                    ? `Dạ, vẫn là <b>${subject}</b>` 
+                    : `Dạ, em tìm thấy các mẫu <b>${subject}</b>`;
+            } else {
+                botResponseText = `Hmm, em chưa tìm thấy sản phẩm nào khớp với yêu cầu. Anh/chị thử tìm tên khác xem sao ạ?`;
+                const randomData = await performSearch('all'); 
+                finalProducts = (randomData.results || []).slice(0, 5);
+            }
+        }
+
+        // Lọc giá ở Client-side (Bước cuối cùng)
+        if (intent.type === 'price_filter') {
+            const formatP = (n) => n >= 1000000 ? (n/1000000) + ' triệu' : (n/1000) + 'k';
+            let priceMsg = intent.max === Infinity ? `trên ${formatP(intent.min)}` : `dưới ${formatP(intent.max)}`;
+            if (intent.min > 0 && intent.max < Infinity) priceMsg = `tầm ${formatP((intent.min+intent.max)/2)}`;
+
+            const beforeFilterCount = finalProducts.length;
+            finalProducts = finalProducts.filter(p => {
+                const price = getProductPriceVal(p);
+                return price >= intent.min && price <= intent.max;
+            });
+
+            if (finalProducts.length > 0) {
+                botResponseText += ` có giá <b>${priceMsg}</b> đây ạ:`;
+            } else if (beforeFilterCount > 0) {
+                botResponseText = `Dạ dòng này bên em có, nhưng hiện chưa có mẫu nào giá <b>${priceMsg}</b> ạ. Anh/chị tham khảo các mức giá khác nhé:`;
+                // Restore list để user xem
+                const restoreData = await performSearch(currentSearchKeyword);
+                finalProducts = restoreData.results.slice(0, 5);
+            }
+        } else if (finalProducts.length > 0 && intent.type !== 'greeting') {
+             botResponseText += ` đây ạ:`;
         }
 
         chatMessages.value.push({
@@ -254,15 +454,14 @@ const handleSend = async (text) => {
 };
 
 const clearHistory = () => {
-    // Không cần confirm nữa, xóa trực tiếp
     chatMessages.value = [defaultMessage];
     sessionId.value = "";
+    lastSearchContext.value = { keyword: '', detectedBrands: [], detectedCategories: [] }; // Reset context
     try { 
         localStorage.removeItem(STORAGE_KEY); 
         localStorage.removeItem(SESSION_KEY);
     } catch (e) { }
 
-    // Cấu hình Toast như yêu cầu
     const Toast = Swal.mixin({
         toast: true,
         position: 'top-end',
@@ -282,12 +481,7 @@ const clearHistory = () => {
             toast.addEventListener('mouseleave', Swal.resumeTimer)
         }
     });
-
-    // Hiển thị Toast
-    Toast.fire({
-        icon: 'success',
-        title: 'Đã xóa lịch sử trò chuyện'
-    });
+    Toast.fire({ icon: 'success', title: 'Đã xóa lịch sử trò chuyện' });
 };
 
 const toggleChat = () => isChatOpen.value = !isChatOpen.value;
@@ -365,21 +559,24 @@ watch(isChatExpanded, () => scrollToBottom());
                                 <div v-for="p in msg.products" :key="p.id" class="product-card-pro border shadow-sm position-relative"
                                     @click="goToProduct(p)">
                                     
+                                    <!-- WISHLIST BUTTON (NEW) -->
+                                    <button class="btn-wishlist position-absolute top-0 end-0 m-2 rounded-circle border-0 shadow-sm d-flex align-items-center justify-content-center"
+                                        style="width: 32px; height: 32px; z-index: 5; background: rgba(255,255,255,0.95); transition: all 0.2s;"
+                                        :class="{ 'text-danger': isInWishlist(p.id), 'text-muted': !isInWishlist(p.id) }"
+                                        @click.stop="handleToggleWishlist(p)"
+                                        title="Thêm vào yêu thích">
+                                        <i class="fas fa-heart" v-if="isInWishlist(p.id)"></i>
+                                        <i class="far fa-heart" v-else></i>
+                                    </button>
+
                                     <!-- BADGES (Overlay) -->
                                     <div class="badges-overlay position-absolute top-0 start-0 p-2 z-index-2 d-flex flex-column gap-1">
-                                        <!-- Giả định lấy original_price nếu có, hoặc tính toán -->
                                         <span v-if="p.original_price && calculateDiscount(getProductPriceVal(p), p.original_price) > 0" class="badge bg-danger rounded-pill shadow-sm">
                                             -{{ calculateDiscount(getProductPriceVal(p), p.original_price) }}%
                                         </span>
                                         <span v-if="isNewProduct(p.created_at)" class="badge bg-primary rounded-pill shadow-sm">NEW</span>
                                         <span v-if="p.sold_count > 100" class="badge bg-warning text-dark rounded-pill shadow-sm">HOT</span>
                                     </div>
-
-                                    <!-- Wishlist Button -->
-                                    <button class="btn btn-light rounded-circle shadow-sm position-absolute top-0 end-0 m-2 wish-btn-visible"
-                                        @click.stop="toggleProductWishlist(p)" title="Yêu thích">
-                                        <i :class="['bi', isProductInWishlist(p.id) ? 'bi-heart-fill text-danger' : 'bi-heart text-secondary']"></i>
-                                    </button>
 
                                     <!-- Image -->
                                     <div class="card-img-top-wrapper overflow-hidden position-relative">
@@ -389,17 +586,14 @@ watch(isChatExpanded, () => scrollToBottom());
 
                                     <!-- Body -->
                                     <div class="card-body p-3 d-flex flex-column">
-                                        <!-- Brand -->
                                         <small class="text-muted text-uppercase mb-1" style="font-size: 0.7rem; letter-spacing: 0.5px;">
                                             {{ p.brand || p.brand_name || 'THƯƠNG HIỆU' }}
                                         </small>
                                         
-                                        <!-- Name -->
                                         <h6 class="card-title fw-bold text-dark text-truncate-2 mb-2" style="height: 36px; font-size: 0.9rem;" :title="p.name">
                                             {{ p.name }}
                                         </h6>
 
-                                        <!-- Rating & Sold -->
                                         <div class="d-flex align-items-center mb-2 small text-muted">
                                             <div class="d-flex text-warning me-2" v-if="p.average_rating || p.rating_avg">
                                                 <i class="bi bi-star-fill" style="font-size: 0.8rem;"></i>
@@ -408,7 +602,6 @@ watch(isChatExpanded, () => scrollToBottom());
                                             <span class="border-start ps-2" v-if="p.sold_count">Đã bán {{ p.sold_count }}</span>
                                         </div>
 
-                                        <!-- Price -->
                                         <div class="mt-auto">
                                             <div class="d-flex align-items-baseline flex-wrap gap-2">
                                                 <span class="text-theme fw-bold fs-6" style="color: #dc2626;">{{ getDisplayPrice(p) }}</span>
@@ -533,7 +726,6 @@ watch(isChatExpanded, () => scrollToBottom());
     border: 1px solid #e5e7eb;
     transform-origin: bottom right;
     z-index: 10002;
-    /* [NEW] Thêm transition để hiệu ứng phóng to/thu nhỏ mượt mà hơn */
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
@@ -558,9 +750,7 @@ watch(isChatExpanded, () => scrollToBottom());
 
 .chat-window.expanded {
     width: 800px;
-    /* [FIX] Tăng chiều cao lên 90vh để thấy rõ sự thay đổi */
     height: 90vh; 
-    /* [FIX] Override max-height của class gốc */
     max-height: 95vh; 
     max-width: 90vw;
 }
@@ -666,14 +856,14 @@ watch(isChatExpanded, () => scrollToBottom());
     padding-bottom: 8px;
     scrollbar-width: thin;
     max-width: 300px;
-    padding-left: 2px; /* Tránh bóng bị cắt */
+    padding-left: 2px; 
 }
 
 .expanded .product-slider {
     max-width: 700px;
 }
 
-/* ====== NEW CARD STYLES (Adapted from ProductDetail) ====== */
+/* ====== NEW CARD STYLES ====== */
 .product-card-pro {
     min-width: 180px; 
     width: 180px;
@@ -681,7 +871,7 @@ watch(isChatExpanded, () => scrollToBottom());
     border-radius: 12px;
     cursor: pointer;
     transition: all 0.3s ease;
-    flex-shrink: 0; /* Quan trọng để không bị co lại trong flex */
+    flex-shrink: 0; 
 }
 
 .product-card-pro:hover {
@@ -721,26 +911,16 @@ watch(isChatExpanded, () => scrollToBottom());
     text-overflow: ellipsis;
 }
 
-.wish-btn-visible {
-    z-index: 5;
-    transition: all 0.2s;
-    background: rgba(255, 255, 255, 0.9);
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-}
-
-.wish-btn-visible:hover {
-    background-color: #fee2e2;
-    transform: scale(1.1);
-}
-
 .badges-overlay .badge {
     font-size: 9px;
     padding: 3px 6px;
+}
+
+/* Wishlist Button Hover Effect */
+.btn-wishlist:hover {
+    transform: scale(1.1);
+    background: white !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
 }
 
 /* ========================================================== */

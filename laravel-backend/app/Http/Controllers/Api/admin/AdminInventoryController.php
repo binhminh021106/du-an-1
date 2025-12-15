@@ -30,16 +30,13 @@ class AdminInventoryController extends Controller
 
             // 2. Xử lý dữ liệu (Transform)
             $products->each(function ($product) {
-                // Fix ảnh Product
                 if ($product->thumbnail_url) {
                     // Xóa dấu / ở đầu để tránh double slash khi dùng asset()
                     $path = ltrim($product->thumbnail_url, '/');
                     $product->thumbnail_url = asset($path);
                 }
 
-                // Fix ảnh & Tạo tên thuộc tính cho từng Variant
                 $product->variants->each(function ($variant) {
-                    // a. Fix ảnh Variant
                     if ($variant->image) {
                         $path = ltrim($variant->image, '/');
                         $variant->image = asset($path);

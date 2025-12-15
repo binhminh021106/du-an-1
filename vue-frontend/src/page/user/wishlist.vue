@@ -103,7 +103,6 @@ const verifyEmptyState = async () => {
     }
 };
 
-// [CORE FIX] Hàm đồng bộ dữ liệu
 const syncAndEnrichData = async () => {
   // 1. Nếu Store có dữ liệu -> Xử lý hiển thị ngay
   if (wishlist.value && wishlist.value.length > 0) {

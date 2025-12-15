@@ -3,12 +3,12 @@ import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue';
 import apiService from '../../../apiService.js';
 import Swal from 'sweetalert2';
 import { Modal } from 'bootstrap';
-import draggable from 'vuedraggable'; // [NEW] Import thư viện kéo thả
+import draggable from 'vuedraggable';
 
 // CONFIGURATION
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
-// ICON LIBRARY (Giữ nguyên)
+// ICON LIBRARY
 const commonIcons = [
     { name: 'Điện thoại', code: '<i class="fa-solid fa-mobile-screen"></i>' },
     { name: 'Laptop', code: '<i class="fa-solid fa-laptop"></i>' },
@@ -55,14 +55,12 @@ const currentUser = ref({});
 const hasRole = (allowedRoles) => {
     const userRoleId = Number(currentUser.value?.role_id);
     let userRoleName = '';
-
     if (userRoleId === 1) userRoleName = 'admin';
     else if (userRoleId === 12) userRoleName = 'staff';
     else if (userRoleId === 13) userRoleName = 'blogger';
 
     if (!userRoleName) return false;
     if (userRoleName === 'admin') return true;
-
     return allowedRoles.includes(userRoleName);
 };
 
@@ -115,15 +113,15 @@ const requireLogin = () => {
 
 // STATE MANAGEMENT
 const categories = ref([]);
-const sortableList = ref([]); // [NEW] Danh sách dùng riêng cho Drag & Drop
+const sortableList = ref([]);
 const isLoading = ref(true);
 const isSaving = ref(false);
 const isEditMode = ref(false);
 const searchQuery = ref('');
 const activeTab = ref('active');
-const drag = ref(false); // [NEW] State trạng thái kéo
+const drag = ref(false);
 
-// State cho Icon Picker
+// Icon Picker State
 const isIconModalOpen = ref(false);
 const iconSearchQuery = ref('');
 const iconModalInstance = ref(null);
@@ -138,25 +136,17 @@ const viewingCategory = ref({});
 
 // Pagination
 const pagination = reactive({
-    // active: { currentPage: 1, itemsPerPage: 10 }, // [REMOVED] Active tab dùng list full
     disabled: { currentPage: 1, itemsPerPage: 10 }
 });
 
 // Form Data
 const formData = reactive({ 
-    id: null, 
-    name: '', 
-    description: '', 
-    icon: '', 
-    order_number: 1, 
-    status: 'active' 
+    id: null, name: '', description: '', icon: '', order_number: 1, status: 'active' 
 });
 
 const errors = reactive({ name: '', description: '', icon: '', order_number: '' });
 
-// COMPUTED & LOGIC
-
-// Filter Icon List
+// COMPUTED
 const filteredIcons = computed(() => {
     const query = iconSearchQuery.value.toLowerCase().trim();
     if (!query) return commonIcons;
@@ -166,9 +156,6 @@ const filteredIcons = computed(() => {
     );
 });
 
-// [NEW] Logic mới cho Drag & Drop:
-// Tab Active: Sử dụng sortableList (đã lọc và sort). 
-// Khi search: sortableList sẽ được filter lại (nhưng lúc search thì không nên drag để tránh lỗi logic vị trí).
 const processedActiveList = computed(() => {
     let result = sortableList.value;
     const query = searchQuery.value.toLowerCase().trim();
@@ -181,7 +168,6 @@ const processedActiveList = computed(() => {
     return result;
 });
 
-// Tab Disabled: Vẫn giữ logic cũ (Pagination)
 const processedDisabledList = computed(() => {
     let result = categories.value.filter(c => c.status !== 'active');
     const query = searchQuery.value.toLowerCase().trim();
@@ -192,45 +178,33 @@ const processedDisabledList = computed(() => {
             (c.description && c.description.toLowerCase().includes(query))
         );
     }
-    // Sắp xếp disabled list theo order cũ
     result.sort((a, b) => (a.order_number || 0) - (b.order_number || 0));
     return result;
 });
 
 const statusCounts = computed(() => ({
-    active: sortableList.value.length, // Lấy length từ list active
+    active: sortableList.value.length,
     disabled: categories.value.filter(c => c.status !== 'active').length
 }));
 
-// Pagination Helper (Chỉ dùng cho tab Disabled)
 function getPaginatedData(list, type) {
     const pageInfo = pagination[type];
     const totalPages = Math.max(1, Math.ceil(list.length / pageInfo.itemsPerPage));
     if (pageInfo.currentPage > totalPages) pageInfo.currentPage = 1;
 
     const start = (pageInfo.currentPage - 1) * pageInfo.itemsPerPage;
-    return { 
-        data: list.slice(start, start + pageInfo.itemsPerPage), 
-        totalPages 
-    };
+    return { data: list.slice(start, start + pageInfo.itemsPerPage), totalPages };
 }
 
 const pagedDisabled = computed(() => getPaginatedData(processedDisabledList.value, 'disabled'));
 
-// Watchers
 watch(searchQuery, () => {
-    // pagination.active.currentPage = 1; // [REMOVED]
     pagination.disabled.currentPage = 1;
 });
 
 // HELPER FUNCTIONS
 const changePage = (type, page) => { pagination[type].currentPage = page; };
 const setActiveTab = (tabName) => activeTab.value = tabName;
-
-const getFormattedDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('vi-VN');
-};
 
 const calculateNextOrder = () => {
     if (categories.value.length === 0) return 1;
@@ -244,7 +218,7 @@ const resetForm = () => {
     Object.keys(errors).forEach(k => errors[k] = '');
 };
 
-// ACTIONS (API)
+// API ACTIONS
 async function fetchCategories() {
     if (categories.value.length === 0) isLoading.value = true;
     try {
@@ -256,8 +230,7 @@ async function fetchCategories() {
         
         categories.value = rawData;
 
-        // [NEW] Tách list Active ra riêng để làm Drag & Drop
-        // Sắp xếp ban đầu theo order_number
+        // Tách active list cho sortable
         sortableList.value = rawData
             .filter(c => c.status === 'active')
             .sort((a, b) => a.order_number - b.order_number);
@@ -270,64 +243,37 @@ async function fetchCategories() {
     }
 }
 
-// [NEW] Xử lý khi thả chuột (Drag End)
 async function onDragEnd(event) {
     drag.value = false;
-    
-    // Nếu chỉ là click nhầm, không di chuyển thì thôi
     if (event.newIndex === event.oldIndex) return;
-
-    // Lấy danh sách ID theo thứ tự mới
     const orderedIds = sortableList.value.map(item => item.id);
-
     try {
-        // Gọi API cập nhật
         await apiService.post('admin/categories/update-order', { ids: orderedIds });
-        
-        // Cập nhật lại order_number hiển thị ở client cho khớp (để nhìn đẹp mắt ngay lập tức)
-        sortableList.value.forEach((item, index) => {
-            item.order_number = index + 1;
-        });
-
-        // Đồng bộ ngược lại vào main categories list nếu cần thiết (optional)
-        // Nhưng vì sortableList là object reference nên thay đổi thuộc tính cũng sẽ phản ánh vào categories gốc
-
-        const Toast = Swal.mixin({
-            toast: true, position: 'top-end', showConfirmButton: false, timer: 1500, timerProgressBar: true
-        });
+        sortableList.value.forEach((item, index) => { item.order_number = index + 1; });
+        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500, timerProgressBar: true });
         Toast.fire({ icon: 'success', title: 'Đã cập nhật vị trí' });
-
     } catch (error) {
         console.error("Sort API error:", error);
         Swal.fire('Lỗi', 'Không thể lưu thứ tự sắp xếp.', 'error');
-        fetchCategories(); // Revert lại nếu lỗi
+        fetchCategories();
     }
 }
 
-// Validate dựa trên DB Schema
 function validateForm() {
     Object.keys(errors).forEach(k => errors[k] = '');
     let isValid = true;
-
     if (!formData.name.trim()) { errors.name = 'Vui lòng nhập tên danh mục.'; isValid = false; }
-    else if (formData.name.length > 100) { errors.name = 'Tên danh mục không được quá 100 ký tự.'; isValid = false; }
-
-    if (!formData.icon || !formData.icon.trim()) { errors.icon = 'Vui lòng nhập hoặc chọn mã icon.'; isValid = false; }
-    else if (formData.icon.length > 100) { errors.icon = 'Mã icon quá dài (tối đa 100 ký tự).'; isValid = false; }
-
-    if (formData.order_number === '' || isNaN(formData.order_number) || formData.order_number === null) {
-        errors.order_number = 'Thứ tự phải là số.'; isValid = false;
-    } else if (!Number.isInteger(Number(formData.order_number)) || Number(formData.order_number) < 1) {
+    else if (formData.name.length > 100) { errors.name = 'Tên danh mục quá dài.'; isValid = false; }
+    if (!formData.icon || !formData.icon.trim()) { errors.icon = 'Vui lòng nhập hoặc chọn icon.'; isValid = false; }
+    if (formData.order_number === '' || isNaN(formData.order_number) || Number(formData.order_number) < 1) {
         errors.order_number = 'Thứ tự phải là số nguyên dương.'; isValid = false;
     }
-
     return isValid;
 }
 
 async function handleSave() {
     if (!requireLogin()) return;
     if (!validateForm()) return;
-
     isSaving.value = true;
     const payload = { ...formData };
     
@@ -357,7 +303,6 @@ async function handleSave() {
 
 async function toggleStatus(category) {
     if (!requireLogin()) return;
-
     const oldStatus = category.status;
     const newStatus = category.status === 'active' ? 'disabled' : 'active';
     const actionText = newStatus === 'active' ? 'KÍCH HOẠT' : 'VÔ HIỆU HÓA';
@@ -376,7 +321,7 @@ async function toggleStatus(category) {
         try {
             await apiService.put(`admin/categories/${category.id}`, { status: newStatus });
             Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Cập nhật thành công', timer: 1500, showConfirmButton: false });
-            fetchCategories(); // Load lại để update list sortable
+            fetchCategories();
         } catch (error) {
             category.status = oldStatus;
             Swal.fire('Lỗi', 'Không thể cập nhật trạng thái.', 'error');
@@ -386,6 +331,16 @@ async function toggleStatus(category) {
 
 async function handleDelete(category) {
     if (!requireLogin()) return;
+
+    // Frontend check (UX only)
+    if (category.products_count > 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Không thể xóa',
+            text: `Danh mục "${category.name}" đang chứa ${category.products_count} sản phẩm. Vui lòng xóa sản phẩm trước.`,
+        });
+        return;
+    }
 
     const result = await Swal.fire({
         title: 'Xóa danh mục?',
@@ -400,46 +355,29 @@ async function handleDelete(category) {
         try {
             await apiService.delete(`admin/categories/${category.id}`);
             categories.value = categories.value.filter(c => c.id !== category.id);
-            // Update sortable list local
             sortableList.value = sortableList.value.filter(c => c.id !== category.id);
             Swal.fire('Đã xóa!', 'Danh mục đã bị xóa.', 'success');
         } catch (error) {
-            Swal.fire('Lỗi', 'Không thể xóa danh mục này (có thể đang chứa sản phẩm).', 'error');
+            Swal.fire('Lỗi', error.response?.data?.message || 'Không thể xóa danh mục này.', 'error');
         }
     }
 }
 
-// Modal Functions
 const openCreateModal = () => { if(!requireLogin()) return; resetForm(); isEditMode.value = false; modalInstance.value?.show(); };
 const openEditModal = (cat) => { 
     if(!requireLogin()) return;
-    Object.assign(formData, { 
-        id: cat.id, name: cat.name, description: cat.description, 
-        icon: cat.icon, order_number: cat.order_number, status: cat.status 
-    });
+    Object.assign(formData, { id: cat.id, name: cat.name, description: cat.description, icon: cat.icon, order_number: cat.order_number, status: cat.status });
     Object.keys(errors).forEach(k => errors[k] = '');
     isEditMode.value = true; 
     modalInstance.value?.show(); 
 };
 const openViewModal = (cat) => { viewingCategory.value = cat; viewModalInstance.value?.show(); };
+const openIconModal = () => { iconSearchQuery.value = ''; iconModalInstance.value?.show(); };
+const selectIcon = (iconCode) => { formData.icon = iconCode; errors.icon = ''; iconModalInstance.value?.hide(); };
 
-// Icon Picker Functions
-const openIconModal = () => {
-    iconSearchQuery.value = '';
-    iconModalInstance.value?.show();
-};
-
-const selectIcon = (iconCode) => {
-    formData.icon = iconCode;
-    errors.icon = ''; // Clear error if any
-    iconModalInstance.value?.hide();
-};
-
-// Lifecycle
 onMounted(async () => {
     await checkAuthState();
     if (!requireLogin()) { isLoading.value = false; return; }
-    
     nextTick(() => {
         if (modalRef.value) modalInstance.value = new Modal(modalRef.value, { backdrop: 'static' });
         if (viewModalRef.value) viewModalInstance.value = new Modal(viewModalRef.value);
@@ -505,7 +443,7 @@ onMounted(async () => {
                 <!-- TABLE -->
                 <div class="card-body p-0">
                     <div class="tab-content">
-                        <!-- TAB ACTIVE: DRAG & DROP ENABLED (NO PAGINATION) -->
+                        <!-- TAB ACTIVE -->
                         <div class="tab-pane fade show active" v-if="activeTab === 'active'">
                              <div class="table-responsive">
                                 <table class="table table-hover align-middle mb-0 custom-table">
@@ -520,7 +458,6 @@ onMounted(async () => {
                                             <th style="width: 160px;" class="text-center pe-3">Hành động</th>
                                         </tr>
                                     </thead>
-                                    <!-- DRAGGABLE COMPONENT WRAPPING TBODY -->
                                     <draggable 
                                         v-model="sortableList" 
                                         tag="tbody" 
@@ -532,11 +469,9 @@ onMounted(async () => {
                                     >
                                         <template #item="{ element: category }">
                                             <tr :class="{ 'bg-light': drag }">
-                                                <!-- Drag Handle -->
                                                 <td class="text-center cursor-move drag-handle" title="Kéo thả để sắp xếp">
                                                     <i class="bi bi-grip-vertical text-secondary fs-5 opacity-50 hover-opacity-100"></i>
                                                 </td>
-
                                                 <td class="text-muted fw-bold">#{{ category.id }}</td>
                                                 <td class="text-center fs-4 text-primary">
                                                     <span v-if="category.icon" v-html="category.icon"></span>
@@ -544,7 +479,10 @@ onMounted(async () => {
                                                 </td>
                                                 <td class="fw-bold text-dark">
                                                     {{ category.name }}
-                                                    <span v-if="category.order_number" class="badge bg-light text-secondary ms-2 border">Top {{ category.order_number }}</span>
+                                                    <!-- Badge hiển thị số lượng sản phẩm -->
+                                                    <span v-if="category.products_count > 0" class="badge bg-info bg-opacity-10 text-info ms-1 border border-info" title="Số lượng sản phẩm">
+                                                        {{ category.products_count }} SP
+                                                    </span>
                                                 </td>
                                                 <td class="d-none d-md-table-cell text-muted small text-truncate" style="max-width: 200px;">{{ category.description }}</td>
                                                 <td class="text-center">
@@ -559,14 +497,22 @@ onMounted(async () => {
                                                     <div class="d-flex justify-content-center gap-1">
                                                         <button class="btn btn-sm btn-light text-secondary border" @click="openViewModal(category)" title="Xem"><i class="bi bi-eye"></i></button>
                                                         <button class="btn btn-sm btn-light text-primary border" @click="openEditModal(category)" title="Sửa"><i class="bi bi-pencil"></i></button>
-                                                        <button class="btn btn-sm btn-light text-danger border" @click="handleDelete(category)" title="Xóa"><i class="bi bi-trash"></i></button>
+                                                        
+                                                        <!-- [NEW] Nút xóa bị vô hiệu hóa nếu có sản phẩm -->
+                                                        <button 
+                                                            class="btn btn-sm btn-light border"
+                                                            :class="category.products_count > 0 ? 'text-muted' : 'text-danger'"
+                                                            :disabled="category.products_count > 0"
+                                                            @click="handleDelete(category)" 
+                                                            :title="category.products_count > 0 ? `Không thể xóa: Chứa ${category.products_count} sản phẩm` : 'Xóa'"
+                                                        >
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
                                         </template>
                                     </draggable>
-                                    
-                                    <!-- Fallback when empty or loading -->
                                     <tbody v-else>
                                          <tr v-if="isLoading"><td colspan="7" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>
                                          <tr v-else><td colspan="7" class="text-center py-5 text-muted fst-italic">Không có danh mục hoạt động nào.</td></tr>
@@ -574,11 +520,11 @@ onMounted(async () => {
                                 </table>
                             </div>
                             <div class="card-footer bg-white py-3 text-muted small text-center">
-                                <i class="bi bi-info-circle me-1"></i> Mẹo: Nhấn giữ biểu tượng <i class="bi bi-grip-vertical"></i> để kéo thả sắp xếp vị trí hiển thị trên Menu.
+                                <i class="bi bi-info-circle me-1"></i> Mẹo: Nhấn giữ biểu tượng <i class="bi bi-grip-vertical"></i> để kéo thả sắp xếp.
                             </div>
                         </div>
 
-                        <!-- TAB DISABLED: NORMAL TABLE WITH PAGINATION -->
+                        <!-- TAB DISABLED -->
                         <div class="tab-pane fade show active" v-if="activeTab === 'disabled'">
                              <div class="table-responsive">
                                 <table class="table table-hover align-middle mb-0 custom-table">
@@ -604,7 +550,12 @@ onMounted(async () => {
                                                 <span v-if="category.icon" v-html="category.icon"></span>
                                                 <i v-else class="bi bi-image text-muted opacity-50"></i>
                                             </td>
-                                            <td class="fw-bold text-dark">{{ category.name }}</td>
+                                            <td class="fw-bold text-dark">
+                                                {{ category.name }}
+                                                <span v-if="category.products_count > 0" class="badge bg-info bg-opacity-10 text-info ms-1 border border-info">
+                                                    {{ category.products_count }} SP
+                                                </span>
+                                            </td>
                                             <td class="d-none d-md-table-cell text-muted small text-truncate" style="max-width: 200px;">{{ category.description }}</td>
                                             <td class="text-center">
                                                 <div class="form-check form-switch d-flex justify-content-center">
@@ -618,14 +569,23 @@ onMounted(async () => {
                                                 <div class="d-flex justify-content-center gap-1">
                                                     <button class="btn btn-sm btn-light text-secondary border" @click="openViewModal(category)" title="Xem"><i class="bi bi-eye"></i></button>
                                                     <button class="btn btn-sm btn-light text-primary border" @click="openEditModal(category)" title="Sửa"><i class="bi bi-pencil"></i></button>
-                                                    <button class="btn btn-sm btn-light text-danger border" @click="handleDelete(category)" title="Xóa"><i class="bi bi-trash"></i></button>
+                                                    
+                                                    <!-- [NEW] Nút xóa bị vô hiệu hóa -->
+                                                    <button 
+                                                        class="btn btn-sm btn-light border"
+                                                        :class="category.products_count > 0 ? 'text-muted' : 'text-danger'"
+                                                        :disabled="category.products_count > 0"
+                                                        @click="handleDelete(category)" 
+                                                        :title="category.products_count > 0 ? `Không thể xóa: Chứa ${category.products_count} sản phẩm` : 'Xóa'"
+                                                    >
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
-                            <!-- Pagination for Disabled -->
                             <div class="card-footer bg-white border-top-0 py-3" v-if="pagedDisabled.totalPages > 1">
                                 <ul class="pagination pagination-sm m-0 justify-content-end">
                                     <li class="page-item" :class="{ disabled: pagination.disabled.currentPage === 1 }"><button class="page-link border-0" @click="changePage('disabled', pagination.disabled.currentPage - 1)">&laquo;</button></li>
@@ -713,7 +673,7 @@ onMounted(async () => {
         </div>
     </div>
 
-    <!-- MODAL ICON PICKER -->
+    <!-- MODAL ICON PICKER (Same as before) -->
     <div class="modal fade" id="iconModal" ref="iconModalRef" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
@@ -743,7 +703,7 @@ onMounted(async () => {
         </div>
     </div>
 
-    <!-- MODAL VIEW -->
+    <!-- MODAL VIEW (Same as before) -->
     <div class="modal fade" id="viewModal" ref="viewModalRef" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
@@ -758,6 +718,12 @@ onMounted(async () => {
                         <span :class="['badge', viewingCategory.status === 'active' ? 'bg-success' : 'bg-secondary']">
                             {{ viewingCategory.status === 'active' ? 'Hoạt động' : 'Vô hiệu hóa' }}
                         </span>
+                         <!-- [NEW] Badge hiển thị số lượng sản phẩm trong view detail -->
+                        <div class="mt-2" v-if="viewingCategory.products_count > 0">
+                            <span class="badge bg-info text-white">
+                                <i class="bi bi-box-seam me-1"></i> {{ viewingCategory.products_count }} sản phẩm
+                            </span>
+                        </div>
                     </div>
                     <div class="p-4">
                         <div class="row g-3 text-center mb-4">

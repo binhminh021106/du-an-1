@@ -59,7 +59,6 @@ onMounted(() => {
   <aside class="app-sidebar shadow custom-sidebar" data-bs-theme="dark">
     <div class="sidebar-brand">
       <router-link to="/admin" class="brand-link">
-        <!-- [FIX] Đổi onError thành @error="$event.target..." để đúng chuẩn Vue 3 -->
         <img src="../img/logo.png" alt="Logo" class="brand-image opacity-75 shadow" @error="$event.target.style.display='none'">
         <span class="brand-text fw-bold text-white">ThinkHub</span>
       </router-link>
@@ -266,7 +265,7 @@ onMounted(() => {
 .transition-icon {
     transition: transform 0.3s ease;
     font-size: 0.8rem;
-    display: inline-block; /* FIX: Phải là block hoặc inline-block mới xoay được */
+    display: inline-block; 
     margin-left: auto; /* Đẩy icon về phía bên phải nếu dùng flex trong thẻ a */
     float: right; /* AdminLTE thường dùng float cho icon bên phải */
     margin-top: 4px;

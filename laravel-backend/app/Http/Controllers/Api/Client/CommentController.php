@@ -32,7 +32,6 @@ class CommentController extends Controller
         }
 
         // 2. Validate dữ liệu
-        // FIX: Sửa 'exists:products,id' thành 'exists:product,id' vì tên bảng là số ít
         $validated = $request->validate([
             'product_id' => 'required|exists:product,id', 
             'content' => 'required|string|max:1000',

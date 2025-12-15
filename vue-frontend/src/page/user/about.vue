@@ -17,19 +17,17 @@
         </p>
       </div>
 
-      <!-- [FIX] Bỏ 'align-items-center' để 2 cột tự động cao bằng nhau (stretch) -->
       <div class="row g-5"> 
         
         <!-- Hình ảnh giới thiệu -->
-        <div class="col-lg-6 d-flex"> <!-- Thêm d-flex để wrapper con có thể full height -->
+        <div class="col-lg-6 d-flex"> 
           <div class="about-image-wrapper w-100">
-            <!-- [FIX] Thêm object-position: left để căn ảnh từ trái qua -->
             <img src="../../components/img/thinkhubabout1.png" alt="about us" class="img-fluid rounded shadow-lg h-100 w-100" style="object-fit: cover; object-position: left;" />
           </div>
         </div>
 
         <!-- Nội dung giới thiệu -->
-        <div class="col-lg-6 d-flex flex-column justify-content-center"> <!-- Căn giữa nội dung theo chiều dọc -->
+        <div class="col-lg-6 d-flex flex-column justify-content-center"> 
           <h3 class="fw-bold text-primary mb-3">Câu chuyện của chúng tôi</h3>
           <p class="text-muted fs-6 mb-4">
             Được thành lập với niềm đam mê về công nghệ và phong cách sống hiện đại,

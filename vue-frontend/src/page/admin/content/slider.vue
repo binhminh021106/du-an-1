@@ -170,7 +170,6 @@ async function fetchAllSlides() {
 async function fetchAllBrands() {
   isLoadingBrands.value = true;
   try {
-    // [FIX] Đổi endpoint từ admin/brands (Brand sản phẩm) sang admin/brand-slides (Brand Banner)
     const response = await apiService.get(`admin/brand-slides`);
     allBrands.value = response.data
         .map(b => ({ ...b, status: b.status || 'published' }))
@@ -219,7 +218,6 @@ async function onBrandDragEnd(event) {
     const orderedIds = allBrands.value.map(item => item.id);
 
     try {
-        // [FIX] Đổi endpoint sang admin/brand-slides/update-order
         await apiService.post('admin/brand-slides/update-order', { ids: orderedIds });
         
         allBrands.value.forEach((item, index) => {
@@ -542,13 +540,11 @@ async function handleSaveBrand() {
 
     if (isBrandEditMode.value) {
       formData.append('_method', 'PUT');
-      // [FIX] Đổi endpoint sang admin/brand-slides
       await apiService.post(`admin/brand-slides/${brandFormData.id}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       Swal.fire('Thành công', 'Đã cập nhật brand!', 'success');
     } else {
-      // [FIX] Đổi endpoint sang admin/brand-slides
       await apiService.post(`admin/brand-slides`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
@@ -577,7 +573,6 @@ async function handleBrandToggleStatus(brand) {
     formData.append('status', newStatus);
     formData.append('_method', 'PUT');
 
-    // [FIX] Đổi endpoint sang admin/brand-slides
     await apiService.post(`admin/brand-slides/${brand.id}`, formData);
     Swal.fire('Thành công', `Đã ${actionText} brand "${brand.name}"!`, 'success');
   } catch (error) {
@@ -600,7 +595,6 @@ async function handleDeleteBrand(brand) {
   });
   if (result.isConfirmed) {
     try {
-      // [FIX] Đổi endpoint sang admin/brand-slides
       await apiService.delete(`admin/brand-slides/${brand.id}`);
       Swal.fire('Đã xóa!', 'Brand đã được xóa.', 'success');
       fetchAllBrands();

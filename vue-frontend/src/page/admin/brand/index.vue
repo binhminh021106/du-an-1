@@ -8,6 +8,10 @@ import { Modal } from 'bootstrap';
 const rawApiUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 const API_BASE_URL = rawApiUrl.replace(/\/api\/?$/, '');
 
+// --- REGEX VALIDATION ---
+// Chỉ cho phép chữ cái (có dấu), số và khoảng trắng
+const validNameRegex = /^[a-zA-Z0-9\sàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]+$/u;
+
 // --- STATE ---
 const brands = ref([]);
 const isLoading = ref(true);
@@ -31,7 +35,8 @@ const formData = reactive({
 const logoFile = ref(null);
 const logoPreview = ref(null);
 const fileInputRef = ref(null);
-const errors = reactive({ name: '', slug: '' });
+// Thêm error field cho description
+const errors = reactive({ name: '', slug: '', description: '' });
 
 // --- COMPUTED ---
 const filteredBrands = computed(() => {
@@ -43,6 +48,9 @@ const filteredBrands = computed(() => {
     // Sắp xếp theo thứ tự order_number
     return result.sort((a, b) => (a.order_number || 0) - (b.order_number || 0));
 });
+
+// Tính toán độ dài mô tả để hiển thị
+const descriptionLength = computed(() => formData.description ? formData.description.length : 0);
 
 // --- ACTIONS ---
 async function fetchBrands() {
@@ -89,7 +97,10 @@ function resetForm() {
     logoFile.value = null;
     logoPreview.value = null;
     if (fileInputRef.value) fileInputRef.value.value = '';
+    // Reset toàn bộ errors
     errors.name = '';
+    errors.slug = '';
+    errors.description = '';
 }
 
 function openCreateModal() {
@@ -108,8 +119,44 @@ function openEditModal(brand) {
     modalInstance.value?.show();
 }
 
+// Hàm kiểm tra trùng tên
+function checkDuplicateName(name, currentId = null) {
+    const nameToCheck = name.toLowerCase().trim();
+    return brands.value.some(brand => {
+        // Nếu đang edit thì bỏ qua chính nó
+        if (currentId && brand.id === currentId) return false;
+        return brand.name.toLowerCase().trim() === nameToCheck;
+    });
+}
+
 async function handleSave() {
-    if (!formData.name.trim()) { errors.name = 'Vui lòng nhập tên thương hiệu'; return; }
+    // 1. Reset lỗi cũ
+    errors.name = '';
+    errors.description = '';
+    
+    // 2. Validate Rỗng
+    if (!formData.name.trim()) { 
+        errors.name = 'Vui lòng nhập tên thương hiệu'; 
+        return; 
+    }
+
+    // 3. Validate Ký tự đặc biệt
+    if (!validNameRegex.test(formData.name)) {
+        errors.name = 'Tên thương hiệu không được chứa ký tự đặc biệt';
+        return;
+    }
+
+    // 4. Validate Trùng tên
+    if (checkDuplicateName(formData.name, formData.id)) {
+        errors.name = 'Tên thương hiệu đã tồn tại';
+        return;
+    }
+
+    // 5. Validate Mô tả quá dài
+    if (formData.description && formData.description.length > 255) {
+        errors.description = `Mô tả quá dài (${formData.description.length}/255 ký tự)`;
+        return;
+    }
     
     isSaving.value = true;
     const payload = new FormData();
@@ -158,6 +205,12 @@ async function handleSave() {
 }
 
 async function handleDelete(brand) {
+    // Nếu nút bị disable rồi thì thôi, nhưng chặn thêm ở đây cho chắc chắn
+    if (brand.products_count > 0) {
+        Swal.fire('Không thể xóa', `Thương hiệu này đang có ${brand.products_count} sản phẩm sử dụng.`, 'warning');
+        return;
+    }
+
     const result = await Swal.fire({
         title: 'Xóa thương hiệu?',
         text: `Bạn có chắc muốn xóa "${brand.name}"? Hành động này không thể hoàn tác.`,
@@ -182,7 +235,8 @@ async function handleDelete(brand) {
 
 // Auto slug watcher
 watch(() => formData.name, (val) => {
-    if (!isEditMode.value && val) {
+    // Chỉ cập nhật slug khi KHÔNG có lỗi ký tự đặc biệt để tránh slug bị lỗi
+    if (!isEditMode.value && val && validNameRegex.test(val)) {
         formData.slug = val.toLowerCase()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
             .replace(/đ/g, "d").replace(/[^a-z0-9\s-]/g, "")
@@ -258,6 +312,10 @@ onMounted(() => {
                                     <td>
                                         <div class="fw-bold text-dark">{{ brand.name }}</div>
                                         <div class="small text-muted">{{ brand.slug }}</div>
+                                        <!-- Hiển thị số lượng sản phẩm để debug/thông tin -->
+                                        <div v-if="brand.products_count > 0" class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill mt-1">
+                                            <i class="bi bi-box-seam me-1"></i>{{ brand.products_count }} sản phẩm
+                                        </div>
                                     </td>
                                     <td class="d-none d-md-table-cell small text-muted text-truncate" style="max-width: 250px;">
                                         {{ brand.description || 'Chưa có mô tả' }}
@@ -269,7 +327,18 @@ onMounted(() => {
                                     </td>
                                     <td class="text-center pe-3">
                                         <button class="btn btn-sm btn-light text-primary border me-1" @click="openEditModal(brand)" title="Sửa"><i class="bi bi-pencil"></i></button>
-                                        <button class="btn btn-sm btn-light text-danger border" @click="handleDelete(brand)" title="Xóa"><i class="bi bi-trash"></i></button>
+                                        
+                                        <!-- NÚT XOÁ ĐƯỢC CHỈNH SỬA TẠI ĐÂY -->
+                                        <button 
+                                            class="btn btn-sm btn-light border" 
+                                            :class="brand.products_count > 0 ? 'text-muted cursor-not-allowed opacity-50' : 'text-danger'"
+                                            :disabled="brand.products_count > 0"
+                                            @click="handleDelete(brand)" 
+                                            :title="brand.products_count > 0 ? `Không thể xóa: Đang có ${brand.products_count} sản phẩm` : 'Xóa'"
+                                        >
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        
                                     </td>
                                 </tr>
                             </tbody>
@@ -311,6 +380,7 @@ onMounted(() => {
                         <div class="mb-3">
                             <label class="form-label required fw-bold">Tên thương hiệu</label>
                             <input type="text" class="form-control" v-model="formData.name" :class="{ 'is-invalid': errors.name }" placeholder="VD: Samsung, Apple...">
+                            <!-- Hiển thị lỗi Name -->
                             <div class="invalid-feedback">{{ errors.name }}</div>
                         </div>
                         
@@ -320,8 +390,20 @@ onMounted(() => {
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-bold">Mô tả</label>
-                            <textarea class="form-control" rows="2" v-model="formData.description" placeholder="Mô tả ngắn gọn..."></textarea>
+                            <div class="d-flex justify-content-between">
+                                <label class="form-label fw-bold">Mô tả</label>
+                                <!-- Bộ đếm ký tự -->
+                                <span class="small" :class="descriptionLength > 255 ? 'text-danger fw-bold' : 'text-muted'">
+                                    {{ descriptionLength }}/255
+                                </span>
+                            </div>
+                            <textarea class="form-control" 
+                                      rows="2" 
+                                      v-model="formData.description" 
+                                      :class="{ 'is-invalid': errors.description || descriptionLength > 255 }"
+                                      placeholder="Mô tả ngắn gọn..."></textarea>
+                            <!-- Hiển thị lỗi Description -->
+                            <div class="invalid-feedback">{{ errors.description }}</div>
                         </div>
 
                         <div class="row">
@@ -341,7 +423,8 @@ onMounted(() => {
                 </div>
                 <div class="modal-footer border-top-0 bg-light">
                     <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Hủy bỏ</button>
-                    <button type="submit" form="brandForm" class="btn btn-primary px-4" :disabled="isSaving">
+                    <!-- Disable nút Lưu nếu mô tả quá dài -->
+                    <button type="submit" form="brandForm" class="btn btn-primary px-4" :disabled="isSaving || descriptionLength > 255">
                         <span v-if="isSaving" class="spinner-border spinner-border-sm me-1"></span>
                         {{ isSaving ? 'Đang lưu...' : (isEditMode ? 'Cập nhật' : 'Lưu lại') }}
                     </button>
@@ -357,4 +440,5 @@ onMounted(() => {
 .btn-primary:hover { background-color: #007a67 !important; border-color: #007a67 !important; }
 .form-label.required::after { content: " *"; color: red; }
 .custom-table th { font-weight: 600; font-size: 0.9rem; text-transform: uppercase; }
+.cursor-not-allowed { cursor: not-allowed !important; }
 </style>

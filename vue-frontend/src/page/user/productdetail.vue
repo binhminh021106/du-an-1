@@ -336,7 +336,6 @@ const loadProductById = async (id) => {
         console.error("Lỗi:", error);
         notify('error', 'Không thể tải thông tin sản phẩm', 'Lỗi kết nối');
     } finally {
-        // [FIX] Thêm delay 2 giây để hiển thị Skeleton như yêu cầu
         setTimeout(() => { loading.value = false }, 2000);
     }
 };
@@ -1187,7 +1186,6 @@ watchEffect(() => {
                                                 <div class="d-flex align-items-center">
                                                     <!-- Avatar tự tạo hoặc Ảnh -->
                                                     <div class="me-3">
-                                                        <!-- Fix Logic Avatar -->
                                                         <img v-if="getUserAvatar(c.user) && !imageLoadErrors[c.id]"
                                                             :src="getUserAvatar(c.user)" class="rounded-circle"
                                                             style="width: 45px; height: 45px; object-fit: cover;"

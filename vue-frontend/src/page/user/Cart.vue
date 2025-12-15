@@ -60,9 +60,8 @@ const loadLordicon = () => {
 }
 
 onMounted(() => {
-    loadLordicon(); // Load script icon
+    loadLordicon(); 
     store.dispatch('enrichCartData').finally(() => {
-        // [FIX] Thêm delay giả lập 2s để hiển thị Skeleton
         setTimeout(() => { loading.value = false }, 2000);
     });
 });

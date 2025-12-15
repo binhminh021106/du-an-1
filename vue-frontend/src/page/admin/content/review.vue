@@ -102,7 +102,6 @@ const processedReviews = computed(() => {
     const query = searchQuery.value.toLowerCase().trim();
     if (query) {
         result = result.filter(r =>
-            // FIX: Đổi username thành fullName
             (r.user?.fullName && r.user.fullName.toLowerCase().includes(query)) ||
             (r.product?.name && r.product.name.toLowerCase().includes(query)) ||
             (r.content && r.content.toLowerCase().includes(query))
@@ -344,7 +343,6 @@ onMounted(async () => {
                                         <tr v-else v-for="review in pagedPending.data" :key="review.id">
                                             <td class="ps-3 fw-bold text-muted">{{ review.id }}</td>
                                             <td><span class="fw-bold text-dark">{{ review.product?.name }}</span></td>
-                                            <!-- FIX: Đổi username thành fullName -->
                                             <td>{{ review.user?.fullName || 'Ẩn danh' }}</td>
                                             <td class="text-warning small">{{ renderStars(review.rating) }}</td>
                                             <td><span class="d-inline-block text-truncate text-muted" style="max-width: 250px;">{{ review.content }}</span></td>
@@ -389,7 +387,6 @@ onMounted(async () => {
                                         <tr v-else v-for="review in pagedApproved.data" :key="review.id">
                                             <td class="ps-3 fw-bold text-muted">{{ review.id }}</td>
                                             <td><span class="fw-bold text-dark">{{ review.product?.name }}</span></td>
-                                            <!-- FIX: Đổi username thành fullName -->
                                             <td>{{ review.user?.fullName || 'Ẩn danh' }}</td>
                                             <td class="text-warning small">{{ renderStars(review.rating) }}</td>
                                             <td><span class="d-inline-block text-truncate text-muted" style="max-width: 250px;">{{ review.content }}</span></td>
@@ -433,7 +430,6 @@ onMounted(async () => {
                                         <tr v-else v-for="review in pagedRejected.data" :key="review.id">
                                             <td class="ps-3 fw-bold text-muted">{{ review.id }}</td>
                                             <td><span class="fw-bold text-dark">{{ review.product?.name }}</span></td>
-                                            <!-- FIX: Đổi username thành fullName -->
                                             <td>{{ review.user?.fullName || 'Ẩn danh' }}</td>
                                             <td class="text-warning small">{{ renderStars(review.rating) }}</td>
                                             <td><span class="d-inline-block text-truncate text-muted" style="max-width: 250px;">{{ review.content }}</span></td>
@@ -489,10 +485,8 @@ onMounted(async () => {
                         <!-- Review Info -->
                         <div class="col-md-7">
                             <div class="d-flex align-items-center mb-4 p-3 bg-light rounded">
-                                <!-- FIX: Đổi avatar thành avatar_url và fullName -->
                                 <img :src="viewingReview.user?.avatar_url || `https://placehold.co/50x50/009981/ffffff?text=${viewingReview.user?.fullName?.charAt(0).toUpperCase() || 'U'}`" class="rounded-circle me-3 border" width="50" height="50">
                                 <div>
-                                    <!-- FIX: Đổi username thành fullName -->
                                     <div class="fw-bold fs-6">{{ viewingReview.user?.fullName || 'Người dùng ẩn danh' }}</div>
                                     <div class="text-muted small">User ID: #{{ viewingReview.user?.id }}</div>
                                 </div>

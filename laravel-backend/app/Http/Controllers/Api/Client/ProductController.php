@@ -50,7 +50,6 @@ class ProductController extends Controller
             $hasVariants = $product->variants && $product->variants->isNotEmpty();
 
             if ($hasVariants) {
-                // [FIX QUAN TRỌNG] Tạo tên cho biến thể từ thuộc tính (Attribute Values)
                 // Vì bảng variants thường không có cột 'name', ta phải ghép từ Color, Size...
                 $product->variants->transform(function ($variant) {
                     // Nếu variant chưa có tên, hoặc tên rỗng
@@ -112,7 +111,6 @@ class ProductController extends Controller
         $variants = $product->variants;
         $hasVariants = $variants && $variants->isNotEmpty();
 
-        // [FIX] Cũng áp dụng logic tạo tên biến thể cho trang chi tiết luôn cho đồng bộ
         if ($hasVariants) {
             $variants->transform(function ($variant) {
                 if (empty($variant->name)) {

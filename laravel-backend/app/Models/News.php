@@ -24,7 +24,6 @@ class News extends Model
         'status',
         'views',
         'author_name',
-        // [SEO UPGRADE] Thêm các trường Meta cho SEO
         'meta_title',
         'meta_description',
         'meta_keywords',

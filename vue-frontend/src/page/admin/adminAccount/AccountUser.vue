@@ -102,8 +102,8 @@ const formData = reactive({
     email: '',
     phone: '',
     address: '',
-    sex: 'other',      // [NEW] Giới tính
-    birthday: '',      // [NEW] Ngày sinh
+    sex: 'other',     
+    birthday: '',      
     avatar_url: '',
     status: 'active',
     password: '', 

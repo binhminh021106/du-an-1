@@ -41,7 +41,6 @@ class AdminVariantController extends Controller
                 // Tên file: variant_{id}_{random}.{ext}
                 $fileName = 'variant_' . $variant->id . '_' . Str::random(10) . '.' . $extension;
                 
-                // [FIX] Dùng public_path để trỏ tới thư mục public/variants thực tế
                 $uploadPath = public_path('variants');
 
                 // Tạo thư mục nếu chưa có

@@ -11,7 +11,6 @@ const route = useRoute();
 const router = useRouter();
 const store = useStore();
 
-// [FIX] URL Backend chuẩn (127.0.0.1)
 const BACKEND_URL = 'http://127.0.0.1:8000';
 
 const products = ref([]);

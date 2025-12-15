@@ -885,7 +885,6 @@ const handleSubmitReviews = async () => {
   color: #fff;
 }
 
-/* [FIXED] Set cứng màu Hex để đảm bảo hiển thị */
 .status-dang-giao-hang {
   background-color: #3498DB;
 }

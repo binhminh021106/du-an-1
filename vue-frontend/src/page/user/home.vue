@@ -194,7 +194,6 @@ const fetchData = async () => {
     } catch (err) {
         console.error("Lỗi tải trang chủ:", err);
     } finally {
-        // [FIX] Thêm delay giả lập 2s để nhìn thấy skeleton theo yêu cầu
         setTimeout(() => { loading.value = false }, 2000)
     }
 };
@@ -222,6 +221,8 @@ const categoriesWithProducts = computed(() => {
                     discount: 10,
                     rating: getRating(p),
                     sold_count: p.sold_count || 0,
+                    // [UPDATED] Lấy stock của biến thể
+                    stock: v.stock !== undefined ? Number(v.stock) : (v.quantity !== undefined ? Number(v.quantity) : 0),
                     raw_variant: v, 
                     raw_product: p
                 });
@@ -238,6 +239,8 @@ const categoriesWithProducts = computed(() => {
                 discount: 10,
                 rating: getRating(p),
                 sold_count: p.sold_count || 0,
+                // [UPDATED] Lấy stock của sản phẩm chính
+                stock: p.stock !== undefined ? Number(p.stock) : (p.quantity !== undefined ? Number(p.quantity) : 0),
                 raw_variant: null,
                 raw_product: p
             });
@@ -308,6 +311,9 @@ const prevSlide = () => { stopAutoSlide(); currentSlide.value = (currentSlide.va
 
 
 const onAddToCart = async (item) => {
+    // [CHECK STOCK] Nếu hết hàng thì không làm gì
+    if (item.stock <= 0) return;
+
     try {
         let product = item.raw_product ? JSON.parse(JSON.stringify(item.raw_product)) : {
             id: item.id,
@@ -327,7 +333,7 @@ const onAddToCart = async (item) => {
                 product_id: product.id,
                 name: '', 
                 price: product.price || item.sale_price,
-                stock: 9999, 
+                stock: item.stock || 9999, // Use item.stock if available
                 image: product.image || product.thumbnail_url 
             };
         }
@@ -417,79 +423,79 @@ onBeforeUnmount(stopAutoSlide);
                              <div class="mega-menu-panel"
                                   v-if="hoveredCategoryId === category.id && getMegaDataForCategory(category.id)">
 
-                                 <div class="mega-content-wrapper">
-                                     <!-- Cột 1: Thương hiệu (20%) -->
-                                     <div class="mega-column brands-column" v-if="getMegaDataForCategory(category.id).brands.length > 0">
-                                         <h4 class="mega-title">Thương hiệu</h4>
-                                         <div class="brands-list-vertical">
-                                             <a href="#" v-for="brand in getMegaDataForCategory(category.id).brands" :key="brand"
-                                                class="brand-link" @click.prevent="goToShopWithBrand(category.id, brand)">
-                                                 {{ brand }}
-                                             </a>
-                                         </div>
-                                     </div>
+                                  <div class="mega-content-wrapper">
+                                      <!-- Cột 1: Thương hiệu (20%) -->
+                                      <div class="mega-column brands-column" v-if="getMegaDataForCategory(category.id).brands.length > 0">
+                                          <h4 class="mega-title">Thương hiệu</h4>
+                                          <div class="brands-list-vertical">
+                                              <a href="#" v-for="brand in getMegaDataForCategory(category.id).brands" :key="brand"
+                                                 class="brand-link" @click.prevent="goToShopWithBrand(category.id, brand)">
+                                                  {{ brand }}
+                                              </a>
+                                          </div>
+                                      </div>
 
-                                     <!-- Cột 2: Nổi bật (40%) -->
-                                     <div class="mega-column products-column border-end">
-                                         <h4 class="mega-title">Nổi bật nhất</h4>
-                                         <ul class="mega-product-list">
-                                             <li v-for="prod in getMegaDataForCategory(category.id).products" :key="prod.id"
-                                                 @click.stop="goToProduct(prod.id)">
-                                                 <div class="search-item">
-                                                     <!-- Ảnh to hơn -->
-                                                     <img :src="getImageUrl(prod.thumbnail_url || prod.image_url)"
-                                                          class="search-item-img big-img" alt="img"
-                                                          @error="$event.target.src = 'https://placehold.co/50x50?text=No+Img'">
-                                                     <div class="search-item-info">
-                                                         <div class="search-item-name">{{ prod.name }}</div>
-                                                         <!-- Hiển thị Giá + Đã bán -->
-                                                         <div class="d-flex align-items-center gap-2 mt-1">
-                                                             <div class="search-item-price text-danger fw-bold">
-                                                                 {{ formatCurrency(prod.price || prod.min_price) }}
-                                                             </div>
-                                                             <small class="text-muted ms-auto" style="font-size: 11px;">Đã bán {{ prod.sold_count || 0 }}</small>
-                                                         </div>
-                                                         <!-- Hiển thị Rating -->
-                                                         <div class="d-flex align-items-center gap-1 mt-1">
-                                                             <div class="text-warning small" style="font-size: 11px;">
-                                                                 {{ getRating(prod).toFixed(1) }} <i class="fa-solid fa-star"></i>
-                                                             </div>
-                                                         </div>
-                                                     </div>
-                                                 </div>
-                                             </li>
-                                         </ul>
-                                     </div>
+                                      <!-- Cột 2: Nổi bật (40%) -->
+                                      <div class="mega-column products-column border-end">
+                                          <h4 class="mega-title">Nổi bật nhất</h4>
+                                          <ul class="mega-product-list">
+                                              <li v-for="prod in getMegaDataForCategory(category.id).products" :key="prod.id"
+                                                  @click.stop="goToProduct(prod.id)">
+                                                  <div class="search-item">
+                                                      <!-- Ảnh to hơn -->
+                                                      <img :src="getImageUrl(prod.thumbnail_url || prod.image_url)"
+                                                           class="search-item-img big-img" alt="img"
+                                                           @error="$event.target.src = 'https://placehold.co/50x50?text=No+Img'">
+                                                      <div class="search-item-info">
+                                                          <div class="search-item-name">{{ prod.name }}</div>
+                                                          <!-- Hiển thị Giá + Đã bán -->
+                                                          <div class="d-flex align-items-center gap-2 mt-1">
+                                                              <div class="search-item-price text-danger fw-bold">
+                                                                  {{ formatCurrency(prod.price || prod.min_price) }}
+                                                              </div>
+                                                              <small class="text-muted ms-auto" style="font-size: 11px;">Đã bán {{ prod.sold_count || 0 }}</small>
+                                                          </div>
+                                                          <!-- Hiển thị Rating -->
+                                                          <div class="d-flex align-items-center gap-1 mt-1">
+                                                              <div class="text-warning small" style="font-size: 11px;">
+                                                                  {{ getRating(prod).toFixed(1) }} <i class="fa-solid fa-star"></i>
+                                                              </div>
+                                                          </div>
+                                                      </div>
+                                                  </div>
+                                              </li>
+                                          </ul>
+                                      </div>
 
-                                     <!-- Cột 3: Có thể bạn thích (40%) -->
-                                     <div class="mega-column products-column">
-                                         <h4 class="mega-title">Có thể bạn thích</h4>
-                                         <ul class="mega-product-list">
-                                             <li v-for="prod in getMegaDataForCategory(category.id).topRated" :key="prod.id"
-                                                 @click.stop="goToProduct(prod.id)">
-                                                 <div class="search-item">
-                                                     <img :src="getImageUrl(prod.thumbnail_url || prod.image_url)"
-                                                          class="search-item-img big-img" alt="img"
-                                                          @error="$event.target.src = 'https://placehold.co/50x50?text=No+Img'">
-                                                     <div class="search-item-info">
-                                                         <div class="search-item-name">{{ prod.name }}</div>
-                                                         <div class="d-flex align-items-center gap-2 mt-1">
-                                                             <div class="search-item-price text-danger fw-bold">
-                                                                 {{ formatCurrency(prod.price || prod.min_price) }}
-                                                             </div>
-                                                             <small class="text-muted ms-auto" style="font-size: 11px;">Đã bán {{ prod.sold_count || 0 }}</small>
-                                                         </div>
-                                                         <div class="d-flex align-items-center gap-1 mt-1">
-                                                             <div class="text-warning small" style="font-size: 11px;">
-                                                                 {{ getRating(prod).toFixed(1) }} <i class="fa-solid fa-star"></i>
-                                                             </div>
-                                                         </div>
-                                                     </div>
-                                                 </div>
-                                             </li>
-                                         </ul>
-                                     </div>
-                                 </div>
+                                      <!-- Cột 3: Có thể bạn thích (40%) -->
+                                      <div class="mega-column products-column">
+                                          <h4 class="mega-title">Có thể bạn thích</h4>
+                                          <ul class="mega-product-list">
+                                              <li v-for="prod in getMegaDataForCategory(category.id).topRated" :key="prod.id"
+                                                  @click.stop="goToProduct(prod.id)">
+                                                  <div class="search-item">
+                                                      <img :src="getImageUrl(prod.thumbnail_url || prod.image_url)"
+                                                           class="search-item-img big-img" alt="img"
+                                                           @error="$event.target.src = 'https://placehold.co/50x50?text=No+Img'">
+                                                      <div class="search-item-info">
+                                                          <div class="search-item-name">{{ prod.name }}</div>
+                                                          <div class="d-flex align-items-center gap-2 mt-1">
+                                                              <div class="search-item-price text-danger fw-bold">
+                                                                  {{ formatCurrency(prod.price || prod.min_price) }}
+                                                              </div>
+                                                              <small class="text-muted ms-auto" style="font-size: 11px;">Đã bán {{ prod.sold_count || 0 }}</small>
+                                                          </div>
+                                                          <div class="d-flex align-items-center gap-1 mt-1">
+                                                              <div class="text-warning small" style="font-size: 11px;">
+                                                                  {{ getRating(prod).toFixed(1) }} <i class="fa-solid fa-star"></i>
+                                                              </div>
+                                                          </div>
+                                                      </div>
+                                                  </div>
+                                              </li>
+                                          </ul>
+                                      </div>
+                                  </div>
                              </div>
 
                         </div>
@@ -623,17 +629,28 @@ onBeforeUnmount(stopAutoSlide);
                                 </p>
 
                                 <div class="product-actions-group">
-                                    <button class="btn-add-cart" @click.stop="onAddToCart(item)">
-                                        <div class="lord-icon-wrapper">
-                                            <lord-icon
-                                                src="https://cdn.lordicon.com/evyuuwna.json"
-                                                trigger="hover"
-                                                target="closest button"
-                                                colors="primary:#ffffff,secondary:#ffffff"
-                                                style="width:24px;height:24px">
-                                            </lord-icon>
-                                        </div>
-                                        Thêm Ngay
+                                    <!-- [UPDATED] Button Logic: Check Stock -->
+                                    <button class="btn-add-cart" 
+                                            :class="{ 'btn-out-of-stock': item.stock <= 0 }"
+                                            :disabled="item.stock <= 0"
+                                            @click.stop="onAddToCart(item)">
+                                        
+                                        <template v-if="item.stock > 0">
+                                            <div class="lord-icon-wrapper">
+                                                <lord-icon
+                                                    src="https://cdn.lordicon.com/evyuuwna.json"
+                                                    trigger="hover"
+                                                    target="closest button"
+                                                    colors="primary:#ffffff,secondary:#ffffff"
+                                                    style="width:24px;height:24px">
+                                                </lord-icon>
+                                            </div>
+                                            Thêm Ngay
+                                        </template>
+                                        <template v-else>
+                                            Hết hàng
+                                        </template>
+
                                     </button>
                                 </div>
                             </div>
@@ -1295,6 +1312,16 @@ onBeforeUnmount(stopAutoSlide);
 .btn-add-cart:hover { 
     background: #007563; 
     color: white !important; 
+}
+/* [NEW] Style cho nút hết hàng */
+.btn-out-of-stock {
+    background: #d1d5db !important; /* Xám */
+    color: #6b7280 !important;
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+.btn-out-of-stock:hover {
+    background: #d1d5db !important;
 }
 
 .lord-icon-wrapper {

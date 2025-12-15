@@ -48,7 +48,7 @@ class UserController extends Controller
             'phone'    => 'required|regex:/(0)[0-9]{9}/',
             'sex'      => 'nullable|string',
             'birthday' => 'nullable|date',
-            'avatar'   => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120', // 5MB
+            'avatar'   => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
         ]);
 
         // Lấy các dữ liệu text trước

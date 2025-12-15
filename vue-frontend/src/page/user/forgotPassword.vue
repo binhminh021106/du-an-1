@@ -126,7 +126,6 @@ const sendLink = async () => {
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
-/* FIX QUAN TRỌNG: Thay :root bằng class bao ngoài cùng của component */
 .login-page-wrapper {
     --primary-color: #009981;
     --text-color: #333;

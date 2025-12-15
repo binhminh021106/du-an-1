@@ -1015,7 +1015,7 @@ function validateForm() {
     isValid = false;
   }
 
-  // 2. Validate Description
+  // 2. Validate Description không được quá dài
   if (formData.description && formData.description.length > MAX_DESC_LENGTH) {
     errors.description = `Mô tả quá dài (Tối đa ${MAX_DESC_LENGTH} ký tự).`;
     isValid = false;
@@ -1042,33 +1042,44 @@ function validateForm() {
     formData.variants.forEach((v, index) => {
       const price = parseFloat(v.price);
       const originalPrice = parseFloat(v.original_price);
-
-      // Price Validation
-      if (isNaN(price) || price < 0) {
-        errors.variants = "Giá bán không được âm.";
-        isValid = false;
-      }
-      else if (price > 0 && price < MIN_PRICE) {
-        errors.variants = `Giá bán tối thiểu là ${formatCurrency(MIN_PRICE)}.`;
-        isValid = false;
-      }
-      else if (price > MAX_PRICE) {
-        errors.variants = `Giá bán quá lớn (> ${formatCurrency(MAX_PRICE)}).`;
-        isValid = false;
-      }
-
-      // Logic: Price vs Original Price
-      if (!isNaN(originalPrice) && originalPrice > 0) {
-        if (price > originalPrice) {
-          errors.variants = `Giá bán (${formatCurrency(price)}) không được cao hơn giá gốc (${formatCurrency(originalPrice)}).`;
-          isValid = false;
-        }
-      }
-
-      // Stock Validation
       const stock = Number(v.stock);
+
+      // Validate Giá Bán (Price)
+      if (isNaN(price)) {
+         errors.variants = "Giá bán không hợp lệ.";
+         isValid = false;
+      } else if (price < 0) {
+         errors.variants = "Giá bán không được là số âm.";
+         isValid = false;
+      } else if (price < MIN_PRICE) {
+         errors.variants = `Giá bán quá thấp (Tối thiểu ${formatCurrency(MIN_PRICE)}).`;
+         isValid = false;
+      } else if (price > MAX_PRICE) {
+         errors.variants = `Giá bán quá cao (Tối đa ${formatCurrency(MAX_PRICE)}).`;
+         isValid = false;
+      }
+
+      // Validate Giá Gốc (Original Price)
+      if (!isNaN(originalPrice)) {
+          if (originalPrice < 0) {
+              errors.variants = "Giá gốc không được là số âm.";
+              isValid = false;
+          }
+          if (originalPrice > 0 && originalPrice < MIN_PRICE) {
+               errors.variants = `Giá gốc quá thấp (Tối thiểu ${formatCurrency(MIN_PRICE)}).`;
+               isValid = false;
+          }
+      }
+
+      // Logic: Price vs Original Price (Only if original price exists and is valid)
+      if (isValid && originalPrice > 0 && price > originalPrice) {
+          errors.variants = `Giá bán (${formatCurrency(price)}) không được lớn hơn giá gốc (${formatCurrency(originalPrice)}).`;
+          isValid = false;
+      }
+
+      // Validate Stock
       if (isNaN(stock) || stock < 0) {
-        errors.variants = "Số lượng kho không được âm.";
+        errors.variants = "Số lượng kho không được là số âm.";
         isValid = false;
       }
       else if (!Number.isInteger(stock)) {
@@ -1235,14 +1246,12 @@ onMounted(async () => {
   fetchProducts();
 
   nextTick(() => {
-    // [FIXED] Disable focus trap for nested SweetAlert
     if (modalRef.value)
       modalInstance.value = new Modal(modalRef.value, { backdrop: "static", keyboard: false, focus: false });
     if (viewModalRef.value)
       viewModalInstance.value = new Modal(viewModalRef.value);
     if (attrModalRef.value)
       attrModalInstance.value = new Modal(attrModalRef.value, { backdrop: "static" });
-    // [NEW] Manage Modal
     if (manageAttrModalRef.value)
       manageAttrModalInstance.value = new Modal(manageAttrModalRef.value, { backdrop: "static" });
   });
@@ -1438,7 +1447,6 @@ onMounted(async () => {
   </div>
 
   <!-- Modal Product (Create/Edit) -->
-  <!-- [FIXED] data-bs-focus="false" prevents focus trapping -->
   <div class="modal fade" id="productModal" ref="modalRef" data-bs-backdrop="static" data-bs-keyboard="false"
     data-bs-focus="false">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
